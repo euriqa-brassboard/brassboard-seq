@@ -67,6 +67,9 @@ cdef class RuntimeValue:
     cdef object cache
     cdef object cb
 
+    cpdef object eval(self, long long age)
+    cdef object _eval(self, long long age)
+
 cdef inline bint is_rtval(v) noexcept:
     return type(v) is RuntimeValue
 
@@ -79,3 +82,8 @@ cpdef inline bint same_value(v1, v2) noexcept:
         return v1 == v2
     except:
         return False
+
+cpdef inline get_value(v, long long age):
+    if is_rtval(v):
+        return (<RuntimeValue>v).eval(age)
+    return v
