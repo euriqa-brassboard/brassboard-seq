@@ -1,6 +1,8 @@
 #
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+include_directories(${Python_NumPy_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_definitions(-DNPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION)
 
 add_library(brassboard_seq_utils SHARED
   src/utils.cpp)

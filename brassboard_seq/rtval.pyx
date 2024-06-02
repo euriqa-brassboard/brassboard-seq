@@ -4,6 +4,8 @@ cdef io, np # hide import
 import io
 cdef StringIO = io.StringIO
 import numpy as np
+cimport numpy as cnpy
+cnpy._import_array()
 
 cimport cython
 from cpython cimport PyErr_Format, PyFloat_AS_DOUBLE
@@ -179,7 +181,139 @@ cdef void show(io, write, RuntimeValue v):
     else:
         write('Unknown value')
 
+cdef extern from *:
+    """
+    #include "Python.h"
+
+    static inline PyObject *_add_or_sub(PyObject *a, PyObject *b, bool issub)
+    {
+        if (issub) {
+            return PyNumber_Subtract(a, b);
+        }
+        else {
+            return PyNumber_Add(a, b);
+        }
+    }
+    static inline int pycmp2valcmp(int op)
+    {
+        switch (op) {
+        case Py_LT: return 5;
+        case Py_GT: return 6;
+        case Py_LE: return 7;
+        case Py_GE: return 8;
+        case Py_NE: return 9;
+        case Py_EQ: return 10;
+        default: return 0;
+        }
+    }
+    """
+    object _add_or_sub(object a, object b, bint issub)
+    int pycmp2valcmp(int op) noexcept
+
+cdef _new_addsub(c, RuntimeValue v, bint s):
+    if c == 0 and not s:
+        return v
+    return new_expr2(ValueType.Sub if s else ValueType.Add, new_const(c), v)
+
+cdef _build_addsub(v0, v1, bint issub):
+    cdef bint ns0 = False
+    cdef bint ns1 = False
+    cdef RuntimeValue nv0
+    cdef RuntimeValue nv1
+    cdef ValueType type_
+    if not is_rtval(v0):
+        nc = v0
+        nv0 = None
+    else:
+        nc = False
+        nv0 = <RuntimeValue>v0
+        type_ = nv0.type_
+        if type_ == ValueType.Const:
+            nc = nv0.cache
+            nv0 = None
+        elif type_ == ValueType.Add:
+            arg0 = nv0.arg0
+            # Add/Sub should only have the first argument as constant
+            if arg0.type_ == ValueType.Const:
+                nc = arg0.cache
+                nv0 = nv0.arg1
+        elif type_ == ValueType.Sub:
+            arg0 = nv0.arg0
+            # Add/Sub should only have the first argument as constant
+            if arg0.type_ == ValueType.Const:
+                ns0 = True
+                nc = arg0.cache
+                nv0 = nv0.arg1
+    if not is_rtval(v1):
+        nc = _add_or_sub(nc, v1, issub)
+        nv1 = None
+    else:
+        nv1 = <RuntimeValue>v1
+        type_ = nv1.type_
+        if type_ == ValueType.Const:
+            nc = _add_or_sub(nc, nv1.cache, issub)
+            nv1 = None
+        elif type_ == ValueType.Add:
+            arg0 = nv1.arg0
+            # Add/Sub should only have the first argument as constant
+            if arg0.type_ == ValueType.Const:
+                nc = _add_or_sub(nc, arg0.cache, issub)
+                nv1 = nv1.arg1
+        elif type_ == ValueType.Sub:
+            arg0 = nv1.arg0
+            # Add/Sub should only have the first argument as constant
+            if arg0.type_ == ValueType.Const:
+                ns1 = True
+                nc = _add_or_sub(nc, arg0.cache, issub)
+                nv1 = nv1.arg1
+    if nv0 is v0 and v1 is nv1:
+        return new_expr2(ValueType.Sub if issub else ValueType.Add, v0, v1)
+    if issub:
+        ns1 = not ns1
+    if nv0 is None:
+        if nv1 is None:
+            return new_const(nc)
+        return _new_addsub(nc, nv1, ns1)
+    if nv1 is None:
+        return _new_addsub(nc, nv0, ns0)
+    cdef bint ns = False
+    if ns0:
+        if ns1:
+            nv = new_expr2(ValueType.Add, nv0, nv1)
+            ns = True
+        else:
+            nv = new_expr2(ValueType.Sub, nv1, nv0)
+    elif ns1:
+        nv = new_expr2(ValueType.Sub, nv0, nv1)
+    else:
+        nv = new_expr2(ValueType.Add, nv0, nv1)
+    return _new_addsub(nc, nv, ns)
+
+cdef RuntimeValue wrap_value(v):
+    if is_rtval(v):
+        return <RuntimeValue>v
+    return new_const(v)
+
 cdef np_add = np.add
+cdef np_subtract = np.subtract
+cdef np_multiply = np.multiply
+cdef np_divide = np.divide
+cdef np_remainder = np.remainder
+cdef np_bitwise_and = np.bitwise_and
+cdef np_bitwise_or = np.bitwise_or
+cdef np_bitwise_xor = np.bitwise_xor
+cdef np_power = np.power
+cdef np_less = np.less
+cdef np_greater = np.greater
+cdef np_less_equal = np.less_equal
+cdef np_greater_equal = np.greater_equal
+cdef np_equal = np.equal
+cdef np_not_equal = np.not_equal
+
+cdef np_fmin = np.fmin
+cdef np_fmax = np.fmax
+
+cdef np_abs = np.abs
 cdef np_ceil = np.ceil
 cdef np_exp = np.exp
 cdef np_expm1 = np.expm1
@@ -331,6 +465,7 @@ cdef object rt_eval(RuntimeValue self, unsigned age):
     self.cache = res
     return res
 
+@cython.c_api_binop_methods(True)
 @cython.final
 cdef class RuntimeValue:
     def __init__(self):
@@ -350,3 +485,243 @@ cdef class RuntimeValue:
         io = StringIO()
         show(io, io.write, self)
         return io.getvalue()
+
+    # It's too easy to accidentally use this in control flow/assertion
+    def __bool__(self):
+        PyErr_Format(TypeError, "Cannot convert runtime value to boolean")
+
+    def __add__(self, other):
+        return _build_addsub(self, other, False)
+    def __sub__(self, other):
+        return _build_addsub(self, other, True)
+
+    def __mul__(self, other):
+        return new_expr2(ValueType.Mul, wrap_value(self), wrap_value(other))
+
+    def __truediv__(self, other):
+        return new_expr2(ValueType.Div, wrap_value(self), wrap_value(other))
+
+    def __and__(self, other):
+        return new_expr2(ValueType.And, wrap_value(self), wrap_value(other))
+
+    def __or__(self, other):
+        return new_expr2(ValueType.Or, wrap_value(self), wrap_value(other))
+
+    def __xor__(self, other):
+        return new_expr2(ValueType.Xor, wrap_value(self), wrap_value(other))
+
+    def __pow__(self, other):
+        return new_expr2(ValueType.Pow, wrap_value(self), wrap_value(other))
+
+    def __mod__(self, other):
+        return new_expr2(ValueType.Mod, wrap_value(self), wrap_value(other))
+
+    def __pos__(self):
+        return self
+    def __neg__(self):
+        return _build_addsub(0, self, True)
+
+    def __richcmp__(self, other, int op):
+        cdef int typ = pycmp2valcmp(op)
+        assert typ != 0
+        cdef RuntimeValue v2
+        if is_rtval(other):
+            if self is other:
+                return (typ == ValueType.CmpLE or typ == ValueType.CmpGE or
+                        typ == ValueType.CmpEQ)
+            v2 = <RuntimeValue>other
+        else:
+            v2 = new_const(other)
+        return new_expr2(<ValueType>typ, self, v2)
+
+    def __abs__(self):
+        if self.type_ == ValueType.Abs:
+            return self
+        return new_expr1(ValueType.Abs, self)
+
+    def __ceil__(self):
+        if self.type_ == ValueType.Ceil:
+            return self
+        return new_expr1(ValueType.Ceil, self)
+
+    def __floor__(self):
+        if self.type_ == ValueType.Floor:
+            return self
+        return new_expr1(ValueType.Floor, self)
+
+    # Artifically limit the supported ufunc
+    # in case we need to do any processing later
+    # (e.g. compiling/sending it to kernel etc).
+    def __array_ufunc__(self, ufunc, methods, *inputs, **kws):
+        if methods != '__call__':
+            return NotImplemented
+        # Needed for numpy type support
+        if ufunc is np_add:
+            return _build_addsub(inputs[0], inputs[1], False)
+        if ufunc is np_subtract:
+            return _build_addsub(inputs[0], inputs[1], True)
+        if ufunc is np_multiply:
+            return new_expr2(ValueType.Mul,
+                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+        if ufunc is np_divide:
+            return new_expr2(ValueType.Div,
+                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+        if ufunc is np_remainder:
+            return new_expr2(ValueType.Mod,
+                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+        if ufunc is np_bitwise_and:
+            return new_expr2(ValueType.And,
+                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+        if ufunc is np_bitwise_or:
+            return new_expr2(ValueType.Or,
+                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+        if ufunc is np_bitwise_xor:
+            return new_expr2(ValueType.Xor,
+                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+        if ufunc is np_power:
+            return new_expr2(ValueType.Pow,
+                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+        if ufunc is np_less:
+            return new_expr2(ValueType.CmpLT,
+                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+        if ufunc is np_greater:
+            return new_expr2(ValueType.CmpGT,
+                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+        if ufunc is np_less_equal:
+            return new_expr2(ValueType.CmpLE,
+                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+        if ufunc is np_greater_equal:
+            return new_expr2(ValueType.CmpGE,
+                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+        if ufunc is np_equal:
+            return new_expr2(ValueType.CmpEQ,
+                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+        if ufunc is np_not_equal:
+            return new_expr2(ValueType.CmpNE,
+                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+        if ufunc is np_fmin:
+            v1 = inputs[0]
+            v2 = inputs[1]
+            if v1 is v2:
+                return v1
+            return new_expr2(ValueType.Min,
+                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+        if ufunc is np_fmax:
+            v1 = inputs[0]
+            v2 = inputs[1]
+            if v1 is v2:
+                return v1
+            return new_expr2(ValueType.Max,
+                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+        if ufunc is np_abs:
+            arg0 = <RuntimeValue?>inputs[0]
+            if arg0.type_ == ValueType.Abs:
+                return arg0
+            return new_expr1(ValueType.Abs, arg0)
+        if ufunc is np_ceil:
+            arg0 = <RuntimeValue?>inputs[0]
+            if arg0.type_ == ValueType.Ceil:
+                return arg0
+            return new_expr1(ValueType.Ceil, arg0)
+        if ufunc is np_exp:
+            return new_expr1(ValueType.Exp, <RuntimeValue?>inputs[0])
+        if ufunc is np_expm1:
+            return new_expr1(ValueType.Expm1, <RuntimeValue?>inputs[0])
+        if ufunc is np_floor:
+            arg0 = <RuntimeValue?>inputs[0]
+            if arg0.type_ == ValueType.Floor:
+                return arg0
+            return new_expr1(ValueType.Floor, arg0)
+        if ufunc is np_log:
+            return new_expr1(ValueType.Log, <RuntimeValue?>inputs[0])
+        if ufunc is np_log1p:
+            return new_expr1(ValueType.Log1p, <RuntimeValue?>inputs[0])
+        if ufunc is np_log2:
+            return new_expr1(ValueType.Log2, <RuntimeValue?>inputs[0])
+        if ufunc is np_log10:
+            return new_expr1(ValueType.Log10, <RuntimeValue?>inputs[0])
+        if ufunc is np_sqrt:
+            return new_expr1(ValueType.Sqrt, <RuntimeValue?>inputs[0])
+        if ufunc is np_arcsin:
+            return new_expr1(ValueType.Asin, <RuntimeValue?>inputs[0])
+        if ufunc is np_arccos:
+            return new_expr1(ValueType.Acos, <RuntimeValue?>inputs[0])
+        if ufunc is np_arctan:
+            return new_expr1(ValueType.Atan, <RuntimeValue?>inputs[0])
+        if ufunc is np_arctan2:
+            return new_expr2(ValueType.Atan2,
+                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+        if ufunc is np_arcsinh:
+            return new_expr1(ValueType.Asinh, <RuntimeValue?>inputs[0])
+        if ufunc is np_arccosh:
+            return new_expr1(ValueType.Acosh, <RuntimeValue?>inputs[0])
+        if ufunc is np_arctanh:
+            return new_expr1(ValueType.Atanh, <RuntimeValue?>inputs[0])
+        if ufunc is np_sin:
+            return new_expr1(ValueType.Sin, <RuntimeValue?>inputs[0])
+        if ufunc is np_cos:
+            return new_expr1(ValueType.Cos, <RuntimeValue?>inputs[0])
+        if ufunc is np_tan:
+            return new_expr1(ValueType.Tan, <RuntimeValue?>inputs[0])
+        if ufunc is np_sinh:
+            return new_expr1(ValueType.Sinh, <RuntimeValue?>inputs[0])
+        if ufunc is np_cosh:
+            return new_expr1(ValueType.Cosh, <RuntimeValue?>inputs[0])
+        if ufunc is np_tanh:
+            return new_expr1(ValueType.Tanh, <RuntimeValue?>inputs[0])
+        if ufunc is np_hypot:
+            return new_expr2(ValueType.Hypot,
+                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+        if ufunc is np_rint:
+            arg0 = <RuntimeValue?>inputs[0]
+            if arg0.type_ == ValueType.Rint:
+                return arg0
+            return new_expr1(ValueType.Rint, arg0)
+        return NotImplemented
+
+cpdef inv(v):
+    if type(v) is bool:
+        return v is False
+    cdef RuntimeValue _v
+    if is_rtval(v):
+        _v = <RuntimeValue>v
+        if _v.type_ == ValueType.Not:
+            return _v.arg0
+        return new_expr1(ValueType.Not, _v)
+    return ~v
+
+cpdef convert_bool(_v):
+    cdef RuntimeValue v
+    if is_rtval(_v):
+        v = <RuntimeValue>(_v)
+        if v.type_ == ValueType.Int64:
+            v = v.arg0
+        if v.type_ == ValueType.Bool:
+            return v
+        return new_expr1(ValueType.Bool, v)
+    if isinstance(_v, cnpy.ndarray):
+        return cnpy.PyArray_Cast(_v, cnpy.NPY_BOOL)
+    return bool(_v)
+
+cpdef round_int64(_v):
+    cdef RuntimeValue v
+    if is_rtval(_v):
+        return round_int64_rt(<RuntimeValue>_v)
+    if isinstance(_v, cnpy.ndarray):
+        ary = <cnpy.ndarray>_v
+        if cnpy.PyArray_TYPE(ary) == cnpy.NPY_INT64:
+            return ary
+        if not (cnpy.PyArray_ISINTEGER(ary) or cnpy.PyArray_ISBOOL(ary)):
+            ary = <cnpy.ndarray>np_rint(ary)
+        return cnpy.PyArray_Cast(ary, cnpy.NPY_INT64)
+    return _round_int64(_v)
+
+cpdef ifelse(b, v1, v2):
+    if (isinstance(b, cnpy.ndarray) or isinstance(v1, cnpy.ndarray) or
+        isinstance(v2, cnpy.ndarray)):
+        return cnpy.PyArray_Where(b, v1, v2)
+    if same_value(v1, v2):
+        return v1
+    if is_rtval(b):
+        return new_expr3(ValueType.Select, b, wrap_value(v1), wrap_value(v2))
+    return v1 if b else v2
