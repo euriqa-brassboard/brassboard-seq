@@ -1,6 +1,6 @@
 # cython: language_level=3
 
-from brassboard_seq cimport rtval
+from brassboard_seq cimport action, rtval
 
 def new_invalid_rtval():
     # This should only happen if something really wrong happens.
@@ -10,3 +10,12 @@ def new_invalid_rtval():
     rv.arg0 = rtval.new_const(1)
     rv.arg1 = rtval.new_const(1)
     return rv
+
+def new_action(value, cond, bint is_pulse, bint exact_time, dict kws, int aid):
+    return action.new_action(value, cond, is_pulse, exact_time, kws, aid)
+
+def action_set_tid(action.Action action, int tid):
+    action.tid = tid
+
+def action_get_aid(action.Action action):
+    return action.aid
