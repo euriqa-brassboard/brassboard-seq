@@ -14,5 +14,6 @@ cython_link_libraries(brassboard_seq_utils)
 python_install_module("${CMAKE_CURRENT_SOURCE_DIR}/.." brassboard_seq
   __init__.py
   action.pyx
+  config.pyx
   rtval.pyx
   utils.pxd)
