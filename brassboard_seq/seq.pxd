@@ -42,6 +42,10 @@ cdef class SeqInfo:
     cdef Config config
     # Backtrace collection
     cdef BacktraceTracker bt_tracker
+    # Name<->channel ID mapping
+    cdef dict channel_name_map
+    cdef dict channel_path_map
+    cdef list channel_paths
 
 
 cdef class Seq(SubSeq):

@@ -1,6 +1,6 @@
 # cython: language_level=3
 
-from brassboard_seq cimport action, event_time, rtval
+from brassboard_seq cimport action, event_time, rtval, seq
 from cpython cimport PyObject
 
 import numpy as np
@@ -115,3 +115,6 @@ def event_time_is_ordered(event_time.EventTime t1, event_time.EventTime t2):
         assert event_time.is_ordered(t2, t1) == event_time.OrderBefore
         return 'OrderAfter'
     assert False
+
+def seq_get_channel_paths(seq.Seq s):
+    return s.seqinfo.channel_paths
