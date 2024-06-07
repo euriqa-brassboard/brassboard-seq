@@ -1,6 +1,7 @@
 # cython: language_level=3
 
 # Do not use relative import since it messes up cython file name tracking
+from brassboard_seq.action cimport new_action
 from brassboard_seq.event_time cimport round_time_int, round_time_rt
 from brassboard_seq.rtval cimport convert_bool, is_rtval, RuntimeValue
 
@@ -38,6 +39,28 @@ cdef class TimeStep(TimeSeq):
     def __init__(self):
         PyErr_Format(TypeError, "TimeStep cannot be created directly")
 
+    cdef int _set(self, chn, value, cond, bint is_pulse, bint exact_time, dict kws) except -1:
+        cdef int cid
+        if type(chn) is int:
+            cid = <int>chn
+            pycid = chn
+        else:
+            cid = self.seqinfo._get_channel_id(chn)
+            pycid = cid
+        cdef dict actions = self.actions
+        if pycid in actions:
+            PyErr_Format(ValueError, "Multiple action added for the same channel.")
+        action = new_action(value, cond, is_pulse, exact_time, kws)
+        actions[pycid] = action
+        return 0
+
+    def set(self, chn, value, *, cond=True, bint exact_time=False, **kws):
+        self._set(chn, value, combine_cond(self.cond, cond), False, exact_time, kws)
+        return self
+
+    def pulse(self, chn, value, *, cond=True, bint exact_time=False, **kws):
+        self._set(chn, value, combine_cond(self.cond, cond), True, exact_time, kws)
+        return self
 
 @cython.final
 cdef class ConditionalWrapper:

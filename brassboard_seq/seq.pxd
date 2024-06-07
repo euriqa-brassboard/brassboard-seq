@@ -30,6 +30,8 @@ cdef class TimeStep(TimeSeq):
     # The dict of channel -> actions
     cdef dict actions
 
+    cdef int _set(self, chn, value, cond, bint is_pulse, bint exact_time, dict kws) except -1
+
 
 cdef class ConditionalWrapper:
     cdef SubSeq seq
