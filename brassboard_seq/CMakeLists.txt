@@ -17,4 +17,5 @@ python_install_module("${CMAKE_CURRENT_SOURCE_DIR}/.." brassboard_seq
   config.pyx
   event_time.pyx
   rtval.pyx
+  seq.pyx
   utils.pxd)
