@@ -45,6 +45,9 @@ cdef class ConditionalWrapper:
         wrapper.cond = combine_cond(self.cond, cond)
         return wrapper
 
+    def wait(self, length, *, cond=True):
+        wait_cond(self.seq, length, combine_cond(self.cond, cond))
+
 cdef class SubSeq(TimeSeq):
     def __init__(self):
         PyErr_Format(TypeError, "SubSeq cannot be created directly")
@@ -54,6 +57,15 @@ cdef class SubSeq(TimeSeq):
         wrapper.seq = self
         wrapper.cond = combine_cond(self.cond, cond)
         return wrapper
+
+    def wait(self, length, *, cond=True):
+        wait_cond(self, length, combine_cond(self.cond, cond))
+
+cdef int wait_cond(SubSeq self, length, cond) except -1:
+    self.end_time = self.seqinfo.time_mgr.new_round_time(self.end_time, length,
+                                                         False, cond, None)
+    self.seqinfo.bt_tracker.record(event_time_key(<void*>self.end_time))
+    return 0
 
 @cython.no_gc
 @cython.final

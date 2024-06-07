@@ -56,3 +56,31 @@ def test_seq():
     c6 = c2.conditional(v2)
     cc6 = test_utils.seq_get_cond(c6)
     assert str(cc6) == f'{bv1} & bool({v2})'
+
+    with pytest.raises(ValueError, match="Time delay cannot be negative"):
+        s.wait(-0.001)
+
+    s.wait(0)
+    t1 = s.end_time
+    assert test_utils.event_time_id(t1) == 1
+    assert str(t1) == 'T[0] + 0 ps'
+
+    s.wait(0.001, cond=v2)
+    t2 = s.end_time
+    assert test_utils.event_time_id(t2) == 2
+    assert str(t2) == f'T[1] + (1 ms; if bool({v2}))'
+
+    c1.wait(0.002, cond=True)
+    t3 = s.end_time
+    assert test_utils.event_time_id(t3) == 3
+    assert str(t3) == 'T[2] + 2 ms'
+
+    c2.wait(0.0002)
+    t4 = s.end_time
+    assert test_utils.event_time_id(t4) == 4
+    assert str(t4) == f'T[3] + (200 us; if {bv1})'
+
+    c3.wait(1)
+    t5 = s.end_time
+    assert test_utils.event_time_id(t5) == 5
+    assert str(t5) == 'T[4] + (1 s; if False)'
