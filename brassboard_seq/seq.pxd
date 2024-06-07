@@ -41,6 +41,12 @@ cdef class SeqInfo:
     cdef TimeManager time_mgr
     # Global config object
     cdef Config config
+    # Name<->channel ID mapping
+    cdef dict channel_name_map
+    cdef dict channel_path_map
+    cdef list channel_paths
+
+    cdef int _get_channel_id(self, str name) except -1
 
 
 cdef class Seq(SubSeq):
