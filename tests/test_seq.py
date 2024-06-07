@@ -1,7 +1,7 @@
 #
 
 from brassboard_seq.config import Config
-from brassboard_seq import seq, rtval
+from brassboard_seq import seq, rtval, action
 import brassboard_seq_test_utils as test_utils
 import pytest
 
@@ -92,6 +92,10 @@ def test_seq():
     t6 = s.end_time
     assert test_utils.event_time_id(t6) == 6
     assert str(t6) == 'T[5] + 200 ms'
+    st1.set('artiq/ttl1', True, cond=True)
+    with pytest.raises(ValueError, match="Multiple actions added for "
+                       "the same channel at the same time on artiq/ttl1"):
+        st1.set('artiq/ttl1', True, cond=False)
 
     st2 = s.add_background(10)
     assert st2.start_time is t6
@@ -99,6 +103,7 @@ def test_seq():
     t7 = st2.end_time
     assert test_utils.event_time_id(t7) == 7
     assert str(t7) == 'T[6] + 10 s'
+    st2.pulse('artiq/ttl2', True, cond=False)
 
     st3 = s.add_floating(0.1)
     t8 = st3.start_time
@@ -108,6 +113,7 @@ def test_seq():
     assert test_utils.event_time_id(t9) == 9
     assert str(t8) == '<floating>'
     assert str(t9) == 'T[8] + 100 ms'
+    st3.pulse(1, v1, cond=bv1)
 
     st4 = s.add_at(t9, 0.12)
     assert st4.start_time is t9
@@ -115,6 +121,8 @@ def test_seq():
     assert s.end_time is t6
     assert test_utils.event_time_id(t10) == 10
     assert str(t10) == 'T[9] + 120 ms'
+    st4.set('artiq/ttl4', v2, exact_time=True)
+    assert s.get_channel_id('artiq/ttl4') == 3
 
     with pytest.raises(ValueError, match="Time delay cannot be negative"):
         st3.set_time(t7, -0.1)
@@ -128,6 +136,8 @@ def test_seq():
     t11 = s.end_time
     assert test_utils.event_time_id(t11) == 11
     assert str(t11) == f'T[6] + (200 ms; if {bv1})'
+    f1 = StaticFunction()
+    st5.pulse('artiq/analog', f1, random_keyword=123)
 
     st6 = c2.add_background(10)
     assert st6.start_time is t11
@@ -144,6 +154,8 @@ def test_seq():
     assert test_utils.event_time_id(t14) == 14
     assert str(t13) == '<floating>'
     assert str(t14) == f'T[13] + (100 ms; if {bv1})'
+    f2 = StaticFunction()
+    st7.set('artiq/analog', f2)
 
     st7.set_time(t12, 0.01)
     assert str(t13) == f'T[12] + (10 ms; if {bv1})'
@@ -384,3 +396,10 @@ def step2(s, len2, *, cond2=None):
     tid3 = test_utils.event_time_id(t3)
     assert tid3 == tid2 + 1
     assert s.end_time is t3
+
+class StaticFunction(action.RampFunction):
+    def __init__(self):
+        action.RampFunction.__init__(self)
+
+    def eval(self, t, length, oldval):
+        return t / 2 + oldval - length

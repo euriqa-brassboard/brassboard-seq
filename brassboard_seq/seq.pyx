@@ -1,12 +1,13 @@
 # cython: language_level=3
 
 # Do not use relative import since it messes up cython file name tracking
+from brassboard_seq.action cimport new_action
 from brassboard_seq.config cimport translate_channel
 from brassboard_seq.event_time cimport round_time_int, round_time_rt, \
   set_base_int, set_base_rt
 from brassboard_seq.rtval cimport convert_bool, is_rtval, RuntimeValue
 from brassboard_seq.utils cimport assume_not_none, _assume_not_none, \
-  event_time_key
+  action_key, event_time_key
 
 cimport cython
 from cpython cimport PyErr_Format, PyObject, PyDict_GetItemWithError, PyList_GET_SIZE, PyTuple_GET_SIZE, PyDict_Size
@@ -43,6 +44,39 @@ cdef class TimeStep(TimeSeq):
     def __init__(self):
         PyErr_Format(TypeError, "TimeStep cannot be created directly")
 
+    def set(self, chn, value, *, cond=True, bint exact_time=False, **kws):
+        timestep_set(self, chn, value, combine_cond(self.cond, cond),
+                     False, exact_time, kws)
+        return self
+
+    def pulse(self, chn, value, *, cond=True, bint exact_time=False, **kws):
+        timestep_set(self, chn, value, combine_cond(self.cond, cond),
+                     True, exact_time, kws)
+        return self
+
+cdef int timestep_set(TimeStep self, chn, value, cond, bint is_pulse,
+                      bint exact_time, dict kws) except -1:
+    cdef int cid
+    seqinfo = self.seqinfo
+    if type(chn) is int:
+        cid = <int>chn
+        pycid = chn
+    else:
+        cid = _get_channel_id(seqinfo, chn)
+        pycid = cid
+    cdef dict actions = self.actions
+    assume_not_none(actions)
+    if pycid in actions:
+        name = '/'.join(seqinfo.channel_paths[cid])
+        PyErr_Format(ValueError,
+                     "Multiple actions added for the same channel "
+                     "at the same time on %U.", <PyObject*>name)
+    self.seqinfo.bt_tracker.record(action_key(seqinfo.action_counter))
+    action = new_action(value, cond, is_pulse, exact_time, kws, seqinfo.action_counter)
+    seqinfo.action_counter += 1
+    assume_not_none(actions)
+    actions[pycid] = action
+    return 0
 
 @cython.final
 cdef class ConditionalWrapper:
@@ -210,6 +244,7 @@ cdef class Seq(SubSeq):
         seqinfo.channel_name_map = {}
         seqinfo.channel_path_map = {}
         seqinfo.channel_paths = []
+        seqinfo.action_counter = 0
         self.seqinfo = seqinfo
         self.end_time = seqinfo.time_mgr.new_time_int(None, 0, False, True, None)
         self.seqinfo.bt_tracker.record(event_time_key(<void*>self.end_time))

@@ -51,6 +51,7 @@ cdef class SeqInfo:
     cdef dict channel_name_map
     cdef dict channel_path_map
     cdef list channel_paths
+    cdef int action_counter
 
 
 cdef class Seq(SubSeq):
