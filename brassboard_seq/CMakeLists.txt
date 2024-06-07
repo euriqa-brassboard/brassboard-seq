@@ -9,4 +9,5 @@ python_install_module("${CMAKE_CURRENT_SOURCE_DIR}/.." brassboard_seq
   action.pyx
   config.pyx
   event_time.pyx
-  rtval.pyx)
+  rtval.pyx
+  seq.pyx)
