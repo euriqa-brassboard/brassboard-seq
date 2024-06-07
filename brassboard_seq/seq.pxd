@@ -44,6 +44,8 @@ cdef class SubSeq(TimeSeq):
 
     cpdef ConditionalWrapper conditional(self, cond)
 
+    cdef int wait_cond(self, length, cond) except -1 # length in seconds
+
 
 cdef class SeqInfo:
     # EventTime manager
