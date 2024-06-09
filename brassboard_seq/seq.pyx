@@ -4,7 +4,7 @@
 from brassboard_seq.rtval cimport convert_bool
 
 cimport cython
-from cpython cimport PyErr_Format, PyObject, PyDict_GetItemWithError, PyList_GET_SIZE
+from cpython cimport PyErr_Format, PyObject, PyDict_GetItemWithError, PyList_GET_SIZE, PyTuple_GET_SIZE, PyDict_Size
 
 cdef combine_cond(cond1, new_cond):
     if cond1 is False:
@@ -46,6 +46,28 @@ cdef class ConditionalWrapper:
     def wait(self, length, *, cond=True):
         self.seq.wait_cond(length, combine_cond(self.cond, cond))
 
+    def add_step(self, first_arg, *args, **kwargs):
+        seq = self.seq
+        step = seq.add_step_real(self.cond, seq.end_time, first_arg, args, kwargs)
+        seq.end_time = step.end_time
+        return step
+
+    def add_background(self, first_arg, *args, **kwargs):
+        seq = self.seq
+        return seq.add_step_real(self.cond, seq.end_time, first_arg, args, kwargs)
+
+    def add_floating(self, first_arg, *args, **kwargs):
+        seq = self.seq
+        cond = self.cond
+        return seq.add_step_real(cond,
+                                 seq.seqinfo.time_mgr.new_time_int(None, 0, True,
+                                                                   cond, None),
+                                 first_arg, args, kwargs)
+
+    def add_at(self, EventTime tp, first_arg, *args, **kwargs):
+        seq = self.seq
+        return seq.add_step_real(self.cond, tp, first_arg, args, kwargs)
+
 cdef class SubSeq(TimeSeq):
     def __init__(self):
         PyErr_Format(TypeError, "SubSeq cannot be created directly")
@@ -64,6 +86,58 @@ cdef class SubSeq(TimeSeq):
 
     def wait(self, length, *, cond=True):
         self.wait_cond(length, combine_cond(self.cond, cond))
+
+    @cython.final
+    cdef SubSeq add_custom_step(self, cond, EventTime start_time, cb,
+                                tuple args, dict kwargs):
+        subseq = <SubSeq>SubSeq.__new__(SubSeq)
+        init_subseq(subseq, self, start_time, cond)
+        cb(subseq, *args, **kwargs)
+        self.sub_seqs.append(subseq)
+        return subseq
+
+    @cython.final
+    cdef TimeStep add_time_step(self, cond, EventTime start_time, length):
+        step = <TimeStep>TimeStep.__new__(TimeStep)
+        init_timeseq(step, self, start_time, cond, True)
+        step.actions = {}
+        step.length = length
+        step.end_time = self.seqinfo.time_mgr.new_round_time(start_time, length,
+                                                             False, cond, None)
+        self.sub_seqs.append(step)
+        return step
+
+    @cython.final
+    cdef TimeSeq add_step_real(self, cond, EventTime start_time,
+                               first_arg, tuple args, dict kwargs):
+        if callable(first_arg):
+            return self.add_custom_step(cond, start_time, first_arg, args, kwargs)
+        elif not PyTuple_GET_SIZE(args) and not PyDict_Size(kwargs):
+            return self.add_time_step(cond, start_time, first_arg)
+        else:
+            sargs = str(args)
+            skwargs = str(kwargs)
+            PyErr_Format(ValueError,
+                         "Unexpected arguments when creating new time step, %U, %U.",
+                         <PyObject*>sargs, <PyObject*>skwargs)
+
+    def add_step(self, first_arg, *args, **kwargs):
+        step = self.add_step_real(self.cond, self.end_time, first_arg, args, kwargs)
+        self.end_time = step.end_time
+        return step
+
+    def add_background(self, first_arg, *args, **kwargs):
+        return self.add_step_real(self.cond, self.end_time, first_arg, args, kwargs)
+
+    def add_floating(self, first_arg, *args, **kwargs):
+        cond = self.cond
+        return self.add_step_real(cond,
+                                  self.seqinfo.time_mgr.new_time_int(None, 0, True,
+                                                                     cond, None),
+                                  first_arg, args, kwargs)
+
+    def add_at(self, EventTime tp, first_arg, *args, **kwargs):
+        return self.add_step_real(self.cond, tp, first_arg, args, kwargs)
 
 @cython.no_gc
 @cython.final
