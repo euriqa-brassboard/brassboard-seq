@@ -45,6 +45,12 @@ cdef class SubSeq(TimeSeq):
     cpdef ConditionalWrapper conditional(self, cond)
 
     cdef int wait_cond(self, length, cond) except -1 # length in seconds
+    cdef SubSeq add_custom_step(self, cond, EventTime start_time, cb,
+                                tuple args, dict kwargs)
+    # length in seconds
+    cdef TimeStep add_time_step(self, cond, EventTime start_time, length)
+    cdef TimeSeq add_step_real(self, cond, EventTime start_time,
+                               first_arg, tuple args, dict kwargs)
 
 
 cdef class SeqInfo:
