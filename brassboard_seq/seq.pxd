@@ -38,6 +38,7 @@ cdef class ConditionalWrapper:
 cdef class SubSeq(TimeSeq):
     # The list of subsequences and steps in this subsequcne
     cdef list sub_seqs
+    cdef TimeStep dummy_step
 
 
 cdef class SeqInfo:
