@@ -1,7 +1,22 @@
 # cython: language_level=3
 
+# Do not use relative import since it messes up cython file name tracking
+from brassboard_seq.rtval cimport convert_bool
+
 cimport cython
 from cpython cimport PyErr_Format, PyObject, PyDict_GetItemWithError, PyList_GET_SIZE
+
+cdef combine_cond(cond1, new_cond):
+    if cond1 is False:
+        return False
+    cond2 = convert_bool(new_cond)
+    if cond1 is True:
+        return cond2
+    if cond2 is True:
+        return cond1
+    if cond2 is False:
+        return False
+    return cond1 & cond2
 
 cdef class TimeSeq:
     def __init__(self):
@@ -16,9 +31,27 @@ cdef class TimeStep(TimeSeq):
     def __init__(self):
         PyErr_Format(TypeError, "TimeStep cannot be created directly")
 
+
+@cython.final
+cdef class ConditionalWrapper:
+    def __init__(self):
+        PyErr_Format(TypeError, "ConditionalWrapper cannot be created directly")
+
+    cpdef ConditionalWrapper conditional(self, cond):
+        wrapper = <ConditionalWrapper>ConditionalWrapper.__new__(ConditionalWrapper)
+        wrapper.seq = self.seq
+        wrapper.cond = combine_cond(self.cond, cond)
+        return wrapper
+
 cdef class SubSeq(TimeSeq):
     def __init__(self):
         PyErr_Format(TypeError, "SubSeq cannot be created directly")
+
+    cpdef ConditionalWrapper conditional(self, cond):
+        wrapper = <ConditionalWrapper>ConditionalWrapper.__new__(ConditionalWrapper)
+        wrapper.seq = self
+        wrapper.cond = combine_cond(self.cond, cond)
+        return wrapper
 
 @cython.no_gc
 @cython.final
