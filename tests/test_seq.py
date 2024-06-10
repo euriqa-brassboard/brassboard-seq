@@ -24,6 +24,7 @@ def test_seq():
     s = seq.Seq(conf)
     assert s.start_time is None
     assert str(s.end_time) == '0 ps'
+    assert s.current_time is s.end_time
     assert s.get_channel_id('artiq/ttl1') == 0
     assert s.get_channel_id('test_ttl') == 0
     assert s.get_channel_id('artiq/ttl3') == 1

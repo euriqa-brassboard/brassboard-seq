@@ -84,6 +84,10 @@ cdef class SubSeq(TimeSeq):
     def __init__(self):
         PyErr_Format(TypeError, "SubSeq cannot be created directly")
 
+    @property
+    def current_time(self):
+        return self.end_time
+
     def conditional(self, cond):
         wrapper = <ConditionalWrapper>ConditionalWrapper.__new__(ConditionalWrapper)
         wrapper.seq = self
