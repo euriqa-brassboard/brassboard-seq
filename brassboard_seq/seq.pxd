@@ -30,6 +30,11 @@ cdef class TimeStep(TimeSeq):
     cdef dict actions
 
 
+cdef class ConditionalWrapper:
+    cdef SubSeq seq
+    cdef object cond
+
+
 cdef class SubSeq(TimeSeq):
     # The list of subsequences and steps in this subsequcne
     cdef list sub_seqs

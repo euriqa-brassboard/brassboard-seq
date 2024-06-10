@@ -118,3 +118,8 @@ def event_time_is_ordered(event_time.EventTime t1, event_time.EventTime t2):
 
 def seq_get_channel_paths(seq.Seq s):
     return s.seqinfo.channel_paths
+
+def seq_get_cond(s):
+    if type(s) is seq.ConditionalWrapper:
+        return (<seq.ConditionalWrapper>s).cond
+    return (<seq.TimeSeq?>s).cond
