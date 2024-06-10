@@ -146,6 +146,10 @@ cdef class SubSeq(TimeSeq):
     def add_at(self, EventTime tp, first_arg, *args, **kwargs):
         return self.add_step_real(self.cond, tp, first_arg, args, kwargs)
 
+    @property
+    def current_time(self):
+        return self.end_time
+
 @cython.no_gc
 @cython.final
 cdef class SeqInfo:
