@@ -245,6 +245,17 @@ def test_seq():
     with pytest.raises(TypeError):
         c2.wait_for(v2, 0.1)
 
+    s.set('artiq/ttl1', False, cond=True)
+    s.set('artiq/ttl2', False, exact_time=True)
+    with pytest.raises(ValueError, match="Multiple action"):
+        s.set('artiq/ttl2', True)
+    s.wait(0, cond=False)
+    s.set('artiq/ttl2', True, kwarg=11)
+    with pytest.raises(ValueError, match="Multiple action"):
+        c2.set('artiq/ttl2', True)
+    c2.set('artiq/ttl5', True)
+    c2.set('artiq/ttl6', True, cond=False)
+
 def test_seq_error1():
     conf = Config()
     s = seq.new_seq(conf)

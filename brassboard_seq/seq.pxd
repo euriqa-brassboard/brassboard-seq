@@ -43,6 +43,7 @@ cdef class ConditionalWrapper:
 cdef class SubSeq(TimeSeq):
     # The list of subsequences and steps in this subsequcne
     cdef list sub_seqs
+    cdef TimeStep dummy_step
 
     cpdef ConditionalWrapper conditional(self, cond)
 
@@ -55,6 +56,8 @@ cdef class SubSeq(TimeSeq):
                                first_arg, tuple args, dict kwargs)
 
     cdef int wait_for_cond(self, tp, offset, cond) except -1 # offset in seconds
+
+    cdef int _set(self, chn, value, cond, bint exact_time, dict kws) except -1
 
 
 cdef class SeqInfo:

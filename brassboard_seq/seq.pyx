@@ -101,6 +101,10 @@ cdef class ConditionalWrapper:
     def wait_for(self, tp, offset=0):
         self.seq.wait_for_cond(tp, offset, self.cond)
 
+    def set(self, chn, value, *, cond=True, bint exact_time=False, **kws):
+        self.seq._set(chn, value, combine_cond(self.cond, cond), exact_time, kws)
+        return self
+
 cdef class SubSeq(TimeSeq):
     def __init__(self):
         PyErr_Format(TypeError, "SubSeq cannot be created directly")
@@ -189,6 +193,22 @@ cdef class SubSeq(TimeSeq):
     @property
     def current_time(self):
         return self.end_time
+
+    cdef int _set(self, chn, value, cond, bint exact_time, dict kws) except -1:
+        step = self.dummy_step
+        start_time = self.end_time
+        if step is None or step.end_time is not start_time:
+            step = self.add_time_step(self.cond, start_time, 0)
+            self.dummy_step = step
+            # Update the current time so that a normal step added later
+            # this is treated as ordered after this set event
+            # rather than at the same time.
+            self.end_time = step.end_time
+        return step._set(chn, value, cond, False, exact_time, kws)
+
+    def set(self, chn, value, *, cond=True, bint exact_time=False, **kws):
+        self._set(chn, value, combine_cond(self.cond, cond), exact_time, kws)
+        return self
 
 @cython.no_gc
 @cython.final
