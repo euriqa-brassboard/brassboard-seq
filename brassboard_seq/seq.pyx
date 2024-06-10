@@ -75,6 +75,9 @@ cdef class ConditionalWrapper:
         seq = self.seq
         return seq.add_step_real(self.cond, tp, first_arg, args, kwargs)
 
+    def wait_for(self, tp, offset=0):
+        self.seq.wait_for_cond(tp, offset, self.cond)
+
 cdef class SubSeq(TimeSeq):
     def __init__(self):
         PyErr_Format(TypeError, "SubSeq cannot be created directly")
@@ -145,6 +148,20 @@ cdef class SubSeq(TimeSeq):
 
     def add_at(self, EventTime tp, first_arg, *args, **kwargs):
         return self.add_step_real(self.cond, tp, first_arg, args, kwargs)
+
+    @cython.final
+    cdef int wait_for_cond(self, _tp0, offset, cond) except -1:
+        cdef EventTime tp0
+        if type(_tp0) is EventTime:
+            tp0 = <EventTime>_tp0
+        else:
+            tp0 = (<TimeSeq?>_tp0).end_time
+        self.end_time = self.seqinfo.time_mgr.new_round_time(self.end_time, offset,
+                                                             False, cond, tp0)
+        return 0
+
+    def wait_for(self, tp, offset=0):
+        self.wait_for_cond(tp, offset, self.cond)
 
     @property
     def current_time(self):
