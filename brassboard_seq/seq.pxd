@@ -52,6 +52,8 @@ cdef class SubSeq(TimeSeq):
     cdef TimeSeq add_step_real(self, cond, EventTime start_time,
                                first_arg, tuple args, dict kwargs)
 
+    cdef int wait_for_cond(self, tp, offset, cond) except -1 # offset in seconds
+
 
 cdef class SeqInfo:
     # EventTime manager
