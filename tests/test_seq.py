@@ -221,6 +221,25 @@ def test_seq():
     assert test_utils.event_time_id(t33) == 33
     assert str(t33) == f'T[32] + (int64({v2} * 1000000000000); if False)'
 
+    s.wait_for(st14, 0.01)
+    t34 = s.current_time
+    assert test_utils.event_time_id(t34) == 34
+    assert str(t34) == 'T[25]; wait_for(T[28] + 10 ms)'
+
+    c2.wait_for(t33)
+    t35 = s.current_time
+    assert test_utils.event_time_id(t35) == 35
+    assert str(t35) == f'T[34]; wait_for(T[33] + 0 ps; if {bv1})'
+
+    with pytest.raises(TypeError):
+        s.wait_for(1)
+    with pytest.raises(TypeError):
+        s.wait_for(1, 0.1)
+    with pytest.raises(TypeError):
+        c2.wait_for(v1)
+    with pytest.raises(TypeError):
+        c2.wait_for(v2, 0.1)
+
 def test_seq_error1():
     conf = Config()
     s = seq.Seq(conf)

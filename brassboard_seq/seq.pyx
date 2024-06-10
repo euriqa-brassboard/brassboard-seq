@@ -80,6 +80,9 @@ cdef class ConditionalWrapper:
         seq = self.seq
         return add_step_real(seq, self.cond, tp, first_arg, args, kwargs)
 
+    def wait_for(self, tp, offset=0):
+        wait_for_cond(self.seq, tp, offset, self.cond)
+
 cdef class SubSeq(TimeSeq):
     def __init__(self):
         PyErr_Format(TypeError, "SubSeq cannot be created directly")
@@ -114,6 +117,9 @@ cdef class SubSeq(TimeSeq):
 
     def add_at(self, EventTime tp, first_arg, *args, **kwargs):
         return add_step_real(self, self.cond, tp, first_arg, args, kwargs)
+
+    def wait_for(self, tp, offset=0):
+        wait_for_cond(self, tp, offset, self.cond)
 
 cdef int wait_cond(SubSeq self, length, cond) except -1:
     self.end_time = self.seqinfo.time_mgr.new_round_time(self.end_time, length,
@@ -154,6 +160,17 @@ cdef TimeSeq add_step_real(SubSeq self, cond, EventTime start_time,
         PyErr_Format(ValueError,
                      "Unexpected arguments when creating new time step, %U, %U.",
                      <PyObject*>sargs, <PyObject*>skwargs)
+
+cdef int wait_for_cond(SubSeq self, _tp0, offset, cond) except -1:
+    cdef EventTime tp0
+    if type(_tp0) is EventTime:
+        tp0 = <EventTime>_tp0
+    else:
+        tp0 = (<TimeSeq?>_tp0).end_time
+    self.end_time = self.seqinfo.time_mgr.new_round_time(self.end_time, offset,
+                                                         False, cond, tp0)
+    self.seqinfo.bt_tracker.record(event_time_key(<void*>self.end_time))
+    return 0
 
 @cython.no_gc
 @cython.final
