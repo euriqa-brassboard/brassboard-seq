@@ -1,6 +1,9 @@
 # cython: language_level=3
 
 from brassboard_seq cimport action, rtval
+from cpython cimport PyObject
+
+import numpy as np
 
 def new_invalid_rtval():
     # This should only happen if something really wrong happens.
@@ -19,3 +22,27 @@ def action_set_tid(action.Action action, int tid):
 
 def action_get_aid(action.Action action):
     return action.aid
+
+cdef class RampBufferTest:
+    cdef action.RampFunction func
+    cdef action.RampBuffer buff
+    def __init__(self, func):
+        self.func = func
+        self.buff = action.new_ramp_buffer()
+
+    def eval_compile(self, t, length, oldval):
+        action.ramp_set_compile_params(self.func)
+        return action.ramp_eval(self.func, t, length, oldval)
+
+    def eval_runtime(self, age, ts, length, oldval):
+        action.ramp_set_runtime_params(self.func, age)
+        nt = len(ts)
+        cdef double *buff_ptr = action.rampbuffer_alloc_input(self.buff, nt)
+        for i in range(nt):
+            buff_ptr[i] = ts[i]
+        cdef double *output_ptr = action.rampbuffer_eval(self.buff, self.func,
+                                                         length, oldval)
+        output = np.empty(nt)
+        for i in range(nt):
+            output[i] = output_ptr[i]
+        return output

@@ -38,3 +38,19 @@ cdef inline Action new_action(value, cond, bint is_pulse, bint exact_time, dict 
     self.kws = kws if PyDict_Size(kws) else None
     self.aid = aid
     return self
+
+cdef class RampFunction:
+    cdef dict params
+    cdef object _eval
+
+cdef ramp_eval(RampFunction self, t, length, oldval)
+cdef int ramp_set_compile_params(RampFunction self) except -1
+cdef int ramp_set_runtime_params(RampFunction self, unsigned age) except -1
+
+cdef class RampBuffer:
+    cdef object input_buff
+    cdef object output_buff
+
+cdef RampBuffer new_ramp_buffer()
+cdef double *rampbuffer_alloc_input(self, int size) except NULL
+cdef double *rampbuffer_eval(self, func, length, oldval) except NULL
