@@ -10,4 +10,5 @@ python_test("${CMAKE_BINARY_DIR}"
   test_event_time.py
   test_scan.py
   test_seq.py
+  test_seq_compile.py
 )

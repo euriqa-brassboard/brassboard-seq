@@ -59,6 +59,8 @@ cdef class SubSeq(TimeSeq):
 
     cdef int _set(self, chn, value, cond, bint exact_time, dict kws) except -1
 
+    cdef int collect_actions(self, list actions) except -1
+
 
 cdef class SeqInfo:
     # EventTime manager
@@ -74,6 +76,8 @@ cdef class SeqInfo:
 
 
 cdef class Seq(SubSeq):
-    pass
+    cdef list all_actions
+
+    cdef int finalize(self) except -1
 
 cpdef Seq new_seq(Config config)
