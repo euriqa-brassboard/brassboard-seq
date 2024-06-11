@@ -9,6 +9,10 @@ from brassboard_seq.rtval cimport convert_bool, is_rtval, RuntimeValue
 from brassboard_seq.utils cimport assume_not_none, _assume_not_none, \
   action_key, event_time_key
 
+cdef io # hide import
+import io
+cdef StringIO = io.StringIO
+
 cimport cython
 from cpython cimport PyErr_Format, PyObject, PyDict_GetItemWithError, PyList_GET_SIZE, PyTuple_GET_SIZE, PyDict_Size
 
@@ -54,6 +58,14 @@ cdef class TimeStep(TimeSeq):
                      True, exact_time, kws)
         return self
 
+    def __str__(self):
+        io = StringIO()
+        timestep_show(self, io.write, 0)
+        return io.getvalue()
+
+    def __repr__(self):
+        return str(self)
+
 cdef int timestep_set(TimeStep self, chn, value, cond, bint is_pulse,
                       bint exact_time, dict kws) except -1:
     cdef int cid
@@ -76,6 +88,20 @@ cdef int timestep_set(TimeStep self, chn, value, cond, bint is_pulse,
     seqinfo.action_counter += 1
     assume_not_none(actions)
     actions[pycid] = action
+    return 0
+
+cdef int timestep_show(TimeStep self, write, int indent) except -1:
+    write(' ' * indent)
+    write(f'TimeStep({self.length})@T[{self.start_time.data.id}]')
+    cond = self.cond
+    if cond is not True:
+        write(f' if {cond}\n')
+    else:
+        write('\n')
+    for (chn, action) in self.actions.items():
+        chn = '/'.join(self.seqinfo.channel_paths[chn])
+        write(' ' * (indent + 2))
+        write(f'{chn}: {str(action)}\n')
     return 0
 
 @cython.final
@@ -121,6 +147,21 @@ cdef class ConditionalWrapper:
         subseq_set(self.seq, chn, value, combine_cond(self.cond, cond), exact_time, kws)
         return self
 
+    def __str__(self):
+        io = StringIO()
+        conditionalwrapper_show(self, io.write, 0)
+        return io.getvalue()
+
+    def __repr__(self):
+        return str(self)
+
+cdef int conditionalwrapper_show(ConditionalWrapper self, write, int indent) except -1:
+    write(' ' * indent)
+    write(f'ConditionalWrapper({self.cond}) for\n')
+    if type(self.seq) == Seq:
+        return seq_show(self.seq, write, indent + 2)
+    return subseq_show(self.seq, write, indent + 2)
+
 cdef class SubSeq(TimeSeq):
     def __init__(self):
         PyErr_Format(TypeError, "SubSeq cannot be created directly")
@@ -162,6 +203,14 @@ cdef class SubSeq(TimeSeq):
     def set(self, chn, value, *, cond=True, bint exact_time=False, **kws):
         subseq_set(self, chn, value, combine_cond(self.cond, cond), exact_time, kws)
         return self
+
+    def __str__(self):
+        io = StringIO()
+        subseq_show(self, io.write, 0)
+        return io.getvalue()
+
+    def __repr__(self):
+        return str(self)
 
 cdef int wait_cond(SubSeq self, length, cond) except -1:
     self.end_time = self.seqinfo.time_mgr.new_round_time(self.end_time, length,
@@ -226,6 +275,26 @@ cdef int subseq_set(SubSeq self, chn, value, cond, bint exact_time, dict kws) ex
         self.end_time = step.end_time
     return timestep_set(step, chn, value, cond, False, exact_time, kws)
 
+cdef int subseq_show_subseqs(SubSeq self, write, int indent) except -1:
+    for _subseq in self.sub_seqs:
+        subseq = <TimeSeq>_subseq
+        if type(subseq) is TimeStep:
+            timestep_show(<TimeStep>subseq, write, indent)
+        else:
+            subseq_show(<SubSeq>subseq, write, indent)
+    return 0
+
+cdef int subseq_show(SubSeq self, write, int indent) except -1:
+    write(' ' * indent)
+    write(f'SubSeq@T[{self.start_time.data.id}] - T[{self.end_time.data.id}]')
+    cond = self.cond
+    if cond is not True:
+        write(f' if {cond}\n')
+    else:
+        write('\n')
+    subseq_show_subseqs(self, write, indent + 2)
+    return 0
+
 @cython.no_gc
 @cython.final
 cdef class SeqInfo:
@@ -268,6 +337,26 @@ cdef class Seq(SubSeq):
         self.seqinfo = seqinfo
         self.end_time = seqinfo.time_mgr.new_time_int(None, 0, False, True, None)
         self.seqinfo.bt_tracker.record(event_time_key(<void*>self.end_time))
+
+    def __str__(self):
+        io = StringIO()
+        seq_show(self, io.write, 0)
+        return io.getvalue()
+
+    def __repr__(self):
+        return str(self)
+
+cdef int seq_show(Seq self, write, int indent) except -1:
+    write(' ' * indent)
+    write(f'Seq - T[{self.end_time.data.id}]\n')
+    cdef int i = 0
+    for t in self.seqinfo.time_mgr.event_times:
+        write(' ' * (indent + 1))
+        write(f'T[{i}]: ')
+        write(str(t))
+        write('\n')
+        i += 1
+    return subseq_show_subseqs(self, write, indent + 2)
 
 cdef inline void init_timeseq(TimeSeq self, SubSeq parent,
                               EventTime start_time, cond) noexcept:
