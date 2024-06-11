@@ -1,13 +1,15 @@
 # cython: language_level=3
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.action cimport new_action
+from brassboard_seq.action cimport new_action, Action, RampFunction, \
+  ramp_eval, ramp_set_compile_params
 from brassboard_seq.config cimport translate_channel
-from brassboard_seq.event_time cimport round_time_int, round_time_rt, \
+from brassboard_seq cimport event_time
+from brassboard_seq.event_time cimport is_ordered, round_time_int, round_time_rt, \
   set_base_int, set_base_rt
-from brassboard_seq.rtval cimport convert_bool, is_rtval, RuntimeValue
+from brassboard_seq.rtval cimport convert_bool, ifelse, is_rtval, RuntimeValue
 from brassboard_seq.utils cimport assume_not_none, _assume_not_none, \
-  action_key, assert_key, event_time_key
+  action_key, assert_key, bb_err_format, bb_raise, event_time_key, set_global_tracker
 
 cdef io # hide import
 import io
@@ -15,6 +17,28 @@ cdef StringIO = io.StringIO
 
 cimport cython
 from cpython cimport PyErr_Format, PyObject, PyDict_GetItemWithError, PyList_GET_SIZE, PyTuple_GET_SIZE, PyDict_Size
+
+cdef extern from *:
+    """
+    #include "Python.h"
+
+    static inline PyObject *new_list_of_list(int n)
+    {
+        PyObject *list = PyList_New(n);
+        if (!list)
+            return NULL;
+        for (int i = 0; i < n; i++) {
+            PyObject *sublist = PyList_New(0);
+            if (!sublist) {
+                Py_DECREF(list);
+                return NULL;
+            }
+            PyList_SET_ITEM(list, i, sublist);
+        }
+        return list;
+    }
+    """
+    list new_list_of_list(int n)
 
 cdef combine_cond(cond1, new_cond):
     if cond1 is False:
@@ -303,6 +327,30 @@ cdef int subseq_show(SubSeq self, write, int indent) except -1:
     subseq_show_subseqs(self, write, indent + 2)
     return 0
 
+cdef int collect_actions(SubSeq self, list actions) except -1:
+    _assume_not_none(<void*>self.sub_seqs)
+    for _subseq in self.sub_seqs:
+        subseq = <TimeSeq>_subseq
+        if type(subseq) is not TimeStep:
+            collect_actions(<SubSeq>subseq, actions)
+            continue
+        step = <TimeStep>subseq
+        tid = step.start_time.data.id
+        end_tid = step.end_time.data.id
+        length = step.length
+        _assume_not_none(<void*>step.actions)
+        for (_chn, _action) in step.actions.items():
+            chn = <int>_chn
+            action = <Action>_action
+            action.tid = tid
+            action.end_tid = end_tid
+            action.length = length
+            assume_not_none(actions)
+            _actions = <list>actions[chn]
+            assume_not_none(_actions)
+            _actions.append(action)
+    return 0
+
 @cython.no_gc
 @cython.final
 cdef class SeqInfo:
@@ -354,6 +402,81 @@ cdef class Seq(SubSeq):
 
     def __repr__(self):
         return str(self)
+
+    cdef int finalize(self) except -1:
+        bt_guard = set_global_tracker(&self.seqinfo.bt_tracker)
+        seqinfo = self.seqinfo
+        time_mgr = seqinfo.time_mgr
+        time_mgr.finalize()
+        _assume_not_none(<void*>seqinfo.channel_name_map)
+        seqinfo.channel_name_map.clear() # Free up memory
+        cdef int nchn = PyList_GET_SIZE(seqinfo.channel_paths)
+        all_actions = new_list_of_list(nchn)
+        collect_actions(self, all_actions)
+        event_times = time_mgr.event_times
+        cdef EventTime last_time
+        cdef bint last_is_start
+        cdef int cid = -1
+        cdef int tid
+        assume_not_none(all_actions)
+        for _actions in all_actions:
+            cid += 1
+            actions = <list>_actions
+            assume_not_none(actions)
+            actions.sort()
+            value = 0
+            last_time = None
+            last_is_start = False
+            assume_not_none(actions)
+            tid = -1
+            for _action in actions:
+                action = <Action>_action
+                if action.tid == tid:
+                    # It is difficult to decide the ordering of actions
+                    # if multiple were added to exactly the same time points.
+                    # We disallow this in the same timestep and we'll also disallow
+                    # this here.
+                    name = '/'.join(seqinfo.channel_paths[cid])
+                    bb_err_format(ValueError, action_key(action.aid),
+                                  "Multiple actions added for the same channel "
+                                  "at the same time on %U.", <PyObject*>name)
+                tid = action.tid
+                assume_not_none(event_times)
+                start_time = <EventTime>event_times[tid]
+                if last_time is not None:
+                    o = is_ordered(last_time, start_time)
+                    if (o != event_time.OrderBefore and
+                        (o != event_time.OrderEqual or last_is_start)):
+                        name = '/'.join(seqinfo.channel_paths[cid])
+                        bb_err_format(ValueError, action_key(action.aid),
+                                      "Actions on %U is not statically ordered",
+                                      <PyObject*>name)
+                action.prev_val = value
+                action_value = action.value
+                if not action.data.is_pulse:
+                    if isinstance(action_value, RampFunction):
+                        rampf = <RampFunction>action_value
+                        try:
+                            ramp_set_compile_params(rampf)
+                            length = action.length
+                            new_value = ramp_eval(rampf, length, length, value)
+                        except Exception as ex:
+                            bb_raise(ex, action_key(action.aid))
+                        assume_not_none(event_times)
+                        last_time = <EventTime>event_times[action.end_tid]
+                        last_is_start = False
+                    else:
+                        new_value = action_value
+                        last_time = start_time
+                        last_is_start = True
+                    value = ifelse(action.cond, new_value, value)
+                else:
+                    assume_not_none(event_times)
+                    last_time = <EventTime>event_times[action.end_tid]
+                    last_is_start = False
+                action.end_val = value
+        self.all_actions = all_actions
+        return 0
 
 cdef int seq_show(Seq self, write, int indent) except -1:
     write(' ' * indent)

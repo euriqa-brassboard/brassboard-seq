@@ -58,4 +58,6 @@ cdef class SeqInfo:
 
 
 cdef class Seq(SubSeq):
-    pass
+    cdef list all_actions
+
+    cdef int finalize(self) except -1

@@ -12,4 +12,5 @@ python_test("${CMAKE_BINARY_DIR}"
   test_scan.py
   test_scan_no_yaml.py
   test_seq.py
+  test_seq_compile.py
 )
