@@ -79,6 +79,48 @@ def test_cond_order1():
     assert info2['length'] == 2
     assert info2['end_val'] is False
 
+    test_utils.seq_runtime_finalize(s, 1)
+    assert test_utils.action_get_cond_val(action1) is True
+    assert test_utils.action_get_cond_val(action2) is True
+    total_time, times = test_utils.seq_get_all_times(s)
+
+    assert times == [0,
+                     100_000_000_000,
+                     1100_000_000_000,
+                     1100_000_000_000,
+                     3100_000_000_000]
+    assert total_time == 3100_000_000_000
+
+    c1val = False
+    test_utils.seq_runtime_finalize(s, 2)
+    assert test_utils.action_get_cond_val(action1) is c1val
+    assert test_utils.action_get_cond_val(action2) is True
+    total_time, times = test_utils.seq_get_all_times(s)
+
+    assert times == [0,
+                     100_000_000_000,
+                     100_000_000_000,
+                     100_000_000_000,
+                     2100_000_000_000]
+    assert total_time == 2100_000_000_000
+
+    c2val = False
+    test_utils.seq_runtime_finalize(s, 3)
+    assert test_utils.action_get_cond_val(action1) is c1val
+    assert test_utils.action_get_cond_val(action2) is True
+    total_time, times = test_utils.seq_get_all_times(s)
+
+    assert times == [0,
+                     100_000_000_000,
+                     100_000_000_000,
+                     0,
+                     2000_000_000_000]
+    assert total_time == 2000_000_000_000
+
+    c1val = True
+    with pytest.raises(ValueError, match="Action time order violation"):
+        test_utils.seq_runtime_finalize(s, 4)
+
 def test_cond_order2():
     s = new_seq()
 
@@ -145,6 +187,51 @@ def test_cond_order2():
     assert info2['prev_val'] is info1['end_val']
     assert info2['length'] == 2
     assert info2['end_val'] is False
+
+    test_utils.seq_runtime_finalize(s, 1)
+    assert test_utils.action_get_cond_val(action1) is True
+    assert test_utils.action_get_cond_val(action2) is True
+    total_time, times = test_utils.seq_get_all_times(s)
+
+    assert times == [0,
+                     100_000_000_000,
+                     1100_000_000_000,
+                     1100_000_000_000,
+                     1100_000_000_000,
+                     3100_000_000_000]
+    assert total_time == 3100_000_000_000
+
+    c1val = False
+    test_utils.seq_runtime_finalize(s, 2)
+    assert test_utils.action_get_cond_val(action1) is c1val
+    assert test_utils.action_get_cond_val(action2) is True
+    total_time, times = test_utils.seq_get_all_times(s)
+
+    assert times == [0,
+                     100_000_000_000,
+                     100_000_000_000,
+                     100_000_000_000,
+                     100_000_000_000,
+                     2100_000_000_000]
+    assert total_time == 2100_000_000_000
+
+    c2val = False
+    test_utils.seq_runtime_finalize(s, 3)
+    assert test_utils.action_get_cond_val(action1) is c1val
+    assert test_utils.action_get_cond_val(action2) is True
+    total_time, times = test_utils.seq_get_all_times(s)
+
+    assert times == [0,
+                     100_000_000_000,
+                     100_000_000_000,
+                     0,
+                     0,
+                     2000_000_000_000]
+    assert total_time == 2000_000_000_000
+
+    c1val = True
+    with pytest.raises(ValueError, match="Action time order violation"):
+        test_utils.seq_runtime_finalize(s, 4)
 
 def test_order_error1():
     s = new_seq()
@@ -302,6 +389,17 @@ def test_order_error3():
     assert info2['length'] == 0.1
     assert info2['end_val'] is True
 
+    test_utils.seq_runtime_finalize(s, 1)
+    assert test_utils.action_get_cond_val(action1) is True
+    assert test_utils.action_get_cond_val(action2) is True
+    total_time, times = test_utils.seq_get_all_times(s)
+
+    assert times == [0,
+                     100_000_000_000,
+                     200_000_000_000,
+                     300_000_000_000]
+    assert total_time == 300_000_000_000
+
     s = new_seq()
 
     s.add_background(0.1).pulse('artiq/ttl1', True)
@@ -415,3 +513,32 @@ def test_ramp_order1():
     assert info3['prev_val'] is info2['end_val']
     assert info3['length'] == 0.1
     assert info3['end_val'] is info2['end_val']
+
+    test_utils.seq_runtime_finalize(s, 1)
+    assert test_utils.action_get_cond_val(action1) is True
+    assert test_utils.action_get_cond_val(action2) is True
+    assert test_utils.action_get_cond_val(action3) is True
+    total_time, times = test_utils.seq_get_all_times(s)
+
+    assert times == [0,
+                     0,
+                     100_000_000_000,
+                     200_000_000_000,
+                     200_000_000_000,
+                     300_000_000_000]
+    assert total_time == 300_000_000_000
+
+    c2val = 0.5
+    test_utils.seq_runtime_finalize(s, 2)
+    assert test_utils.action_get_cond_val(action1) is True
+    assert test_utils.action_get_cond_val(action2) is True
+    assert test_utils.action_get_cond_val(action3) is True
+    total_time, times = test_utils.seq_get_all_times(s)
+
+    assert times == [0,
+                     0,
+                     500_000_000_000,
+                     200_000_000_000,
+                     500_000_000_000,
+                     600_000_000_000]
+    assert total_time == 600_000_000_000
