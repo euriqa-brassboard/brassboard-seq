@@ -27,6 +27,9 @@ def action_get_compile_info(action.Action action):
     return dict(tid=action.tid, end_tid=action.end_tid, length=action.length,
                 prev_val=action.prev_val, end_val=action.end_val)
 
+def action_get_cond_val(action.Action action):
+    return action.data.cond_val
+
 cdef class RampBufferTest:
     cdef action.RampFunction func
     cdef action.RampBuffer buff
@@ -133,3 +136,14 @@ def seq_finalize(seq.Seq s):
 
 def seq_get_all_actions(seq.Seq s):
     return s.all_actions
+
+def seq_runtime_finalize(seq.Seq s, unsigned age):
+    s.runtime_finalize(age)
+
+def seq_get_all_times(seq.Seq s):
+    time_mgr = s.seqinfo.time_mgr
+    ntimes = time_mgr.time_values.size()
+    values = []
+    for i in range(ntimes):
+        values.append(time_mgr.time_values[i])
+    return s.total_time, values

@@ -99,6 +99,49 @@ def test_cond_order1(max_bt):
     assert info2['length'] == 2
     assert info2['end_val'] is False
 
+    test_utils.seq_runtime_finalize(s, 1)
+    assert test_utils.action_get_cond_val(action1) is True
+    assert test_utils.action_get_cond_val(action2) is True
+    total_time, times = test_utils.seq_get_all_times(s)
+
+    assert times == [0,
+                     100_000_000_000,
+                     1100_000_000_000,
+                     1100_000_000_000,
+                     3100_000_000_000]
+    assert total_time == 3100_000_000_000
+
+    c1val = False
+    test_utils.seq_runtime_finalize(s, 2)
+    assert test_utils.action_get_cond_val(action1) is c1val
+    assert test_utils.action_get_cond_val(action2) is True
+    total_time, times = test_utils.seq_get_all_times(s)
+
+    assert times == [0,
+                     100_000_000_000,
+                     100_000_000_000,
+                     100_000_000_000,
+                     2100_000_000_000]
+    assert total_time == 2100_000_000_000
+
+    c2val = False
+    test_utils.seq_runtime_finalize(s, 3)
+    assert test_utils.action_get_cond_val(action1) is c1val
+    assert test_utils.action_get_cond_val(action2) is True
+    total_time, times = test_utils.seq_get_all_times(s)
+
+    assert times == [0,
+                     100_000_000_000,
+                     100_000_000_000,
+                     0,
+                     2000_000_000_000]
+    assert total_time == 2000_000_000_000
+
+    c1val = True
+    with pytest.raises(ValueError, match="Action time order violation") as exc:
+        test_utils.seq_runtime_finalize(s, 4)
+    check_bt(exc, max_bt, 'step_bbb_yxz_2')
+
 @with_seq_params
 def test_cond_order2(max_bt):
     s = new_seq(max_bt)
@@ -170,6 +213,52 @@ def test_cond_order2(max_bt):
     assert info2['prev_val'] is info1['end_val']
     assert info2['length'] == 2
     assert info2['end_val'] is False
+
+    test_utils.seq_runtime_finalize(s, 1)
+    assert test_utils.action_get_cond_val(action1) is True
+    assert test_utils.action_get_cond_val(action2) is True
+    total_time, times = test_utils.seq_get_all_times(s)
+
+    assert times == [0,
+                     100_000_000_000,
+                     1100_000_000_000,
+                     1100_000_000_000,
+                     1100_000_000_000,
+                     3100_000_000_000]
+    assert total_time == 3100_000_000_000
+
+    c1val = False
+    test_utils.seq_runtime_finalize(s, 2)
+    assert test_utils.action_get_cond_val(action1) is c1val
+    assert test_utils.action_get_cond_val(action2) is True
+    total_time, times = test_utils.seq_get_all_times(s)
+
+    assert times == [0,
+                     100_000_000_000,
+                     100_000_000_000,
+                     100_000_000_000,
+                     100_000_000_000,
+                     2100_000_000_000]
+    assert total_time == 2100_000_000_000
+
+    c2val = False
+    test_utils.seq_runtime_finalize(s, 3)
+    assert test_utils.action_get_cond_val(action1) is c1val
+    assert test_utils.action_get_cond_val(action2) is True
+    total_time, times = test_utils.seq_get_all_times(s)
+
+    assert times == [0,
+                     100_000_000_000,
+                     100_000_000_000,
+                     0,
+                     0,
+                     2000_000_000_000]
+    assert total_time == 2000_000_000_000
+
+    c1val = True
+    with pytest.raises(ValueError, match="Action time order violation") as exc:
+        test_utils.seq_runtime_finalize(s, 4)
+    check_bt(exc, max_bt, 'g_123_asnbe', 'f_0_21234_alsdf')
 
 @with_seq_params
 def test_order_error1(max_bt):
@@ -341,6 +430,17 @@ def test_order_error3(max_bt):
     assert info2['length'] == 0.1
     assert info2['end_val'] is True
 
+    test_utils.seq_runtime_finalize(s, 1)
+    assert test_utils.action_get_cond_val(action1) is True
+    assert test_utils.action_get_cond_val(action2) is True
+    total_time, times = test_utils.seq_get_all_times(s)
+
+    assert times == [0,
+                     100_000_000_000,
+                     200_000_000_000,
+                     300_000_000_000]
+    assert total_time == 300_000_000_000
+
     s = new_seq(max_bt)
 
     s.add_background(0.1).pulse('artiq/ttl1', True)
@@ -463,6 +563,35 @@ def test_ramp_order1(max_bt):
     assert info3['length'] == 0.1
     assert info3['end_val'] is info2['end_val']
 
+    test_utils.seq_runtime_finalize(s, 1)
+    assert test_utils.action_get_cond_val(action1) is True
+    assert test_utils.action_get_cond_val(action2) is True
+    assert test_utils.action_get_cond_val(action3) is True
+    total_time, times = test_utils.seq_get_all_times(s)
+
+    assert times == [0,
+                     0,
+                     100_000_000_000,
+                     200_000_000_000,
+                     200_000_000_000,
+                     300_000_000_000]
+    assert total_time == 300_000_000_000
+
+    c2val = 0.5
+    test_utils.seq_runtime_finalize(s, 2)
+    assert test_utils.action_get_cond_val(action1) is True
+    assert test_utils.action_get_cond_val(action2) is True
+    assert test_utils.action_get_cond_val(action3) is True
+    total_time, times = test_utils.seq_get_all_times(s)
+
+    assert times == [0,
+                     0,
+                     500_000_000_000,
+                     200_000_000_000,
+                     500_000_000_000,
+                     600_000_000_000]
+    assert total_time == 600_000_000_000
+
 class ErrorFunction(action.RampFunction):
     def __init__(self, err):
         action.RampFunction.__init__(self)
@@ -496,3 +625,43 @@ def test_ramp_eval_error1(max_bt):
     with pytest.raises(RuntimeError, match="AAAA-BBBB.CCCC") as exc:
         test_utils.seq_finalize(s)
     check_bt(exc, max_bt, 'asd7f8ashdfasd')
+
+@with_seq_params
+def test_rt_assert(max_bt):
+    s = new_seq(max_bt)
+
+    c1val = True
+    c1 = rtval.new_extern(lambda: c1val)
+
+    def japsidfjpaoisdjpafosd():
+        s.rt_assert(c1, "Some message")
+    japsidfjpaoisdjpafosd()
+
+    test_utils.seq_finalize(s)
+    test_utils.seq_runtime_finalize(s, 1)
+
+    c1val = False
+    with pytest.raises(AssertionError, match="Some message") as exc:
+        test_utils.seq_runtime_finalize(s, 2)
+    check_bt(exc, max_bt, 'japsidfjpaoisdjpafosd')
+
+    c1val = True
+    test_utils.seq_runtime_finalize(s, 3)
+
+@with_seq_params
+def test_cond_error(max_bt):
+    s = new_seq(max_bt)
+    s.set('artiq/ttl0', True)
+    s.add_step(0.01) \
+      .pulse('artiq/urukul0_ch2/freq', rtval.new_extern(lambda: 1.23)) \
+      .pulse('artiq/ttl2', rtval.new_extern(lambda: True))
+    def error_callback():
+        raise ValueError("AAABBBCCC")
+    def ajqu7sdf7h7uhfasd():
+        s.conditional(rtval.new_extern(error_callback)) \
+         .set('artiq/ttl0', True)
+    ajqu7sdf7h7uhfasd()
+    test_utils.seq_finalize(s)
+    with pytest.raises(ValueError, match="AAABBBCCC") as exc:
+        test_utils.seq_runtime_finalize(s, 1)
+    check_bt(exc, max_bt, 'ajqu7sdf7h7uhfasd')

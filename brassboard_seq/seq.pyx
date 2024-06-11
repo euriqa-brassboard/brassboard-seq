@@ -2,12 +2,13 @@
 
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.action cimport new_action, Action, RampFunction, \
-  ramp_eval, ramp_set_compile_params
+  ramp_eval, ramp_set_compile_params, ramp_set_runtime_params
 from brassboard_seq.config cimport translate_channel
 from brassboard_seq cimport event_time
 from brassboard_seq.event_time cimport is_ordered, round_time_int, round_time_rt, \
   set_base_int, set_base_rt
-from brassboard_seq.rtval cimport convert_bool, ifelse, is_rtval, RuntimeValue
+from brassboard_seq.rtval cimport convert_bool, get_value, ifelse, is_rtval, \
+  RuntimeValue, rt_eval
 from brassboard_seq.utils cimport assume_not_none, _assume_not_none, \
   action_key, assert_key, bb_err_format, bb_raise, event_time_key, set_global_tracker
 
@@ -476,6 +477,50 @@ cdef class Seq(SubSeq):
                     last_is_start = False
                 action.end_val = value
         self.all_actions = all_actions
+        return 0
+
+    cdef int runtime_finalize(self, unsigned age) except -1:
+        bt_guard = set_global_tracker(&self.seqinfo.bt_tracker)
+        time_mgr = self.seqinfo.time_mgr
+        self.total_time = time_mgr.compute_all_times(age)
+        _assume_not_none(<void*>self.seqinfo.assertions)
+        cdef int assert_id = 0
+        for _a in self.seqinfo.assertions:
+            a = <tuple>_a
+            c = <RuntimeValue>a[0]
+            if not rt_eval(c, age):
+                bb_raise(AssertionError(a[1]), assert_key(assert_id))
+            assert_id += 1
+        cdef long long prev_time
+        cdef bint cond_val
+        cdef bint is_ramp
+        _assume_not_none(<void*>self.all_actions)
+        for _actions in self.all_actions:
+            actions = <list>_actions
+            prev_time = 0
+            assume_not_none(actions)
+            for _action in actions:
+                action = <Action>_action
+                try:
+                    cond_val = get_value(action.cond, age)
+                except Exception as ex:
+                    bb_raise(ex, action_key(action.aid))
+                action.data.cond_val = cond_val
+                if not cond_val:
+                    continue
+                action_value = action.value
+                is_ramp = isinstance(action_value, RampFunction)
+                if is_ramp:
+                    ramp_set_runtime_params(<RampFunction>action_value, age)
+                start_time = time_mgr.time_values[action.tid]
+                end_time = time_mgr.time_values[action.end_tid]
+                if prev_time > start_time or start_time > end_time:
+                    bb_err_format(ValueError, action_key(action.aid),
+                                  "Action time order violation")
+                if is_ramp or action.data.is_pulse:
+                    prev_time = end_time
+                else:
+                    prev_time = start_time
         return 0
 
 cdef int seq_show(Seq self, write, int indent) except -1:

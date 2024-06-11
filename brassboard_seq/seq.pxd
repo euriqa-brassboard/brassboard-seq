@@ -60,4 +60,8 @@ cdef class SeqInfo:
 cdef class Seq(SubSeq):
     cdef list all_actions
 
+    cdef long long total_time
+
     cdef int finalize(self) except -1
+
+    cdef int runtime_finalize(self, unsigned age) except -1
