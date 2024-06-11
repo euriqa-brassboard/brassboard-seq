@@ -11,6 +11,10 @@ def new_action(value, cond, bint is_pulse, bint exact_time, dict kws):
 def action_set_tid(action.Action action, int tid):
     action.tid = tid
 
+def action_get_compile_info(action.Action action):
+    return dict(tid=action.tid, end_tid=action.end_tid, length=action.length,
+                prev_val=action.prev_val, end_val=action.end_val)
+
 cdef class RampBufferTest:
     cdef action.RampFunction func
     cdef action.RampBuffer buff
@@ -113,3 +117,9 @@ def seq_get_cond(s):
     if type(s) is seq.ConditionalWrapper:
         return (<seq.ConditionalWrapper>s).cond
     return (<seq.TimeSeq?>s).cond
+
+def seq_finalize(seq.Seq s):
+    s.finalize()
+
+def seq_get_all_actions(seq.Seq s):
+    return s.all_actions

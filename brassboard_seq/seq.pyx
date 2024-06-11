@@ -1,9 +1,10 @@
 # cython: language_level=3
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.action cimport new_action
-from brassboard_seq.event_time cimport round_time_int, round_time_rt
-from brassboard_seq.rtval cimport convert_bool, is_rtval, RuntimeValue
+from brassboard_seq.action cimport new_action, Action, RampFunction
+from brassboard_seq cimport event_time
+from brassboard_seq.event_time cimport is_ordered, round_time_int, round_time_rt
+from brassboard_seq.rtval cimport convert_bool, ifelse, is_rtval, RuntimeValue
 from brassboard_seq.utils cimport assume_not_none, _assume_not_none
 
 import io
@@ -283,6 +284,31 @@ cdef class SubSeq(TimeSeq):
     def __repr__(self):
         return str(self)
 
+    @cython.final
+    cdef int collect_actions(self, list actions) except -1:
+        _assume_not_none(<void*>self.sub_seqs)
+        for _subseq in self.sub_seqs:
+            subseq = <TimeSeq>_subseq
+            if not subseq.is_step:
+                (<SubSeq>subseq).collect_actions(actions)
+                continue
+            step = <TimeStep>subseq
+            tid = step.start_time.id
+            end_tid = step.end_time.id
+            length = step.length
+            _assume_not_none(<void*>step.actions)
+            for (_chn, _action) in step.actions.items():
+                chn = <int>_chn
+                action = <Action>_action
+                action.tid = tid
+                action.end_tid = end_tid
+                action.length = length
+                assume_not_none(actions)
+                _actions = <list>actions[chn]
+                assume_not_none(_actions)
+                _actions.append(action)
+        return 0
+
 cdef int seq_show(Seq self, write, int indent) except -1:
     write(' ' * indent)
     write(f'Seq - T[{self.end_time.id}]\n')
@@ -294,6 +320,28 @@ cdef int seq_show(Seq self, write, int indent) except -1:
         write('\n')
         i += 1
     return subseq_show_subseqs(self, write, indent + 2)
+
+cdef extern from *:
+    """
+    #include "Python.h"
+
+    static inline PyObject *new_list_of_list(int n)
+    {
+        PyObject *list = PyList_New(n);
+        if (!list)
+            return NULL;
+        for (int i = 0; i < n; i++) {
+            PyObject *sublist = PyList_New(0);
+            if (!sublist) {
+                Py_DECREF(list);
+                return NULL;
+            }
+            PyList_SET_ITEM(list, i, sublist);
+        }
+        return list;
+    }
+    """
+    list new_list_of_list(int n)
 
 @cython.no_gc
 @cython.final
@@ -334,6 +382,65 @@ cdef class Seq(SubSeq):
 
     def __repr__(self):
         return str(self)
+
+    cdef int finalize(self) except -1:
+        seqinfo = self.seqinfo
+        time_mgr = seqinfo.time_mgr
+        time_mgr.finalize()
+        _assume_not_none(<void*>seqinfo.channel_name_map)
+        seqinfo.channel_name_map.clear() # Free up memory
+        cdef int nchn = PyList_GET_SIZE(seqinfo.channel_paths)
+        all_actions = new_list_of_list(nchn)
+        self.collect_actions(all_actions)
+        event_times = time_mgr.event_times
+        cdef EventTime last_time
+        cdef bint last_is_start
+        cdef int cid = -1
+        assume_not_none(all_actions)
+        for _actions in all_actions:
+            cid += 1
+            actions = <list>_actions
+            assume_not_none(actions)
+            actions.sort()
+            value = 0
+            last_time = None
+            last_is_start = False
+            assume_not_none(actions)
+            for _action in actions:
+                action = <Action>_action
+                assume_not_none(event_times)
+                start_time = <EventTime>event_times[action.tid]
+                if last_time is not None:
+                    o = is_ordered(last_time, start_time)
+                    if (o != event_time.OrderBefore and
+                        (o != event_time.OrderEqual or last_is_start)):
+                        name = '/'.join(seqinfo.channel_paths[cid])
+                        PyErr_Format(ValueError,
+                                     "Actions on %U is not statically ordered",
+                                     <PyObject*>name)
+                action.prev_val = value
+                action_value = action.value
+                if not action.is_pulse:
+                    if isinstance(action_value, RampFunction):
+                        rampf = <RampFunction>action_value
+                        rampf.set_compile_params()
+                        length = action.length
+                        new_value = rampf.eval(length, length, value)
+                        assume_not_none(event_times)
+                        last_time = <EventTime>event_times[action.end_tid]
+                        last_is_start = False
+                    else:
+                        new_value = action_value
+                        last_time = start_time
+                        last_is_start = True
+                    value = ifelse(action.cond, new_value, value)
+                else:
+                    assume_not_none(event_times)
+                    last_time = <EventTime>event_times[action.end_tid]
+                    last_is_start = False
+                action.end_val = value
+        self.all_actions = all_actions
+        return 0
 
 cdef inline void init_timeseq(TimeSeq self, SubSeq parent,
                               EventTime start_time, cond, bint is_step) noexcept:
