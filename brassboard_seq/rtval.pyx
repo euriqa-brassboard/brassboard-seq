@@ -711,3 +711,58 @@ cpdef max_val(v1, v2):
     if v1 is v2:
         return v1
     return new_expr2(ValueType.Max, wrap_value(v1), wrap_value(v2))
+
+@cython.final
+cdef class rtprop_callback:
+    cdef obj
+    cdef str fieldname
+
+    def __init__(self):
+        PyErr_Format(TypeError, "rtprop_callback cannot be created directly")
+
+    def __call__(self, long long age):
+        _v = getattr(self.obj, self.fieldname)
+        if not is_rtval(_v):
+            return _v
+        cdef RuntimeValue v = <RuntimeValue>_v
+        if (v.type_ == ValueType.ExternAge and v.cb is self):
+            PyErr_Format(ValueError, 'RT property have not been assigned.')
+        return v.eval(age)
+
+cdef rtprop_callback new_rtprop_callback(obj, str fieldname):
+    self = <rtprop_callback>rtprop_callback.__new__(rtprop_callback)
+    self.obj = obj
+    self.fieldname = fieldname
+    return self
+
+@cython.final
+cdef class RTProp:
+    cdef str fieldname
+
+    cdef __init_class(self, cls):
+        if self.fieldname is not None:
+            return
+        for _name in dir(cls):
+            name = <str>_name
+            field = getattr(cls, name)
+            if isinstance(field, RTProp):
+                (<RTProp>field).fieldname = '_RTProp_value_' + name
+        if self.fieldname is None:
+            PyErr_Format(ValueError, 'Cannot determine runtime property name')
+
+    def __set__(self, obj, value):
+        self.__init_class(type(obj))
+        setattr(obj, self.fieldname, value)
+
+    def __get__(self, obj, objtype):
+        if obj is None:
+            return self
+        self.__init_class(type(obj))
+        fieldname = self.fieldname
+        try:
+            return getattr(obj, fieldname)
+        except AttributeError:
+            pass
+        value = new_extern_age(new_rtprop_callback(obj, fieldname))
+        setattr(obj, fieldname, value)
+        return value
