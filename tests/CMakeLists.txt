@@ -8,5 +8,6 @@ python_test("${CMAKE_BINARY_DIR}"
   test_action.py
   test_config.py
   test_event_time.py
+  test_scan.py
   test_seq.py
 )
