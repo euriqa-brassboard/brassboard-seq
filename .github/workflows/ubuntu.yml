@@ -1,0 +1,48 @@
+name: Build and Test
+
+on:
+  workflow_dispatch:
+  push:
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    name: "Build and Test (${{matrix.BUILD_TYPE}} build)"
+    runs-on: ubuntu-24.04 # Required for cython3
+    strategy:
+      fail-fast: false
+      matrix:
+        BUILD_TYPE: [ Release, Debug ]
+    env:
+      CXXFLAGS_COV: -fprofile-arcs -ftest-coverage
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: sudo apt-get install cython3 python3-numpy python3-yaml python3-coverage python3-pytest
+
+    - name: Configure CMake
+      run: CXXFLAGS+=" ${CXXFLAGS_COV}" cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.BUILD_TYPE}} -DENABLE_CYTHON_COVERAGE=On
+
+    - name: Build
+      run: cmake --build ${{github.workspace}}/build --config ${{matrix.BUILD_TYPE}} -j $(nproc)
+
+    - name: Test
+      working-directory: ${{github.workspace}}/build
+      run: ctest -C ${{matrix.BUILD_TYPE}} --output-on-failure -j $(nproc)
+
+    - name: Generate coverage report
+      working-directory: ${{github.workspace}}/build
+      # Repeating the argument to ignore errors seems to make a difference
+      # and I'm too lazy to figure out why for now...
+      run: |
+        bash ${{github.workspace}}/scripts/fix_cython_c_path.sh ${{github.workspace}} ${{github.workspace}}/build
+        python3 -m coverage combine --rcfile=${{github.workspace}}/cmake/coveragerc
+        python3 -m coverage xml -i --ignore-errors --omit='tests/*' --rcfile=${{github.workspace}}/cmake/coveragerc
+
+    - name: Upload coverage
+      uses: codecov/codecov-action@v4
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
