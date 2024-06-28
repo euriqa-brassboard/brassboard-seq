@@ -114,6 +114,9 @@ def test_seq():
     assert test_utils.event_time_id(t10) == 10
     assert str(t10) == 'T[9] + 120.0 ms'
 
+    st3.set_time(t7)
+    assert str(t8) == 'T[7] + 0.0 ps'
+
     st5 = c2.add_step(0.2)
     assert st5.start_time is t6
     assert st5.end_time is s.end_time
@@ -136,6 +139,9 @@ def test_seq():
     assert test_utils.event_time_id(t14) == 14
     assert str(t13) == '<floating>'
     assert str(t14) == f'T[13] + (100.0 ms; if {bv1})'
+
+    st7.set_time(t12, 0.01)
+    assert str(t13) == f'T[12] + (10.0 ms; if {bv1})'
 
     st8 = c2.add_at(t14, 0.12)
     assert st8.start_time is t14
@@ -167,6 +173,9 @@ def test_seq():
     assert str(t20) == '<floating>'
     assert str(t21) == f'T[20] + int64({v1} * 1000000000000)'
 
+    st11.set_time(t19, v1)
+    assert str(t20) == f'T[19] + int64({v1} * 1000000000000)'
+
     st12 = s.add_at(t21, step2, v2, cond2=False)
     assert st12.start_time is t21
     t24 = st12.end_time
@@ -196,6 +205,9 @@ def test_seq():
     assert test_utils.event_time_id(t30) == 30
     assert str(t29) == '<floating>'
     assert str(t30) == f'T[29] + (int64({v1} * 1000000000000); if {bv1})'
+
+    st15.set_time(t28, v2)
+    assert str(t29) == f'T[28] + (int64({v2} * 1000000000000); if {bv1})'
 
     st16 = c2.add_at(t30, step2, v2, cond2=False)
     assert st16.start_time is t30
