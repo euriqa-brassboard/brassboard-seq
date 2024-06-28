@@ -33,6 +33,9 @@ cdef extern from "../src/artiq_backend.h" namespace "artiq_backend" nogil:
         uint32_t io_update_target
         uint8_t ref_period_mu
 
+        uint16_t last_gap_mu
+        int last_idx
+
     cppclass DDSChannel:
         double ftw_per_hz
         uint32_t bus_id
