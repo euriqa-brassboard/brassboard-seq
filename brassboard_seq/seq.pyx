@@ -2,7 +2,9 @@
 
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.config cimport translate_channel
-from brassboard_seq.rtval cimport convert_bool
+from brassboard_seq.event_time cimport round_time_int, round_time_rt, \
+  set_base_int, set_base_rt
+from brassboard_seq.rtval cimport convert_bool, is_rtval, RuntimeValue
 from brassboard_seq.utils cimport assume_not_none, _assume_not_none, \
   event_time_key
 
@@ -27,6 +29,13 @@ cdef class TimeSeq:
 
     def get_channel_id(self, str name):
         return _get_channel_id(self.seqinfo, name)
+
+    def set_time(self, EventTime time, offset=0): # offset in seconds
+        if is_rtval(offset):
+            set_base_rt(self.start_time, time, round_time_rt(<RuntimeValue>offset))
+        else:
+            set_base_int(self.start_time, time, round_time_int(offset))
+        self.seqinfo.bt_tracker.record(event_time_key(<void*>self.start_time))
 
 @cython.no_gc
 @cython.final
