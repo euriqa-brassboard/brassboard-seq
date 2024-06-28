@@ -14,6 +14,7 @@ cython_link_libraries(brassboard_seq_utils)
 python_install_module("${CMAKE_CURRENT_SOURCE_DIR}/.." brassboard_seq
   __init__.py
   action.pyx
+  artiq_backend.pyx
   backend.pyx
   config.pyx
   event_time.pyx
