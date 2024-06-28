@@ -3,6 +3,7 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.rtval cimport ifelse, get_value, max_val, \
   new_const, new_extern_age
+from brassboard_seq.utils cimport _assume_not_none
 
 from libcpp.map cimport map as cppmap
 from libcpp.algorithm cimport fill as cppfill
@@ -56,6 +57,7 @@ cdef class TimeManager:
         if wait_for is not None:
             self.visit_time(wait_for, visited)
         t.id = -1
+        _assume_not_none(<void*>self.event_times)
         self.event_times.append(t)
         return 0
 
@@ -69,6 +71,7 @@ cdef class TimeManager:
         self.event_times = event_times
         cdef unordered_set[int] visited
         # First, topologically order the times
+        assume_not_none(old_event_times)
         for _t in old_event_times:
             self.visit_time(<EventTime>_t, visited)
 
@@ -81,6 +84,7 @@ cdef class TimeManager:
         cdef int chain_id
         cdef int chain_pos
         cdef EventTime t
+        assume_not_none(event_times)
         for _t in event_times:
             t = <EventTime>_t
             tid = i
@@ -128,6 +132,7 @@ cdef class TimeManager:
             t.chain_pos[chain_id] = chain_pos
 
         cdef int nchains = chain_lengths.size()
+        assume_not_none(event_times)
         for _t in event_times:
             t = <EventTime>_t
             t.chain_pos.resize(nchains, -1)
@@ -149,6 +154,7 @@ cdef class TimeManager:
         cdef int ntimes = PyList_GET_SIZE(event_times)
         self.time_values.resize(ntimes)
         cppfill(self.time_values.begin(), self.time_values.end(), -1)
+        assume_not_none(event_times)
         for t in event_times:
             tv = (<EventTime>t).get_value(-1, age, self.time_values)
             if tv > max_time:

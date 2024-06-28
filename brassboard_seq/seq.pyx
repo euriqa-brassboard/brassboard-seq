@@ -6,6 +6,7 @@ from brassboard_seq cimport event_time
 from brassboard_seq.event_time cimport is_ordered, round_time_int, round_time_rt
 from brassboard_seq.rtval cimport convert_bool, get_value, ifelse, is_rtval, \
   RuntimeValue
+from brassboard_seq.utils cimport assume_not_none, _assume_not_none
 
 import io
 cdef StringIO = io.StringIO
@@ -67,9 +68,11 @@ cdef class TimeStep(TimeSeq):
             cid = self.seqinfo._get_channel_id(chn)
             pycid = cid
         cdef dict actions = self.actions
+        assume_not_none(actions)
         if pycid in actions:
             PyErr_Format(ValueError, "Multiple action added for the same channel.")
         action = new_action(value, cond, is_pulse, exact_time, kws)
+        assume_not_none(actions)
         actions[pycid] = action
         return 0
 
@@ -192,6 +195,7 @@ cdef class SubSeq(TimeSeq):
         subseq = <SubSeq>SubSeq.__new__(SubSeq)
         init_subseq(subseq, self, start_time, cond)
         cb(subseq, *args, **kwargs)
+        _assume_not_none(<void*>self.sub_seqs)
         self.sub_seqs.append(subseq)
         return subseq
 
@@ -203,6 +207,7 @@ cdef class SubSeq(TimeSeq):
         step.length = length
         step.end_time = self.seqinfo.time_mgr.new_round_time(start_time, length,
                                                              False, cond, None)
+        _assume_not_none(<void*>self.sub_seqs)
         self.sub_seqs.append(step)
         return step
 
@@ -282,6 +287,7 @@ cdef class SubSeq(TimeSeq):
 
     @cython.final
     cdef int collect_actions(self, list actions) except -1:
+        _assume_not_none(<void*>self.sub_seqs)
         for _subseq in self.sub_seqs:
             subseq = <TimeSeq>_subseq
             if not subseq.is_step:
@@ -291,13 +297,16 @@ cdef class SubSeq(TimeSeq):
             tid = step.start_time.id
             end_tid = step.end_time.id
             length = step.length
+            _assume_not_none(<void*>step.actions)
             for (_chn, _action) in step.actions.items():
                 chn = <int>_chn
                 action = <Action>_action
                 action.tid = tid
                 action.end_tid = end_tid
                 action.length = length
+                assume_not_none(actions)
                 _actions = <list>actions[chn]
+                assume_not_none(_actions)
                 _actions.append(action)
         return 0
 
@@ -353,9 +362,12 @@ cdef class SeqInfo:
             return <int><object>chnp
         channel_paths = self.channel_paths
         cid = PyList_GET_SIZE(channel_paths)
+        assume_not_none(channel_paths)
         channel_paths.append(path)
+        assume_not_none(channel_path_map)
         cdef object pycid = cid
         channel_path_map[path] = pycid
+        assume_not_none(channel_name_map)
         channel_name_map[name] = pycid
         return cid
 
@@ -376,6 +388,7 @@ cdef class Seq(SubSeq):
         seqinfo = self.seqinfo
         time_mgr = seqinfo.time_mgr
         time_mgr.finalize()
+        _assume_not_none(<void*>seqinfo.channel_name_map)
         seqinfo.channel_name_map.clear() # Free up memory
         cdef int nchn = PyList_GET_SIZE(seqinfo.channel_paths)
         all_actions = new_list_of_list(nchn)
@@ -384,15 +397,19 @@ cdef class Seq(SubSeq):
         cdef EventTime last_time
         cdef bint last_is_start
         cdef int cid = -1
+        assume_not_none(all_actions)
         for _actions in all_actions:
             cid += 1
             actions = <list>_actions
+            assume_not_none(actions)
             actions.sort()
             value = 0
             last_time = None
             last_is_start = False
+            assume_not_none(actions)
             for _action in actions:
                 action = <Action>_action
+                assume_not_none(event_times)
                 start_time = <EventTime>event_times[action.tid]
                 if last_time is not None:
                     o = is_ordered(last_time, start_time)
@@ -410,6 +427,7 @@ cdef class Seq(SubSeq):
                         rampf.set_compile_params()
                         length = action.length
                         new_value = rampf.eval(length, length, value)
+                        assume_not_none(event_times)
                         last_time = <EventTime>event_times[action.end_tid]
                         last_is_start = False
                     else:
@@ -418,6 +436,7 @@ cdef class Seq(SubSeq):
                         last_is_start = True
                     value = ifelse(action.cond, new_value, value)
                 else:
+                    assume_not_none(event_times)
                     last_time = <EventTime>event_times[action.end_tid]
                     last_is_start = False
                 action.end_val = value
@@ -430,9 +449,11 @@ cdef class Seq(SubSeq):
         cdef long long prev_time
         cdef bint cond_val
         cdef bint is_ramp
+        _assume_not_none(<void*>self.all_actions)
         for _actions in self.all_actions:
             actions = <list>_actions
             prev_time = 0
+            assume_not_none(actions)
             for _action in actions:
                 action = <Action>_action
                 cond_val = get_value(action.cond, age)

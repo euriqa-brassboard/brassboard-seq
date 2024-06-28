@@ -7,6 +7,7 @@ from libcpp.vector cimport vector
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.rtval cimport is_rtval, new_expr2, round_int64_rt, \
   RuntimeValue, ValueType
+from brassboard_seq.utils cimport assume_not_none
 
 from cpython cimport PyErr_Format, PyFloat_AS_DOUBLE, PyList_GET_SIZE
 
@@ -56,6 +57,7 @@ cdef class TimeManager:
         event_times = self.event_times
         cdef int ntimes = status.ntimes
         tp.id = ntimes
+        assume_not_none(event_times)
         event_times.append(tp)
         status.ntimes = ntimes + 1
         return tp
@@ -75,6 +77,7 @@ cdef class TimeManager:
         event_times = self.event_times
         cdef int ntimes = status.ntimes
         tp.id = ntimes
+        assume_not_none(event_times)
         event_times.append(tp)
         status.ntimes = ntimes + 1
         return tp
