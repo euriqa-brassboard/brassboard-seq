@@ -45,6 +45,13 @@ cdef extern from "src/artiq_backend.h" namespace "artiq_backend" nogil:
         uint32_t target
         bint iscounter
 
+    cppclass SeqAction:
+        ChannelType param
+        bint exact_time
+        uint16_t artiq_chn
+        uint32_t val
+        uint64_t time_mu
+
 
 cdef class ChannelsInfo:
     # Artiq objects
@@ -81,10 +88,18 @@ cdef class ChannelsInfo:
     cdef int add_channel_artiq(self, int idx, tuple path) except -1
     cdef int collect_channels(self, Seq seq) except -1
 
+cdef enum RelocationType:
+    BoolCond
+    BoolValue
+
+cdef cppclass Relocation:
+    bint is_bool
+
 cdef class ArtiqBackend:
     cdef Seq seq
     cdef ChannelsInfo channels
 
     cdef int process_seq(self) except -1
+    cdef int collect_actions(self) except -1
 
 cpdef ArtiqBackend new_artiq_backend(sys, Seq seq)

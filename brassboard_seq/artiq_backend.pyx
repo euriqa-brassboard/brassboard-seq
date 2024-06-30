@@ -1,5 +1,10 @@
 # cython: language_level=3
 
+# Do not use relative import since it messes up cython file name tracking
+from brassboard_seq.action cimport Action, RampFunction
+from brassboard_seq.rtval cimport is_rtval
+from brassboard_seq.utils cimport ValueIndexer, _assume_not_none, assume_not_none
+
 cimport cython
 from cpython cimport PyErr_Format, PyObject
 
@@ -171,7 +176,29 @@ cdef class ArtiqBackend:
 
     cdef int process_seq(self) except -1:
         self.channels.collect_channels(self.seq)
+        self.collect_actions()
         # TODO
+
+    cdef int collect_actions(self) except -1:
+        cdef ValueIndexer bool_values
+        cdef ValueIndexer float_values
+
+        seq = self.seq
+
+        for p in self.channels.ttl_chn_map:
+            chn = p.first
+            ttl_idx = p.second
+            _assume_not_none(<void*>seq.all_actions)
+            actions = <list>seq.all_actions[chn]
+            assume_not_none(actions)
+            for _action in actions:
+                action = <Action>_action
+                action_value = action.value
+                if isinstance(action_value, RampFunction):
+                    PyErr_Format(ValueError, "TTL Channel cannot be ramped")
+                if is_rtval(action_value):
+                    bool_values.get_id(<void*>action_value)
+
 
 cpdef ArtiqBackend new_artiq_backend(sys, Seq seq):
     self = <ArtiqBackend>ArtiqBackend.__new__(ArtiqBackend)
