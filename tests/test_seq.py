@@ -39,6 +39,12 @@ def test_seq():
     assert test_utils.seq_get_channel_paths(s) == [('artiq', 'ttl1'), ('artiq', 'ttl3'),
                                                    ('artiq', 'ttl2')]
 
+    with pytest.raises(AssertionError, match="Assertion failed"):
+        s.rt_assert(0)
+    with pytest.raises(AssertionError, match="Some message"):
+        s.rt_assert(0, "Some message")
+    s.rt_assert(1)
+
     c1 = s.conditional(True)
     assert test_utils.seq_get_cond(c1) is True
     assert str(s) == """Seq - T[0]

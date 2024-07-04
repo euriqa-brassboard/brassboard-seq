@@ -7,7 +7,7 @@ from brassboard_seq.event_time cimport round_time_int, round_time_rt, \
   set_base_int, set_base_rt
 from brassboard_seq.rtval cimport convert_bool, is_rtval, RuntimeValue
 from brassboard_seq.utils cimport assume_not_none, _assume_not_none, \
-  action_key, event_time_key
+  action_key, assert_key, event_time_key
 
 cdef io # hide import
 import io
@@ -41,6 +41,14 @@ cdef class TimeSeq:
         else:
             set_base_int(self.start_time, time, round_time_int(offset))
         self.seqinfo.bt_tracker.record(event_time_key(<void*>self.start_time))
+
+    def rt_assert(self, c, str msg="Assertion failed"):
+        if is_rtval(c):
+            self.seqinfo.bt_tracker.record(assert_key(len(self.seqinfo.assertions)))
+            self.seqinfo.assertions.append((c, msg))
+            return
+        if not c:
+            raise AssertionError(msg)
 
 @cython.no_gc
 @cython.final
@@ -329,6 +337,7 @@ cdef class Seq(SubSeq):
         seqinfo = <SeqInfo>SeqInfo.__new__(SeqInfo)
         seqinfo.config = config
         seqinfo.time_mgr = new_time_manager()
+        seqinfo.assertions = []
         seqinfo.bt_tracker.max_frame = max_frame
         seqinfo.channel_name_map = {}
         seqinfo.channel_path_map = {}

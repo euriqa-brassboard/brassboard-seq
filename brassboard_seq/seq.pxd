@@ -44,6 +44,8 @@ cdef class SubSeq(TimeSeq):
 cdef class SeqInfo:
     # EventTime manager
     cdef TimeManager time_mgr
+    # Global assumptions
+    cdef list assertions
     # Global config object
     cdef Config config
     # Backtrace collection
