@@ -23,6 +23,18 @@ def action_set_tid(action.Action action, int tid):
 def action_get_aid(action.Action action):
     return action.aid
 
+def action_get_is_pulse(action.Action action):
+    return action.data.is_pulse
+
+def action_get_exact_time(action.Action action):
+    return action.data.exact_time
+
+def action_get_cond(action.Action action):
+    return action.cond
+
+def action_get_value(action.Action action):
+    return action.value
+
 def action_get_compile_info(action.Action action):
     return dict(tid=action.tid, end_tid=action.end_tid, length=action.length,
                 prev_val=action.prev_val, end_val=action.end_val)
@@ -125,6 +137,9 @@ def event_time_is_ordered(event_time.EventTime t1, event_time.EventTime t2):
 
 def seq_get_channel_paths(seq.Seq s):
     return s.seqinfo.channel_paths
+
+def seq_get_event_time(seq.Seq s, int tid):
+    return s.seqinfo.time_mgr.event_times[tid]
 
 def seq_get_cond(s):
     if type(s) is seq.ConditionalWrapper:

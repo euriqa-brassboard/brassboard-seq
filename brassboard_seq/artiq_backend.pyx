@@ -1,6 +1,9 @@
 # cython: language_level=3
 
 # Do not use relative import since it messes up cython file name tracking
+from brassboard_seq.action cimport Action, RampFunction
+from brassboard_seq.event_time cimport EventTime
+from brassboard_seq.rtval cimport is_rtval
 from brassboard_seq.utils cimport set_global_tracker
 
 cimport cython
@@ -19,6 +22,22 @@ cdef DevTTLOut = ttl.TTLOut
 
 cdef extern from "src/artiq_backend.cpp" namespace "artiq_backend":
     ArtiqConsts artiq_consts
+
+    struct CompileVTable:
+        bint (*is_rtval)(object) noexcept
+        bint (*is_ramp)(object) noexcept
+
+    void collect_actions(ArtiqBackend ab,
+                         CompileVTable vtable, Action, EventTime) except +
+
+cdef inline bint is_ramp(obj) noexcept:
+    return isinstance(obj, RampFunction)
+
+cdef inline CompileVTable get_compile_vtable() noexcept nogil:
+    cdef CompileVTable vt
+    vt.is_rtval = is_rtval
+    vt.is_ramp = is_ramp
+    return vt
 
 artiq_consts.COUNTER_ENABLE = <int?>edge_counter.CONFIG_COUNT_RISING | <int?>edge_counter.CONFIG_RESET_TO_ZERO
 artiq_consts.COUNTER_DISABLE = <int?>edge_counter.CONFIG_SEND_COUNT_EVENT
@@ -116,3 +135,4 @@ cdef class ArtiqBackend:
     cdef int finalize(self) except -1:
         bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)
         collect_channels(&self.channels, self.prefix, self.sys, self.seq)
+        collect_actions(self, get_compile_vtable(), None, None)

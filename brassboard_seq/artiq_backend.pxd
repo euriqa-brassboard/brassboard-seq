@@ -27,6 +27,17 @@ cdef extern from "src/artiq_backend.h" namespace "artiq_backend":
         TTLOut
         CounterEnable
 
+    cppclass ArtiqAction:
+        ChannelType type
+        bint cond
+        bint exact_time
+        int chn_idx
+        int tid
+        int64_t time_mu
+        uint32_t value
+        int aid
+        int reloc_id
+
     cppclass DDSChannel:
         double ftw_per_hz
         uint32_t bus_id
@@ -60,10 +71,22 @@ cdef extern from "src/artiq_backend.h" namespace "artiq_backend":
         void add_dds_param_channel(int seqchn, uint32_t bus_id, double ftw_per_hz,
                                    uint8_t chip_select, ChannelType param)
 
+    cppclass Relocation:
+        int cond_idx
+        int time_idx
+        int val_idx
+
+    int64_t seq_time_to_mu(long long time)
+
+
 cdef class ArtiqBackend(Backend):
     # Artiq system object
     cdef sys
 
     cdef ChannelsInfo channels
+    cdef vector[ArtiqAction] all_actions
+    cdef vector[pair[void*,bint]] bool_values
+    cdef vector[pair[void*,double]] float_values
+    cdef vector[Relocation] relocations
 
     cdef int finalize(self) except -1

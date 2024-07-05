@@ -30,6 +30,22 @@ enum ChannelType : uint8_t {
     CounterEnable,
 };
 
+struct ArtiqAction {
+    ChannelType type: 4;
+    mutable bool cond: 1;
+    bool exact_time: 1;
+    mutable bool eval_status: 1;
+    int chn_idx: 25;
+    // We need to keep the tid around at runtime since this is needed to
+    // sort actions that happens at the same time.
+    int tid;
+    mutable uint32_t value;
+    int aid;
+    // -1 if no relocation is needed
+    int reloc_id;
+    mutable int64_t time_mu;
+};
+
 struct DDSChannel {
     double ftw_per_hz;
     uint32_t bus_id;
@@ -81,6 +97,40 @@ struct ChannelsInfo {
     void add_dds_param_channel(int seqchn, uint32_t bus_id, double ftw_per_hz,
                                uint8_t chip_select, ChannelType param);
 };
+
+struct Relocation {
+    // If a particular relocation is not needed for this action,
+    // the corresponding idx would be -1
+    int cond_idx;
+    int time_idx;
+    int val_idx;
+};
+
+static inline int64_t seq_time_to_mu(long long time)
+{
+    // Hard code for now.
+    return (time + 500) / 1000;
+}
+
+static inline uint32_t dds_amp_to_mu(double amp)
+{
+    auto v = int(amp * 0x3fff + 0.5);
+    if (v < 0)
+        return 0;
+    if (v > 0x3fff)
+        return 0x3fff;
+    return v;
+}
+
+static inline uint32_t dds_phase_to_mu(double phase)
+{
+    return uint32_t(phase * 0x10000 + 0.5) & 0xffff;
+}
+
+static inline uint32_t dds_freq_to_mu(double freq, double ftw_per_hz)
+{
+    return uint32_t(freq * ftw_per_hz + 0.5);
+}
 
 }
 

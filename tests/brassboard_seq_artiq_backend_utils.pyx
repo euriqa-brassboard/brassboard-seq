@@ -55,3 +55,59 @@ def get_channel_info(artiq_backend.ArtiqBackend ab):
     self.ttl_chn_map = dict(info.ttl_chn_map)
     self.dds_param_chn_map = dict(info.dds_param_chn_map)
     return self
+
+cdef class ArtiqAction:
+    cdef public str type
+    cdef public bint cond
+    cdef public bint exact_time
+    cdef public int chn_idx
+    cdef public int tid
+    cdef public int64_t time_mu
+    cdef public uint32_t value
+    cdef public int aid
+    cdef public int reloc_id
+
+channel_type_names = {
+    artiq_backend.DDSFreq: 'ddsfreq',
+    artiq_backend.DDSAmp: 'ddsamp',
+    artiq_backend.DDSPhase: 'ddsphase',
+    artiq_backend.TTLOut: 'ttl',
+    artiq_backend.CounterEnable: 'counter',
+}
+
+cdef ArtiqAction new_artiq_action(artiq_backend.ArtiqAction c_action):
+    py_action = <ArtiqAction>ArtiqAction.__new__(ArtiqAction)
+    py_action.type = channel_type_names[c_action.type]
+    py_action.cond = c_action.cond
+    py_action.exact_time = c_action.exact_time
+    py_action.chn_idx = c_action.chn_idx
+    py_action.tid = c_action.tid
+    py_action.time_mu = c_action.time_mu
+    py_action.value = c_action.value
+    py_action.aid = c_action.aid
+    py_action.reloc_id = c_action.reloc_id
+    return py_action
+
+cdef class Relocation:
+    cdef public int cond_idx
+    cdef public int time_idx
+    cdef public int val_idx
+
+cdef Relocation new_relocation(artiq_backend.Relocation c_reloc):
+    py_reloc = <Relocation>Relocation.__new__(Relocation)
+    py_reloc.cond_idx = c_reloc.cond_idx
+    py_reloc.time_idx = c_reloc.time_idx
+    py_reloc.val_idx = c_reloc.val_idx
+    return py_reloc
+
+class CompiledInfo:
+    pass
+
+def get_compiled_info(artiq_backend.ArtiqBackend ab):
+    self = CompiledInfo()
+    self.all_actions = [new_artiq_action(ab.all_actions[i])
+                            for i in range(ab.all_actions.size())]
+    self.bool_values = [<object>p.first for p in ab.bool_values]
+    self.float_values = [<object>p.first for p in ab.float_values]
+    self.relocations = [new_relocation(action) for action in ab.relocations]
+    return self
