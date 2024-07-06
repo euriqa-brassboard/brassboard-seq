@@ -13,6 +13,7 @@ import numpy as np
 global_conf = Config()
 global_conf.add_supported_prefix('artiq')
 global_conf.add_supported_prefix('rfsoc')
+np_rtios = np.ndarray((0,), np.int32)
 
 def seq_time_to_mu(time):
     return (time + 500) // 1000
@@ -31,13 +32,41 @@ def dds_phase_to_mu(phase):
 def dds_freq_to_mu(freq):
     return int(freq * 4.294967296 + 0.5)
 
+dds_data_addr = 0x0e << 24
+def dds_data1(amp, phase):
+    return (dds_amp_to_mu(amp) << 16) | dds_phase_to_mu(phase)
+def dds_data2(freq):
+    return dds_freq_to_mu(freq)
+
+def _dds_config(flags, length, cs):
+    SPIT_DDS_WR = 2
+    return flags | ((length - 1) << 8) | ((SPIT_DDS_WR - 2) << 16) | (cs << 24)
+def _dds_data_len(length):
+    SPIT_DDS_WR = 2
+    return ((length + 1) * SPIT_DDS_WR + 1) * 8
+
+dds_config_len = 8
+def dds_config_addr(cs):
+    return _dds_config(0x8, 8, cs)
+dds_addr_len = _dds_data_len(8)
+def dds_config_data1(cs):
+    return _dds_config(0x8, 32, cs)
+dds_data_len = _dds_data_len(32)
+def dds_config_data2(cs):
+    return _dds_config(0xa, 32, cs)
+
+dds_conf_addr_len = dds_config_len + dds_addr_len
+dds_conf_data_len = dds_config_len + dds_data_len
+dds_total_len = dds_conf_addr_len + dds_conf_data_len * 2
+dds_headless_len = dds_conf_addr_len + dds_conf_data_len * 2 - dds_config_len
+
 def new_seq_compiler(*args):
     s = seq.Seq(global_conf, *args)
     comp = backend.SeqCompiler(s)
     return s, comp
 
 def add_artiq_backend(comp, sys):
-    ab = artiq_backend.ArtiqBackend(sys)
+    ab = artiq_backend.ArtiqBackend(sys, np_rtios)
     comp.add_backend('artiq', ab)
     comp.add_backend('rfsoc', backend.Backend()) # Dummy backend
     return ab
@@ -64,6 +93,14 @@ with_artiq_params = with_params((0,), (5,), (500,))
 def test_constructors():
     with pytest.raises(TypeError):
         artiq_backend.ArtiqBackend()
+    with pytest.raises(TypeError):
+        artiq_backend.ArtiqBackend(dummy_artiq.DummyDaxSystem(), [])
+    with pytest.raises(TypeError, match="RTIO output must be a int32 array"):
+        artiq_backend.ArtiqBackend(dummy_artiq.DummyDaxSystem(),
+                                   np.ndarray((0,), np.int64))
+    with pytest.raises(ValueError, match="RTIO output must be a 1D array"):
+        artiq_backend.ArtiqBackend(dummy_artiq.DummyDaxSystem(),
+                                   np.ndarray((2, 2), np.int32))
 
 def get_channel_info(ab):
     channels = artiq_utils.get_channel_info(ab)
@@ -209,6 +246,67 @@ def test_val_error(max_bt):
     with pytest.raises(TypeError) as exc:
         comp.finalize()
     check_bt(exc, max_bt, 'jaus7hfas9dafs')
+
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    s.set('artiq/ttl0', True)
+    s.add_step(0.01) \
+      .pulse('artiq/urukul0_ch2/freq', rtval.new_extern(lambda: 1.23)) \
+      .pulse('artiq/ttl2', rtval.new_extern(lambda: True))
+    # This causes a error to be thrown when converting to boolean
+    def ajquo1827uhfasd():
+        s.set('artiq/ttl0', rtval.new_extern(lambda: np.array([1, 2])))
+    ajquo1827uhfasd()
+    comp.finalize()
+    with pytest.raises(ValueError) as exc:
+        comp.runtime_finalize(1)
+    check_bt(exc, max_bt, 'ajquo1827uhfasd')
+
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    s.set('artiq/ttl0', True)
+    s.add_step(0.01) \
+      .pulse('artiq/urukul0_ch2/freq', rtval.new_extern(lambda: 1.23)) \
+      .pulse('artiq/ttl2', rtval.new_extern(lambda: True))
+    # This causes a error to be thrown when converting to float
+    def jausasdjklfa834fs():
+        s.set('artiq/urukul3_ch0/amp', rtval.new_extern(lambda: [1, 2]))
+    jausasdjklfa834fs()
+    comp.finalize()
+    with pytest.raises(TypeError) as exc:
+        comp.runtime_finalize(1)
+    check_bt(exc, max_bt, 'jausasdjklfa834fs')
+
+    def error_callback():
+        raise ValueError("AAABBBCCC")
+
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    s.set('artiq/ttl0', True)
+    s.add_step(0.01) \
+      .pulse('artiq/urukul0_ch2/freq', rtval.new_extern(lambda: 1.23)) \
+      .pulse('artiq/ttl2', rtval.new_extern(lambda: True))
+    def ajsdf78ah4has9d():
+        s.set('artiq/ttl0', rtval.new_extern(error_callback))
+    ajsdf78ah4has9d()
+    comp.finalize()
+    with pytest.raises(ValueError, match="AAABBBCCC") as exc:
+        comp.runtime_finalize(1)
+    check_bt(exc, max_bt, 'ajsdf78ah4has9d')
+
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    s.set('artiq/ttl0', True)
+    s.add_step(0.01) \
+      .pulse('artiq/urukul0_ch2/freq', rtval.new_extern(lambda: 1.23)) \
+      .pulse('artiq/ttl2', rtval.new_extern(lambda: True))
+    def jas830bnsod8q():
+        s.set('artiq/urukul3_ch0/amp', rtval.new_extern(error_callback))
+    jas830bnsod8q()
+    comp.finalize()
+    with pytest.raises(ValueError, match="AAABBBCCC") as exc:
+        comp.runtime_finalize(1)
+    check_bt(exc, max_bt, 'jas830bnsod8q')
 
 @with_artiq_params
 def test_channels(max_bt):
@@ -357,6 +455,29 @@ def test_ttl(max_bt):
     compiled_info = get_compiled_info(ab, s)
     assert len(compiled_info.all_actions) == 8
 
+    comp.runtime_finalize(1)
+    rtio1 = list(np_rtios)
+    channels = get_channel_info(ab)
+    ttlchns = channels.ttlchns
+    assert rtio1 == [
+        -3000, # wait 3000 ns
+        ttlchns[1].target, 1, # TTL output, exact_time first
+        ttlchns[0].target, 1,
+        -10_000_000,
+        ttlchns[1].target, 0, # Pulse end
+        -200_000_000,
+        ttlchns[0].target, 0, # Second action
+        ttlchns[1].target, 1,
+        -10_000_000,
+        ttlchns[1].target, 0, # Pulse end
+        -1_000_000,
+        ttlchns[1].target, 1, # Third action, no-op set on ttl0 omitted
+        -10_000_000,
+    ]
+
+    comp.runtime_finalize(2)
+    assert list(np_rtios) == rtio1
+
 @with_artiq_params
 def test_counter(max_bt):
     v = rtval.new_extern(lambda: True)
@@ -385,6 +506,31 @@ def test_counter(max_bt):
     comp.finalize()
     compiled_info = get_compiled_info(ab, s)
     assert len(compiled_info.all_actions) == 9
+
+    comp.runtime_finalize(1)
+    rtio1 = list(np_rtios)
+    channels = get_channel_info(ab)
+    ttlchns = channels.ttlchns
+    assert rtio1 == [
+        -3000, # wait 3000 ns
+        ttlchns[0].target, 9, # TTL output, action order
+        ttlchns[1].target, 9,
+        -10_000_000,
+        ttlchns[1].target, 4, # Pulse end
+        -1_000_000,
+        ttlchns[0].target, 4, # Second action
+        ttlchns[1].target, 9,
+        -10_000_000,
+        ttlchns[1].target, 4, # Pulse end
+        -1_000_000,
+        ttlchns[1].target, 9, # Third action
+        -10_000_000,
+        ttlchns[1].target, 4, # Pulse end
+        -1_000_000,
+    ]
+
+    comp.runtime_finalize(2)
+    assert list(np_rtios) == rtio1
 
     s, comp = new_seq_compiler(max_bt)
     ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
@@ -437,6 +583,90 @@ def test_dds(max_bt):
     compiled_info = get_compiled_info(ab, s)
     assert len(compiled_info.all_actions) == 14
 
+    channels = get_channel_info(ab)
+    addr_tgts = [bus.addr_target for bus in channels.urukul_busses]
+    data_tgts = [bus.data_target for bus in channels.urukul_busses]
+    upd_tgts = [bus.io_update_target for bus in channels.urukul_busses]
+    css = [dds.chip_select for dds in channels.ddschns]
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+
+    comp.runtime_finalize(1)
+    rtio1 = list(np_rtios)
+
+    assert rtio1 == [
+        addr_tgts[0], dds_config_addr(css[0]), -dds_config_len,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(0.1, 0.1), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(123e6), -dds_data_len,
+        addr_tgts[0], dds_config_addr(css[0]), -(3000 - dds_total_len),
+        # Beginning of sequence
+        ttl_tgts[0], 1,
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(0, 0.1), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(123e6), -dds_data_len,
+        addr_tgts[0], dds_config_addr(css[0]), -(10_000_000 - dds_headless_len - 8),
+        # End of first step.
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(0.01, 0.1), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(23e6), -dds_data_len,
+        addr_tgts[0], dds_config_addr(css[1]), -dds_config_len,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[1]), -dds_config_len,
+        data_tgts[0], dds_data1(1.2, 0), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[1]), -dds_config_len,
+        data_tgts[0], dds_data2(0), -dds_data_len,
+        addr_tgts[0], dds_config_addr(css[0]),
+        -(1_000_000 - dds_headless_len - dds_total_len - 8),
+        # Beginning of second step
+        ttl_tgts[0], 0,
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(0, 0.1), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(23e6), -dds_data_len,
+        addr_tgts[0], dds_config_addr(css[1]), -dds_config_len,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[1]), -dds_config_len,
+        data_tgts[0], dds_data1(0, 0), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[1]), -dds_config_len,
+        data_tgts[0], dds_data2(0), -dds_data_len,
+        addr_tgts[0], dds_config_addr(css[0]),
+        -(10_000_000 - dds_headless_len - dds_total_len - 8),
+        # End of second step
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(0, 1.2), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(23e6),
+        -(1_000_000 - dds_headless_len + dds_data_len - 8),
+        # Beginning of third step
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        -(10_000_000 - 8),
+    ]
+
+    comp.runtime_finalize(2)
+    assert list(np_rtios) == rtio1
+
 class StaticFunction(action.RampFunction):
     def __init__(self):
         action.RampFunction.__init__(self)
@@ -480,6 +710,7 @@ def test_ramp(max_bt):
 def test_start_trigger(max_bt):
     s, comp = new_seq_compiler(max_bt)
     ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    s.set('artiq/ttl10', True)
     artiq_utils.add_start_trigger(ab, 0xfff1231, 0, 8000, True)
     artiq_utils.add_start_trigger(ab, 0xfff1232, 0, 8000, False)
     comp.finalize()
@@ -494,6 +725,23 @@ def test_start_trigger(max_bt):
     assert not triggers[1].raising_edge
     assert triggers[1].time_mu == 0
 
+    comp.runtime_finalize(1)
+    rtio1 = list(np_rtios)
+
+    channels = get_channel_info(ab)
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+    assert rtio1 == [
+        -3000,
+        0xfff1232, 1, -8,
+        0xfff1231, 1,
+        0xfff1232, 0,
+        ttl_tgts[0], 1, -8,
+        0xfff1231, 0,
+    ]
+
+    comp.runtime_finalize(2)
+    assert list(np_rtios) == rtio1
+
     s, comp = new_seq_compiler(max_bt)
     ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
     s.set('artiq/ttl10', True)
@@ -502,12 +750,31 @@ def test_start_trigger(max_bt):
     comp.finalize()
     triggers = artiq_utils.get_start_trigger(ab)
     assert len(triggers) == 2
+    trigger1 = triggers[0].target
     assert triggers[0].min_time_mu == 8
     assert triggers[0].raising_edge
     assert triggers[0].time_mu == 0
+    trigger2 = triggers[1].target
     assert triggers[1].min_time_mu == 8
     assert not triggers[1].raising_edge
     assert triggers[1].time_mu == 0
+
+    comp.runtime_finalize(1)
+    rtio1 = list(np_rtios)
+
+    channels = get_channel_info(ab)
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+    assert rtio1 == [
+        -3000,
+        trigger2, 1, -8,
+        trigger1, 1,
+        trigger2, 0,
+        ttl_tgts[0], 1, -8,
+        trigger1, 0,
+    ]
+
+    comp.runtime_finalize(2)
+    assert list(np_rtios) == rtio1
 
 @with_artiq_params
 def test_start_trigger_error(max_bt):
@@ -517,3 +784,957 @@ def test_start_trigger_error(max_bt):
         ab.add_start_trigger('ttl0_counter', 0, 8e-9, True)
     with pytest.raises(ValueError, match="Invalid start trigger device: urukul1_ch0"):
         ab.add_start_trigger('urukul1_ch0', 0, 8e-9, True)
+
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    s.set('artiq/ttl10', True)
+    for i in range(8):
+        artiq_utils.add_start_trigger(ab, 0xfff1231 + i, 0, 8000, True)
+    comp.finalize()
+
+    with pytest.raises(ValueError, match="Too many start triggers at the same time"):
+        comp.runtime_finalize(1)
+
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    s.set('artiq/ttl10', True)
+    for t in range(200):
+        for i in range(7):
+            artiq_utils.add_start_trigger(ab, 0xfff1231 + t * 8 + i, t * 8000,
+                                          8000, True)
+    comp.finalize()
+
+    with pytest.raises(ValueError, match="Too many start triggers at the same time"):
+        comp.runtime_finalize(1)
+
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    s.set('artiq/ttl10', True)
+    for t in range(200):
+        for i in range(7):
+            artiq_utils.add_start_trigger(ab, 0xfff1231 + t * 8 + i,
+                                          t * 8000, 8000, False)
+    comp.finalize()
+
+    with pytest.raises(ValueError, match="Too many start triggers at the same time"):
+        comp.runtime_finalize(1)
+
+@with_artiq_params
+def test_ttl_time_move(max_bt):
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    for i in range(8):
+        s.set(f'artiq/ttl{i}', True)
+    comp.finalize()
+
+    channels = get_channel_info(ab)
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+
+    comp.runtime_finalize(1)
+    rtio1 = list(np_rtios)
+    assert rtio1 == [
+        -2992,
+        ttl_tgts[7], 1,
+        -8,
+        ttl_tgts[0], 1,
+        ttl_tgts[1], 1,
+        ttl_tgts[2], 1,
+        ttl_tgts[3], 1,
+        ttl_tgts[4], 1,
+        ttl_tgts[5], 1,
+        ttl_tgts[6], 1,
+    ]
+
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    for i in range(15):
+        s.set(f'artiq/ttl{i}', True)
+    comp.finalize()
+
+    channels = get_channel_info(ab)
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+
+    comp.runtime_finalize(1)
+    rtio1 = list(np_rtios)
+    assert rtio1 == [
+        -2992,
+        ttl_tgts[7], 1,
+        ttl_tgts[8], 1,
+        ttl_tgts[9], 1,
+        ttl_tgts[10], 1,
+        ttl_tgts[11], 1,
+        ttl_tgts[12], 1,
+        ttl_tgts[13], 1,
+        -8,
+        ttl_tgts[0], 1,
+        ttl_tgts[1], 1,
+        ttl_tgts[2], 1,
+        ttl_tgts[3], 1,
+        ttl_tgts[4], 1,
+        ttl_tgts[5], 1,
+        ttl_tgts[6], 1,
+        -8,
+        ttl_tgts[14], 1,
+    ]
+
+@with_artiq_params
+def test_ttl_exact_time(max_bt):
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    s.set(f'artiq/ttl0', True, exact_time=True)
+    s.wait(8e-9)
+    s.set(f'artiq/ttl0', False, exact_time=True)
+    comp.finalize()
+
+    channels = get_channel_info(ab)
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+
+    comp.runtime_finalize(1)
+    rtio1 = list(np_rtios)
+    assert rtio1 == [
+        -3000,
+        ttl_tgts[0], 1,
+        -8,
+        ttl_tgts[0], 0,
+    ]
+
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    s.set(f'artiq/ttl0', True)
+    s.wait(8e-9)
+    s.set(f'artiq/ttl0', False, exact_time=True)
+    comp.finalize()
+
+    channels = get_channel_info(ab)
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+
+    comp.runtime_finalize(1)
+    rtio1 = list(np_rtios)
+    assert rtio1 == [
+        -3008,
+        ttl_tgts[0], 0,
+    ]
+
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    for i in range(7):
+        s.set(f'artiq/ttl{i}', True, exact_time=True)
+    comp.finalize()
+
+    channels = get_channel_info(ab)
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+
+    comp.runtime_finalize(1)
+    rtio1 = list(np_rtios)
+    assert rtio1 == [
+        -3000,
+        ttl_tgts[0], 1,
+        ttl_tgts[1], 1,
+        ttl_tgts[2], 1,
+        ttl_tgts[3], 1,
+        ttl_tgts[4], 1,
+        ttl_tgts[5], 1,
+        ttl_tgts[6], 1,
+    ]
+
+@with_artiq_params
+def test_dds_merge_value(max_bt):
+    v1 = 1e-6
+    rv1 = rtval.new_extern(lambda: v1)
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    s.set(f'artiq/urukul0_ch0/amp', 0.1)
+    s.set(f'artiq/urukul0_ch0/freq', 1.3e6)
+    s.wait(0.1e-3)
+    s.set(f'artiq/urukul0_ch0/amp', 0.2)
+    s.wait(rv1)
+    s.set(f'artiq/urukul0_ch0/amp', 0.1)
+    comp.finalize()
+
+    channels = get_channel_info(ab)
+    addr_tgts = [bus.addr_target for bus in channels.urukul_busses]
+    data_tgts = [bus.data_target for bus in channels.urukul_busses]
+    upd_tgts = [bus.io_update_target for bus in channels.urukul_busses]
+    css = [dds.chip_select for dds in channels.ddschns]
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+
+    comp.runtime_finalize(1)
+    rtio1 = list(np_rtios)
+    assert rtio1 == [
+        addr_tgts[0], dds_config_addr(css[0]),
+        -dds_config_len,
+        data_tgts[0], dds_data_addr,
+        -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]),
+        -dds_config_len,
+        data_tgts[0], dds_data1(0.1, 0),
+        -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]),
+        -dds_config_len,
+        data_tgts[0], dds_data2(1.3e6),
+        -(3000 - dds_total_len + dds_data_len),
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        -(101_000 - 8),
+    ]
+
+    v1 = 5e-6
+    comp.runtime_finalize(2)
+    rtio2 = list(np_rtios)
+    assert rtio2 == [
+        addr_tgts[0], dds_config_addr(css[0]),
+        -dds_config_len,
+        data_tgts[0], dds_data_addr,
+        -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]),
+        -dds_config_len,
+        data_tgts[0], dds_data1(0.1, 0),
+        -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]),
+        -dds_config_len,
+        data_tgts[0], dds_data2(1.3e6),
+        -dds_data_len,
+        addr_tgts[0], dds_config_addr(css[0]),
+        -(3000 - dds_total_len),
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        data_tgts[0], dds_data_addr,
+        -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]),
+        -dds_config_len,
+        data_tgts[0], dds_data1(0.2, 0),
+        -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]),
+        -dds_config_len,
+        data_tgts[0], dds_data2(1.3e6),
+        -dds_data_len,
+        addr_tgts[0], dds_config_addr(css[0]),
+        -(100_000 - 8 - dds_total_len + dds_config_len),
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        data_tgts[0], dds_data_addr,
+        -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]),
+        -dds_config_len,
+        data_tgts[0], dds_data1(0.1, 0),
+        -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]),
+        -dds_config_len,
+        data_tgts[0], dds_data2(1.3e6),
+        -(5_000 - 8 - dds_headless_len + dds_data_len),
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+    ]
+
+@with_artiq_params
+def test_dds_exact_time(max_bt):
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    for i in range(7):
+        s.set(f'artiq/urukul{i}_ch{i % 4}/amp', 0.1, exact_time=True)
+        s.set(f'artiq/urukul{i}_ch{i % 4}/freq', (12 + i) * 1e6, exact_time=True)
+    comp.finalize()
+
+    channels = get_channel_info(ab)
+    addr_tgts = [bus.addr_target for bus in channels.urukul_busses]
+    data_tgts = [bus.data_target for bus in channels.urukul_busses]
+    upd_tgts = [bus.io_update_target for bus in channels.urukul_busses]
+    css = [dds.chip_select for dds in channels.ddschns]
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+
+    comp.runtime_finalize(1)
+    rtio1 = list(np_rtios)
+    assert rtio1 == [
+        addr_tgts[0], dds_config_addr(css[0]),
+        addr_tgts[1], dds_config_addr(css[1]),
+        addr_tgts[2], dds_config_addr(css[2]),
+        addr_tgts[3], dds_config_addr(css[3]),
+        addr_tgts[4], dds_config_addr(css[4]),
+        addr_tgts[5], dds_config_addr(css[5]),
+        addr_tgts[6], dds_config_addr(css[6]),
+        -dds_config_len,
+        data_tgts[0], dds_data_addr,
+        data_tgts[1], dds_data_addr,
+        data_tgts[2], dds_data_addr,
+        data_tgts[3], dds_data_addr,
+        data_tgts[4], dds_data_addr,
+        data_tgts[5], dds_data_addr,
+        data_tgts[6], dds_data_addr,
+        -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]),
+        addr_tgts[1], dds_config_data1(css[1]),
+        addr_tgts[2], dds_config_data1(css[2]),
+        addr_tgts[3], dds_config_data1(css[3]),
+        addr_tgts[4], dds_config_data1(css[4]),
+        addr_tgts[5], dds_config_data1(css[5]),
+        addr_tgts[6], dds_config_data1(css[6]),
+        -dds_config_len,
+        data_tgts[0], dds_data1(0.1, 0),
+        data_tgts[1], dds_data1(0.1, 0),
+        data_tgts[2], dds_data1(0.1, 0),
+        data_tgts[3], dds_data1(0.1, 0),
+        data_tgts[4], dds_data1(0.1, 0),
+        data_tgts[5], dds_data1(0.1, 0),
+        data_tgts[6], dds_data1(0.1, 0),
+        -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]),
+        addr_tgts[1], dds_config_data2(css[1]),
+        addr_tgts[2], dds_config_data2(css[2]),
+        addr_tgts[3], dds_config_data2(css[3]),
+        addr_tgts[4], dds_config_data2(css[4]),
+        addr_tgts[5], dds_config_data2(css[5]),
+        addr_tgts[6], dds_config_data2(css[6]),
+        -dds_config_len,
+        data_tgts[0], dds_data2(12e6),
+        data_tgts[1], dds_data2(13e6),
+        data_tgts[2], dds_data2(14e6),
+        data_tgts[3], dds_data2(15e6),
+        data_tgts[4], dds_data2(16e6),
+        data_tgts[5], dds_data2(17e6),
+        data_tgts[6], dds_data2(18e6),
+        -(3000 - dds_total_len + dds_data_len),
+        upd_tgts[0], 1,
+        upd_tgts[1], 1,
+        upd_tgts[2], 1,
+        upd_tgts[3], 1,
+        upd_tgts[4], 1,
+        upd_tgts[5], 1,
+        upd_tgts[6], 1,
+        -8,
+        upd_tgts[0], 0,
+        upd_tgts[1], 0,
+        upd_tgts[2], 0,
+        upd_tgts[3], 0,
+        upd_tgts[4], 0,
+        upd_tgts[5], 0,
+        upd_tgts[6], 0,
+    ]
+
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    for i in range(7):
+        s.set(f'artiq/urukul{i}_ch{i % 4}/amp', 0.1, exact_time=True)
+        s.set(f'artiq/urukul{i}_ch{i % 4}/freq', (12 + i) * 1e6, exact_time=True)
+    s.wait(1.5e-6)
+    for i in range(7):
+        s.set(f'artiq/urukul{i}_ch{i % 4}/amp', 0.2, exact_time=True)
+    comp.finalize()
+
+    channels = get_channel_info(ab)
+    addr_tgts = [bus.addr_target for bus in channels.urukul_busses]
+    data_tgts = [bus.data_target for bus in channels.urukul_busses]
+    upd_tgts = [bus.io_update_target for bus in channels.urukul_busses]
+    css = [dds.chip_select for dds in channels.ddschns]
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+
+    comp.runtime_finalize(1)
+    rtio1 = list(np_rtios)
+    assert rtio1 == [
+        addr_tgts[0], dds_config_addr(css[0]),
+        addr_tgts[1], dds_config_addr(css[1]),
+        addr_tgts[2], dds_config_addr(css[2]),
+        addr_tgts[3], dds_config_addr(css[3]),
+        addr_tgts[4], dds_config_addr(css[4]),
+        addr_tgts[5], dds_config_addr(css[5]),
+        addr_tgts[6], dds_config_addr(css[6]),
+        -dds_config_len,
+        data_tgts[0], dds_data_addr,
+        data_tgts[1], dds_data_addr,
+        data_tgts[2], dds_data_addr,
+        data_tgts[3], dds_data_addr,
+        data_tgts[4], dds_data_addr,
+        data_tgts[5], dds_data_addr,
+        data_tgts[6], dds_data_addr,
+        -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]),
+        addr_tgts[1], dds_config_data1(css[1]),
+        addr_tgts[2], dds_config_data1(css[2]),
+        addr_tgts[3], dds_config_data1(css[3]),
+        addr_tgts[4], dds_config_data1(css[4]),
+        addr_tgts[5], dds_config_data1(css[5]),
+        addr_tgts[6], dds_config_data1(css[6]),
+        -dds_config_len,
+        data_tgts[0], dds_data1(0.1, 0),
+        data_tgts[1], dds_data1(0.1, 0),
+        data_tgts[2], dds_data1(0.1, 0),
+        data_tgts[3], dds_data1(0.1, 0),
+        data_tgts[4], dds_data1(0.1, 0),
+        data_tgts[5], dds_data1(0.1, 0),
+        data_tgts[6], dds_data1(0.1, 0),
+        -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]),
+        addr_tgts[1], dds_config_data2(css[1]),
+        addr_tgts[2], dds_config_data2(css[2]),
+        addr_tgts[3], dds_config_data2(css[3]),
+        addr_tgts[4], dds_config_data2(css[4]),
+        addr_tgts[5], dds_config_data2(css[5]),
+        addr_tgts[6], dds_config_data2(css[6]),
+        -dds_config_len,
+        data_tgts[0], dds_data2(12e6),
+        data_tgts[1], dds_data2(13e6),
+        data_tgts[2], dds_data2(14e6),
+        data_tgts[3], dds_data2(15e6),
+        data_tgts[4], dds_data2(16e6),
+        data_tgts[5], dds_data2(17e6),
+        data_tgts[6], dds_data2(18e6),
+        -dds_data_len,
+        addr_tgts[0], dds_config_addr(css[0]),
+        addr_tgts[1], dds_config_addr(css[1]),
+        addr_tgts[2], dds_config_addr(css[2]),
+        addr_tgts[3], dds_config_addr(css[3]),
+        addr_tgts[4], dds_config_addr(css[4]),
+        addr_tgts[5], dds_config_addr(css[5]),
+        addr_tgts[6], dds_config_addr(css[6]),
+        -(3000 - dds_total_len),
+        upd_tgts[0], 1,
+        upd_tgts[1], 1,
+        upd_tgts[2], 1,
+        upd_tgts[3], 1,
+        upd_tgts[4], 1,
+        upd_tgts[5], 1,
+        upd_tgts[6], 1,
+        -8,
+        upd_tgts[0], 0,
+        upd_tgts[1], 0,
+        upd_tgts[2], 0,
+        upd_tgts[3], 0,
+        upd_tgts[4], 0,
+        upd_tgts[5], 0,
+        upd_tgts[6], 0,
+        -8,
+        data_tgts[0], dds_data_addr,
+        data_tgts[1], dds_data_addr,
+        data_tgts[2], dds_data_addr,
+        data_tgts[3], dds_data_addr,
+        data_tgts[4], dds_data_addr,
+        data_tgts[5], dds_data_addr,
+        data_tgts[6], dds_data_addr,
+        -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]),
+        addr_tgts[1], dds_config_data1(css[1]),
+        addr_tgts[2], dds_config_data1(css[2]),
+        addr_tgts[3], dds_config_data1(css[3]),
+        addr_tgts[4], dds_config_data1(css[4]),
+        addr_tgts[5], dds_config_data1(css[5]),
+        addr_tgts[6], dds_config_data1(css[6]),
+        -dds_config_len,
+        data_tgts[0], dds_data1(0.2, 0),
+        data_tgts[1], dds_data1(0.2, 0),
+        data_tgts[2], dds_data1(0.2, 0),
+        data_tgts[3], dds_data1(0.2, 0),
+        data_tgts[4], dds_data1(0.2, 0),
+        data_tgts[5], dds_data1(0.2, 0),
+        data_tgts[6], dds_data1(0.2, 0),
+        -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]),
+        addr_tgts[1], dds_config_data2(css[1]),
+        addr_tgts[2], dds_config_data2(css[2]),
+        addr_tgts[3], dds_config_data2(css[3]),
+        addr_tgts[4], dds_config_data2(css[4]),
+        addr_tgts[5], dds_config_data2(css[5]),
+        addr_tgts[6], dds_config_data2(css[6]),
+        -dds_config_len,
+        data_tgts[0], dds_data2(12e6),
+        data_tgts[1], dds_data2(13e6),
+        data_tgts[2], dds_data2(14e6),
+        data_tgts[3], dds_data2(15e6),
+        data_tgts[4], dds_data2(16e6),
+        data_tgts[5], dds_data2(17e6),
+        data_tgts[6], dds_data2(18e6),
+        # 1.5 us is not 8 ns aligned so it's 1504 here
+        -(1504 - dds_headless_len - 16 + dds_data_len),
+        upd_tgts[0], 1,
+        upd_tgts[1], 1,
+        upd_tgts[2], 1,
+        upd_tgts[3], 1,
+        upd_tgts[4], 1,
+        upd_tgts[5], 1,
+        upd_tgts[6], 1,
+        -8,
+        upd_tgts[0], 0,
+        upd_tgts[1], 0,
+        upd_tgts[2], 0,
+        upd_tgts[3], 0,
+        upd_tgts[4], 0,
+        upd_tgts[5], 0,
+        upd_tgts[6], 0,
+    ]
+
+@with_artiq_params
+def test_exact_time_error(max_bt):
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    for i in range(7):
+        s.set(f'artiq/ttl{i}', True, exact_time=True)
+    def adsf78as7dfahsd78f():
+        s.set('artiq/ttl7', True, exact_time=True)
+    adsf78as7dfahsd78f()
+    comp.finalize()
+
+    with pytest.raises(ValueError, match="Too many outputs at the same time") as exc:
+        comp.runtime_finalize(1)
+    check_bt(exc, max_bt, 'adsf78as7dfahsd78f')
+
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    for i in range(7):
+        s.set(f'artiq/urukul{i}_ch2/amp', True, exact_time=True)
+        s.set(f'artiq/urukul{i}_ch2/freq', (12 + i) * 1e6, exact_time=True)
+    def asdh78asdfasdj():
+        s.set('artiq/urukul7_ch2/amp', True, exact_time=True)
+        s.set('artiq/urukul7_ch2/freq', 20e6, exact_time=True)
+    asdh78asdfasdj()
+    comp.finalize()
+
+    with pytest.raises(ValueError, match="Too many outputs at the same time") as exc:
+        comp.runtime_finalize(1)
+    check_bt(exc, max_bt, 'asdh78asdfasdj')
+
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    s.set(f'artiq/urukul0_ch0/amp', True, exact_time=True)
+    s.wait(0.1e-6)
+    def ajsdj7jf8asdf():
+        s.set(f'artiq/urukul0_ch1/amp', True, exact_time=True)
+    ajsdj7jf8asdf()
+    comp.finalize()
+
+    with pytest.raises(ValueError, match="Exact time output cannot satisfy lower time bound") as exc:
+        comp.runtime_finalize(1)
+    check_bt(exc, max_bt, 'ajsdj7jf8asdf')
+
+@with_artiq_params
+def test_inexact_time_error(max_bt):
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    def jasdjf78asdfhsd():
+        for t in range(2000):
+            step = s.add_step(8e-9)
+            for i in range(16):
+                step.set(f'artiq/ttl{i}_counter', t % 2 == 0)
+    jasdjf78asdfhsd()
+    comp.finalize()
+
+    with pytest.raises(ValueError, match="Too many outputs at the same time") as exc:
+        comp.runtime_finalize(1)
+    check_bt(exc, max_bt, 'jasdjf78asdfhsd')
+
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    def asd7923j9fd7():
+        for t in range(100):
+            step = s.add_step(0.5e-6)
+            for i in range(4):
+                step.set(f'artiq/urukul0_ch{i}/amp', t * 0.001)
+    asd7923j9fd7()
+    comp.finalize()
+
+    with pytest.raises(ValueError, match="Cannot find appropriate output time within bound") as exc:
+        comp.runtime_finalize(1)
+    check_bt(exc, max_bt, 'asd7923j9fd7')
+
+@with_artiq_params
+def test_long_wait(max_bt):
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    s.wait(10)
+
+    comp.finalize()
+
+    comp.runtime_finalize(1)
+    rtio1 = list(np_rtios)
+    assert rtio1 == [
+        -2147483648,
+        -2147483648,
+        -2147483648,
+        -2147483648,
+        -1410068408,
+    ]
+
+@with_artiq_params
+def test_dyn_seq1(max_bt):
+    c1 = True
+    rc1 = rtval.new_extern(lambda: c1)
+    c2 = True
+    rc2 = rtval.new_extern(lambda: c2)
+
+    v1 = 0.1
+    rv1 = rtval.new_extern(lambda: v1)
+    v2 = 0.2
+    rv2 = rtval.new_extern(lambda: v2)
+
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    s.add_step(rv1) \
+     .pulse('artiq/ttl0', rc2)
+    s.conditional(rc1) \
+     .add_step(0.001) \
+     .set('artiq/ttl1', rc2)
+    s.wait(rv2)
+    s.add_step(rv1) \
+     .pulse('artiq/ttl0', True)
+    comp.finalize()
+
+    channels = get_channel_info(ab)
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+
+    comp.runtime_finalize(1)
+    rtio1 = list(np_rtios)
+    assert rtio1 == [
+        -3000,
+        ttl_tgts[0], 1,
+        -100_000_000,
+        ttl_tgts[0], 0,
+        ttl_tgts[1], 1,
+        -201_000_000,
+        ttl_tgts[0], 1,
+        -100_000_000,
+        ttl_tgts[0], 0,
+    ]
+
+    c1 = False
+    c2 = True
+    v1 = 0.1
+    v2 = 0.2
+    comp.runtime_finalize(2)
+    rtio2 = list(np_rtios)
+    assert rtio2 == [
+        -3000,
+        ttl_tgts[0], 1,
+        -100_000_000,
+        ttl_tgts[0], 0,
+        -200_000_000,
+        ttl_tgts[0], 1,
+        -100_000_000,
+        ttl_tgts[0], 0,
+    ]
+
+    c1 = True
+    c2 = False
+    v1 = 0.1
+    v2 = 0.2
+    comp.runtime_finalize(3)
+    rtio3 = list(np_rtios)
+    assert rtio3 == [
+        -3000,
+        ttl_tgts[0], 0,
+        -100_000_000,
+        ttl_tgts[1], 0,
+        -201_000_000,
+        ttl_tgts[0], 1,
+        -100_000_000,
+        ttl_tgts[0], 0,
+    ]
+
+    c1 = False
+    c2 = False
+    v1 = 0.1
+    v2 = 0.2
+    comp.runtime_finalize(4)
+    rtio4 = list(np_rtios)
+    assert rtio4 == [
+        -3000,
+        ttl_tgts[0], 0,
+        -300_000_000,
+        ttl_tgts[0], 1,
+        -100_000_000,
+        ttl_tgts[0], 0,
+    ]
+
+    c1 = True
+    c2 = True
+    v1 = 0.0
+    v2 = 0.2
+    comp.runtime_finalize(5)
+    rtio5 = list(np_rtios)
+    assert rtio5 == [
+        -3000,
+        ttl_tgts[0], 0,
+        ttl_tgts[1], 1,
+        -201_000_000,
+    ]
+
+    c1 = False
+    c2 = True
+    v1 = 0.0
+    v2 = 0.2
+    comp.runtime_finalize(6)
+    rtio6 = list(np_rtios)
+    assert rtio6 == [
+        -3000,
+        ttl_tgts[0], 0,
+        -200_000_000,
+    ]
+
+    c1 = True
+    c2 = False
+    v1 = 0.0
+    v2 = 0.2
+    comp.runtime_finalize(7)
+    rtio7 = list(np_rtios)
+    assert rtio7 == [
+        -3000,
+        ttl_tgts[0], 0,
+        ttl_tgts[1], 0,
+        -201_000_000,
+    ]
+
+    c1 = False
+    c2 = False
+    v1 = 0.0
+    v2 = 0.2
+    comp.runtime_finalize(8)
+    rtio8 = list(np_rtios)
+    assert rtio8 == [
+        -3000,
+        ttl_tgts[0], 0,
+        -200_000_000,
+    ]
+
+    c1 = True
+    c2 = True
+    v1 = 0.1
+    v2 = 0.0
+    comp.runtime_finalize(9)
+    rtio9 = list(np_rtios)
+    assert rtio9 == [
+        -3000,
+        ttl_tgts[0], 1,
+        -100_000_000,
+        ttl_tgts[0], 0,
+        ttl_tgts[1], 1,
+        -1_000_000,
+        ttl_tgts[0], 1,
+        -100_000_000,
+        ttl_tgts[0], 0,
+    ]
+
+    c1 = False
+    c2 = True
+    v1 = 0.1
+    v2 = 0.0
+    comp.runtime_finalize(10)
+    rtio10 = list(np_rtios)
+    assert rtio10 == [
+        -3000,
+        ttl_tgts[0], 1,
+        -200_000_000,
+        ttl_tgts[0], 0,
+    ]
+
+    c1 = True
+    c2 = False
+    v1 = 0.1
+    v2 = 0.0
+    comp.runtime_finalize(11)
+    rtio11 = list(np_rtios)
+    assert rtio11 == [
+        -3000,
+        ttl_tgts[0], 0,
+        -100_000_000,
+        ttl_tgts[1], 0,
+        -1_000_000,
+        ttl_tgts[0], 1,
+        -100_000_000,
+        ttl_tgts[0], 0,
+    ]
+
+    c1 = False
+    c2 = False
+    v1 = 0.1
+    v2 = 0.0
+    comp.runtime_finalize(12)
+    rtio12 = list(np_rtios)
+    assert rtio12 == [
+        -3000,
+        ttl_tgts[0], 0,
+        -100_000_000,
+        ttl_tgts[0], 1,
+        -100_000_000,
+        ttl_tgts[0], 0,
+    ]
+
+    c1 = True
+    c2 = True
+    v1 = 0.0
+    v2 = 0.0
+    comp.runtime_finalize(13)
+    rtio13 = list(np_rtios)
+    assert rtio13 == [
+        -3000,
+        ttl_tgts[0], 0,
+        ttl_tgts[1], 1,
+        -1_000_000,
+    ]
+
+    c1 = False
+    c2 = True
+    v1 = 0.0
+    v2 = 0.0
+    comp.runtime_finalize(14)
+    rtio14 = list(np_rtios)
+    assert rtio14 == [
+        -3000,
+        ttl_tgts[0], 0,
+    ]
+
+    c1 = True
+    c2 = False
+    v1 = 0.0
+    v2 = 0.0
+    comp.runtime_finalize(15)
+    rtio15 = list(np_rtios)
+    assert rtio15 == [
+        -3000,
+        ttl_tgts[0], 0,
+        ttl_tgts[1], 0,
+        -1_000_000,
+    ]
+
+    c1 = False
+    c2 = False
+    v1 = 0.0
+    v2 = 0.0
+    comp.runtime_finalize(16)
+    rtio16 = list(np_rtios)
+    assert rtio16 == [
+        -3000,
+        ttl_tgts[0], 0,
+    ]
+
+@with_artiq_params
+def test_single(max_bt):
+    b1 = True
+    b2 = True
+    v1 = 0.001
+    rb1 = rtval.new_extern(lambda: b1)
+    rb2 = rtval.new_extern(lambda: b2)
+    rv1 = rtval.new_extern(lambda: v1)
+
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    s.wait(rv1)
+    s.conditional(rb1).set('artiq/ttl0', rb2)
+    comp.finalize()
+
+    channels = get_channel_info(ab)
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+
+    comp.runtime_finalize(1)
+    rtio1 = list(np_rtios)
+    assert rtio1 == [
+        -1_003_000,
+        ttl_tgts[0], 1,
+    ]
+
+    v1 = 0.001
+    b1 = True
+    b2 = False
+    comp.runtime_finalize(2)
+    rtio2 = list(np_rtios)
+    assert rtio2 == [
+        -1_003_000,
+        ttl_tgts[0], 0,
+    ]
+
+    v1 = 0.001
+    b1 = False
+    b2 = True
+    comp.runtime_finalize(3)
+    rtio3 = list(np_rtios)
+    assert rtio3 == [
+        -1_003_000,
+    ]
+
+    v1 = 0.001
+    b1 = False
+    b2 = False
+    comp.runtime_finalize(4)
+    rtio4 = list(np_rtios)
+    assert rtio4 == [
+        -1_003_000,
+    ]
+
+    v1 = 0.01
+    b1 = True
+    b2 = True
+    comp.runtime_finalize(5)
+    rtio5 = list(np_rtios)
+    assert rtio5 == [
+        -10_003_000,
+        ttl_tgts[0], 1,
+    ]
+
+    v1 = 0.01
+    b1 = True
+    b2 = False
+    comp.runtime_finalize(6)
+    rtio6 = list(np_rtios)
+    assert rtio6 == [
+        -10_003_000,
+        ttl_tgts[0], 0,
+    ]
+
+    v1 = 0.01
+    b1 = False
+    b2 = True
+    comp.runtime_finalize(7)
+    rtio7 = list(np_rtios)
+    assert rtio7 == [
+        -10_003_000,
+    ]
+
+    v1 = 0.01
+    b1 = False
+    b2 = False
+    comp.runtime_finalize(8)
+    rtio8 = list(np_rtios)
+    assert rtio8 == [
+        -10_003_000,
+    ]
+
+@with_artiq_params
+def test_same_time_output(max_bt):
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    st1 = s.add_step(10e-6)
+    st2 = s.add_step(10e-6)
+    st1.pulse('artiq/ttl0', True)
+    st2.pulse('artiq/ttl0', True)
+    comp.finalize()
+
+    channels = get_channel_info(ab)
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+
+    comp.runtime_finalize(1)
+    rtio1 = list(np_rtios)
+    assert rtio1 == [
+        -3000,
+        ttl_tgts[0], 1,
+        -20_000,
+        ttl_tgts[0], 0,
+    ]
+
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    st1 = s.add_step(10e-6)
+    st2 = s.add_step(10e-6)
+    st2.pulse('artiq/ttl0', True)
+    st1.pulse('artiq/ttl0', True)
+    comp.finalize()
+
+    channels = get_channel_info(ab)
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+
+    comp.runtime_finalize(1)
+    rtio1 = list(np_rtios)
+    assert rtio1 == [
+        -3000,
+        ttl_tgts[0], 1,
+        -20_000,
+        ttl_tgts[0], 0,
+    ]

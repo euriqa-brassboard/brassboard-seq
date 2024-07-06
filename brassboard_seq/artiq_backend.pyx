@@ -3,10 +3,13 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.action cimport Action, RampFunction
 from brassboard_seq.event_time cimport EventTime, round_time_int
-from brassboard_seq.rtval cimport is_rtval
+from brassboard_seq.rtval cimport is_rtval, RuntimeValue, rt_eval
+from brassboard_seq.utils cimport set_global_tracker
 
 cimport cython
 from cpython cimport PyErr_Format, PyObject
+cimport numpy as cnpy
+cnpy._import_array()
 
 # Declare these as cdef so that they are hidden from python
 # and can be accessed more efficiently from this module.
@@ -29,6 +32,11 @@ cdef extern from "src/artiq_backend.cpp" namespace "artiq_backend":
     void collect_actions(ArtiqBackend ab,
                          CompileVTable vtable, Action, EventTime) except +
 
+    struct RuntimeVTable:
+        object (*rt_eval)(object, unsigned)
+
+    void generate_rtios(ArtiqBackend ab, unsigned age, RuntimeVTable vtable) except +
+
 cdef inline bint is_ramp(obj) noexcept:
     return isinstance(obj, RampFunction)
 
@@ -36,6 +44,11 @@ cdef inline CompileVTable get_compile_vtable() noexcept nogil:
     cdef CompileVTable vt
     vt.is_rtval = is_rtval
     vt.is_ramp = is_ramp
+    return vt
+
+cdef inline RuntimeVTable get_runtime_vtable() noexcept nogil:
+    cdef RuntimeVTable vt
+    vt.rt_eval = <object (*)(object, unsigned)>rt_eval
     return vt
 
 artiq_consts.COUNTER_ENABLE = <int?>edge_counter.CONFIG_COUNT_RISING | <int?>edge_counter.CONFIG_RESET_TO_ZERO
@@ -128,8 +141,14 @@ cdef int collect_channels(ChannelsInfo *self, str prefix, sys, Seq seq) except -
 
 @cython.final
 cdef class ArtiqBackend:
-    def __init__(self, sys):
+    def __init__(self, sys, cnpy.ndarray rtio_array):
         self.sys = sys
+        self.eval_status = False
+        if rtio_array.ndim != 1:
+            PyErr_Format(ValueError, "RTIO output must be a 1D array")
+        if cnpy.PyArray_TYPE(rtio_array) != cnpy.NPY_INT32:
+            PyErr_Format(TypeError, "RTIO output must be a int32 array")
+        self.rtio_array = rtio_array
 
     cdef int add_start_trigger_ttl(self, uint32_t tgt, long long time,
                                    int min_time, bint raising_edge) except -1:
@@ -154,3 +173,7 @@ cdef class ArtiqBackend:
         bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)
         collect_channels(&self.channels, self.prefix, self.sys, self.seq)
         collect_actions(self, get_compile_vtable(), None, None)
+
+    cdef int runtime_finalize(self, unsigned age) except -1:
+        bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)
+        generate_rtios(self, age, get_runtime_vtable())

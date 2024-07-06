@@ -43,12 +43,17 @@ cdef extern from "src/artiq_backend.h" namespace "artiq_backend":
         uint32_t bus_id
         uint8_t chip_select
 
+    cppclass DDSAction:
+        pass
+
     cppclass UrukulBus:
         uint32_t channel
         uint32_t addr_target
         uint32_t data_target
         uint32_t io_update_target
         uint8_t ref_period_mu
+
+        vector[DDSAction] dds_status
 
     cppclass TTLChannel:
         uint32_t target
@@ -82,6 +87,12 @@ cdef extern from "src/artiq_backend.h" namespace "artiq_backend":
         int time_idx
         int val_idx
 
+    cppclass RTIOAction:
+        pass
+
+    cppclass TimeChecker:
+        TimeChecker() nogil
+
     int64_t seq_time_to_mu(long long time)
 
 
@@ -94,6 +105,10 @@ cdef class ArtiqBackend(Backend):
     cdef vector[pair[void*,bint]] bool_values
     cdef vector[pair[void*,double]] float_values
     cdef vector[Relocation] relocations
+    cdef bint eval_status
+    cdef vector[RTIOAction] rtio_actions
+    cdef TimeChecker time_checker
+    cdef object rtio_array # ndarray
 
     cdef vector[StartTrigger] start_triggers
 
@@ -101,3 +116,4 @@ cdef class ArtiqBackend(Backend):
                                    int min_time, bint raising_edge) except -1
 
     cdef int finalize(self) except -1
+    cdef int runtime_finalize(self, unsigned age) except -1

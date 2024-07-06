@@ -67,6 +67,12 @@ cdef class ArtiqAction:
     cdef public int aid
     cdef public int reloc_id
 
+    def __str__(self):
+        return f'ArtiqAction(type={self.type}, cond={self.cond}, exact_time={self.exact_time}, chn_idx={self.chn_idx}, tid={self.tid}, time_mu={self.time_mu}, value={self.value}, aid={self.aid}, reloc_id={self.reloc_id})'
+
+    def __repr__(self):
+        return str(self)
+
 channel_type_names = {
     artiq_backend.DDSFreq: 'ddsfreq',
     artiq_backend.DDSAmp: 'ddsamp',

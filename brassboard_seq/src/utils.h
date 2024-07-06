@@ -299,4 +299,21 @@ struct ValueIndexer {
     std::map<void*,int> indices;
 };
 
+template<typename CB>
+struct ScopeExit {
+    template<typename _CB>
+    ScopeExit(_CB &&cb)
+        : cb(std::forward<_CB>(cb))
+    {}
+    ~ScopeExit()
+    {
+        cb();
+    }
+private:
+    CB cb;
+};
+
+template<typename CB>
+ScopeExit(CB) -> ScopeExit<CB>;
+
 #endif

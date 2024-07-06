@@ -7,6 +7,8 @@
 
 #include <assert.h>
 
+#include <numpy/arrayobject.h>
+
 namespace artiq_backend {
 static ArtiqConsts artiq_consts;
 
@@ -213,6 +215,613 @@ void collect_actions(ArtiqBackend *ab, const CompileVTable vtable, Action*, Even
 
     ab->bool_values = std::move(bool_values.values);
     ab->float_values = std::move(float_values.values);
+}
+
+struct RuntimeVTable {
+    PyObject *(*rt_eval)(PyObject*, unsigned age);
+};
+
+template<typename ArtiqBackend>
+static __attribute__((noreturn))
+void reraise_reloc_error(ArtiqBackend *ab, size_t reloc_idx, bool isbool)
+{
+    // This is inefficient when we actually hit an error but saves memory
+    // when we didn't have an error
+    for (auto &artiq_action: ab->all_actions) {
+        if (artiq_action.reloc_id == -1)
+            continue;
+        auto reloc = ab->relocations[artiq_action.reloc_id];
+        // We only need to check for the value index since the time relocation
+        // does not use our relocation table as the input and the conditional
+        // values are checked by the sequence common code
+        // (and their value is cached so there shouldn't be an error
+        // when we try to evaluate it.)
+        if (reloc.val_idx != reloc_idx)
+            continue;
+        auto type = artiq_action.type;
+        auto action_isbool = type == TTLOut || type == CounterEnable;
+        if (action_isbool == isbool) {
+            bb_reraise(action_key(artiq_action.aid));
+            break;
+        }
+    }
+    throw 0;
+}
+
+template<typename ArtiqBackend>
+static __attribute__((always_inline)) inline
+void generate_rtios(ArtiqBackend *ab, unsigned age, const RuntimeVTable vtable)
+{
+    bb_debug("generate_rtios: start\n");
+    auto seq = ab->__pyx_base.seq;
+    for (size_t i = 0, nreloc = ab->bool_values.size(); i < nreloc; i++) {
+        auto &[rtval, val] = ab->bool_values[i];
+        py_object pyval(vtable.rt_eval((PyObject*)rtval, age));
+        if (!pyval)
+            reraise_reloc_error(ab, i, true);
+        val = get_value_bool(pyval, [&] { reraise_reloc_error(ab, i, true); });
+    }
+    for (size_t i = 0, nreloc = ab->float_values.size(); i < nreloc; i++) {
+        auto &[rtval, val] = ab->float_values[i];
+        py_object pyval(vtable.rt_eval((PyObject*)rtval, age));
+        if (!pyval)
+            reraise_reloc_error(ab, i, false);
+        val = get_value_f64(pyval, [&] { reraise_reloc_error(ab, i, false); });
+    }
+    auto &time_values = seq->__pyx_base.__pyx_base.seqinfo->time_mgr->time_values;
+
+    auto reloc_action = [ab, &time_values] (const ArtiqAction &action) {
+        auto reloc = ab->relocations[action.reloc_id];
+        if (reloc.cond_idx != -1)
+            action.cond = ab->bool_values[reloc.cond_idx].second;
+        // No need to do anything else if we hit a disabled action.
+        if (!action.cond)
+            return;
+        if (reloc.time_idx != -1)
+            action.time_mu = seq_time_to_mu(time_values[reloc.time_idx]);
+        if (reloc.val_idx != -1) {
+            auto type = action.type;
+            if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
+                double v = ab->float_values[reloc.val_idx].second;
+                if (type == DDSFreq) {
+                    auto &ddschn = ab->channels.ddschns[action.chn_idx];
+                    action.value = dds_freq_to_mu(v, ddschn.ftw_per_hz);
+                }
+                else if (type == DDSAmp) {
+                    action.value = dds_amp_to_mu(v);
+                }
+                else {
+                    assert(type == DDSPhase);
+                    action.value = dds_phase_to_mu(v);
+                }
+            }
+            else {
+                action.value = ab->bool_values[reloc.val_idx].second;
+            }
+        }
+    };
+
+    bool eval_status = !ab->eval_status;
+    ab->eval_status = eval_status;
+
+    if (ab->all_actions.size() == 1) {
+        auto &a = ab->all_actions[0];
+        if (a.reloc_id >= 0) {
+            a.eval_status = eval_status;
+            reloc_action(a);
+        }
+    }
+    else {
+        std::sort(ab->all_actions.begin(), ab->all_actions.end(),
+                  [&] (const auto &a1, const auto &a2) {
+                      if (a1.reloc_id >= 0 && a1.eval_status != eval_status) {
+                          a1.eval_status = eval_status;
+                          reloc_action(a1);
+                      }
+                      if (a2.reloc_id >= 0 && a2.eval_status != eval_status) {
+                          a2.eval_status = eval_status;
+                          reloc_action(a2);
+                      }
+                      // Move disabled actions to the end
+                      if (a1.cond != a2.cond)
+                          return int(a1.cond) > int(a2.cond);
+                      // Sort by time
+                      if (a1.time_mu != a2.time_mu)
+                          return a1.time_mu < a2.time_mu;
+                      // Sometimes time points with different tid may actually happen
+                      // at the same time (especially on the same artiq mu time point)
+                      // in these cases we need to make sure we output them in order
+                      // in order to generate the right output at the end.
+                      if (a1.tid != a2.tid)
+                          return a1.tid < a2.tid;
+                      // End action technically happens just before the time point
+                      // and must be sorted to be before the start action.
+                      if (a1.is_end != a2.is_end)
+                          return int(a1.is_end) > int(a2.is_end);
+                      return a1.aid < a2.aid;
+                  });
+    }
+
+    ScopeExit cleanup([&] {
+        ab->time_checker.clear();
+        ab->rtio_actions.clear();
+    });
+    assert(ab->time_checker.empty());
+    assert(ab->rtio_actions.empty());
+
+    auto add_action = [&] (uint32_t target, uint32_t value, int aid,
+                           int64_t request_time_mu, int64_t lb_mu,
+                           bool exact_time) -> int64_t {
+        if (exact_time) {
+            if (request_time_mu < lb_mu) {
+                bb_err_format(PyExc_ValueError, action_key(aid),
+                              "Exact time output cannot satisfy lower time bound");
+                throw 0;
+            }
+            else if (!ab->time_checker.check_and_add_time(request_time_mu)) {
+                bb_err_format(PyExc_ValueError, action_key(aid),
+                              "Too many outputs at the same time");
+                throw 0;
+            }
+            ab->rtio_actions.push_back({target, value, request_time_mu});
+            return request_time_mu;
+        }
+        // hard code a 10 us bound.
+        constexpr int64_t max_offset = 10000;
+        int64_t ub_mu = request_time_mu + max_offset;
+        if (ub_mu < lb_mu) {
+            bb_err_format(PyExc_ValueError, action_key(aid),
+                          "Cannot find appropriate output time within bound");
+            throw 0;
+        }
+        if (request_time_mu < lb_mu) {
+            request_time_mu = lb_mu;
+        }
+        else {
+            lb_mu = std::max(lb_mu, request_time_mu - max_offset);
+        }
+        auto time_mu = ab->time_checker.find_time(lb_mu, request_time_mu, ub_mu);
+        if (time_mu == INT64_MIN) {
+            bb_err_format(PyExc_ValueError, action_key(aid),
+                          "Too many outputs at the same time");
+            throw 0;
+        }
+        ab->rtio_actions.push_back({target, value, time_mu});
+        return time_mu;
+    };
+
+    int64_t start_mu = 0;
+
+    // Add all the exact time events first
+    for (auto start_trigger: ab->start_triggers) {
+        auto time_mu = start_trigger.time_mu;
+        start_mu = std::min(time_mu, start_mu);
+        if (!ab->time_checker.check_and_add_time(time_mu)) {
+            PyErr_Format(PyExc_ValueError, "Too many start triggers at the same time");
+            throw 0;
+        }
+        ab->rtio_actions.push_back({start_trigger.target,
+                start_trigger.raising_edge, time_mu});
+    }
+    for (auto start_trigger: ab->start_triggers) {
+        auto time_mu = start_trigger.time_mu;
+        bb_debug("Adding start trigger: time=%" PRId64 ", raising=%d\n",
+                 time_mu, (int)start_trigger.raising_edge);
+        if (start_trigger.raising_edge) {
+            auto end_mu = time_mu + start_trigger.min_time_mu;
+            end_mu = ab->time_checker.find_time(end_mu, end_mu, end_mu + 1000);
+            if (end_mu == INT64_MIN) {
+                PyErr_Format(PyExc_ValueError,
+                             "Too many start triggers at the same time");
+                throw 0;
+            }
+            ab->rtio_actions.push_back({start_trigger.target, 0, end_mu});
+        }
+        else {
+            auto raise_mu = time_mu - start_trigger.min_time_mu;
+            raise_mu = ab->time_checker.find_time(raise_mu - 1000, raise_mu, raise_mu);
+            if (raise_mu == INT64_MIN) {
+                PyErr_Format(PyExc_ValueError,
+                             "Too many start triggers at the same time");
+                throw 0;
+            }
+            ab->rtio_actions.push_back({start_trigger.target, 1, raise_mu});
+            start_mu = std::min(raise_mu, start_mu);
+        }
+    }
+
+    // Add a 3 us buffer to queue outputs before the sequence officially starts
+    start_mu -= 3000;
+
+    for (auto &bus: ab->channels.urukul_busses)
+        bus.reset(start_mu);
+    for (auto &ttlchn: ab->channels.ttlchns)
+        ttlchn.reset(start_mu);
+    for (auto &ddschn: ab->channels.ddschns)
+        ddschn.reset();
+
+    for (auto &artiq_action: ab->all_actions) {
+        // All disabled actions should be at the end.
+        if (!artiq_action.cond)
+            break;
+        auto time_mu = artiq_action.time_mu;
+        for (auto &ttlchn: ab->channels.ttlchns)
+            ttlchn.flush_output(add_action, time_mu, true, false);
+        for (auto &ttlchn: ab->channels.ttlchns)
+            ttlchn.flush_output(add_action, time_mu, false, false);
+        for (auto &bus: ab->channels.urukul_busses)
+            bus.flush_output(add_action, time_mu, false);
+
+        switch (artiq_action.type) {
+        case DDSFreq:
+        case DDSAmp:
+        case DDSPhase: {
+            auto &ddschn = ab->channels.ddschns[artiq_action.chn_idx];
+            ab->channels.urukul_busses[ddschn.bus_id].add_output(add_action,
+                                                                 artiq_action, ddschn);
+            break;
+        }
+        case TTLOut:
+        case CounterEnable:
+            ab->channels.ttlchns[artiq_action.chn_idx].add_output(add_action,
+                                                                  artiq_action);
+            break;
+        }
+    }
+    for (auto &ttlchn: ab->channels.ttlchns)
+        ttlchn.flush_output(add_action, 0, true, true);
+    for (auto &ttlchn: ab->channels.ttlchns)
+        ttlchn.flush_output(add_action, 0, false, true);
+    for (auto &bus: ab->channels.urukul_busses)
+        bus.flush_output(add_action, 0, true);
+
+
+    std::stable_sort(ab->rtio_actions.begin(), ab->rtio_actions.end(),
+                     [] (auto &a1, auto &a2) { return a1.time_mu < a2.time_mu; });
+
+    auto rtio_array = (PyArrayObject*)ab->rtio_array;
+
+    npy_intp rtio_alloc = (npy_intp)PyArray_SIZE(rtio_array);
+    PyArray_Dims pydims{&rtio_alloc, 1};
+    npy_intp rtio_len = 0;
+    uint32_t *rtio_array_data = (uint32_t*)PyArray_DATA(rtio_array);
+    auto resize_rtio = [&] (npy_intp sz) {
+        rtio_alloc = sz;
+        if (!PyArray_Resize(rtio_array, &pydims, 0, NPY_CORDER)) {
+            throw 0;
+        }
+    };
+
+    auto alloc_space = [&] (int n) -> uint32_t* {
+        auto old_len = rtio_len;
+        auto new_len = old_len + n;
+        if (new_len > rtio_alloc) {
+            resize_rtio(new_len * 2 + 2);
+            rtio_array_data = (uint32_t*)PyArray_DATA(rtio_array);
+        }
+        rtio_len = new_len;
+        return &rtio_array_data[old_len];
+    };
+
+    auto add_wait = [&] (int64_t t_mu) {
+        const int64_t max_wait = 0x80000000;
+        if (t_mu > max_wait) {
+            auto nwait_eles = t_mu / max_wait;
+            t_mu = t_mu % max_wait;
+            auto wait_cmds = alloc_space(nwait_eles);
+            for (int i = 0; i < nwait_eles; i++) {
+                wait_cmds[i] = uint32_t(max_wait);
+            }
+        }
+        if (t_mu > 0) {
+            auto wait_cmd = alloc_space(1);
+            wait_cmd[0] = uint32_t(-t_mu);
+        }
+    };
+
+    int64_t time_mu = start_mu;
+    auto total_time_mu = seq_time_to_mu(ab->__pyx_base.seq->total_time);
+    for (auto action: ab->rtio_actions) {
+        add_wait(action.time_mu - time_mu);
+        time_mu = action.time_mu;
+        auto cmd = alloc_space(2);
+        cmd[0] = action.target;
+        cmd[1] = action.value;
+    }
+    if (total_time_mu > time_mu)
+        add_wait(total_time_mu - time_mu);
+    resize_rtio(rtio_len);
+
+    bb_debug("generate_rtios: finish\n");
+    return;
+}
+
+template<typename Add>
+void UrukulBus::add_dds_action(Add &add_action, DDSAction &action)
+{
+    auto div = artiq_consts.URUKUL_SPIT_DDS_WR;
+    auto ddschn = action.ddschn;
+    bb_debug("add_dds_action: aid=%d, bus@%" PRId64 ", io_upd@%" PRId64 ", "
+             "data1=%x, data2=%x, chn=%d, cs=%d\n",
+             action.aid, last_bus_mu, last_io_update_mu,
+             action.data1, action.data2, channel, ddschn->chip_select);
+
+    auto config_and_write = [&] (uint32_t flags, uint32_t length,
+                                 uint32_t data, int64_t lb_mu1, int64_t lb_mu2) {
+        auto addr = (flags | ((length - 1) << 8) | ((div - 2) << 16) |
+                     (uint32_t(ddschn->chip_select) << 24));
+        uint16_t data_time_mu = uint16_t(((length + 1) * div + 1) * ref_period_mu);
+        auto t1 = add_action(addr_target, addr, action.aid, lb_mu1, lb_mu1, false);
+        lb_mu2 = std::max(lb_mu2, t1 + ref_period_mu);
+        auto t2 = add_action(data_target, data, action.aid, lb_mu2, lb_mu2, false);
+        return t2 + data_time_mu;
+    };
+    // We can't start the write safely before the previous io_update finishes
+    // since it may abort the write. However, we can configure the SPI controller
+    // before the io_update finishes since no signal should be sent to the DDS.
+    int64_t lb_mu1 = (start_write_before_update ? last_bus_mu :
+                      std::max(last_bus_mu, last_io_update_mu));
+    int64_t lb_mu2 = std::max(last_bus_mu, last_io_update_mu);
+    auto t1 = config_and_write(artiq_consts.URUKUL_CONFIG, 8,
+                               artiq_consts._AD9910_REG_PROFILE0 << 24,
+                               lb_mu1, lb_mu2);
+    auto t2 = config_and_write(artiq_consts.URUKUL_CONFIG, 32, action.data1, t1, t1);
+    auto t3 = config_and_write(artiq_consts.URUKUL_CONFIG_END, 32, action.data2,
+                               t2, t2);
+    ddschn->data1 = action.data1;
+    ddschn->data2 = action.data2;
+    ddschn->had_output = true;
+    last_bus_mu = t3;
+}
+
+template<typename Add>
+void UrukulBus::add_io_update(Add &add_action, int64_t time_mu,
+                              int aid, bool exact_time)
+{
+    // Round to the nearest 8 cycles.
+    time_mu = (time_mu + 4) & ~int64_t(7);
+    bb_debug("add_io_update: aid=%d, bus@%" PRId64 ", io_upd@%" PRId64 ", "
+             "time=%" PRId64 ", exact_time=%d, chn=%d\n",
+             aid, last_bus_mu, last_io_update_mu, time_mu, exact_time, channel);
+    auto t1 = add_action(io_update_target, 1, aid, time_mu,
+                         std::max(last_bus_mu, last_io_update_mu), exact_time);
+    auto t2 = add_action(io_update_target, 0, aid, t1 + 8,
+                         t1 + 8, false);
+    last_io_update_mu = t2;
+}
+
+template<typename Add>
+inline void UrukulBus::flush_output(Add &add_action, int64_t time_mu, bool force)
+{
+    if (!dds_actions.empty())
+        bb_debug("flush_dds: bus@%" PRId64 ", io_upd@%" PRId64 ", "
+                 "time=%" PRId64 ", chn=%d, nactions=%zd, force=%d\n",
+                 last_bus_mu, last_io_update_mu, time_mu, channel,
+                 dds_actions.size(), (int)force);
+    bool need_io_update = false;
+    int aid = -1;
+    int64_t update_time_mu = 0;
+    while (!dds_actions.empty()) {
+        auto &action = dds_actions.front();
+        if (!force && action.time_mu + max_action_shift >= time_mu)
+            break;
+        add_dds_action(add_action, action);
+        if (action.exact_time) {
+            add_io_update(add_action, action.time_mu, action.aid, true);
+        }
+        else {
+            need_io_update = true;
+            aid = action.aid;
+            update_time_mu = action.time_mu;
+        }
+        dds_actions.erase(dds_actions.begin());
+    }
+    if (need_io_update) {
+        add_io_update(add_action, update_time_mu, aid, false);
+    }
+}
+
+template<typename Add>
+inline void UrukulBus::add_output(Add &add_action, const ArtiqAction &action,
+                                  DDSChannel &ddschn)
+{
+    auto update_dds_data = [&] (uint32_t &data1, uint32_t &data2) {
+        if (action.type == DDSFreq) {
+            data2 = action.value;
+        }
+        else if (action.type == DDSAmp) {
+            data1 = (data1 & 0xffff) | (action.value << 16);
+        }
+        else {
+            assert(action.type == DDSPhase);
+            data1 = (data1 & 0xffff0000) | action.value;
+        }
+    };
+    bb_debug("add_dds: time=%" PRId64 ", exact_time=%d, chn=%d, nactions=%zd, "
+             "type=%s, value=%x\n",
+             action.time_mu, action.exact_time, channel, dds_actions.size(),
+             (action.type == DDSFreq ? "ddsfreq" :
+              (action.type == DDSAmp ? "ddsamp" : "ddsphase")), action.value);
+    for (auto it = dds_actions.begin(), end = dds_actions.end(); it != end; ++it) {
+        auto &dds_action = *it;
+        if (dds_action.ddschn == &ddschn) {
+            if (action.exact_time && dds_action.exact_time &&
+                action.time_mu != dds_action.time_mu) {
+                // Flush output and add a new one afterwards
+                bb_debug("add_dds: found pending exact action at time=%" PRId64 ", "
+                         "flusing\n", dds_action.time_mu);
+                auto last = it + 1;
+                for (auto it2 = dds_actions.begin(); it2 != last; ++it2) {
+                    auto &dds_action2 = *it2;
+                    add_dds_action(add_action, dds_action2);
+                    if (action.exact_time) {
+                        add_io_update(add_action, dds_action2.time_mu,
+                                      dds_action2.aid, true);
+                    }
+                }
+                dds_actions.erase(dds_actions.begin(), last);
+                break;
+            }
+            update_dds_data(dds_action.data1, dds_action.data2);
+            if (ddschn.had_output && dds_action.data1 == ddschn.data1 &&
+                dds_action.data2 == ddschn.data2) {
+                bb_debug("add_dds: new values the same as the old values "
+                         "(data1=%x, data2=%x), erasing\n",
+                         dds_action.data1, dds_action.data2);
+                // No-op, pop the action
+                dds_actions.erase(it);
+                return;
+            }
+            // Data already updated, we are done if the new action is not exact time.
+            if (action.exact_time) {
+                bb_debug("add_dds: Moving pending non-exact time action to new time "
+                         "(data1=%x, data2=%x)\n", dds_action.data1, dds_action.data2);
+                // Move action to the end
+                auto new_action = dds_action;
+                new_action.exact_time = true;
+                new_action.time_mu = action.time_mu;
+                new_action.aid = action.aid;
+                dds_actions.erase(it);
+                dds_actions.push_back(new_action);
+            }
+            return;
+        }
+    }
+    // New action
+    uint32_t data1 = ddschn.data1;
+    uint32_t data2 = ddschn.data2;
+    update_dds_data(data1, data2);
+    if (ddschn.had_output && data1 == ddschn.data1 && data2 == ddschn.data2) {
+        bb_debug("add_dds: new values the same as the old values "
+                 "(data1=%x, data2=%x), skipping\n", data1, data2);
+        return;
+    }
+    bb_debug("add_dds: adding pending dds action (data1=%x, data2=%x), skipping\n",
+             data1, data2);
+    dds_actions.push_back({action.time_mu, data1, data2, action.exact_time,
+            action.aid, &ddschn});
+}
+
+template<typename Add>
+inline void TTLChannel::flush_output(Add &add_action, int64_t cur_time_mu,
+                                     bool exact_time_only, bool force)
+{
+    if (new_val == cur_val)
+        return;
+    if (cur_time_mu <= time_mu + max_action_shift && !force)
+        return;
+    if (exact_time_only && !exact_time)
+        return;
+    bb_debug("flush_ttl: last_time@%" PRId64 ", "
+             "time=%" PRId64 ", tgt=%d, cur_v=%d, new_v=%d, force=%d\n",
+             last_time_mu, cur_time_mu, target, cur_val, new_val, (int)force);
+    // Now do the output
+    cur_val = new_val;
+    last_time_mu = add_action(target, new_val, aid, time_mu,
+                              last_time_mu, exact_time) + 8;
+}
+
+template<typename Add>
+inline void TTLChannel::add_output(Add &add_action, const ArtiqAction &action)
+{
+    uint8_t val;
+    if (!iscounter) {
+        val = action.value;
+    }
+    else if (action.value) {
+        val = artiq_consts.COUNTER_ENABLE;
+    }
+    else {
+        val = artiq_consts.COUNTER_DISABLE;
+    }
+
+    bb_debug("add_ttl: time=%" PRId64 ", exact_time=%d, tgt=%d, "
+             "iscounter=%d, value=%x\n", action.time_mu, action.exact_time, target,
+             iscounter, action.value);
+
+    // No need to output
+    if (new_val == val) {
+        bb_debug("add_ttl: value already queued, skipping\n");
+        return;
+    }
+
+    // For counters, we need to maintain the on-off count since that determines
+    // the number of results we produce. we'll therefore always do the output
+    // immediately and not allowing any coalesce of values
+    if (iscounter) {
+        bb_debug("add_ttl: flush counter channel\n");
+        assert(cur_val == new_val);
+        cur_val = val;
+        new_val = val;
+        last_time_mu = add_action(target, val, action.aid, action.time_mu,
+                                  last_time_mu, action.exact_time) + 8;
+        return;
+    }
+
+    // If we have two exact outputs we need to flush the previous one
+    if (cur_val != new_val && exact_time && action.exact_time &&
+        action.time_mu != time_mu) {
+        bb_debug("add_ttl: flush pending exact time output\n");
+        last_time_mu = add_action(target, new_val, aid, time_mu,
+                                  last_time_mu, true) + 8;
+        cur_val = new_val;
+    }
+
+    // No current output
+    if (cur_val == new_val) {
+        bb_debug("add_ttl: queuing new output\n");
+        new_val = val;
+        exact_time = action.exact_time;
+        time_mu = action.time_mu;
+        aid = action.aid;
+        return;
+    }
+
+    bb_debug("add_ttl: updating queued output to new value\n");
+    if (action.exact_time) {
+        time_mu = action.time_mu;
+        exact_time = true;
+    }
+    new_val = val;
+}
+
+inline void TimeChecker::clear()
+{
+    counts.clear();
+    max_key = 0;
+}
+
+inline bool TimeChecker::check_and_add_time(int64_t t_mu)
+{
+    auto t_course = t_mu >> 3; // hard code
+    if (t_course > max_key) {
+        max_key = t_course;
+        counts[t_course] = 1;
+        return true;
+    }
+    auto &cnt = counts[t_course];
+    if (cnt >= 7)
+        return false;
+    cnt += 1;
+    return true;
+}
+
+inline int64_t TimeChecker::find_time(int64_t lb_mu, int64_t t_mu, int64_t ub_mu)
+{
+    if (check_and_add_time(t_mu))
+        return t_mu;
+    int64_t offset = 8;
+    while (true) {
+        auto in_lb = t_mu - offset >= lb_mu;
+        auto in_ub = t_mu + offset <= ub_mu;
+        if (in_lb && check_and_add_time(t_mu - offset))
+            return t_mu - offset;
+        if (in_ub && check_and_add_time(t_mu + offset))
+            return t_mu + offset;
+        if (!in_lb && !in_ub)
+            return INT64_MIN;
+        offset += 8;
+    }
 }
 
 }
