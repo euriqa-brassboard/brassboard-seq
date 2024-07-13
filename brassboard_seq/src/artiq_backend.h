@@ -38,7 +38,8 @@ struct ArtiqAction {
     int chn_idx: 25;
     // We need to keep the tid around at runtime since this is needed to
     // sort actions that happens at the same time.
-    int tid;
+    int tid: 31;
+    bool is_end: 1;
     mutable uint32_t value;
     int aid;
     // -1 if no relocation is needed
@@ -63,6 +64,13 @@ struct UrukulBus {
 struct TTLChannel {
     uint32_t target;
     bool iscounter;
+};
+
+struct StartTrigger {
+    uint32_t target;
+    uint16_t min_time_mu;
+    bool raising_edge;
+    int64_t time_mu;
 };
 
 struct ChannelsInfo {

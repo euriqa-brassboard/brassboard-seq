@@ -79,7 +79,8 @@ void collect_actions(ArtiqBackend *ab, const CompileVTable vtable, Action*, Even
     auto event_times = seq->__pyx_base.__pyx_base.seqinfo->time_mgr->event_times;
 
     auto add_single_action = [&] (Action *action, ChannelType type, int chn_idx,
-                                  int tid, PyObject *value, int cond_reloc) {
+                                  int tid, PyObject *value, int cond_reloc,
+                                  bool is_end) {
         ArtiqAction artiq_action;
         int aid = action->aid;
         artiq_action.type = type;
@@ -88,6 +89,7 @@ void collect_actions(ArtiqBackend *ab, const CompileVTable vtable, Action*, Even
         artiq_action.eval_status = false;
         artiq_action.chn_idx = chn_idx;
         artiq_action.tid = tid;
+        artiq_action.is_end = is_end;
         artiq_action.aid = aid;
 
         bool needs_reloc = cond_reloc != -1;
@@ -155,10 +157,10 @@ void collect_actions(ArtiqBackend *ab, const CompileVTable vtable, Action*, Even
             assert(cond == Py_True);
         }
         add_single_action(action, type, chn_idx, action->tid, action->value,
-                          cond_reloc);
+                          cond_reloc, false);
         if (action->data.is_pulse) {
             add_single_action(action, type, chn_idx, action->end_tid, action->end_val,
-                              cond_reloc);
+                              cond_reloc, true);
         }
     };
 

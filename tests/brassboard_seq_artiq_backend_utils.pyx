@@ -111,3 +111,27 @@ def get_compiled_info(artiq_backend.ArtiqBackend ab):
     self.float_values = [<object>p.first for p in ab.float_values]
     self.relocations = [new_relocation(action) for action in ab.relocations]
     return self
+
+cdef class StartTrigger:
+    cdef public uint32_t target
+    cdef public uint16_t min_time_mu
+    cdef public bint raising_edge
+    cdef public int64_t time_mu
+
+cdef StartTrigger new_start_trigger(artiq_backend.StartTrigger c_trigger):
+    py_trigger = <StartTrigger>StartTrigger.__new__(StartTrigger)
+    py_trigger.target = c_trigger.target
+    py_trigger.min_time_mu = c_trigger.min_time_mu
+    py_trigger.raising_edge = c_trigger.raising_edge
+    py_trigger.time_mu = c_trigger.time_mu
+    return py_trigger
+
+def get_start_trigger(artiq_backend.ArtiqBackend ab):
+    return [new_start_trigger(trigger) for trigger in ab.start_triggers]
+
+def add_start_trigger(artiq_backend.ArtiqBackend ab, uint32_t tgt, long long time,
+                      int min_time, bint raising_edge):
+    ab.add_start_trigger_ttl(tgt, time, min_time, raising_edge)
+
+def get_start_trigger(artiq_backend.ArtiqBackend ab):
+    return [new_start_trigger(trigger) for trigger in ab.start_triggers]

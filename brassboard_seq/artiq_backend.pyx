@@ -2,9 +2,8 @@
 
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.action cimport Action, RampFunction
-from brassboard_seq.event_time cimport EventTime
+from brassboard_seq.event_time cimport EventTime, round_time_int
 from brassboard_seq.rtval cimport is_rtval
-from brassboard_seq.utils cimport set_global_tracker
 
 cimport cython
 from cpython cimport PyErr_Format, PyObject
@@ -131,6 +130,25 @@ cdef int collect_channels(ChannelsInfo *self, str prefix, sys, Seq seq) except -
 cdef class ArtiqBackend:
     def __init__(self, sys):
         self.sys = sys
+
+    cdef int add_start_trigger_ttl(self, uint32_t tgt, long long time,
+                                   int min_time, bint raising_edge) except -1:
+        cdef StartTrigger start_trigger
+        start_trigger.target = tgt
+        start_trigger.min_time_mu = <uint16_t>max(seq_time_to_mu(min_time), 8)
+        start_trigger.time_mu = seq_time_to_mu(time)
+        start_trigger.raising_edge = raising_edge
+        self.start_triggers.push_back(start_trigger)
+        return 0
+
+    def add_start_trigger(self, str name, time, min_time,
+                          bint raising_edge):
+        dev = get_artiq_device(self.sys, name)
+        if not isinstance(dev, DevTTLOut):
+            PyErr_Format(ValueError, 'Invalid start trigger device: %U',
+                         <PyObject*>name)
+        self.add_start_trigger_ttl(dev.target_o, round_time_int(time),
+                                   round_time_int(min_time), raising_edge)
 
     cdef int finalize(self) except -1:
         bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)

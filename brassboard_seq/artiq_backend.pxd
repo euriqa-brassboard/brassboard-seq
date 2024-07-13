@@ -54,6 +54,12 @@ cdef extern from "src/artiq_backend.h" namespace "artiq_backend":
         uint32_t target
         bint iscounter
 
+    cppclass StartTrigger:
+        uint32_t target
+        uint16_t min_time_mu
+        bint raising_edge
+        int64_t time_mu
+
     cppclass ChannelsInfo:
         vector[UrukulBus] urukul_busses
         vector[TTLChannel] ttlchns
@@ -88,5 +94,10 @@ cdef class ArtiqBackend(Backend):
     cdef vector[pair[void*,bint]] bool_values
     cdef vector[pair[void*,double]] float_values
     cdef vector[Relocation] relocations
+
+    cdef vector[StartTrigger] start_triggers
+
+    cdef int add_start_trigger_ttl(self, uint32_t tgt, long long time,
+                                   int min_time, bint raising_edge) except -1
 
     cdef int finalize(self) except -1

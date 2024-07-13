@@ -475,3 +475,45 @@ def test_ramp(max_bt):
     with pytest.raises(ValueError, match="DDS Channel cannot be ramped") as exc:
         comp.finalize()
     check_bt(exc, max_bt, 'as8df9sdf8')
+
+@with_artiq_params
+def test_start_trigger(max_bt):
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    artiq_utils.add_start_trigger(ab, 0xfff1231, 0, 8000, True)
+    artiq_utils.add_start_trigger(ab, 0xfff1232, 0, 8000, False)
+    comp.finalize()
+    triggers = artiq_utils.get_start_trigger(ab)
+    assert len(triggers) == 2
+    assert triggers[0].target == 0xfff1231
+    assert triggers[0].min_time_mu == 8
+    assert triggers[0].raising_edge
+    assert triggers[0].time_mu == 0
+    assert triggers[1].target == 0xfff1232
+    assert triggers[1].min_time_mu == 8
+    assert not triggers[1].raising_edge
+    assert triggers[1].time_mu == 0
+
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    s.set('artiq/ttl10', True)
+    ab.add_start_trigger('ttl11', 0, 8e-9, True)
+    ab.add_start_trigger('ttl12', 0, 8e-9, False)
+    comp.finalize()
+    triggers = artiq_utils.get_start_trigger(ab)
+    assert len(triggers) == 2
+    assert triggers[0].min_time_mu == 8
+    assert triggers[0].raising_edge
+    assert triggers[0].time_mu == 0
+    assert triggers[1].min_time_mu == 8
+    assert not triggers[1].raising_edge
+    assert triggers[1].time_mu == 0
+
+@with_artiq_params
+def test_start_trigger_error(max_bt):
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    with pytest.raises(ValueError, match="Invalid start trigger device: ttl0_counter"):
+        ab.add_start_trigger('ttl0_counter', 0, 8e-9, True)
+    with pytest.raises(ValueError, match="Invalid start trigger device: urukul1_ch0"):
+        ab.add_start_trigger('urukul1_ch0', 0, 8e-9, True)
