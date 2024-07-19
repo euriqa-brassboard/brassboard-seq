@@ -3,6 +3,20 @@
 #include "utils.h"
 
 #include <stdarg.h>
+#include <stdlib.h>
+#include <strings.h>
+
+BBLogLevel bb_logging_level = [] {
+    if (auto env = getenv("BB_LOG")) {
+        if (strcasecmp(env, "debug") == 0) {
+            return BB_LOG_DEBUG;
+        }
+        else if (strcasecmp(env, "info") == 0) {
+            return BB_LOG_INFO;
+        }
+    }
+    return BB_LOG_INFO;
+}();
 
 #if PY_VERSION_HEX < 0x030a00f0
 

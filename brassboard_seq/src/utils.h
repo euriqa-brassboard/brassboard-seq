@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <stdint.h>
+#include <stdio.h>
 
 #ifdef __has_builtin
 #  define bb_has_builtin(x) __has_builtin(x)
@@ -45,6 +46,20 @@ static inline void _assume_not_none(PyObject *obj)
     assume(obj != Py_None);
 }
 #define assume_not_none(p) _assume_not_none((PyObject*)p)
+
+enum BBLogLevel {
+    BB_LOG_DEBUG,
+    BB_LOG_INFO,
+};
+extern BBLogLevel bb_logging_level;
+
+#define bb_log(level, ...) do {               \
+        if (bb_logging_level <= (level)) {    \
+            printf(__VA_ARGS__);              \
+        }                                     \
+    } while (0)
+#define bb_debug(...) bb_log(BB_LOG_DEBUG, __VA_ARGS__)
+#define bb_info(...) bb_log(BB_LOG_INFO, __VA_ARGS__)
 
 struct BacktraceTracker {
     // Record the backtrace to be used later.
