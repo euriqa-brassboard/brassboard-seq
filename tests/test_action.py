@@ -78,6 +78,15 @@ class ErrorFunction(action.RampFunction):
     def eval(self, t, length, oldval):
         raise self.err
 
+class PyCubicSpline(action.RampFunction):
+    def __init__(self, order0, order1=0.0, order2=0.0, order3=0.0):
+        super().__init__(order0=order0, order1=order1, order2=order2, order3=order3)
+    def eval(self, t, length, oldval):
+        t = t / length
+        return self.order0 + (self.order1 + (self.order2 + self.order3 * t) * t) * t
+    def spline_segments(self, length, oldval):
+        return ()
+
 def test_rampbuffer():
     with pytest.raises(TypeError):
         action.RampBuffer()
@@ -158,3 +167,45 @@ def test_rampbuffer():
         test.eval_compile(rt, rlen, rold)
     with pytest.raises(ValueError, match="^AAAAA$"):
         test.eval_runtime(0, ts, 2, -0.2)
+
+def test_spline():
+    assert test_utils.ramp_get_spline_segments(SinFunction(1.0, 2.0, 0.1), 1, 0) is None
+
+    o0 = 0.1
+    o1 = 0.2
+    o2 = 1
+    o3 = 0.3
+
+    def check_spline(rt0, rt1, rt2, rt3):
+        ro0 = rtval.new_extern(lambda: o0) if rt0 else o0
+        ro1 = rtval.new_extern(lambda: o1) if rt1 else o1
+        ro2 = rtval.new_extern(lambda: o2) if rt2 else o2
+        ro3 = rtval.new_extern(lambda: o3) if rt3 else o3
+
+        sp_seq = action.SeqCubicSpline(ro0, ro1, ro2, ro3)
+        sp_py = PyCubicSpline(ro0, ro1, ro2, ro3)
+        assert test_utils.ramp_get_spline_segments(sp_seq, 1, 0) == ()
+        assert test_utils.ramp_get_spline_segments(sp_py, 1, 0) == ()
+
+        test_seq = test_utils.RampBufferTest(sp_seq)
+        test_py = test_utils.RampBufferTest(sp_py)
+
+        v0_seq = test_seq.eval_compile(0, 1, 0.2)
+        v05_seq = test_seq.eval_compile(0.5, 1, 0.2)
+        v1_seq = test_seq.eval_compile(1, 1, 0.2)
+        assert rtval.get_value(v0_seq, 1) == 0.1
+        assert rtval.get_value(v05_seq, 1) == pytest.approx(0.4875)
+        assert rtval.get_value(v1_seq, 1) == 1.6
+
+        v0_py = test_py.eval_compile(0, 1, 0.2)
+        v05_py = test_py.eval_compile(0.5, 1, 0.2)
+        v1_py = test_py.eval_compile(1, 1, 0.2)
+        assert rtval.get_value(v0_py, 1) == 0.1
+        assert rtval.get_value(v05_py, 1) == pytest.approx(0.4875)
+        assert rtval.get_value(v1_py, 1) == 1.6
+
+        assert list(test_seq.eval_runtime(2, [0, 0.5, 1], 1, 10)) == pytest.approx([0.1, 0.4875, 1.6])
+        assert list(test_py.eval_runtime(2, [0, 0.5, 1], 1, 10)) == pytest.approx([0.1, 0.4875, 1.6])
+
+    for i in range(15):
+        check_spline(i & 1, i & 2, i & 4, i & 8)

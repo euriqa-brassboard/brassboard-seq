@@ -50,15 +50,46 @@ cdef class RampFunction:
     def __init__(self, *, **params):
         self.params = params
         self._eval = getattr(type(self), 'eval')
+        try:
+            self._spline_segments = getattr(type(self), 'spline_segments')
+        except AttributeError:
+            pass
+
+cdef _cubic_spline_eval(SeqCubicSpline self, t, length, oldval):
+    t = t / length
+    if self.compile_mode:
+        orders = <tuple>self._spline_segments
+        return orders[0] + (orders[1] + (orders[2] + orders[3] * t) * t) * t
+    return self.order0 + (self.order1 + (self.order2 + self.order3 * t) * t) * t
+
+cdef cubic_spline_eval = _cubic_spline_eval
+
+@cython.final
+cdef class SeqCubicSpline:
+    def __init__(self, order0, order1=0.0, order2=0.0, order3=0.0):
+        self._spline_segments = (order0, order1, order2, order3)
+        self._eval = cubic_spline_eval
 
 cdef ramp_eval(RampFunction self, t, length, oldval):
     return self._eval(self, t, length, oldval)
 
 cdef int ramp_set_compile_params(RampFunction self) except -1:
+    if type(self) is SeqCubicSpline:
+        (<SeqCubicSpline>self).compile_mode = True
+        return 0
     for (name, value) in self.params.items():
         setattr(self, name, value)
 
 cdef int ramp_set_runtime_params(RampFunction self, unsigned age) except -1:
+    if type(self) is SeqCubicSpline:
+        sp = <SeqCubicSpline>self
+        orders = <tuple>sp._spline_segments
+        sp.order0 = get_value(orders[0], age)
+        sp.order1 = get_value(orders[1], age)
+        sp.order2 = get_value(orders[2], age)
+        sp.order3 = get_value(orders[3], age)
+        sp.compile_mode = False
+        return 0
     for (name, value) in self.params.items():
         setattr(self, name, get_value(value, age))
 

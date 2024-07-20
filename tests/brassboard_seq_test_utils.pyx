@@ -66,6 +66,9 @@ cdef class RampBufferTest:
             output[i] = output_ptr[i]
         return output
 
+def ramp_get_spline_segments(action.RampFunction self, length, oldval):
+    return action.ramp_get_spline_segments(self, length, oldval)
+
 def round_time(v):
     if rtval.is_rtval(v):
         return event_time.round_time_rt(v)
