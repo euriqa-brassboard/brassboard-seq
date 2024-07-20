@@ -1,10 +1,20 @@
 # cython: language_level=3
 
 # Do not use relative import since it messes up cython file name tracking
+from brassboard_seq.action cimport RampFunction, new_ramp_buffer
 from brassboard_seq.utils cimport pyfloat_from_double
 
+from libcpp.map cimport map as cppmap
+
 cimport cython
-from cpython cimport PyDict_GetItemWithError
+from cython.operator cimport dereference as deref
+from cpython cimport PyDict_GetItemWithError, PyErr_Format, PyObject
+
+cdef re # hide import
+import re
+
+cdef extern from "src/rfsoc_backend.cpp" namespace "rfsoc_backend":
+    pass
 
 cdef class RFSOCOutputGenerator:
     cdef int start(self) except -1:
@@ -107,3 +117,60 @@ cdef class PulseCompilerGenerator(RFSOCOutputGenerator):
 
     cdef int finish(self) except -1:
         pulse_compiler_info.ToneData.__post_init__ = pulse_compiler_info.orig_post_init
+
+cdef PyObject *raise_invalid_channel(tuple path) except NULL:
+    name = '/'.join(path)
+    return PyErr_Format(ValueError, 'Invalid channel name %U', <PyObject*>name)
+
+cdef match_rfsoc_dds = re.compile('^dds(\\d+)$').match
+
+@cython.final
+cdef class RFSOCBackend:
+    def __init__(self, RFSOCOutputGenerator generator):
+        self.generator = generator
+        self.ramp_buffer = new_ramp_buffer()
+
+    cdef int finalize(self) except -1:
+        # Channel name format: rfsoc/dds<chn>/<tone>/<param>
+        cdef cppmap[int, int] chn_idx_map
+        cdef int idx = -1
+        cdef int ddsnum
+        cdef int tonenum
+        for _path in self.seq.seqinfo.channel_paths:
+            idx += 1
+            path = <tuple>_path
+            if <str>path[0] != self.prefix:
+                continue
+            if len(path) != 4:
+                raise_invalid_channel(path)
+            m = match_rfsoc_dds(path[1])
+            if m is None:
+                raise_invalid_channel(path)
+            ddsnum = <int>int(m[1])
+            if ddsnum > 31:
+                raise_invalid_channel(path)
+            tonenum = <int>int(path[2])
+            if tonenum > 1:
+                raise_invalid_channel(path)
+            chn = (ddsnum << 1) | tonenum
+            it = chn_idx_map.find(chn)
+            if it == chn_idx_map.end():
+                chn_idx = self.channels.add_tone_channel(chn)
+                chn_idx_map[chn] = chn_idx
+            else:
+                chn_idx = deref(it).second
+            param = <str>path[3]
+            if param == 'freq':
+                param_enum = ToneFreq
+            elif param == 'phase':
+                param_enum = TonePhase
+            elif param == 'amp':
+                param_enum = ToneAmp
+            elif param == 'ff':
+                param_enum = ToneFF
+            else:
+                # Make the C compiler happy since it doesn't know
+                # that `raise_invalid_channel` doesn't return
+                param_enum = ToneFF
+                raise_invalid_channel(path)
+            self.channels.add_seq_channel(idx, chn_idx, param_enum)

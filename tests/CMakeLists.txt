@@ -6,6 +6,7 @@ include_directories("${CMAKE_SOURCE_DIR}/brassboard_seq")
 python_test("${CMAKE_BINARY_DIR}"
   brassboard_seq_test_utils.pyx
   brassboard_seq_artiq_backend_utils.pyx
+  brassboard_seq_rfsoc_backend_utils.pyx
   dummy_artiq.py
   dummy_pulse_compiler.py
   test_rtval.py # Keep this as the first in a parallel run since it takes the longest
