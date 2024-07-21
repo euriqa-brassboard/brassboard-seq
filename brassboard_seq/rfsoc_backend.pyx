@@ -1,20 +1,35 @@
 # cython: language_level=3
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.action cimport RampFunction, new_ramp_buffer
-from brassboard_seq.utils cimport pyfloat_from_double
+from brassboard_seq.action cimport Action, RampFunction, new_ramp_buffer
+from brassboard_seq.event_time cimport EventTime
+from brassboard_seq.rtval cimport is_rtval
+from brassboard_seq.utils cimport pyfloat_from_double, set_global_tracker
 
 from libcpp.map cimport map as cppmap
 
 cimport cython
 from cython.operator cimport dereference as deref
-from cpython cimport PyDict_GetItemWithError, PyErr_Format, PyObject
+from cpython cimport PyDict_GetItemWithError, PyErr_Format
 
 cdef re # hide import
 import re
 
 cdef extern from "src/rfsoc_backend.cpp" namespace "rfsoc_backend":
-    pass
+    struct CompileVTable:
+        bint (*is_rtval)(object) noexcept
+        bint (*is_ramp)(object) noexcept
+    void collect_actions(RFSOCBackend ab,
+                         CompileVTable vtable, Action, EventTime) except+
+
+cdef inline bint is_ramp(obj) noexcept:
+    return isinstance(obj, RampFunction)
+
+cdef inline CompileVTable get_compile_vtable() noexcept nogil:
+    cdef CompileVTable vt
+    vt.is_rtval = is_rtval
+    vt.is_ramp = is_ramp
+    return vt
 
 cdef class RFSOCOutputGenerator:
     cdef int start(self) except -1:
@@ -131,6 +146,7 @@ cdef class RFSOCBackend:
         self.ramp_buffer = new_ramp_buffer()
 
     cdef int finalize(self) except -1:
+        bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)
         # Channel name format: rfsoc/dds<chn>/<tone>/<param>
         cdef cppmap[int, int] chn_idx_map
         cdef int idx = -1
@@ -174,3 +190,4 @@ cdef class RFSOCBackend:
                 param_enum = ToneFF
                 raise_invalid_channel(path)
             self.channels.add_seq_channel(idx, chn_idx, param_enum)
+        collect_actions(self, get_compile_vtable(), None, None)

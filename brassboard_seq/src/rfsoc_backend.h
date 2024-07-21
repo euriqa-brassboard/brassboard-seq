@@ -7,6 +7,10 @@
 #include <vector>
 #include <utility>
 
+#include <stdint.h>
+
+#include <Python.h>
+
 namespace rfsoc_backend {
 
 struct cubic_spline_t {
@@ -36,6 +40,28 @@ enum ToneParam {
 };
 
 struct RFSOCAction {
+    mutable bool cond;
+    mutable bool eval_status;
+    bool isramp;
+    bool sync;
+    int reloc_id;
+    int aid;
+    int tid: 31;
+    bool is_end: 1;
+    mutable int64_t seq_time;
+    union {
+        mutable double float_value;
+        mutable bool bool_value;
+    };
+    PyObject *ramp;
+};
+
+struct Relocation {
+    // If a particular relocation is not needed for this action,
+    // the corresponding idx would be -1
+    int cond_idx;
+    int time_idx;
+    int val_idx;
 };
 
 struct ToneChannel {

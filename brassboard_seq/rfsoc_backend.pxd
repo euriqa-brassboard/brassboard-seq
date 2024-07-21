@@ -10,6 +10,11 @@ from libcpp.vector cimport vector
 from libcpp.map cimport map as cppmap
 from libcpp.utility cimport pair
 
+from libcpp.utility cimport pair
+from libcpp.vector cimport vector
+
+from cpython cimport PyObject
+
 cdef extern from "src/rfsoc_backend.h" namespace "rfsoc_backend":
     struct cubic_spline_t:
         double order0
@@ -29,7 +34,22 @@ cdef extern from "src/rfsoc_backend.h" namespace "rfsoc_backend":
         ToneFF
 
     cppclass RFSOCAction:
-        pass
+        bint cond
+        bint isramp
+        bint sync
+        int reloc_id
+        int aid
+        int tid
+        bint is_end
+        int64_t seq_time
+        double float_value
+        bint bool_value
+        PyObject *ramp
+
+    cppclass Relocation:
+        int cond_idx
+        int time_idx
+        int val_idx
 
     cppclass ToneChannel:
         int chn
@@ -52,6 +72,9 @@ cdef class RFSOCOutputGenerator:
 cdef class RFSOCBackend(Backend):
     cdef RFSOCOutputGenerator generator
     cdef ChannelInfo channels
+    cdef vector[pair[void*,bint]] bool_values
+    cdef vector[pair[void*,double]] float_values
+    cdef vector[Relocation] relocations
     cdef RampBuffer ramp_buffer
 
     cdef int finalize(self) except -1
