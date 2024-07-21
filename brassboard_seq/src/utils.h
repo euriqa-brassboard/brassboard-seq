@@ -189,4 +189,46 @@ static inline void bb_reraise_and_throw_if(bool cond, uintptr_t key)
     }
 }
 
+template<typename CB>
+static __attribute__((always_inline)) inline
+bool get_value_bool(PyObject *obj, CB &&cb)
+{
+    if (obj == Py_True)
+        return true;
+    if (obj == Py_False)
+        return false;
+    int res = PyObject_IsTrue(obj);
+    if (res < 0)
+        cb();
+    return res;
+}
+
+static inline bool get_value_bool(PyObject *obj, uintptr_t key)
+{
+    return get_value_bool(obj, [&] {
+        bb_reraise(key);
+        throw 0;
+    });
+}
+
+template<typename CB>
+static __attribute__((always_inline)) inline
+double get_value_f64(PyObject *obj, CB &&cb)
+{
+    if (PyFloat_CheckExact(obj))
+        return PyFloat_AS_DOUBLE(obj);
+    auto res = PyFloat_AsDouble(obj);
+    if (res == -1 && PyErr_Occurred())
+        cb();
+    return res;
+}
+
+static inline double get_value_f64(PyObject *obj, uintptr_t key)
+{
+    return get_value_f64(obj, [&] {
+        bb_reraise(key);
+        throw 0;
+    });
+}
+
 #endif
