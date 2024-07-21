@@ -7,6 +7,7 @@
 #include "frameobject.h"
 
 #include <map>
+#include <memory>
 #include <vector>
 
 #include <stdint.h>
@@ -230,5 +231,40 @@ static inline double get_value_f64(PyObject *obj, uintptr_t key)
         throw 0;
     });
 }
+
+struct PyDeleter {
+    template<typename T>
+    void operator()(T *p) {
+        if (p) {
+            Py_DECREF(p);
+        }
+    }
+};
+template<typename T>
+struct py_object : std::unique_ptr<T,PyDeleter> {
+    using std::unique_ptr<T,PyDeleter>::unique_ptr;
+    operator T*() { return this->get(); };
+};
+template<typename T>
+py_object(T*) -> py_object<T>;
+
+template<typename T>
+struct ValueIndexer {
+    int get_id(void *p)
+    {
+        int nvalues = (int)values.size();
+        auto [it, inserted] = indices.emplace(p, nvalues);
+        if (inserted) {
+            std::pair<void*,T> pair;
+            pair.first = p;
+            values.push_back(pair);
+            return nvalues;
+        }
+        return it->second;
+    }
+
+    std::vector<std::pair<void*,T>> values;
+    std::map<void*,int> indices;
+};
 
 #endif
