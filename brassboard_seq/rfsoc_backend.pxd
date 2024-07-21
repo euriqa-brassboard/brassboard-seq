@@ -62,6 +62,9 @@ cdef extern from "src/rfsoc_backend.h" namespace "rfsoc_backend":
         int add_tone_channel(int chn) nogil
         void add_seq_channel(int seq_chn, int chn_idx, ToneParam param) nogil
 
+    cppclass ToneBuffer:
+        pass
+
 cdef class RFSOCOutputGenerator:
     cdef int start(self) except -1
     cdef int add_tone_data(self, int channel, int tone, int64_t duration_cycles,
@@ -75,6 +78,9 @@ cdef class RFSOCBackend(Backend):
     cdef vector[pair[void*,bint]] bool_values
     cdef vector[pair[void*,double]] float_values
     cdef vector[Relocation] relocations
+    cdef bint eval_status
     cdef RampBuffer ramp_buffer
+    cdef ToneBuffer tone_buffer
 
     cdef int finalize(self) except -1
+    cdef int runtime_finalize(self, unsigned age) except -1

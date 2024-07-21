@@ -2,6 +2,8 @@
 
 from brassboard_seq cimport rfsoc_backend
 
+from libc.stdint cimport *
+
 class RFSOCAction:
     pass
 
@@ -76,3 +78,11 @@ def get_compiled_info(rfsoc_backend.RFSOCBackend rb):
     self.float_values = [<object>p.first for p in rb.float_values]
     self.relocations = [new_relocation(action) for action in rb.relocations]
     return self
+
+cdef class ErrorGenerator(rfsoc_backend.RFSOCOutputGenerator):
+    cdef int add_tone_data(self, int channel, int tone, int64_t duration_cycles,
+                           rfsoc_backend.cubic_spline_t frequency_hz,
+                           rfsoc_backend.cubic_spline_t amplitude,
+                           rfsoc_backend.cubic_spline_t phase_rad,
+                           rfsoc_backend.output_flags_t flags) except -1:
+        raise RuntimeError("AAABBBCCCC Error Generator DDDEEEFFF")

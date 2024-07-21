@@ -1,9 +1,10 @@
 # cython: language_level=3
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.action cimport Action, RampFunction, new_ramp_buffer
+from brassboard_seq.action cimport Action, RampFunction, SeqCubicSpline, \
+  new_ramp_buffer, ramp_get_spline_segments, rampbuffer_alloc_input, rampbuffer_eval
 from brassboard_seq.event_time cimport EventTime
-from brassboard_seq.rtval cimport is_rtval
+from brassboard_seq.rtval cimport is_rtval, rt_eval
 from brassboard_seq.utils cimport pyfloat_from_double, set_global_tracker
 
 from libcpp.map cimport map as cppmap
@@ -22,13 +23,68 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "rfsoc_backend":
     void collect_actions(RFSOCBackend ab,
                          CompileVTable vtable, Action, EventTime) except+
 
+    struct RuntimeVTable:
+        object (*rt_eval)(object, unsigned)
+        int (*rampbuffer_eval_segments)(object, object, object, object,
+                                        double **input, double **output) except -1
+        double *(*rampbuffer_alloc_input)(object, int) except NULL
+        double *(*rampbuffer_eval)(object, object, object, object) except NULL
+        bint (*ramp_get_cubic_spline)(object, cubic_spline_t *sp) noexcept
+
+    void generate_tonedata(RFSOCBackend ab, unsigned age, RuntimeVTable vtable) except +
+
 cdef inline bint is_ramp(obj) noexcept:
     return isinstance(obj, RampFunction)
+
+cdef inline bint ramp_get_cubic_spline(_ramp, cubic_spline_t *sp) noexcept:
+    if type(_ramp) is not SeqCubicSpline:
+        return False
+    sp[0] = cubic_spline_t((<SeqCubicSpline>_ramp).order0,
+                           (<SeqCubicSpline>_ramp).order1,
+                           (<SeqCubicSpline>_ramp).order2,
+                           (<SeqCubicSpline>_ramp).order3)
+    return True
+
+cdef inline int rampbuffer_eval_segments(_buff, _func, length, oldval,
+                                         double **input, double **output) except -1:
+    cdef RampBuffer buff = <RampBuffer>_buff
+    cdef RampFunction func = <RampFunction>_func
+    pts = ramp_get_spline_segments(func, length, oldval)
+    if pts is None:
+        return 0
+    cdef int npts = len(pts)
+    pin = rampbuffer_alloc_input(buff, npts * 3 + 4)
+    input[0] = pin
+    cdef double prev_v = 0
+    cdef double v
+    pin[0] = 0
+    cdef int i
+    for i in range(npts):
+        v = pts[i]
+        pin[3 * i + 1] = v * (1 / 3) + prev_v * (2 / 3)
+        pin[3 * i + 2] = v * (2 / 3) + prev_v * (1 / 3)
+        pin[3 * i + 3] = v
+        prev_v = v
+    v = <double?>length
+    pin[3 * npts + 1] = v * (1 / 3) + prev_v * (2 / 3)
+    pin[3 * npts + 2] = v * (2 / 3) + prev_v * (1 / 3)
+    pin[3 * npts + 3] = v
+    output[0] = rampbuffer_eval(buff, func, length, oldval)
+    return npts * 3 + 4
 
 cdef inline CompileVTable get_compile_vtable() noexcept nogil:
     cdef CompileVTable vt
     vt.is_rtval = is_rtval
     vt.is_ramp = is_ramp
+    return vt
+
+cdef inline RuntimeVTable get_runtime_vtable() noexcept nogil:
+    cdef RuntimeVTable vt
+    vt.rt_eval = <object (*)(object, unsigned)>rt_eval
+    vt.rampbuffer_eval_segments = rampbuffer_eval_segments
+    vt.rampbuffer_alloc_input = rampbuffer_alloc_input
+    vt.rampbuffer_eval = rampbuffer_eval
+    vt.ramp_get_cubic_spline = ramp_get_cubic_spline
     return vt
 
 cdef class RFSOCOutputGenerator:
@@ -142,6 +198,7 @@ cdef match_rfsoc_dds = re.compile('^dds(\\d+)$').match
 @cython.final
 cdef class RFSOCBackend:
     def __init__(self, RFSOCOutputGenerator generator):
+        self.eval_status = False
         self.generator = generator
         self.ramp_buffer = new_ramp_buffer()
 
@@ -191,3 +248,11 @@ cdef class RFSOCBackend:
                 raise_invalid_channel(path)
             self.channels.add_seq_channel(idx, chn_idx, param_enum)
         collect_actions(self, get_compile_vtable(), None, None)
+
+    cdef int runtime_finalize(self, unsigned age) except -1:
+        bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)
+        self.generator.start()
+        try:
+            generate_tonedata(self, age, get_runtime_vtable())
+        finally:
+            self.generator.finish()
