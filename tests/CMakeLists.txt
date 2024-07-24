@@ -7,6 +7,7 @@ python_test("${CMAKE_BINARY_DIR}"
   brassboard_seq_test_utils.pyx
   test_rtval.py # Keep this as the first in a parallel run since it takes the longest
   test_action.py
+  test_backend.py
   test_config.py
   test_event_time.py
   test_scan.py
