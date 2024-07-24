@@ -248,6 +248,38 @@ struct py_object : std::unique_ptr<T,PyDeleter> {
 template<typename T>
 py_object(T*) -> py_object<T>;
 
+extern PyObject *pyfloat_m1;
+extern PyObject *pyfloat_m0_5;
+extern PyObject *pyfloat_0;
+extern PyObject *pyfloat_0_5;
+extern PyObject *pyfloat_1;
+
+static inline PyObject*
+pyfloat_from_double(double v)
+{
+    if (v == -1) {
+        Py_INCREF(pyfloat_m1);
+        return pyfloat_m1;
+    }
+    else if (v == -0.5) {
+        Py_INCREF(pyfloat_m0_5);
+        return pyfloat_m0_5;
+    }
+    else if (v == 0) {
+        Py_INCREF(pyfloat_0);
+        return pyfloat_0;
+    }
+    else if (v == 0.5) {
+        Py_INCREF(pyfloat_0_5);
+        return pyfloat_0_5;
+    }
+    else if (v == 1) {
+        Py_INCREF(pyfloat_1);
+        return pyfloat_1;
+    }
+    return PyFloat_FromDouble(v);
+}
+
 template<typename T>
 struct ValueIndexer {
     int get_id(void *p)

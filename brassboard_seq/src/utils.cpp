@@ -195,3 +195,11 @@ void _bb_err_format(PyObject *exc, uintptr_t key, const char *format, ...)
     va_end(vargs);
     _bb_reraise(key);
 }
+
+// We will leak these objects.
+// Otherwise, the destructor may be called after the libpython is already shut down.
+PyObject *pyfloat_m1(PyFloat_FromDouble(-1));
+PyObject *pyfloat_m0_5(PyFloat_FromDouble(-0.5));
+PyObject *pyfloat_0(PyFloat_FromDouble(0));
+PyObject *pyfloat_0_5(PyFloat_FromDouble(0.5));
+PyObject *pyfloat_1(PyFloat_FromDouble(1));

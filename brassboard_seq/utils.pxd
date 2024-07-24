@@ -25,3 +25,5 @@ cdef extern from "src/utils.h":
 
     int bb_raise(object exc, uintptr_t key) except 0
     int bb_err_format(object exc, uintptr_t key, const char *format, ...) except 0
+
+    object pyfloat_from_double(double v)
