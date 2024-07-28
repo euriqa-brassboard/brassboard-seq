@@ -6,8 +6,12 @@ from brassboard_seq.rtval cimport get_value
 cimport cython
 from cpython cimport PyErr_Format, Py_LT, Py_GT
 
+cdef np # hide import
+import numpy as np
 cimport numpy as cnpy
 cnpy._import_array()
+
+from libc cimport math as cmath
 
 @cython.no_gc
 @cython.final
@@ -128,3 +132,41 @@ cdef double *rampbuffer_eval(_self, _func, length, oldval) except NULL:
         buff = <cnpy.ndarray>cnpy.PyArray_Cast(buff, cnpy.NPY_DOUBLE)
     self.output_buff = buff
     return <double*>cnpy.PyArray_DATA(buff)
+
+# These can be implemented in python code but are provided here
+# to be slightly more efficient.
+cdef np_cos = np.cos
+cdef m_pi = cmath.pi
+cdef m_2pi = cmath.pi * 2
+cdef _blackman_eval(Blackman self, t, length, oldval):
+    theta = t * (m_2pi / length) - m_pi
+    cost = np_cos(theta)
+    val = self.amp * (0.34 + cost * (0.5 + 0.16 * cost))
+    return val + self.offset
+cdef blackman_eval = _blackman_eval
+
+@cython.final
+cdef class Blackman(RampFunction):
+    cdef public object amp
+    cdef public object offset
+    def __init__(self, amp, offset=0):
+        self.params = {'amp': amp, 'offset': offset}
+        self._eval = blackman_eval
+
+cdef _linear_eval(LinearRamp self, t, length, oldval):
+    t = t / length
+    return self.start * (1 - t) + self.end * t
+cdef linear_eval = _linear_eval
+
+cdef _linear_spline_segments(self, length, oldval):
+    return ()
+cdef linear_spline_segments = _linear_spline_segments
+
+@cython.final
+cdef class LinearRamp(RampFunction):
+    cdef public object start
+    cdef public object end
+    def __init__(self, start, end):
+        self.params = {'start': start, 'end': end}
+        self._eval = linear_eval
+        self._spline_segments = linear_spline_segments
