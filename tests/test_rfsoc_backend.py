@@ -291,6 +291,12 @@ def test_generator_error(max_bt):
 def test_channels(max_bt):
     s, comp = new_seq_compiler(max_bt)
     rb = add_rfsoc_backend(comp)
+    assert not rb.has_output
+    comp.finalize()
+    assert not rb.has_output
+
+    s, comp = new_seq_compiler(max_bt)
+    rb = add_rfsoc_backend(comp)
     assert s.get_channel_id('artiq/ttl0') == 0
     assert s.get_channel_id('rfsoc/dds1/0/amp') == 1
     assert s.get_channel_id('rfsoc/dds1/1/freq') == 2
@@ -300,7 +306,9 @@ def test_channels(max_bt):
     assert s.get_channel_id('rfsoc/dds1/1/amp') == 6
     assert s.get_channel_id('rfsoc/dds1/1/ff') == 7
     assert s.get_channel_id('rfsoc/dds0/0/freq') == 8
+    assert not rb.has_output
     comp.finalize()
+    assert rb.has_output
     channels = get_channel_info(rb, s)
     chn_ids = [tone_chn.chn for tone_chn in channels.channels]
     assert chn_ids == [2, 3, 4, 0]

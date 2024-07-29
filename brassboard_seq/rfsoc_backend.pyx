@@ -212,6 +212,10 @@ cdef class RFSOCBackend:
         self.ramp_buffer = new_ramp_buffer()
         self.rt_dds_delay = {}
 
+    @property
+    def has_output(self):
+        return self.channels.channels.size() != 0
+
     def set_dds_delay(self, int dds, delay):
         if is_rtval(delay):
             self.rt_dds_delay[dds] = delay
