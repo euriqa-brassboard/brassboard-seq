@@ -69,6 +69,14 @@ urukul.SPIT_ATT_RD = 16
 urukul.SPIT_DDS_WR = 2
 urukul.SPIT_DDS_RD = 16
 
+dax = new_module(None, 'dax')
+sim = new_module(dax, 'sim')
+sim_coredevice = new_module(sim, 'coredevice')
+
+sim_ad9910 = new_module(sim_coredevice, 'ad9910')
+sim_edge_counter = new_module(sim_coredevice, 'edge_counter')
+sim_ttl = new_module(sim_coredevice, 'ttl')
+
 class SPIBus:
     def __init__(self, channel):
         self.ref_period_mu = 8
@@ -157,6 +165,10 @@ edge_counter.EdgeCounter = EdgeCounter
 ttl.TTLOut = TTLOut
 environment.HasEnvironment = HasEnvironment
 
+sim_ad9910.AD9910 = AD9910
+sim_edge_counter.EdgeCounter = EdgeCounter
+sim_ttl.TTLOut = TTLOut
+
 def inject():
     sys.modules['artiq'] = artiq
     sys.modules['artiq.language'] = language
@@ -167,3 +179,10 @@ def inject():
     sys.modules['artiq.coredevice.spi2'] = spi2
     sys.modules['artiq.coredevice.ttl'] = ttl
     sys.modules['artiq.coredevice.urukul'] = urukul
+
+    sys.modules['dax'] = dax
+    sys.modules['dax.sim'] = sim
+    sys.modules['dax.sim.coredevice'] = sim_coredevice
+    sys.modules['dax.sim.coredevice.ad9910'] = sim_ad9910
+    sys.modules['dax.sim.coredevice.edge_counter'] = sim_edge_counter
+    sys.modules['dax.sim.coredevice.ttl'] = sim_ttl

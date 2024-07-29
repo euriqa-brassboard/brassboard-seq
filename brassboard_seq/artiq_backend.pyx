@@ -22,6 +22,17 @@ cdef DevAD9910 = ad9910.AD9910
 cdef DevEdgeCounter = edge_counter.EdgeCounter
 cdef DevTTLOut = ttl.TTLOut
 
+cdef sim_ad9910, sim_edge_counter, sim_ttl
+try:
+    from dax.sim.coredevice import (ad9910 as sim_ad9910,
+                                    edge_counter as sim_edge_counter,
+                                    ttl as sim_ttl)
+    DevAD9910 = (DevAD9910, sim_ad9910.AD9910)
+    DevEdgeCounter = (DevEdgeCounter, sim_edge_counter.EdgeCounter)
+    DevTTLOut = (DevTTLOut, sim_ttl.TTLOut)
+except:
+    pass
+
 cdef extern from "src/artiq_backend.cpp" namespace "artiq_backend":
     ArtiqConsts artiq_consts
 
