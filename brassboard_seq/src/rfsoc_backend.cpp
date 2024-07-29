@@ -602,12 +602,20 @@ void generate_tonedata(RFSOCBackend *rb, unsigned age, const RuntimeVTable vtabl
         [ToneAmp] = 1e-3,
     };
 
+    int64_t max_delay = 0;
+    for (auto [dds, delay]: rb->channels.dds_delay)
+        max_delay = std::max(max_delay, delay);
+
     // Add extra cycles to be able to handle the requirement of minimum 4 cycles.
-    auto total_cycle = seq_time_to_cycle(rb->__pyx_base.seq->total_time) + 8;
+    auto total_cycle = seq_time_to_cycle(rb->__pyx_base.seq->total_time + max_delay) + 8;
     for (auto &channel: rb->channels.channels) {
         ScopeExit cleanup([&] {
             rb->tone_buffer.clear();
         });
+        int64_t dds_delay = 0;
+        if (auto it = rb->channels.dds_delay.find(channel.chn >> 1);
+            it != rb->channels.dds_delay.end())
+            dds_delay = it->second;
         for (int param = 0; param < _NumToneParam; param++) {
             auto &actions = channel.actions[param];
             bb_debug("processing tone channel: %d, %s, nactions=%zd\n",
@@ -661,14 +669,15 @@ void generate_tonedata(RFSOCBackend *rb, unsigned age, const RuntimeVTable vtabl
                                  param_name(param));
                         break;
                     }
+                    auto action_seq_time = action.seq_time + dds_delay;
                     // Nothing changed.
                     if (ff == action.bool_value && (sync || !action.sync)) {
                         bb_debug("skipping %s action: @%" PRId64 ", ff=%d\n",
                                  param_name(param),
-                                 seq_time_to_cycle(action.seq_time), ff);
+                                 seq_time_to_cycle(action_seq_time), ff);
                         continue;
                     }
-                    auto new_cycle = seq_time_to_cycle(action.seq_time);
+                    auto new_cycle = seq_time_to_cycle(action_seq_time);
                     if (new_cycle != cur_cycle) {
                         bb_debug("adding %s action: [%" PRId64 ", %" PRId64 "], "
                                  "cycle_len=%" PRId64 ", sync=%d, ff=%d\n",
@@ -703,14 +712,14 @@ void generate_tonedata(RFSOCBackend *rb, unsigned age, const RuntimeVTable vtabl
                              param_name(param));
                     break;
                 }
+                auto action_seq_time = action.seq_time + dds_delay;
                 if (!action.isramp && val == action.float_value &&
                     (sync || !action.sync)) {
                     bb_debug("skipping %s action: @%" PRId64 ", val=%f\n",
                              param_name(param),
-                             seq_time_to_cycle(action.seq_time), val);
+                             seq_time_to_cycle(action_seq_time), val);
                     continue;
                 }
-                auto action_seq_time = action.seq_time;
                 auto new_cycle = seq_time_to_cycle(action_seq_time);
                 if (new_cycle != cur_cycle) {
                     assert(new_cycle > cur_cycle);

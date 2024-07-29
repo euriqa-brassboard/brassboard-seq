@@ -58,9 +58,11 @@ cdef extern from "src/rfsoc_backend.h" namespace "rfsoc_backend":
     cppclass ChannelInfo:
         vector[ToneChannel] channels
         cppmap[int,pair[int,ToneParam]] chn_map
+        cppmap[int,int64_t] dds_delay
 
         int add_tone_channel(int chn) nogil
         void add_seq_channel(int seq_chn, int chn_idx, ToneParam param) nogil
+        void set_dds_delay(int dds, int64_t delay) nogil
 
     cppclass ToneBuffer:
         pass
@@ -81,6 +83,8 @@ cdef class RFSOCBackend(Backend):
     cdef bint eval_status
     cdef RampBuffer ramp_buffer
     cdef ToneBuffer tone_buffer
+
+    cdef dict rt_dds_delay
 
     cdef int finalize(self) except -1
     cdef int runtime_finalize(self, unsigned age) except -1

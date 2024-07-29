@@ -38,6 +38,7 @@ cdef ToneChannel new_tone_channel(rfsoc_backend.ToneChannel *tone_chn):
 cdef class ChannelInfo:
     cdef public list channels
     cdef public dict chn_map
+    cdef public dict dds_delay
 
 cdef param_names = {
     rfsoc_backend.ToneFreq: 'freq',
@@ -52,6 +53,7 @@ cdef ChannelInfo new_channel_info(rfsoc_backend.ChannelInfo *info):
                      for i in range(info.channels.size())]
     self.chn_map = {seq_chn: (chn_idx, param_names[param])
                         for seq_chn, (chn_idx, param) in info.chn_map}
+    self.dds_delay = info.dds_delay
     return self
 
 def get_channel_info(rfsoc_backend.RFSOCBackend rb):

@@ -78,9 +78,14 @@ struct ChannelInfo {
     std::vector<ToneChannel> channels;
     // map from sequence channel to tone channel index
     std::map<int,std::pair<int,ToneParam>> chn_map;
+    std::map<int, int64_t> dds_delay;
 
     int add_tone_channel(int chn);
     void add_seq_channel(int seq_chn, int chn_idx, ToneParam param);
+    void set_dds_delay(int dds, int64_t delay)
+    {
+        dds_delay[dds] = delay;
+    }
 };
 
 struct DDSParamAction {

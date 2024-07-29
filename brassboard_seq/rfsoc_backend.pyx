@@ -3,8 +3,8 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.action cimport Action, RampFunction, SeqCubicSpline, \
   new_ramp_buffer, ramp_get_spline_segments, rampbuffer_alloc_input, rampbuffer_eval
-from brassboard_seq.event_time cimport EventTime
-from brassboard_seq.rtval cimport is_rtval, rt_eval
+from brassboard_seq.event_time cimport EventTime, round_time_int
+from brassboard_seq.rtval cimport is_rtval, rt_eval, RuntimeValue
 from brassboard_seq.utils cimport pyfloat_from_double, set_global_tracker
 
 from libcpp.map cimport map as cppmap
@@ -195,12 +195,28 @@ cdef PyObject *raise_invalid_channel(tuple path) except NULL:
 
 cdef match_rfsoc_dds = re.compile('^dds(\\d+)$').match
 
+cdef inline set_dds_delay(RFSOCBackend self, int dds, delay):
+    if delay < 0:
+        PyErr_Format(ValueError, "DDS time offset %S cannot be negative.",
+                     <PyObject*>delay)
+    if delay > 0.1:
+        PyErr_Format(ValueError, "DDS time offset %S cannot be more than 100ms.",
+                     <PyObject*>delay)
+    self.channels.set_dds_delay(dds, round_time_int(delay))
+
 @cython.final
 cdef class RFSOCBackend:
     def __init__(self, RFSOCOutputGenerator generator):
         self.eval_status = False
         self.generator = generator
         self.ramp_buffer = new_ramp_buffer()
+        self.rt_dds_delay = {}
+
+    def set_dds_delay(self, int dds, delay):
+        if is_rtval(delay):
+            self.rt_dds_delay[dds] = delay
+            return
+        set_dds_delay(self, dds, delay)
 
     cdef int finalize(self) except -1:
         bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)
@@ -251,6 +267,8 @@ cdef class RFSOCBackend:
 
     cdef int runtime_finalize(self, unsigned age) except -1:
         bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)
+        for dds, delay in self.rt_dds_delay.items():
+            set_dds_delay(self, dds, rt_eval(<RuntimeValue>delay, age))
         self.generator.start()
         try:
             generate_tonedata(self, age, get_runtime_vtable())

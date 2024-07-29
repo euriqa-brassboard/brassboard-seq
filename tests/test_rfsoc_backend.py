@@ -1613,3 +1613,73 @@ def test_tight_output5(max_bt):
             Tone(8, Spline(0.0), Spline(0.3), Spline(0.0),
                  False, True)],
     }
+
+@with_rfsoc_params
+def test_dds_delay_rt_error(max_bt):
+    s, comp = new_seq_compiler(max_bt)
+    rb = add_rfsoc_backend(comp)
+    rb.set_dds_delay(0, rtval.new_extern(lambda: -0.001))
+    comp.finalize()
+    with pytest.raises(ValueError, match="DDS time offset -0.001 cannot be negative."):
+        comp.runtime_finalize(1)
+
+    s, comp = new_seq_compiler(max_bt)
+    rb = add_rfsoc_backend(comp)
+    rb.set_dds_delay(1, rtval.new_extern(lambda: 1))
+    comp.finalize()
+    with pytest.raises(ValueError,
+                       match="DDS time offset 1 cannot be more than 100ms."):
+        comp.runtime_finalize(1)
+
+@with_rfsoc_params
+def test_dds_delay(max_bt):
+    check_dds_delay(max_bt, False)
+    check_dds_delay(max_bt, True)
+
+def check_dds_delay(max_bt, use_rt):
+    def wrap_value(v):
+        if use_rt:
+            return rtval.new_extern(lambda: v)
+        return v
+    s, comp = new_seq_compiler(max_bt)
+    rb = add_rfsoc_backend(comp)
+    with pytest.raises(ValueError, match="DDS time offset -0.001 cannot be negative."):
+        rb.set_dds_delay(0, -0.001)
+    with pytest.raises(ValueError,
+                       match="DDS time offset 1 cannot be more than 100ms."):
+        rb.set_dds_delay(1, 1)
+
+    rb.set_dds_delay(1, wrap_value(1e-3))
+    rb.set_dds_delay(0, wrap_value(1e-6))
+    s.add_step(1e-3) \
+      .pulse('rfsoc/dds0/0/amp', 0.1) \
+      .set('rfsoc/dds0/1/phase', 0.2) \
+      .set('rfsoc/dds1/1/freq', 100e6) \
+      .pulse('rfsoc/dds2/0/amp', 0.3)
+    comp.finalize()
+
+    if not use_rt:
+        channels = get_channel_info(rb, s)
+        assert channels.dds_delay == {
+            0: 1000_000,
+            1: 1000_000_000
+        }
+
+    comp.runtime_finalize(1)
+    if use_rt:
+        channels = get_channel_info(rb, s)
+        assert channels.dds_delay == {
+            0: 1000_000,
+            1: 1000_000_000
+        }
+    assert get_output() == {
+        0: [Tone(410, Spline(0.0), Spline(0.0), Spline(0.0), False, False),
+            Tone(409600, Spline(0.0), Spline(0.1), Spline(0.0), False, False),
+            Tone(409198, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
+        1: [Tone(410, Spline(0.0), Spline(0.0), Spline(0.0), False, False),
+            Tone(818798, Spline(0.0), Spline(0.0), Spline(0.4 * np.pi), False, False)],
+        3: [Tone(409600, Spline(0.0), Spline(0.0), Spline(0.0), False, False),
+            Tone(409608, Spline(100e6), Spline(0.0), Spline(0.0), False, False)],
+        4: [Tone(409600, Spline(0.0), Spline(0.3), Spline(0.0), False, False),
+            Tone(409608, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
+    }
