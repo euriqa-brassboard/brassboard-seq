@@ -11,5 +11,5 @@ cdef class Backend:
     cdef int runtime_finalize(self, unsigned age) except -1
 
 cdef class SeqCompiler:
-    cdef Seq seq
+    cdef readonly Seq seq
     cdef dict backends

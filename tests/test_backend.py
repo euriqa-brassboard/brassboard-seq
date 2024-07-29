@@ -15,6 +15,7 @@ def test_compiler_error():
     conf.add_supported_prefix('artiq')
     s = seq.Seq(conf)
     comp = backend.SeqCompiler(s)
+    assert comp.seq is s
     assert s.get_channel_id('artiq/a') == 0
     with pytest.raises(ValueError, match="Unhandled channel: artiq/a"):
         comp.finalize()
