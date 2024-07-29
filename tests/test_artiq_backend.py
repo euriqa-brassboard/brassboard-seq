@@ -1738,3 +1738,174 @@ def test_same_time_output(max_bt):
         -20_000,
         ttl_tgts[0], 0,
     ]
+
+@with_artiq_params
+def test_device_delay_rt_error(max_bt):
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab.set_device_delay("ttl0", rtval.new_extern(lambda: -0.001))
+    s.set('artiq/ttl0', True)
+    comp.finalize()
+    with pytest.raises(ValueError,
+                       match="Device time offset -0.001 cannot be negative."):
+        comp.runtime_finalize(1)
+
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab.set_device_delay("urukul0_ch2", rtval.new_extern(lambda: 1.2))
+    s.set('artiq/urukul0_ch2/amp', True)
+    comp.finalize()
+    with pytest.raises(ValueError,
+                       match="Device time offset 1.2 cannot be more than 100ms."):
+        comp.runtime_finalize(1)
+
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab.set_device_delay("ttl0", rtval.new_extern(lambda: []))
+    s.set('artiq/ttl0', True)
+    comp.finalize()
+    with pytest.raises(TypeError):
+        comp.runtime_finalize(1)
+
+    def error_callback():
+        raise ValueError("AAABBBCCC")
+
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab.set_device_delay("ttl0", rtval.new_extern(error_callback))
+    s.set('artiq/ttl0', True)
+    comp.finalize()
+    with pytest.raises(ValueError, match="AAABBBCCC"):
+        comp.runtime_finalize(1)
+
+@with_artiq_params
+def test_device_delay(max_bt):
+    check_device_delay(max_bt, False)
+    check_device_delay(max_bt, True)
+
+def check_device_delay(max_bt, use_rt):
+    def wrap_value(v):
+        if use_rt:
+            return rtval.new_extern(lambda: v)
+        return v
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    with pytest.raises(ValueError,
+                       match="Device time offset -0.001 cannot be negative."):
+        ab.set_device_delay("ttl0", -0.001)
+    with pytest.raises(ValueError,
+                       match="Device time offset 1 cannot be more than 100ms."):
+        ab.set_device_delay("urukul0_ch1", 1)
+
+    s, comp = new_seq_compiler(max_bt)
+    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab.set_device_delay("ttl1", wrap_value(1e-3))
+    ab.set_device_delay("ttl2_counter", wrap_value(2e-3))
+    ab.set_device_delay("urukul0_ch0", wrap_value(3e-3))
+
+    s.add_step(rtval.new_extern(lambda: 5e-3)) \
+      .pulse('artiq/ttl1', True) \
+      .pulse('artiq/ttl0', True) \
+      .pulse('artiq/ttl2_counter', True) \
+      .pulse('artiq/ttl3_counter', True) \
+      .pulse('artiq/urukul0_ch0/sw', True) \
+      .pulse('artiq/urukul1_ch0/sw', True) \
+      .pulse('artiq/urukul0_ch0/amp', 0.2) \
+      .pulse('artiq/urukul0_ch1/amp', 0.3)
+    comp.finalize()
+
+    channels = get_channel_info(ab)
+    addr_tgts = [bus.addr_target for bus in channels.urukul_busses]
+    data_tgts = [bus.data_target for bus in channels.urukul_busses]
+    upd_tgts = [bus.io_update_target for bus in channels.urukul_busses]
+    css = [dds.chip_select for dds in channels.ddschns]
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+
+    comp.runtime_finalize(1)
+    rtio1 = list(np_rtios)
+    assert rtio1 == [
+        addr_tgts[0], dds_config_addr(css[1]),
+        -dds_config_len,
+        data_tgts[0], dds_data_addr,
+        -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[1]),
+        -dds_config_len,
+        data_tgts[0], dds_data1(0.3, 0),
+        -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[1]),
+        -dds_config_len,
+        data_tgts[0], dds_data2(0),
+        -dds_data_len,
+        addr_tgts[0], dds_config_addr(css[0]),
+        -(3000 - dds_total_len),
+        # Beginning of sequence
+        ttl_tgts[3], 9,
+        ttl_tgts[1], 1,
+        ttl_tgts[5], 1,
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        data_tgts[0], dds_data_addr,
+        -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]),
+        -dds_config_len,
+        data_tgts[0], dds_data1(0.2, 0),
+        -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]),
+        -dds_config_len,
+        data_tgts[0], dds_data2(0),
+        -dds_data_len,
+        addr_tgts[0], dds_config_addr(css[1]),
+        -(1_000_000 - dds_headless_len - 8),
+        # ttl0 delayed on @ 1 ms
+        ttl_tgts[0], 1,
+        -1_000_000,
+        # ttl2_counter delayed on @ 2 ms
+        ttl_tgts[2], 9,
+        -1_000_000,
+        # urukul0_ch0/sw and urukul0_ch0/amp delayed on @ 3 ms
+        ttl_tgts[4], 1,
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        data_tgts[0], dds_data_addr,
+        -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[1]),
+        -dds_config_len,
+        data_tgts[0], dds_data1(0, 0),
+        -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[1]),
+        -dds_config_len,
+        data_tgts[0], dds_data2(0),
+        -dds_data_len,
+        addr_tgts[0], dds_config_addr(css[0]),
+        -(2_000_000 - dds_headless_len - 8),
+        # end of step
+        ttl_tgts[3], 4,
+        ttl_tgts[1], 0,
+        ttl_tgts[5], 0,
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        data_tgts[0], dds_data_addr,
+        -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]),
+        -dds_config_len,
+        data_tgts[0], dds_data1(0, 0),
+        -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]),
+        -dds_config_len,
+        data_tgts[0], dds_data2(0),
+        -(1_000_000 - dds_headless_len + dds_data_len - 8),
+        # ttl0 delayed off @ 6 ms
+        ttl_tgts[0], 0,
+        -1_000_000,
+        # ttl2_counter delayed off @ 7 ms
+        ttl_tgts[2], 4,
+        -1_000_000,
+        # urukul0_ch0/sw and urukul0_ch0/amp delayed off @ 8 ms
+        ttl_tgts[4], 0,
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+    ]

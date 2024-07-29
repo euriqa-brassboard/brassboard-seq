@@ -55,6 +55,8 @@ struct DDSChannel {
     bool had_output{false};
     uint32_t data1{0};
     uint32_t data2{0};
+    int64_t delay;
+    PyObject *rt_delay;
 
     void reset()
     {
@@ -118,11 +120,16 @@ struct TTLChannel {
     int64_t time_mu;
     int64_t last_time_mu;
 
+    int64_t delay;
+    PyObject *rt_delay;
+
     static constexpr int max_action_shift = 8;
 
-    TTLChannel(uint32_t target, bool iscounter)
+    TTLChannel(uint32_t target, bool iscounter, int64_t delay, PyObject *rt_delay)
         : target(target),
-          iscounter(iscounter)
+          iscounter(iscounter),
+          delay(delay),
+          rt_delay(rt_delay)
     {
     }
 
@@ -173,10 +180,13 @@ struct ChannelsInfo {
     }
     int add_bus_channel(int bus_channel, uint32_t io_update_target,
                         uint8_t ref_period_mu);
-    void add_ttl_channel(int seqchn, uint32_t target, bool iscounter);
-    int get_dds_channel_id(uint32_t bus_id, double ftw_per_hz, uint8_t chip_select);
+    void add_ttl_channel(int seqchn, uint32_t target, bool iscounter, int64_t delay,
+                         PyObject *rt_delay);
+    int get_dds_channel_id(uint32_t bus_id, double ftw_per_hz, uint8_t chip_select,
+                           int64_t delay, PyObject *rt_delay);
     void add_dds_param_channel(int seqchn, uint32_t bus_id, double ftw_per_hz,
-                               uint8_t chip_select, ChannelType param);
+                               uint8_t chip_select, ChannelType param,
+                               int64_t delay, PyObject *rt_delay);
 };
 
 struct Relocation {

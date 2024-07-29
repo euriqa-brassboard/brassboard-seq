@@ -31,34 +31,38 @@ inline int ChannelsInfo::add_bus_channel(int bus_channel, uint32_t io_update_tar
     return bus_id;
 }
 
-inline void ChannelsInfo::add_ttl_channel(int seqchn, uint32_t target, bool iscounter)
+inline void ChannelsInfo::add_ttl_channel(int seqchn, uint32_t target, bool iscounter,
+                                          int64_t delay, PyObject *rt_delay)
 {
     assert(ttl_chn_map.count(seqchn) == 0);
     auto ttl_id = (int)ttlchns.size();
-    ttlchns.push_back({target, iscounter});
+    ttlchns.push_back({target, iscounter, delay, rt_delay});
     ttl_chn_map[seqchn] = ttl_id;
 }
 
 inline int ChannelsInfo::get_dds_channel_id(uint32_t bus_id, double ftw_per_hz,
-                                            uint8_t chip_select)
+                                            uint8_t chip_select, int64_t delay,
+                                            PyObject *rt_delay)
 {
     std::pair<int,int> key{bus_id, chip_select};
     auto it = dds_chn_map.find(key);
     if (it != dds_chn_map.end())
         return it->second;
     auto dds_id = (int)ddschns.size();
-    ddschns.push_back({ftw_per_hz, bus_id, chip_select});
+    ddschns.push_back({ftw_per_hz, bus_id, chip_select,
+            .delay = delay, .rt_delay = rt_delay });
     dds_chn_map[key] = dds_id;
     return dds_id;
 }
 
 inline void ChannelsInfo::add_dds_param_channel(int seqchn, uint32_t bus_id,
                                                 double ftw_per_hz, uint8_t chip_select,
-                                                ChannelType param)
+                                                ChannelType param, int64_t delay,
+                                                PyObject *rt_delay)
 {
     assert(dds_param_chn_map.count(seqchn) == 0);
-    dds_param_chn_map[seqchn] = {get_dds_channel_id(bus_id, ftw_per_hz,
-                                                    chip_select), param};
+    dds_param_chn_map[seqchn] = {get_dds_channel_id(bus_id, ftw_per_hz, chip_select,
+                                                    delay, rt_delay), param};
 }
 
 struct CompileVTable {
@@ -99,7 +103,28 @@ void collect_actions(ArtiqBackend *ab, const CompileVTable vtable, Action*, Even
 
         auto event_time = (EventTime*)PyList_GET_ITEM(event_times, tid);
         if (event_time->data.has_static) {
-            artiq_action.time_mu = seq_time_to_mu(event_time->data._get_static());
+            PyObject *rt_delay;
+            int64_t delay;
+            if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
+                auto &ddschn = ab->channels.ddschns[chn_idx];
+                delay = ddschn.delay;
+                rt_delay = ddschn.rt_delay;
+            }
+            else {
+                auto &ttlchn = ab->channels.ttlchns[chn_idx];
+                delay = ttlchn.delay;
+                rt_delay = ttlchn.rt_delay;
+            }
+            if (rt_delay) {
+                // We need to fill in the time at runtime
+                // since we don't know the delay value...
+                needs_reloc = true;
+                reloc.time_idx = tid;
+            }
+            else {
+                artiq_action.time_mu =
+                    seq_time_to_mu(event_time->data._get_static() + delay);
+            }
         }
         else {
             needs_reloc = true;
@@ -268,6 +293,35 @@ void generate_rtios(ArtiqBackend *ab, unsigned age, const RuntimeVTable vtable)
             reraise_reloc_error(ab, i, false);
         val = get_value_f64(pyval, [&] { reraise_reloc_error(ab, i, false); });
     }
+    int64_t max_delay = 0;
+    auto relocate_delay = [&] (int64_t &delay, PyObject *rt_delay) {
+        if (!rt_delay)
+            return;
+        py_object pyval(vtable.rt_eval((PyObject*)rt_delay, age));
+        if (!pyval)
+            throw 0;
+        auto fdelay = get_value_f64(pyval, uintptr_t(-1));
+        if (fdelay < 0) {
+            PyErr_Format(PyExc_ValueError,
+                         "Device time offset %S cannot be negative.", pyval.get());
+            throw 0;
+        }
+        else if (fdelay > 0.1) {
+            PyErr_Format(PyExc_ValueError,
+                         "Device time offset %S cannot be more than 100ms.",
+                         pyval.get());
+            throw 0;
+        }
+        delay = int64_t(fdelay * 1e12 + 0.5);
+    };
+    for (auto &ttlchn: ab->channels.ttlchns) {
+        relocate_delay(ttlchn.delay, ttlchn.rt_delay);
+        max_delay = std::max(max_delay, ttlchn.delay);
+    }
+    for (auto &ddschn: ab->channels.ddschns) {
+        relocate_delay(ddschn.delay, ddschn.rt_delay);
+        max_delay = std::max(max_delay, ddschn.delay);
+    }
     auto &time_values = seq->__pyx_base.__pyx_base.seqinfo->time_mgr->time_values;
 
     auto reloc_action = [ab, &time_values] (const ArtiqAction &action) {
@@ -277,14 +331,23 @@ void generate_rtios(ArtiqBackend *ab, unsigned age, const RuntimeVTable vtable)
         // No need to do anything else if we hit a disabled action.
         if (!action.cond)
             return;
-        if (reloc.time_idx != -1)
-            action.time_mu = seq_time_to_mu(time_values[reloc.time_idx]);
+        auto type = action.type;
+        auto chn_idx = action.chn_idx;
+        if (reloc.time_idx != -1) {
+            int64_t delay;
+            if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
+                delay = ab->channels.ddschns[chn_idx].delay;
+            }
+            else {
+                delay = ab->channels.ttlchns[chn_idx].delay;
+            }
+            action.time_mu = seq_time_to_mu(time_values[reloc.time_idx] + delay);
+        }
         if (reloc.val_idx != -1) {
-            auto type = action.type;
             if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
                 double v = ab->float_values[reloc.val_idx].second;
                 if (type == DDSFreq) {
-                    auto &ddschn = ab->channels.ddschns[action.chn_idx];
+                    auto &ddschn = ab->channels.ddschns[chn_idx];
                     action.value = dds_freq_to_mu(v, ddschn.ftw_per_hz);
                 }
                 else if (type == DDSAmp) {
@@ -520,7 +583,7 @@ void generate_rtios(ArtiqBackend *ab, unsigned age, const RuntimeVTable vtable)
     };
 
     int64_t time_mu = start_mu;
-    auto total_time_mu = seq_time_to_mu(ab->__pyx_base.seq->total_time);
+    auto total_time_mu = seq_time_to_mu(ab->__pyx_base.seq->total_time + max_delay);
     for (auto action: ab->rtio_actions) {
         add_wait(action.time_mu - time_mu);
         time_mu = action.time_mu;

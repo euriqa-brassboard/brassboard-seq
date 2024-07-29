@@ -23,15 +23,18 @@ cdef class DDSChannel:
     cdef public double ftw_per_hz
     cdef public uint32_t bus_id
     cdef public uint8_t chip_select
+    cdef public int64_t delay
 
 cdef class TTLChannel:
     cdef public uint32_t target
     cdef public bint iscounter
+    cdef public int64_t delay
 
 cdef new_ttl_channel(artiq_backend.TTLChannel *ttl):
     self = <TTLChannel>TTLChannel.__new__(TTLChannel)
     self.target = ttl.target
     self.iscounter = ttl.iscounter
+    self.delay = ttl.delay
     return self
 
 cdef DDSChannel new_dds_channel(artiq_backend.DDSChannel dds):
@@ -39,6 +42,7 @@ cdef DDSChannel new_dds_channel(artiq_backend.DDSChannel dds):
     self.ftw_per_hz = dds.ftw_per_hz
     self.bus_id = dds.bus_id
     self.chip_select = dds.chip_select
+    self.delay = dds.delay
     return self
 
 class ChannelsInfo:

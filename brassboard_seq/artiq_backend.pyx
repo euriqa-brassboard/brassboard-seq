@@ -7,7 +7,7 @@ from brassboard_seq.rtval cimport is_rtval, RuntimeValue, rt_eval
 from brassboard_seq.utils cimport set_global_tracker
 
 cimport cython
-from cpython cimport PyErr_Format, PyObject
+from cpython cimport PyErr_Format
 cimport numpy as cnpy
 cnpy._import_array()
 
@@ -75,7 +75,8 @@ cdef get_artiq_device(sys, str name):
     cls = artiq.language.environment.HasEnvironment
     return cls.get_device(sys, unique)
 
-cdef int add_channel_artiq(ChannelsInfo *self, dev, int idx, tuple path) except -1:
+cdef int add_channel_artiq(ChannelsInfo *self, dev, int64_t delay, PyObject *rt_delay,
+                           int idx, tuple path) except -1:
     cdef ChannelType dds_param_type
     if isinstance(dev, DevAD9910):
         if len(path) != 3:
@@ -87,7 +88,7 @@ cdef int add_channel_artiq(ChannelsInfo *self, dev, int idx, tuple path) except 
             # We may consider maintaining a relation between this ttl channel
             # and the urukul channel to make sure we don't reorder
             # any operations between the two.
-            self.add_ttl_channel(idx, <int?>dev.sw.target_o, False)
+            self.add_ttl_channel(idx, <int?>dev.sw.target_o, False, delay, rt_delay)
             return 0
         elif path2 == 'freq':
             dds_param_type = DDSFreq
@@ -112,22 +113,26 @@ cdef int add_channel_artiq(ChannelsInfo *self, dev, int idx, tuple path) except 
             bus_id = self.add_bus_channel(bus_channel, io_update_target,
                                           <int?>bus.ref_period_mu)
         self.add_dds_param_channel(idx, bus_id, <double?>dev.ftw_per_hz,
-                                   <int?>dev.chip_select, dds_param_type)
+                                   <int?>dev.chip_select, dds_param_type,
+                                   delay, rt_delay)
     elif isinstance(dev, DevTTLOut):
         if len(path) > 2:
             raise_invalid_channel(path)
-        self.add_ttl_channel(idx, <int?>dev.target_o, False)
+        self.add_ttl_channel(idx, <int?>dev.target_o, False, delay, rt_delay)
     elif isinstance(dev, DevEdgeCounter):
         if len(path) > 2:
             raise_invalid_channel(path)
-        self.add_ttl_channel(idx, (<int?>dev.channel) << 8, True)
+        self.add_ttl_channel(idx, (<int?>dev.channel) << 8, True, delay, rt_delay)
     else:
         devstr = str(dev)
         PyErr_Format(ValueError, 'Unsupported device: %U', <PyObject*>devstr)
     return 0
 
-cdef int collect_channels(ChannelsInfo *self, str prefix, sys, Seq seq) except -1:
+cdef int collect_channels(ChannelsInfo *self, str prefix, sys, Seq seq,
+                          dict device_delay) except -1:
     cdef int idx = -1
+    cdef int64_t delay
+    cdef PyObject *rt_delay
     for _path in seq.seqinfo.channel_paths:
         idx += 1
         path = <tuple>_path
@@ -135,7 +140,19 @@ cdef int collect_channels(ChannelsInfo *self, str prefix, sys, Seq seq) except -
             continue
         if len(path) < 2:
             raise_invalid_channel(path)
-        add_channel_artiq(self, get_artiq_device(sys, <str>path[1]), idx, path)
+        devname = <str>path[1]
+        py_delay = device_delay.get(devname)
+        if py_delay is None:
+            delay = 0
+            rt_delay = NULL
+        elif is_rtval(py_delay):
+            delay = 0
+            rt_delay = <PyObject*>py_delay
+        else:
+            delay = py_delay
+            rt_delay = NULL
+        add_channel_artiq(self, get_artiq_device(sys, devname), delay, rt_delay,
+                          idx, path)
     self.dds_chn_map.clear() # Not needed after channel collection
     return 0
 
@@ -149,6 +166,7 @@ cdef class ArtiqBackend:
         if cnpy.PyArray_TYPE(rtio_array) != cnpy.NPY_INT32:
             PyErr_Format(TypeError, "RTIO output must be a int32 array")
         self.rtio_array = rtio_array
+        self.device_delay = {}
 
     cdef int add_start_trigger_ttl(self, uint32_t tgt, long long time,
                                    int min_time, bint raising_edge) except -1:
@@ -169,9 +187,22 @@ cdef class ArtiqBackend:
         self.add_start_trigger_ttl(dev.target_o, round_time_int(time),
                                    round_time_int(min_time), raising_edge)
 
+    def set_device_delay(self, str name, delay):
+        if is_rtval(delay):
+            self.device_delay[name] = delay
+            return
+        if delay < 0:
+            PyErr_Format(ValueError, "Device time offset %S cannot be negative.",
+                         <PyObject*>delay)
+        if delay > 0.1:
+            PyErr_Format(ValueError, "Device time offset %S cannot be more than 100ms.",
+                         <PyObject*>delay)
+        self.device_delay[name] = round_time_int(delay)
+
     cdef int finalize(self) except -1:
         bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)
-        collect_channels(&self.channels, self.prefix, self.sys, self.seq)
+        collect_channels(&self.channels, self.prefix, self.sys, self.seq,
+                         self.device_delay)
         collect_actions(self, get_compile_vtable(), None, None)
 
     cdef int runtime_finalize(self, unsigned age) except -1:

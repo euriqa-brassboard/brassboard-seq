@@ -9,6 +9,8 @@ from libcpp.utility cimport pair
 from libcpp.vector cimport vector
 from libc.stdint cimport *
 
+from cpython cimport PyObject
+
 cdef extern from "src/artiq_backend.h" namespace "artiq_backend":
     cppclass ArtiqConsts:
         int COUNTER_ENABLE
@@ -42,6 +44,7 @@ cdef extern from "src/artiq_backend.h" namespace "artiq_backend":
         double ftw_per_hz
         uint32_t bus_id
         uint8_t chip_select
+        int64_t delay
 
     cppclass DDSAction:
         pass
@@ -58,6 +61,7 @@ cdef extern from "src/artiq_backend.h" namespace "artiq_backend":
     cppclass TTLChannel:
         uint32_t target
         bint iscounter
+        int64_t delay
 
     cppclass StartTrigger:
         uint32_t target
@@ -78,9 +82,11 @@ cdef extern from "src/artiq_backend.h" namespace "artiq_backend":
         int find_bus_id(int bus_channel);
         int add_bus_channel(int bus_channel, uint32_t io_update_target,
                             uint8_t ref_period_mu)
-        void add_ttl_channel(int seqchn, uint32_t target, bint iscounter)
+        void add_ttl_channel(int seqchn, uint32_t target, bint iscounter,
+                             int64_t delay, PyObject *rt_delay)
         void add_dds_param_channel(int seqchn, uint32_t bus_id, double ftw_per_hz,
-                                   uint8_t chip_select, ChannelType param)
+                                   uint8_t chip_select, ChannelType param,
+                                   int64_t delay, PyObject *rt_delay)
 
     cppclass Relocation:
         int cond_idx
@@ -111,6 +117,7 @@ cdef class ArtiqBackend(Backend):
     cdef object rtio_array # ndarray
 
     cdef vector[StartTrigger] start_triggers
+    cdef dict device_delay
 
     cdef int add_start_trigger_ttl(self, uint32_t tgt, long long time,
                                    int min_time, bint raising_edge) except -1
