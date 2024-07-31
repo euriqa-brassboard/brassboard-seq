@@ -1,7 +1,7 @@
 # cython: language_level=3
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.rtval cimport get_value
+from brassboard_seq.rtval cimport get_value, ifelse, is_rtval
 
 cimport cython
 from cpython cimport PyErr_Format, Py_LT, Py_GT
@@ -139,9 +139,13 @@ cdef np_cos = np.cos
 cdef m_pi = cmath.pi
 cdef m_2pi = cmath.pi * 2
 cdef _blackman_eval(Blackman self, t, length, oldval):
-    theta = t * (m_2pi / length) - m_pi
-    cost = np_cos(theta)
-    val = self.amp * (0.34 + cost * (0.5 + 0.16 * cost))
+    if not is_rtval(length) and length == 0:
+        val = t * 0
+    else:
+        theta = t * (m_2pi / length) - m_pi
+        cost = np_cos(theta)
+        val = self.amp * (0.34 + cost * (0.5 + 0.16 * cost))
+        val = ifelse(length == 0, t * 0, val)
     return val + self.offset
 cdef blackman_eval = _blackman_eval
 

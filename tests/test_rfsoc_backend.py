@@ -1717,3 +1717,19 @@ def test_cond_ramp_error(max_bt):
       .pulse('rfsoc/dds0/1/amp', DivLengthFunction())
     comp.finalize()
     comp.runtime_finalize(1)
+
+    s, comp = new_seq_compiler(max_bt)
+    rb = add_rfsoc_backend(comp)
+    s.add_step(0) \
+      .set('rfsoc/dds0/0/amp', Blackman(1)) \
+      .pulse('rfsoc/dds0/1/amp', Blackman(1))
+    comp.finalize()
+    comp.runtime_finalize(1)
+
+    s, comp = new_seq_compiler(max_bt)
+    rb = add_rfsoc_backend(comp)
+    s.add_step(rtval.new_extern(lambda: 0)) \
+      .set('rfsoc/dds0/0/amp', Blackman(1)) \
+      .pulse('rfsoc/dds0/1/amp', Blackman(1))
+    comp.finalize()
+    comp.runtime_finalize(1)
