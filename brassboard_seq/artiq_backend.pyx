@@ -170,7 +170,7 @@ cdef int collect_channels(ChannelsInfo *self, str prefix, sys, Seq seq,
 
 @cython.final
 cdef class ArtiqBackend:
-    def __init__(self, sys, cnpy.ndarray rtio_array):
+    def __init__(self, sys, cnpy.ndarray rtio_array, /):
         self.sys = sys
         self.eval_status = False
         if rtio_array.ndim != 1:
@@ -191,7 +191,7 @@ cdef class ArtiqBackend:
         return 0
 
     def add_start_trigger(self, str name, time, min_time,
-                          bint raising_edge):
+                          bint raising_edge, /):
         dev = get_artiq_device(self.sys, name)
         if not isinstance(dev, DevTTLOut):
             PyErr_Format(ValueError, 'Invalid start trigger device: %U',
@@ -199,7 +199,7 @@ cdef class ArtiqBackend:
         self.add_start_trigger_ttl(dev.target_o, round_time_int(time),
                                    round_time_int(min_time), raising_edge)
 
-    def set_device_delay(self, str name, delay):
+    def set_device_delay(self, str name, delay, /):
         if is_rtval(delay):
             self.device_delay[name] = delay
             return

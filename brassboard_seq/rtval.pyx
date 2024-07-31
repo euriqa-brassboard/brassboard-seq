@@ -481,7 +481,7 @@ cdef class RuntimeValue:
         # `RuntimeValue.__new__` or its wrapper.
         PyErr_Format(TypeError, "RuntimeValue cannot be created directly")
 
-    def eval(self, unsigned age):
+    def eval(self, unsigned age, /):
         return rt_eval(self, age)
 
     def __str__(self):
@@ -560,7 +560,7 @@ cdef class RuntimeValue:
     # Artifically limit the supported ufunc
     # in case we need to do any processing later
     # (e.g. compiling/sending it to kernel etc).
-    def __array_ufunc__(self, ufunc, methods, *inputs, **kws):
+    def __array_ufunc__(self, ufunc, methods, /, *inputs, **kws):
         if methods != '__call__':
             return NotImplemented
         # Needed for numpy type support
@@ -752,7 +752,7 @@ cdef class rtprop_callback(ExternCallback):
         name = self.fieldname[rtprop_prefix_len:]
         return f'<RTProp {name} for {self.obj}>'
 
-    def __call__(self, unsigned age):
+    def __call__(self, unsigned age, /):
         _v = getattr(self.obj, self.fieldname)
         if not is_rtval(_v):
             return _v

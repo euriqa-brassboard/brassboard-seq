@@ -42,11 +42,11 @@ cdef class Config:
         self.alias_cache = {}
         self.supported_prefix = set()
 
-    def add_supported_prefix(self, str prefix):
+    def add_supported_prefix(self, str prefix, /):
         _assume_not_none(<void*>self.supported_prefix)
         self.supported_prefix.add(prefix)
 
-    def add_channel_alias(self, str name, str target):
+    def add_channel_alias(self, str name, str target, /):
         assume_not_none(name)
         if '/' in name:
             PyErr_Format(ValueError, 'Channel alias name may not contain "/"')
@@ -55,5 +55,5 @@ cdef class Config:
         assume_not_none(target)
         self.channel_alias[name] = tuple(target.split('/'))
 
-    def translate_channel(self, str name):
+    def translate_channel(self, str name, /):
         return translate_channel(self, name)

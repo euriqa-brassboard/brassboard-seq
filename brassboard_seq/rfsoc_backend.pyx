@@ -206,7 +206,7 @@ cdef inline set_dds_delay(RFSOCBackend self, int dds, delay):
 
 @cython.final
 cdef class RFSOCBackend:
-    def __init__(self, RFSOCOutputGenerator generator):
+    def __init__(self, RFSOCOutputGenerator generator, /):
         self.eval_status = False
         self.generator = generator
         self.ramp_buffer = new_ramp_buffer()
@@ -216,7 +216,7 @@ cdef class RFSOCBackend:
     def has_output(self):
         return self.channels.channels.size() != 0
 
-    def set_dds_delay(self, int dds, delay):
+    def set_dds_delay(self, int dds, delay, /):
         if is_rtval(delay):
             self.rt_dds_delay[dds] = delay
             return

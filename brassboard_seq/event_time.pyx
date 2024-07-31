@@ -424,7 +424,7 @@ cdef class EventTimeDiff(ExternCallback):
     def __init__(self):
         PyErr_Format(TypeError, "EventTimeDiff cannot be created directly")
 
-    def __call__(self, unsigned age):
+    def __call__(self, unsigned age, /):
         if self.in_eval:
             PyErr_Format(ValueError, "Recursive value dependency detected.")
         self.in_eval = True

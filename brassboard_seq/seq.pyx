@@ -57,17 +57,17 @@ cdef class TimeSeq:
     def __init__(self):
         PyErr_Format(TypeError, "TimeSeq cannot be created directly")
 
-    def get_channel_id(self, str name):
+    def get_channel_id(self, str name, /):
         return _get_channel_id(self.seqinfo, name)
 
-    def set_time(self, EventTime time, offset=0): # offset in seconds
+    def set_time(self, EventTime time, /, offset=0): # offset in seconds
         if is_rtval(offset):
             set_base_rt(self.start_time, time, round_time_rt(<RuntimeValue>offset))
         else:
             set_base_int(self.start_time, time, round_time_int(offset))
         self.seqinfo.bt_tracker.record(event_time_key(<void*>self.start_time))
 
-    def rt_assert(self, c, str msg="Assertion failed"):
+    def rt_assert(self, c, /, str msg="Assertion failed"):
         if is_rtval(c):
             self.seqinfo.bt_tracker.record(assert_key(len(self.seqinfo.assertions)))
             self.seqinfo.assertions.append((c, msg))
@@ -81,12 +81,12 @@ cdef class TimeStep(TimeSeq):
     def __init__(self):
         PyErr_Format(TypeError, "TimeStep cannot be created directly")
 
-    def set(self, chn, value, *, cond=True, bint exact_time=False, **kws):
+    def set(self, chn, value, /, *, cond=True, bint exact_time=False, **kws):
         timestep_set(self, chn, value, combine_cond(self.cond, cond),
                      False, exact_time, kws)
         return self
 
-    def pulse(self, chn, value, *, cond=True, bint exact_time=False, **kws):
+    def pulse(self, chn, value, /, *, cond=True, bint exact_time=False, **kws):
         timestep_set(self, chn, value, combine_cond(self.cond, cond),
                      True, exact_time, kws)
         return self
@@ -142,26 +142,26 @@ cdef class ConditionalWrapper:
     def __init__(self):
         PyErr_Format(TypeError, "ConditionalWrapper cannot be created directly")
 
-    def conditional(self, cond):
+    def conditional(self, cond, /):
         wrapper = <ConditionalWrapper>ConditionalWrapper.__new__(ConditionalWrapper)
         wrapper.seq = self.seq
         wrapper.cond = combine_cond(self.cond, cond)
         return wrapper
 
-    def wait(self, length, *, cond=True):
+    def wait(self, length, /, *, cond=True):
         wait_cond(self.seq, length, combine_cond(self.cond, cond))
 
-    def add_step(self, first_arg, *args, **kwargs):
+    def add_step(self, first_arg, /, *args, **kwargs):
         seq = self.seq
         step = add_step_real(seq, self.cond, seq.end_time, first_arg, args, kwargs)
         seq.end_time = step.end_time
         return step
 
-    def add_background(self, first_arg, *args, **kwargs):
+    def add_background(self, first_arg, /, *args, **kwargs):
         seq = self.seq
         return add_step_real(seq, self.cond, seq.end_time, first_arg, args, kwargs)
 
-    def add_floating(self, first_arg, *args, **kwargs):
+    def add_floating(self, first_arg, /, *args, **kwargs):
         seq = self.seq
         cond = self.cond
         return add_step_real(seq, cond,
@@ -169,14 +169,14 @@ cdef class ConditionalWrapper:
                                                                cond, None),
                              first_arg, args, kwargs)
 
-    def add_at(self, EventTime tp, first_arg, *args, **kwargs):
+    def add_at(self, EventTime tp, /, first_arg, *args, **kwargs):
         seq = self.seq
         return add_step_real(seq, self.cond, tp, first_arg, args, kwargs)
 
-    def wait_for(self, tp, offset=0):
+    def wait_for(self, tp, /, offset=0):
         wait_for_cond(self.seq, tp, offset, self.cond)
 
-    def set(self, chn, value, *, cond=True, bint exact_time=False, **kws):
+    def set(self, chn, value, /, *, cond=True, bint exact_time=False, **kws):
         subseq_set(self.seq, chn, value, combine_cond(self.cond, cond), exact_time, kws)
         return self
 
@@ -203,37 +203,37 @@ cdef class SubSeq(TimeSeq):
     def current_time(self):
         return self.end_time
 
-    def conditional(self, cond):
+    def conditional(self, cond, /):
         wrapper = <ConditionalWrapper>ConditionalWrapper.__new__(ConditionalWrapper)
         wrapper.seq = self
         wrapper.cond = combine_cond(self.cond, cond)
         return wrapper
 
-    def wait(self, length, *, cond=True):
+    def wait(self, length, /, *, cond=True):
         wait_cond(self, length, combine_cond(self.cond, cond))
 
-    def add_step(self, first_arg, *args, **kwargs):
+    def add_step(self, first_arg, /, *args, **kwargs):
         step = add_step_real(self, self.cond, self.end_time, first_arg, args, kwargs)
         self.end_time = step.end_time
         return step
 
-    def add_background(self, first_arg, *args, **kwargs):
+    def add_background(self, first_arg, /, *args, **kwargs):
         return add_step_real(self, self.cond, self.end_time, first_arg, args, kwargs)
 
-    def add_floating(self, first_arg, *args, **kwargs):
+    def add_floating(self, first_arg, /, *args, **kwargs):
         cond = self.cond
         return add_step_real(self, cond,
                              self.seqinfo.time_mgr.new_time_int(None, 0, True,
                                                                 cond, None),
                              first_arg, args, kwargs)
 
-    def add_at(self, EventTime tp, first_arg, *args, **kwargs):
+    def add_at(self, EventTime tp, first_arg, /, *args, **kwargs):
         return add_step_real(self, self.cond, tp, first_arg, args, kwargs)
 
-    def wait_for(self, tp, offset=0):
+    def wait_for(self, tp, /, offset=0):
         wait_for_cond(self, tp, offset, self.cond)
 
-    def set(self, chn, value, *, cond=True, bint exact_time=False, **kws):
+    def set(self, chn, value, /, *, cond=True, bint exact_time=False, **kws):
         subseq_set(self, chn, value, combine_cond(self.cond, cond), exact_time, kws)
         return self
 
@@ -381,7 +381,7 @@ cdef int _get_channel_id(SeqInfo self, str name) except -1:
 
 @cython.final
 cdef class Seq(SubSeq):
-    def __init__(self, Config config, int max_frame=0):
+    def __init__(self, Config config, /, int max_frame=0):
         init_subseq(self, None, None, True)
         seqinfo = <SeqInfo>SeqInfo.__new__(SeqInfo)
         seqinfo.config = config
