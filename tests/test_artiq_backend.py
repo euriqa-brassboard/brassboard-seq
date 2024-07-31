@@ -1909,3 +1909,63 @@ def check_device_delay(max_bt, use_rt):
         -8,
         upd_tgts[0], 0,
     ]
+
+
+def test_rt_value():
+    sys = dummy_artiq.DummyDaxSystem()
+    submod = dummy_artiq.DummyDaxSystem()
+    sys.register_child(submod)
+
+    x = 1.2
+    fx = lambda: x
+    rx = sys.rt_value(fx)
+    assert str(rx) == f'({fx})()'
+    rd1 = sys.rt_dataset('XXX')
+    assert str(rd1) == f'<dataset XXX for {sys}>'
+    sys.set_dataset('XXX', 2)
+    rd2 = submod.rt_dataset_sys('XXX')
+    assert str(rd2) == f'<dataset_sys XXX for {submod}>'
+    submod.set_dataset_sys('XXX', 4)
+    rd3 = submod.rt_dataset_sys('YYY', 1.2)
+    assert str(rd3) == f'<dataset_sys YYY for {submod}>'
+
+    with pytest.raises(RuntimeError, match="Value evaluated too early"):
+        rtval.get_value(rx, 1)
+    with pytest.raises(RuntimeError, match="Value evaluated too early"):
+        rtval.get_value(rd1, 1)
+    with pytest.raises(RuntimeError, match="Value evaluated too early"):
+        rtval.get_value(rd2, 1)
+    with pytest.raises(RuntimeError, match="Value evaluated too early"):
+        rtval.get_value(rd3, 1)
+
+    sys._eval_all_rtvals()
+    sys._eval_all_rtvals()
+
+    x = 2.3
+    assert rtval.get_value(rx, 2) == 1.2
+    assert sys.rt_value(fx) == 2.3
+    sys.set_dataset('XXX', 3)
+    assert rtval.get_value(rd1, 2) == 2
+    assert sys.rt_dataset('XXX') == 3
+    submod.set_dataset_sys('XXX', 2)
+    assert rtval.get_value(rd2, 2) == 4
+    assert submod.rt_dataset_sys('XXX') == 2
+    submod.set_dataset_sys('YYY', 2.3)
+    assert rtval.get_value(rd3, 2) == 1.2
+    assert submod.rt_dataset_sys('YYY') == 2.3
+
+    sys = dummy_artiq.DummyDaxSystem()
+    submod = dummy_artiq.DummyDaxSystem()
+    sys.register_child(submod)
+
+    sys._eval_all_rtvals()
+    sys._eval_all_rtvals()
+
+    sys = dummy_artiq.DummyDaxSystem()
+    submod = dummy_artiq.DummyDaxSystem()
+    sys.register_child(submod)
+
+    sys._bb_rt_values = [1]
+
+    with pytest.raises(RuntimeError, match="Unknown object in runtime callbacks"):
+        sys._eval_all_rtvals()

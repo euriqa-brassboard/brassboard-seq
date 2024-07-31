@@ -3,7 +3,8 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.action cimport Action, RampFunction
 from brassboard_seq.event_time cimport EventTime, round_time_int
-from brassboard_seq.rtval cimport is_rtval, RuntimeValue, rt_eval
+from brassboard_seq.rtval cimport ExternCallback, is_rtval, new_extern, \
+  RuntimeValue, rt_eval
 from brassboard_seq.utils cimport set_global_tracker
 
 cimport cython
@@ -18,6 +19,7 @@ cdef artiq, ad9910, edge_counter, spi2, ttl, urukul
 import artiq.language.environment
 from artiq.coredevice import ad9910, edge_counter, spi2, ttl, urukul
 
+cdef HasEnvironment = artiq.language.environment.HasEnvironment
 cdef DevAD9910 = ad9910.AD9910
 cdef DevEdgeCounter = edge_counter.EdgeCounter
 cdef DevTTLOut = ttl.TTLOut
@@ -83,8 +85,7 @@ cdef get_artiq_device(sys, str name):
         unique = name
     # Do not call the get_device function from DAX since
     # it assumes that the calling object will take ownership of the deivce.
-    cls = artiq.language.environment.HasEnvironment
-    return cls.get_device(sys, unique)
+    return HasEnvironment.get_device(sys, unique)
 
 cdef int add_channel_artiq(ChannelsInfo *self, dev, int64_t delay, PyObject *rt_delay,
                            int idx, tuple path) except -1:
@@ -219,3 +220,110 @@ cdef class ArtiqBackend:
     cdef int runtime_finalize(self, unsigned age) except -1:
         bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)
         generate_rtios(self, age, get_runtime_vtable())
+
+@cython.final
+cdef class EvalOnceCallback(ExternCallback):
+    cdef object value
+    cdef object callback
+
+    def __call__(self):
+        if self.value is None:
+            PyErr_Format(RuntimeError, 'Value evaluated too early')
+        return self.value
+
+    def __str__(self):
+        return f'({self.callback})()'
+
+@cython.final
+cdef class DatasetCallback(ExternCallback):
+    cdef object value
+    cdef object obj
+    cdef tuple args
+    cdef dict kwargs
+    cdef bint is_sys
+
+    def __call__(self):
+        if self.value is None:
+            PyErr_Format(RuntimeError, 'Value evaluated too early')
+        return self.value
+
+    def __str__(self):
+        if self.args:
+            name = self.args[0]
+        else:
+            name = '<unknown>'
+        if self.is_sys:
+            return f'<dataset_sys {name} for {self.obj}>'
+        return f'<dataset {name} for {self.obj}>'
+
+cdef _eval_all_rtvals
+def _eval_all_rtvals(self, /):
+    try:
+        vals = self._bb_rt_values
+    except AttributeError:
+        vals = ()
+    if vals is None:
+        return
+    for val in vals:
+        if type(val) is DatasetCallback:
+            dval = <DatasetCallback>val
+            if dval.is_sys:
+                dval.value = dval.obj.get_dataset_sys(*dval.args, **dval.kwargs)
+            else:
+                dval.value = dval.obj.get_dataset(*dval.args, **dval.kwargs)
+        elif type(val) is EvalOnceCallback:
+            eoval = <EvalOnceCallback>val
+            eoval.value = eoval.callback()
+        else:
+            PyErr_Format(RuntimeError, 'Unknown object in runtime callbacks')
+    self._bb_rt_values = None
+    self.call_child_method('_eval_all_rtvals')
+
+cdef inline check_bb_rt_values(self):
+    try:
+        vals = self._bb_rt_values # may be None
+    except AttributeError:
+        vals = []
+        self._bb_rt_values = vals
+    return vals
+
+cdef rt_value
+def rt_value(self, cb, /):
+    vals = check_bb_rt_values(self)
+    if vals is None:
+        return cb()
+    rtcb = <EvalOnceCallback>EvalOnceCallback.__new__(EvalOnceCallback)
+    rtcb.callback = cb
+    (<list?>vals).append(rtcb)
+    return new_extern(rtcb)
+
+cdef rt_dataset
+def rt_dataset(self, /, *args, **kwargs):
+    vals = check_bb_rt_values(self)
+    if vals is None:
+        return self.get_dataset(*args, **kwargs)
+    rtcb = <DatasetCallback>DatasetCallback.__new__(DatasetCallback)
+    rtcb.obj = self
+    rtcb.args = args
+    rtcb.kwargs = kwargs
+    rtcb.is_sys = False
+    (<list?>vals).append(rtcb)
+    return new_extern(rtcb)
+
+cdef rt_dataset_sys
+def rt_dataset_sys(self, /, *args, **kwargs):
+    vals = check_bb_rt_values(self)
+    if vals is None:
+        return self.get_dataset_sys(*args, **kwargs)
+    rtcb = <DatasetCallback>DatasetCallback.__new__(DatasetCallback)
+    rtcb.obj = self
+    rtcb.args = args
+    rtcb.kwargs = kwargs
+    rtcb.is_sys = True
+    (<list?>vals).append(rtcb)
+    return new_extern(rtcb)
+
+HasEnvironment.rt_value = rt_value
+HasEnvironment.rt_dataset = rt_dataset
+HasEnvironment.rt_dataset_sys = rt_dataset_sys
+HasEnvironment._eval_all_rtvals = _eval_all_rtvals

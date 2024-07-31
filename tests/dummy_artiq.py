@@ -106,12 +106,38 @@ class TTLOut:
 class DummyDevice:
     pass
 
+class NoDefault:
+    pass
+
 class HasEnvironment:
     def __init__(self):
         self.dummy_chn_counter = 0
         # map from urukul board number to (SPIBus, cpld)
         self.dummy_busses = {}
         self.__devices = {}
+        self.children = []
+        # Roughly mimic the dataset behavior for testing
+        self._dataset = {}
+
+    def register_child(self, child):
+        self.children.append(child)
+
+    def call_child_method(self, method, *args, **kwargs):
+        for child in self.children:
+            try:
+                child_method = getattr(child, method)
+            except AttributeError:
+                pass
+            else:
+                child_method(*args, **kwargs)
+
+    def set_dataset(self, key, value):
+        self._dataset[key] = value
+
+    def get_dataset(self, key, default=NoDefault):
+        if default is NoDefault:
+            return self._dataset[key]
+        return self._dataset.get(key, default)
 
     def __next_id(self):
         self.dummy_chn_counter += 1
@@ -156,9 +182,19 @@ class DummyDaxSystem(HasEnvironment):
     def __init__(self):
         super().__init__()
         self.registry = DummyRegistry()
+        # Roughly mimic the dataset behavior for testing
+        self._dataset_sys = {}
 
     def get_device(self, name):
         raise RuntimeError("Must not call")
+
+    def set_dataset_sys(self, key, value):
+        self._dataset_sys[key] = value
+
+    def get_dataset_sys(self, key, default=NoDefault):
+        if default is NoDefault:
+            return self._dataset_sys[key]
+        return self._dataset_sys.get(key, default)
 
 ad9910.AD9910 = AD9910
 edge_counter.EdgeCounter = EdgeCounter

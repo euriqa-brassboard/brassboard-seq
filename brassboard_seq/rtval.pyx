@@ -81,7 +81,11 @@ cdef void show_call3(io, write, RuntimeValue v, str f):
 cdef void show(io, write, RuntimeValue v):
     cdef ValueType type_ = v.type_
     if type_ == ValueType.Extern:
-        write(f'extern({v.cb_arg2})')
+        cb = v.cb_arg2
+        if isinstance(cb, ExternCallback):
+            write(str(cb))
+        else:
+            write(f'extern({cb})')
     elif type_ == ValueType.ExternAge:
         cb = v.cb_arg2
         if isinstance(cb, ExternCallback):
