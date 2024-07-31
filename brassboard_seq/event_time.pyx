@@ -2,7 +2,7 @@
 
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.rtval cimport ifelse, get_value, \
-  new_const, new_extern_age, rt_eval
+  new_const, new_extern_age, rt_eval, ExternCallback
 from brassboard_seq.utils cimport _assume_not_none, \
   event_time_key, bb_err_format
 
@@ -416,7 +416,7 @@ cdef double timediff_eval(EventTimeDiff self, unsigned age) except? -100.0:
     return diff / c_time_scale
 
 @cython.final
-cdef class EventTimeDiff:
+cdef class EventTimeDiff(ExternCallback):
     cdef EventTime t1
     cdef EventTime t2
     cdef bint in_eval
@@ -434,4 +434,4 @@ cdef class EventTimeDiff:
             self.in_eval = False
 
     def __str__(self):
-        return f'T[{self.t1.data.id}] - T[{self.t2.data.id}]'
+        return f'(T[{self.t1.data.id}] - T[{self.t2.data.id}])'

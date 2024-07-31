@@ -312,12 +312,12 @@ def test_rtprop():
 
     c1p1 = c1.p1
     assert isinstance(c1p1, rtval.RuntimeValue)
-    assert str(c1p1).startswith('extern_age(')
+    assert str(c1p1).startswith('<RTProp p1 for ')
     assert str(c1p1) == str(c1.p1)
 
     c2p1 = c2.p1
     assert isinstance(c2p1, rtval.RuntimeValue)
-    assert str(c2p1).startswith('extern_age(')
+    assert str(c2p1).startswith('<RTProp p1 for ')
     assert str(c2p1) == str(c2.p1)
 
     with pytest.raises(ValueError):
@@ -344,6 +344,8 @@ def test_rtprop():
 
     assert isinstance(c1.p2, rtval.RuntimeValue)
     assert isinstance(c2.p2, rtval.RuntimeValue)
+    assert str(c1.p2).startswith('<RTProp p2 for ')
+    assert str(c2.p2).startswith('<RTProp p2 for ')
 
     c1 = C()
 

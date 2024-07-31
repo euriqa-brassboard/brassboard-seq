@@ -83,7 +83,11 @@ cdef void show(io, write, RuntimeValue v):
     if type_ == ValueType.Extern:
         write(f'extern({v.cb_arg2})')
     elif type_ == ValueType.ExternAge:
-        write(f'extern_age({v.cb_arg2})')
+        cb = v.cb_arg2
+        if isinstance(cb, ExternCallback):
+            write(str(cb))
+        else:
+            write(f'extern_age({cb})')
     elif type_ == ValueType.Const:
         print(v.cache, end='', file=io)
     elif type_ == ValueType.Add:
@@ -726,13 +730,23 @@ cpdef ifelse(b, v1, v2):
         return new_expr3(ValueType.Select, b, wrap_value(v1), wrap_value(v2))
     return v1 if b else v2
 
+cdef class ExternCallback:
+    pass
+
+cdef str rtprop_prefix = '_RTProp_value_'
+cdef int rtprop_prefix_len = len(rtprop_prefix)
+
 @cython.final
-cdef class rtprop_callback:
+cdef class rtprop_callback(ExternCallback):
     cdef obj
     cdef str fieldname
 
     def __init__(self):
         PyErr_Format(TypeError, "rtprop_callback cannot be created directly")
+
+    def __str__(self):
+        name = self.fieldname[rtprop_prefix_len:]
+        return f'<RTProp {name} for {self.obj}>'
 
     def __call__(self, unsigned age):
         _v = getattr(self.obj, self.fieldname)
@@ -756,7 +770,7 @@ cdef rtprop_init_class(RTProp self, cls):
         name = <str>_name
         field = getattr(cls, name)
         if isinstance(field, RTProp):
-            (<RTProp>field).fieldname = '_RTProp_value_' + name
+            (<RTProp>field).fieldname = rtprop_prefix + name
     if self.fieldname is None:
         PyErr_Format(ValueError, 'Cannot determine runtime property name')
 

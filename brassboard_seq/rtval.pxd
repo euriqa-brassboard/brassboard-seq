@@ -138,3 +138,6 @@ cpdef inline get_value(v, unsigned age):
     if is_rtval(v):
         return rt_eval(<RuntimeValue>v, age)
     return v
+
+cdef class ExternCallback:
+    pass

@@ -613,7 +613,7 @@ def test_time_diff():
     t01 = test_utils.time_manager_new_time(mgr, None, 0, False, True, None)
 
     dt = t00 - t01
-    assert str(dt) == 'extern_age(T[0] - T[1])'
+    assert str(dt) == '(T[0] - T[1])'
     with pytest.raises(RuntimeError, match="Event times not finalized"):
         rtval.get_value(dt, 0)
 
@@ -643,7 +643,7 @@ def test_time_diff3():
 
     dt = t2 - t1
     test_utils.event_time_set_base(t2, t1, test_utils.round_time(dt))
-    assert str(t2) == 'T[1] + int64(extern_age(T[2] - T[1]) * 1000000000000)'
+    assert str(t2) == 'T[1] + int64((T[2] - T[1]) * 1000000000000)'
 
     test_utils.time_manager_finalize(mgr)
     assert test_utils.time_manager_nchain(mgr) == 1
@@ -662,7 +662,7 @@ def test_time_diff4():
 
     dt = t2 - t1
     test_utils.event_time_set_base(t1, t0, test_utils.round_time(dt))
-    assert str(t1) == 'T[0] + int64(extern_age(T[2] - T[1]) * 1000000000000)'
+    assert str(t1) == 'T[0] + int64((T[2] - T[1]) * 1000000000000)'
 
     test_utils.time_manager_finalize(mgr)
     assert test_utils.time_manager_nchain(mgr) == 1
@@ -682,7 +682,7 @@ def test_time_diff5():
 
     dt = t3 - t1
     test_utils.event_time_set_base(t1, t0, test_utils.round_time(dt))
-    assert str(t1) == 'T[0] + int64(extern_age(T[3] - T[1]) * 1000000000000)'
+    assert str(t1) == 'T[0] + int64((T[3] - T[1]) * 1000000000000)'
 
     test_utils.time_manager_finalize(mgr)
     assert test_utils.time_manager_nchain(mgr) == 1
