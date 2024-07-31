@@ -99,10 +99,9 @@ cdef class RFSOCOutputGenerator:
     cdef int finish(self) except -1:
         pass
 
-cdef _dummy_post_init(self):
+cdef dummy_post_init
+def dummy_post_init(self, /):
     pass
-
-cdef dummy_post_init = _dummy_post_init
 
 @cython.final
 @cython.no_gc

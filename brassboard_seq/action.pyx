@@ -59,14 +59,13 @@ cdef class RampFunction:
         except AttributeError:
             pass
 
-cdef _cubic_spline_eval(SeqCubicSpline self, t, length, oldval):
+cdef cubic_spline_eval
+def cubic_spline_eval(SeqCubicSpline self, t, length, oldval, /):
     t = t / length
     if self.compile_mode:
         orders = <tuple>self._spline_segments
         return orders[0] + (orders[1] + (orders[2] + orders[3] * t) * t) * t
     return self.order0 + (self.order1 + (self.order2 + self.order3 * t) * t) * t
-
-cdef cubic_spline_eval = _cubic_spline_eval
 
 @cython.final
 cdef class SeqCubicSpline:
@@ -138,7 +137,8 @@ cdef double *rampbuffer_eval(_self, _func, length, oldval) except NULL:
 cdef np_cos = np.cos
 cdef m_pi = cmath.pi
 cdef m_2pi = cmath.pi * 2
-cdef _blackman_eval(Blackman self, t, length, oldval):
+cdef blackman_eval
+def blackman_eval(Blackman self, t, length, oldval, /):
     if not is_rtval(length) and length == 0:
         val = t * 0
     else:
@@ -147,7 +147,6 @@ cdef _blackman_eval(Blackman self, t, length, oldval):
         val = self.amp * (0.34 + cost * (0.5 + 0.16 * cost))
         val = ifelse(length == 0, t * 0, val)
     return val + self.offset
-cdef blackman_eval = _blackman_eval
 
 @cython.final
 cdef class Blackman(RampFunction):
@@ -157,14 +156,14 @@ cdef class Blackman(RampFunction):
         self.params = {'amp': amp, 'offset': offset}
         self._eval = blackman_eval
 
-cdef _linear_eval(LinearRamp self, t, length, oldval):
+cdef linear_eval
+def linear_eval(LinearRamp self, t, length, oldval, /):
     t = t / length
     return self.start * (1 - t) + self.end * t
-cdef linear_eval = _linear_eval
 
-cdef _linear_spline_segments(self, length, oldval):
+cdef linear_spline_segments
+def linear_spline_segments(self, length, oldval, /):
     return ()
-cdef linear_spline_segments = _linear_spline_segments
 
 @cython.final
 cdef class LinearRamp(RampFunction):
