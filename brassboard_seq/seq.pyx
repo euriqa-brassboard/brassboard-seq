@@ -455,7 +455,15 @@ cdef class Seq(SubSeq):
                 action.prev_val = value
                 action_value = action.value
                 if not action.data.is_pulse:
-                    if isinstance(action_value, RampFunction):
+                    isramp = isinstance(action_value, RampFunction)
+                    last_is_start = not isramp
+                    if action.cond is False:
+                        if isramp:
+                            assume_not_none(event_times)
+                            last_time = <EventTime>event_times[action.end_tid]
+                        else:
+                            last_time = start_time
+                    elif isramp:
                         rampf = <RampFunction>action_value
                         try:
                             ramp_set_compile_params(rampf)
@@ -463,14 +471,12 @@ cdef class Seq(SubSeq):
                             new_value = ramp_eval(rampf, length, length, value)
                         except Exception as ex:
                             bb_raise(ex, action_key(action.aid))
+                        value = ifelse(action.cond, new_value, value)
                         assume_not_none(event_times)
                         last_time = <EventTime>event_times[action.end_tid]
-                        last_is_start = False
                     else:
-                        new_value = action_value
+                        value = ifelse(action.cond, action_value, value)
                         last_time = start_time
-                        last_is_start = True
-                    value = ifelse(action.cond, new_value, value)
                 else:
                     assume_not_none(event_times)
                     last_time = <EventTime>event_times[action.end_tid]

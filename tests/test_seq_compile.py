@@ -500,6 +500,33 @@ def test_ramp_order_error1(max_bt):
     check_bt(exc, max_bt, 'fjasldf918327')
 
 @with_seq_params
+def test_ramp_order_error2(max_bt):
+    s = new_seq(max_bt)
+
+    f1 = StaticFunction()
+    s.conditional(False).add_background(0.1).set('artiq/analog', f1)
+    s.wait(0.2)
+    def j98asdfjk2398asdf():
+        s.conditional(False).add_background(0.1).pulse('artiq/analog', 0.1)
+    j98asdfjk2398asdf()
+
+    assert str(s) == f"""Seq - T[2]
+ T[0]: 0 ps
+ T[1]: T[0] + (100 ms; if False)
+ T[2]: T[0] + 200 ms
+ T[3]: T[2] + (100 ms; if False)
+  TimeStep(0.1)@T[0] if False
+    artiq/analog: Set({f1}, cond=False)
+  TimeStep(0.1)@T[2] if False
+    artiq/analog: Pulse(0.1, cond=False)
+"""
+
+    with pytest.raises(ValueError,
+                       match="Actions on artiq/analog is not statically ordered") as exc:
+        test_utils.seq_finalize(s)
+    check_bt(exc, max_bt, 'j98asdfjk2398asdf')
+
+@with_seq_params
 def test_ramp_order1(max_bt):
     s = new_seq(max_bt)
 
@@ -665,3 +692,27 @@ def test_cond_error(max_bt):
     with pytest.raises(ValueError, match="AAABBBCCC") as exc:
         test_utils.seq_runtime_finalize(s, 1)
     check_bt(exc, max_bt, 'ajqu7sdf7h7uhfasd')
+
+class DivLengthFunction(action.RampFunction):
+    def __init__(self):
+        action.RampFunction.__init__(self)
+
+    def eval(self, t, length, oldval):
+        return t / length
+
+@with_seq_params
+def test_cond_ramp_error(max_bt):
+    s = new_seq(max_bt)
+    s.conditional(False).add_step(1) \
+      .set('artiq/urukul0_ch0/amp', ErrorFunction(RuntimeError(""))) \
+      .pulse('artiq/urukul0_ch1/amp', ErrorFunction(RuntimeError("")))
+    test_utils.seq_finalize(s)
+    test_utils.seq_runtime_finalize(s, 1)
+
+    s = new_seq(max_bt)
+    s.conditional(rtval.new_extern(lambda: False)) \
+      .add_step(rtval.new_extern(lambda: 0)) \
+      .set('artiq/urukul0_ch0/amp', DivLengthFunction()) \
+      .pulse('artiq/urukul0_ch1/amp', DivLengthFunction())
+    test_utils.seq_finalize(s)
+    test_utils.seq_runtime_finalize(s, 1)

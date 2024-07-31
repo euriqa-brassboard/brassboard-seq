@@ -156,6 +156,13 @@ class ErrorEval(RampFunction):
     def eval(self, t, length, oldval):
         raise ValueError("XXXJJFSJkdfFDSDF")
 
+class DivLengthFunction(RampFunction):
+    def __init__(self):
+        super().__init__()
+
+    def eval(self, t, length, oldval):
+        return t / length
+
 def test_generator():
     rfsoc_backend.PulseCompilerGenerator()
     rfsoc_backend.PulseCompilerGenerator()
@@ -1691,3 +1698,22 @@ def check_dds_delay(max_bt, use_rt):
         4: [Tone(409600, Spline(0.0), Spline(0.3), Spline(0.0), False, False),
             Tone(409608, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
     }
+
+@with_rfsoc_params
+def test_cond_ramp_error(max_bt):
+    s, comp = new_seq_compiler(max_bt)
+    rb = add_rfsoc_backend(comp)
+    s.conditional(False).add_step(1) \
+      .set('rfsoc/dds0/0/amp', ErrorEval()) \
+      .pulse('rfsoc/dds0/1/amp', ErrorEval())
+    comp.finalize()
+    comp.runtime_finalize(1)
+
+    s, comp = new_seq_compiler(max_bt)
+    rb = add_rfsoc_backend(comp)
+    s.conditional(rtval.new_extern(lambda: False)) \
+      .add_step(rtval.new_extern(lambda: 0)) \
+      .set('rfsoc/dds0/0/amp', DivLengthFunction()) \
+      .pulse('rfsoc/dds0/1/amp', DivLengthFunction())
+    comp.finalize()
+    comp.runtime_finalize(1)
