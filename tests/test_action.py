@@ -209,3 +209,19 @@ def test_spline():
 
     for i in range(15):
         check_spline(i & 1, i & 2, i & 4, i & 8)
+
+def blackman_func(t): # t in [0, 1]
+    theta = (t - 0.5) * 2 * np.pi
+    return 21/50 + 1/2 * np.cos(theta) + 2/25 * np.cos(2 * theta)
+
+def test_blackman():
+    test1 = test_utils.RampBufferTest(action.Blackman(0.9, 0.1))
+    test2 = test_utils.RampBufferTest(action.BlackmanSquare(0.6, -0.1))
+    ts = np.linspace(0, 1, 1000)
+    v1 = list(test1.eval_runtime(0, ts, 1, 0))
+    v2 = list(test2.eval_runtime(0, ts, 1, 0))
+    bs = blackman_func(ts)
+    expect1 = list(0.1 + 0.9 * bs)
+    expect2 = list(-0.1 + 0.6 * bs**2)
+    assert v1 == pytest.approx(expect1)
+    assert v2 == pytest.approx(expect2)

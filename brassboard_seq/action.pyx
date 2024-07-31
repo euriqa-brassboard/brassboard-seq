@@ -156,6 +156,26 @@ cdef class Blackman(RampFunction):
         self.params = {'amp': amp, 'offset': offset}
         self._eval = blackman_eval
 
+cdef blackman_square_eval
+def blackman_square_eval(BlackmanSquare self, t, length, oldval, /):
+    if not is_rtval(length) and length == 0:
+        val = t * 0
+    else:
+        theta = t * (m_2pi / length) - m_pi
+        cost = np_cos(theta)
+        val = 0.34 + cost * (0.5 + 0.16 * cost)
+        val = self.amp * val * val
+        val = ifelse(length == 0, t * 0, val)
+    return val + self.offset
+
+@cython.final
+cdef class BlackmanSquare(RampFunction):
+    cdef public object amp
+    cdef public object offset
+    def __init__(self, amp, offset=0):
+        self.params = {'amp': amp, 'offset': offset}
+        self._eval = blackman_square_eval
+
 cdef linear_eval
 def linear_eval(LinearRamp self, t, length, oldval, /):
     t = t / length
