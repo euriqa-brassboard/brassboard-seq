@@ -32,6 +32,10 @@ static inline PyObject *Py_XNewRef(PyObject *obj)
     return obj;
 }
 
+#endif
+
+#if PY_VERSION_HEX < 0x030b00f0
+
 static inline PyCodeObject *pyframe_getcode(PyFrameObject *frame)
 {
     return (PyCodeObject*)Py_XNewRef((PyObject*)frame->f_code);
