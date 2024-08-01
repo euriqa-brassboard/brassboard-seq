@@ -185,3 +185,9 @@ cdef ParamPack new_param_pack(dict value, dict visited, str fieldname):
     self.visited = visited
     self.fieldname = fieldname
     return self
+
+# Helper function for functions that takes an optional parameter pack
+def get_param(param, /):
+    if param is None:
+        return new_param_pack({}, {}, 'root')
+    return param

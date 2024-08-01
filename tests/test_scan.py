@@ -8,6 +8,9 @@ def test_parampack():
     p = scan.ParamPack()
     assert scan.get_visited(p) is False
 
+    assert scan.get_param(p) is p
+    assert isinstance(scan.get_param(None), scan.ParamPack)
+
     assert str(p) == '<Undefined>'
 
     assert isinstance(p.a, scan.ParamPack)
