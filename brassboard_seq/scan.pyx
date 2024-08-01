@@ -87,10 +87,22 @@ cdef get_value_default(ParamPack self, default_value):
 
 @cython.final
 cdef class ParamPack:
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         self.values = {}
         self.visited = {}
         self.fieldname = 'root'
+        nargs = PyTuple_GET_SIZE(args)
+        nkws = PyDict_Size(kwargs)
+        if nkws == 0 and nargs == 0:
+            return
+        self_values = ensure_dict(self)
+        for arg in args:
+            if not isinstance(arg, dict):
+                PyErr_Format(TypeError,
+                             "Cannot use value as default value for parameter pack")
+            merge_dict_into(self_values, <dict>arg, False)
+        if nkws != 0:
+            merge_dict_into(self_values, kwargs, False)
 
     def __getattr__(self, str name):
         if name.startswith('_'):

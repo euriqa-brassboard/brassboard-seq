@@ -128,3 +128,12 @@ def test_parampack():
                                          z=dict(y=True, x=True,
                                                 d=dict(a=True, b=True, c=True),
                                                 f=dict(a=True, b=True)))
+
+
+def test_constructor():
+    with pytest.raises(TypeError,
+                       match="Cannot use value as default value for parameter pack"):
+        scan.ParamPack(1)
+    assert str(scan.ParamPack({})) == '{}\n'
+    assert str(scan.ParamPack({'A': 123})) == 'A: 123\n'
+    assert str(scan.ParamPack(B=23)) == 'B: 23\n'
