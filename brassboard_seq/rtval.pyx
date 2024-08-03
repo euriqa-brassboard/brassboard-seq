@@ -1,8 +1,7 @@
 # cython: language_level=3
 
-cdef io, np # hide import
-import io
-cdef StringIO = io.StringIO
+cdef StringIO, np # hide import
+from io import StringIO
 import numpy as np
 cimport numpy as cnpy
 cnpy._import_array()

@@ -12,9 +12,8 @@ from brassboard_seq.rtval cimport convert_bool, get_value, ifelse, is_rtval, \
 from brassboard_seq.utils cimport assume_not_none, _assume_not_none, \
   action_key, assert_key, bb_err_format, bb_raise, event_time_key, set_global_tracker
 
-cdef io # hide import
-import io
-cdef StringIO = io.StringIO
+cdef StringIO # hide import
+from io import StringIO
 
 cimport cython
 from cpython cimport PyErr_Format, PyObject, PyDict_GetItemWithError, PyList_GET_SIZE, PyTuple_GET_SIZE, PyDict_Size
