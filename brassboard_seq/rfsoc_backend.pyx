@@ -16,7 +16,7 @@ from cpython cimport PyDict_GetItemWithError, PyErr_Format
 cdef re # hide import
 import re
 
-cdef extern from "src/rfsoc_backend.cpp" namespace "rfsoc_backend":
+cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backend":
     struct CompileVTable:
         bint (*is_rtval)(object) noexcept
         bint (*is_ramp)(object) noexcept

@@ -4,10 +4,10 @@ from cpython cimport PyObject
 
 from libc.stdint cimport *
 
-cdef extern from "src/utils.h":
+cdef extern from "src/utils.h" namespace "brassboard_seq":
     T assume[T](T) noexcept nogil
     void assume_not_none(object) noexcept nogil
-    void _assume_not_none "assume_not_none"(void*) noexcept nogil
+    void _assume_not_none "brassboard_seq::assume_not_none"(void*) noexcept nogil
 
     cppclass BacktraceTracker:
         int max_frame

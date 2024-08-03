@@ -11,7 +11,7 @@ from libc.stdint cimport *
 
 from cpython cimport PyObject
 
-cdef extern from "src/artiq_backend.h" namespace "artiq_backend":
+cdef extern from "src/artiq_backend.h" namespace "brassboard_seq::artiq_backend":
     enum ChannelType:
         DDSFreq
         DDSAmp

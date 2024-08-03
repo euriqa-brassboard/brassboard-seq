@@ -35,7 +35,7 @@ try:
 except:
     pass
 
-cdef extern from "src/artiq_backend.cpp" namespace "artiq_backend":
+cdef extern from "src/artiq_backend.cpp" namespace "brassboard_seq::artiq_backend":
     struct ArtiqConsts:
         int COUNTER_ENABLE
         int COUNTER_DISABLE

@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-namespace artiq_backend {
+namespace brassboard_seq::artiq_backend {
 
 enum ChannelType : uint8_t {
     DDSFreq,

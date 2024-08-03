@@ -9,7 +9,7 @@
 
 #include <numpy/arrayobject.h>
 
-namespace artiq_backend {
+namespace brassboard_seq::artiq_backend {
 
 struct ArtiqConsts {
     int COUNTER_ENABLE;

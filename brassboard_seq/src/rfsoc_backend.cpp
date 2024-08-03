@@ -7,7 +7,7 @@
 
 #include <assert.h>
 
-namespace rfsoc_backend {
+namespace brassboard_seq::rfsoc_backend {
 
 inline int ChannelInfo::add_tone_channel(int chn)
 {

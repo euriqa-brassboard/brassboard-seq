@@ -19,6 +19,8 @@
 #  define bb_has_builtin(x) 0
 #endif
 
+namespace brassboard_seq {
+
 #if bb_has_builtin(__builtin_assume)
 template<typename T>
 static inline T assume(T v)
@@ -324,5 +326,7 @@ private:
 
 template<typename CB>
 ScopeExit(CB) -> ScopeExit<CB>;
+
+}
 
 #endif

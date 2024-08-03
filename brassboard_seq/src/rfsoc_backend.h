@@ -11,7 +11,7 @@
 
 #include <Python.h>
 
-namespace rfsoc_backend {
+namespace brassboard_seq::rfsoc_backend {
 
 struct cubic_spline_t {
     double order0;

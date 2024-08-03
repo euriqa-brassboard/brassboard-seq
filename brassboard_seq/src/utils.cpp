@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <strings.h>
 
+namespace brassboard_seq {
+
 BBLogLevel bb_logging_level = [] {
     if (auto env = getenv("BB_LOG")) {
         if (strcasecmp(env, "debug") == 0) {
@@ -207,3 +209,5 @@ PyObject *pyfloat_m0_5(PyFloat_FromDouble(-0.5));
 PyObject *pyfloat_0(PyFloat_FromDouble(0));
 PyObject *pyfloat_0_5(PyFloat_FromDouble(0.5));
 PyObject *pyfloat_1(PyFloat_FromDouble(1));
+
+}

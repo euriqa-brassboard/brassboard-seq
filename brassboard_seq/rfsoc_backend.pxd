@@ -15,7 +15,7 @@ from libcpp.vector cimport vector
 
 from cpython cimport PyObject
 
-cdef extern from "src/rfsoc_backend.h" namespace "rfsoc_backend":
+cdef extern from "src/rfsoc_backend.h" namespace "brassboard_seq::rfsoc_backend":
     struct cubic_spline_t:
         double order0
         double order1
