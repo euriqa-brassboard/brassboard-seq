@@ -10,35 +10,14 @@ from brassboard_seq.event_time cimport is_ordered, round_time_int, round_time_rt
 from brassboard_seq.rtval cimport convert_bool, get_value, ifelse, is_rtval, \
   RuntimeValue, rt_eval
 from brassboard_seq.utils cimport assume_not_none, _assume_not_none, \
-  action_key, assert_key, bb_err_format, bb_raise, event_time_key, set_global_tracker
+  action_key, assert_key, bb_err_format, bb_raise, event_time_key, \
+  new_list_of_list, set_global_tracker
 
 cdef StringIO # hide import
 from io import StringIO
 
 cimport cython
 from cpython cimport PyErr_Format, PyObject, PyDict_GetItemWithError, PyList_GET_SIZE, PyTuple_GET_SIZE, PyDict_Size
-
-cdef extern from *:
-    """
-    #include "Python.h"
-
-    static inline PyObject *new_list_of_list(int n)
-    {
-        PyObject *list = PyList_New(n);
-        if (!list)
-            return NULL;
-        for (int i = 0; i < n; i++) {
-            PyObject *sublist = PyList_New(0);
-            if (!sublist) {
-                Py_DECREF(list);
-                return NULL;
-            }
-            PyList_SET_ITEM(list, i, sublist);
-        }
-        return list;
-    }
-    """
-    list new_list_of_list(int n)
 
 cdef combine_cond(cond1, new_cond):
     if cond1 is False:

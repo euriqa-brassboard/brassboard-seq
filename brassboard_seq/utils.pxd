@@ -27,3 +27,4 @@ cdef extern from "src/utils.h" namespace "brassboard_seq":
     int bb_err_format(object exc, uintptr_t key, const char *format, ...) except 0
 
     object pyfloat_from_double(double v)
+    list new_list_of_list(int n)

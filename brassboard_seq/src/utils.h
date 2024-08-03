@@ -56,10 +56,10 @@ enum BBLogLevel {
 };
 extern BBLogLevel bb_logging_level;
 
-#define bb_log(level, ...) do {               \
-        if (bb_logging_level <= (level)) {    \
-            printf(__VA_ARGS__);              \
-        }                                     \
+#define bb_log(level, ...) do {                 \
+        if (bb_logging_level <= (level)) {      \
+            printf(__VA_ARGS__);                \
+        }                                       \
     } while (0)
 #define bb_debug(...) bb_log(BB_LOG_DEBUG, __VA_ARGS__)
 #define bb_info(...) bb_log(BB_LOG_INFO, __VA_ARGS__)
@@ -326,6 +326,22 @@ private:
 
 template<typename CB>
 ScopeExit(CB) -> ScopeExit<CB>;
+
+static inline PyObject *new_list_of_list(int n)
+{
+    PyObject *list = PyList_New(n);
+    if (!list)
+        return NULL;
+    for (int i = 0; i < n; i++) {
+        PyObject *sublist = PyList_New(0);
+        if (!sublist) {
+            Py_DECREF(list);
+            return NULL;
+        }
+        PyList_SET_ITEM(list, i, sublist);
+    }
+    return list;
+}
 
 }
 
