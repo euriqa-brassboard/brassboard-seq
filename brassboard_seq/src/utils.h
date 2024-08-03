@@ -42,11 +42,11 @@ static inline T assume(T v)
 }
 #endif
 
-static inline void _assume_not_none(PyObject *obj)
+template<typename T>
+static inline void assume_not_none(T *obj)
 {
-    assume(obj != Py_None);
+    assume((PyObject*)obj != Py_None);
 }
-#define assume_not_none(p) _assume_not_none((PyObject*)p)
 
 enum BBLogLevel {
     BB_LOG_DEBUG,
@@ -174,13 +174,22 @@ static inline uintptr_t assert_key(int aid)
 }
 
 void _bb_raise(PyObject *exc, uintptr_t key);
-void _bb_reraise(uintptr_t key);
+void bb_reraise(uintptr_t key);
 void _bb_err_format(PyObject *exc, uintptr_t key, const char *format, ...);
 
-#define bb_raise(exc, key) ({ _bb_raise((exc), uintptr_t(key)); 0; })
-#define bb_reraise(key) ({ _bb_reraise(uintptr_t(key)); 0; })
-#define bb_err_format(exc, key, ...)                                    \
-    ({ _bb_err_format((exc), uintptr_t(key), __VA_ARGS__); 0; })
+// Wrapper inline function to make it more clear to the C compiler
+// that the function returns 0
+static inline int bb_raise(PyObject *exc, uintptr_t key)
+{
+    _bb_raise(exc, key);
+    return 0;
+}
+template<typename... T>
+inline int bb_err_format(PyObject *exc, uintptr_t key, const char *format, T&&... args)
+{
+    _bb_err_format(exc, key, format, std::forward<T>(args)...);
+    return 0;
+}
 
 static inline void bb_reraise_and_throw_if(bool cond, uintptr_t key)
 {

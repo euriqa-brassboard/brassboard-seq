@@ -183,7 +183,7 @@ void _bb_raise(PyObject *exc, uintptr_t key)
                                     get_global_backtrace(key)));
 }
 
-void _bb_reraise(uintptr_t key)
+void bb_reraise(uintptr_t key)
 {
     PyObject *exc, *type, *old_tb;
     PyErr_Fetch(&type, &exc, &old_tb);
@@ -197,7 +197,7 @@ void _bb_err_format(PyObject *exc, uintptr_t key, const char *format, ...)
     va_start(vargs, format);
     PyErr_FormatV(exc, format, vargs);
     va_end(vargs);
-    _bb_reraise(key);
+    bb_reraise(key);
 }
 
 // We will leak these objects.
