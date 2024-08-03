@@ -10,6 +10,18 @@
 #include <numpy/arrayobject.h>
 
 namespace artiq_backend {
+
+struct ArtiqConsts {
+    int COUNTER_ENABLE;
+    int COUNTER_DISABLE;
+    int _AD9910_REG_PROFILE0;
+    int URUKUL_CONFIG;
+    int URUKUL_CONFIG_END;
+    int URUKUL_SPIT_DDS_WR;
+    int SPI_CONFIG_ADDR;
+    int SPI_DATA_ADDR;
+};
+
 static ArtiqConsts artiq_consts;
 
 inline int ChannelsInfo::add_bus_channel(int bus_channel, uint32_t io_update_target,

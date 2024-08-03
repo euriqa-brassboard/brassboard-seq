@@ -12,16 +12,6 @@ from libc.stdint cimport *
 from cpython cimport PyObject
 
 cdef extern from "src/artiq_backend.h" namespace "artiq_backend":
-    cppclass ArtiqConsts:
-        int COUNTER_ENABLE
-        int COUNTER_DISABLE
-        int _AD9910_REG_PROFILE0
-        int URUKUL_CONFIG
-        int URUKUL_CONFIG_END
-        int URUKUL_SPIT_DDS_WR
-        int SPI_CONFIG_ADDR
-        int SPI_DATA_ADDR
-
     enum ChannelType:
         DDSFreq
         DDSAmp
@@ -97,7 +87,7 @@ cdef extern from "src/artiq_backend.h" namespace "artiq_backend":
         pass
 
     cppclass TimeChecker:
-        TimeChecker() nogil
+        pass
 
     int64_t seq_time_to_mu(long long time)
 

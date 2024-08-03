@@ -36,6 +36,16 @@ except:
     pass
 
 cdef extern from "src/artiq_backend.cpp" namespace "artiq_backend":
+    struct ArtiqConsts:
+        int COUNTER_ENABLE
+        int COUNTER_DISABLE
+        int _AD9910_REG_PROFILE0
+        int URUKUL_CONFIG
+        int URUKUL_CONFIG_END
+        int URUKUL_SPIT_DDS_WR
+        int SPI_CONFIG_ADDR
+        int SPI_DATA_ADDR
+
     ArtiqConsts artiq_consts
 
     struct CompileVTable:
