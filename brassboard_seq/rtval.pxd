@@ -103,14 +103,6 @@ cdef inline RuntimeValue new_expr2(ValueType type_, RuntimeValue arg0,
     self.arg1 = arg1
     return self
 
-cdef inline RuntimeValue new_expr3(ValueType type_, RuntimeValue arg0,
-                                   RuntimeValue arg1, RuntimeValue arg2):
-    self = _new_rtval(type_)
-    self.arg0 = arg0
-    self.arg1 = arg1
-    self.cb_arg2 = arg2
-    return self
-
 cdef inline RuntimeValue round_int64_rt(RuntimeValue v):
     if v.type_ == ValueType.Int64:
         return v
@@ -123,16 +115,6 @@ cpdef ifelse(b, v1, v2)
 
 cdef inline bint is_rtval(v) noexcept:
     return type(v) is RuntimeValue
-
-cpdef inline bint same_value(v1, v2) noexcept:
-    if is_rtval(v1):
-        return v1 is v2
-    if is_rtval(v2):
-        return False
-    try:
-        return v1 == v2
-    except:
-        return False
 
 cpdef inline get_value(v, unsigned age):
     if is_rtval(v):

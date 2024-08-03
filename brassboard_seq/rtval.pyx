@@ -217,6 +217,14 @@ cdef extern from *:
     object _add_or_sub(object a, object b, bint issub)
     int pycmp2valcmp(int op) noexcept
 
+cdef inline RuntimeValue new_expr3(ValueType type_, RuntimeValue arg0,
+                                   RuntimeValue arg1, RuntimeValue arg2):
+    self = _new_rtval(type_)
+    self.arg0 = arg0
+    self.arg1 = arg1
+    self.cb_arg2 = arg2
+    return self
+
 cdef _new_addsub(c, RuntimeValue v, bint s):
     if c == 0 and not s:
         return v
@@ -732,6 +740,16 @@ cpdef ifelse(b, v1, v2):
     if is_rtval(b):
         return new_expr3(ValueType.Select, b, wrap_value(v1), wrap_value(v2))
     return v1 if b else v2
+
+cpdef inline bint same_value(v1, v2) noexcept:
+    if is_rtval(v1):
+        return v1 is v2
+    if is_rtval(v2):
+        return False
+    try:
+        return v1 == v2
+    except:
+        return False
 
 cdef class ExternCallback:
     pass
