@@ -2,14 +2,7 @@
 
 from cpython cimport PyDict_Size
 
-cdef extern from *:
-    """
-struct ActionData {
-    bool is_pulse;
-    bool exact_time;
-    bool cond_val;
-};
-    """
+cdef extern from "src/action.h" namespace "brassboard_seq::action":
     cppclass ActionData:
         bint is_pulse;
         bint exact_time;

@@ -9,9 +9,11 @@ add_library(brassboard_seq_utils SHARED
 target_include_directories(brassboard_seq_utils PRIVATE ${Python_INCLUDE_DIRS})
 install(TARGETS brassboard_seq_utils DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 install(FILES
+  src/action.h
   src/artiq_backend.h
   src/event_time.h
   src/rfsoc_backend.h
+  src/rtval.h
   src/utils.h
   DESTINATION "${_PYTHON_SITE_INSTALL_DIR}/brassboard_seq/src")
 

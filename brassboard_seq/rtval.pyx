@@ -1,5 +1,8 @@
 # cython: language_level=3
 
+# Do not use relative import since it messes up cython file name tracking
+from brassboard_seq.utils cimport pynum_add_or_sub
+
 cdef StringIO, np # hide import
 from io import StringIO
 import numpy as np
@@ -188,35 +191,6 @@ cdef void show(io, write, RuntimeValue v):
     else:
         write('Unknown value')
 
-cdef extern from *:
-    """
-    #include "Python.h"
-
-    static inline PyObject *_add_or_sub(PyObject *a, PyObject *b, bool issub)
-    {
-        if (issub) {
-            return PyNumber_Subtract(a, b);
-        }
-        else {
-            return PyNumber_Add(a, b);
-        }
-    }
-    static inline int pycmp2valcmp(int op)
-    {
-        switch (op) {
-        case Py_LT: return 5;
-        case Py_GT: return 6;
-        case Py_LE: return 7;
-        case Py_GE: return 8;
-        case Py_NE: return 9;
-        case Py_EQ: return 10;
-        default: return 0;
-        }
-    }
-    """
-    object _add_or_sub(object a, object b, bint issub)
-    int pycmp2valcmp(int op) noexcept
-
 cdef inline RuntimeValue new_expr3(ValueType type_, RuntimeValue arg0,
                                    RuntimeValue arg1, RuntimeValue arg2):
     self = _new_rtval(type_)
@@ -260,26 +234,26 @@ cdef _build_addsub(v0, v1, bint issub):
                 nc = arg0.cache
                 nv0 = nv0.arg1
     if not is_rtval(v1):
-        nc = _add_or_sub(nc, v1, issub)
+        nc = pynum_add_or_sub(nc, v1, issub)
         nv1 = None
     else:
         nv1 = <RuntimeValue>v1
         type_ = nv1.type_
         if type_ == ValueType.Const:
-            nc = _add_or_sub(nc, nv1.cache, issub)
+            nc = pynum_add_or_sub(nc, nv1.cache, issub)
             nv1 = None
         elif type_ == ValueType.Add:
             arg0 = nv1.arg0
             # Add/Sub should only have the first argument as constant
             if arg0.type_ == ValueType.Const:
-                nc = _add_or_sub(nc, arg0.cache, issub)
+                nc = pynum_add_or_sub(nc, arg0.cache, issub)
                 nv1 = nv1.arg1
         elif type_ == ValueType.Sub:
             arg0 = nv1.arg0
             # Add/Sub should only have the first argument as constant
             if arg0.type_ == ValueType.Const:
                 ns1 = True
-                nc = _add_or_sub(nc, arg0.cache, issub)
+                nc = pynum_add_or_sub(nc, arg0.cache, issub)
                 nv1 = nv1.arg1
     if nv0 is v0 and v1 is nv1:
         return new_expr2(ValueType.Sub if issub else ValueType.Add, v0, v1)
@@ -537,8 +511,7 @@ cdef class RuntimeValue:
         return _build_addsub(0, self, True)
 
     def __richcmp__(self, other, int op):
-        cdef int typ = pycmp2valcmp(op)
-        assert typ != 0
+        typ = pycmp2valcmp(op)
         cdef RuntimeValue v2
         if is_rtval(other):
             if self is other:
@@ -547,7 +520,7 @@ cdef class RuntimeValue:
             v2 = <RuntimeValue>other
         else:
             v2 = new_const(other)
-        return new_expr2(<ValueType>typ, self, v2)
+        return new_expr2(typ, self, v2)
 
     def __abs__(self):
         if self.type_ == ValueType.Abs:

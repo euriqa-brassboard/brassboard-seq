@@ -343,6 +343,16 @@ static inline PyObject *new_list_of_list(int n)
     return list;
 }
 
+static inline PyObject *pynum_add_or_sub(PyObject *a, PyObject *b, bool issub)
+{
+    if (issub) {
+        return PyNumber_Subtract(a, b);
+    }
+    else {
+        return PyNumber_Add(a, b);
+    }
+}
+
 }
 
 #endif

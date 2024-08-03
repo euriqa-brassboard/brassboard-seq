@@ -1,62 +1,65 @@
 # cython: language_level=3
 
-cdef enum ValueType:
-    ExternAge = -2,
-    Const = -1,
-    Extern = 0,
+cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
+    cdef enum ValueType:
+        ExternAge
+        Const
+        Extern
 
-    Add = 1,
-    Sub = 2,
-    Mul = 3,
-    Div = 4,
-    CmpLT = 5,
-    CmpGT = 6,
-    CmpLE = 7,
-    CmpGE = 8,
-    CmpNE = 9,
-    CmpEQ = 10,
-    And = 11,
-    Or = 12,
-    Xor = 13,
-    Not = 14,
-    Abs = 15,
-    Ceil = 16,
-    Exp = 17,
-    Expm1 = 18,
-    Floor = 19,
-    Log = 20,
-    Log1p = 21,
-    Log2 = 22,
-    Log10 = 23,
-    Pow = 24,
-    Sqrt = 25,
-    Asin = 26,
-    Acos = 27,
-    Atan = 28,
-    Atan2 = 29,
-    Asinh = 30,
-    Acosh = 31,
-    Atanh = 32,
-    Sin = 33,
-    Cos = 34,
-    Tan = 35,
-    Sinh = 36,
-    Cosh = 37,
-    Tanh = 38,
-    Hypot = 39,
-    # Erf = 40,
-    # Erfc = 41,
-    # Gamma = 42,
-    # Lgamma = 43,
-    Rint = 44,
-    Max = 45,
-    Min = 46,
-    Mod = 47,
-    # Interp = 48,
-    Select = 49,
-    # Identity = 50,
-    Int64 = 51,
-    Bool = 52,
+        Add
+        Sub
+        Mul
+        Div
+        CmpLT
+        CmpGT
+        CmpLE
+        CmpGE
+        CmpNE
+        CmpEQ
+        And
+        Or
+        Xor
+        Not
+        Abs
+        Ceil
+        Exp
+        Expm1
+        Floor
+        Log
+        Log1p
+        Log2
+        Log10
+        Pow
+        Sqrt
+        Asin
+        Acos
+        Atan
+        Atan2
+        Asinh
+        Acosh
+        Atanh
+        Sin
+        Cos
+        Tan
+        Sinh
+        Cosh
+        Tanh
+        Hypot
+        # Erf
+        # Erfc
+        # Gamma
+        # Lgamma
+        Rint
+        Max
+        Min
+        Mod
+        # Interp
+        Select
+        # Identity
+        Int64
+        Bool
+
+    ValueType pycmp2valcmp(int op) noexcept
 
 cdef class RuntimeValue:
     cdef ValueType type_
