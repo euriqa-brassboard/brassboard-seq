@@ -72,7 +72,7 @@ cdef class TimeManager:
         return tp
 
     cdef inline EventTime new_time_rt(self, EventTime prev, RuntimeValue offset,
-                                      bint floating, cond, EventTime wait_for):
+                                      cond, EventTime wait_for):
         status = self.status.get()
         if status.finalized:
             PyErr_Format(RuntimeError, "Cannot allocate more time: already finalized")
@@ -81,7 +81,7 @@ cdef class TimeManager:
         tp.prev = prev
         tp.wait_for = wait_for
         tp.rt_offset = offset
-        tp.data.floating = floating
+        tp.data.floating = False
         tp.data.has_static = False
         tp.cond = cond
         event_times = self.event_times
@@ -93,13 +93,13 @@ cdef class TimeManager:
         return tp
 
     cdef inline EventTime new_round_time(self, EventTime prev, offset,
-                                         bint floating, cond, EventTime wait_for):
+                                         cond, EventTime wait_for):
         if is_rtval(offset):
             return self.new_time_rt(prev, round_time_rt(<RuntimeValue>offset),
-                                    floating, cond, wait_for)
+                                    cond, wait_for)
         else:
             return self.new_time_int(prev, round_time_int(offset),
-                                     floating, cond, wait_for)
+                                     False, cond, wait_for)
 
     cdef int finalize(self) except -1
     cdef long long compute_all_times(self, unsigned age) except -1

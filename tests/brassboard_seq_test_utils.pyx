@@ -82,14 +82,15 @@ def time_manager_new_time(event_time.TimeManager time_manager,
                           event_time.EventTime prev, offset,
                           bint floating, cond, event_time.EventTime wait_for):
     if rtval.is_rtval(offset):
-        return time_manager.new_time_rt(prev, offset, floating, cond, wait_for)
+        assert not floating
+        return time_manager.new_time_rt(prev, offset, cond, wait_for)
     else:
         return time_manager.new_time_int(prev, offset, floating, cond, wait_for)
 
 def time_manager_new_round_time(event_time.TimeManager time_manager,
                                 event_time.EventTime prev, offset,
-                                bint floating, cond, event_time.EventTime wait_for):
-    return time_manager.new_round_time(prev, offset, floating, cond, wait_for)
+                                cond, event_time.EventTime wait_for):
+    return time_manager.new_round_time(prev, offset, cond, wait_for)
 
 def time_manager_finalize(event_time.TimeManager time_manager):
     time_manager.finalize()

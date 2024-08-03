@@ -225,7 +225,7 @@ cdef class SubSeq(TimeSeq):
 
 cdef int wait_cond(SubSeq self, length, cond) except -1:
     self.end_time = self.seqinfo.time_mgr.new_round_time(self.end_time, length,
-                                                         False, cond, None)
+                                                         cond, None)
     self.seqinfo.bt_tracker.record(event_time_key(<void*>self.end_time))
     return 0
 
@@ -244,7 +244,7 @@ cdef TimeStep add_time_step(SubSeq self, cond, EventTime start_time, length):
     step.actions = {}
     step.length = length
     step.end_time = self.seqinfo.time_mgr.new_round_time(start_time, length,
-                                                         False, cond, None)
+                                                         cond, None)
     self.seqinfo.bt_tracker.record(event_time_key(<void*>step.end_time))
     _assume_not_none(<void*>self.sub_seqs)
     self.sub_seqs.append(step)
@@ -270,7 +270,7 @@ cdef int wait_for_cond(SubSeq self, _tp0, offset, cond) except -1:
     else:
         tp0 = (<TimeSeq?>_tp0).end_time
     self.end_time = self.seqinfo.time_mgr.new_round_time(self.end_time, offset,
-                                                         False, cond, tp0)
+                                                         cond, tp0)
     self.seqinfo.bt_tracker.record(event_time_key(<void*>self.end_time))
     return 0
 

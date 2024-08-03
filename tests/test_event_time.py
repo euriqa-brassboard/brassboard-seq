@@ -53,7 +53,7 @@ def test_event_time1():
     assert test_utils.event_time_id(t4) == 4
     assert test_utils.event_time_get_static(t4) == -1
 
-    t5 = test_utils.time_manager_new_round_time(mgr, t4, 3e-9, False, False, None)
+    t5 = test_utils.time_manager_new_round_time(mgr, t4, 3e-9, False, None)
     assert str(t5) == 'T[4] + (3 ns; if False)'
     assert test_utils.event_time_id(t5) == 5
     assert test_utils.event_time_get_static(t5) == -1
@@ -174,7 +174,7 @@ def test_event_time1_rt():
     assert test_utils.event_time_id(t4) == 4
     assert test_utils.event_time_get_static(t4) == -1
 
-    t5 = test_utils.time_manager_new_round_time(mgr, t4, 3e-9, False, False, None)
+    t5 = test_utils.time_manager_new_round_time(mgr, t4, 3e-9, False, None)
     assert str(t5) == 'T[4] + (3 ns; if False)'
     assert test_utils.event_time_id(t5) == 5
     assert test_utils.event_time_get_static(t5) == -1
@@ -307,8 +307,7 @@ def test_event_time3():
     assert repr(t0) == str(t0)
     assert test_utils.event_time_id(t0) == 0
 
-    t1 = test_utils.time_manager_new_round_time(mgr, t0, 0.01,
-                                                False, True, None)
+    t1 = test_utils.time_manager_new_round_time(mgr, t0, 0.01, True, None)
     assert str(t1) == 'T[0] + 10 ms'
     assert test_utils.event_time_id(t1) == 1
 
@@ -320,7 +319,7 @@ def test_event_time3():
     actual_value = -1.0
     v = rtval.new_extern(lambda: actual_value)
     s = str(v)
-    t3 = test_utils.time_manager_new_round_time(mgr, t1, v, False, True, t2)
+    t3 = test_utils.time_manager_new_round_time(mgr, t1, v, True, t2)
     with pytest.raises(ValueError, match="Cannot modify non-floating time"):
         test_utils.event_time_set_base(t3, t1, v)
     assert str(t3) == f'T[1]; wait_for(T[2] + int64({s} * 1000000000000))'
@@ -370,8 +369,7 @@ def test_event_time3_rt():
     assert test_utils.event_time_id(t0) == 0
 
     v0 = rtval.new_extern(lambda: 0.01)
-    t1 = test_utils.time_manager_new_round_time(mgr, t0, v0,
-                                                False, True, None)
+    t1 = test_utils.time_manager_new_round_time(mgr, t0, v0, True, None)
     assert str(t1) == f'T[0] + int64({v0} * 1000000000000)'
     assert test_utils.event_time_id(t1) == 1
 
@@ -383,7 +381,7 @@ def test_event_time3_rt():
     actual_value = -1.0
     v = rtval.new_extern(lambda: actual_value)
     s = str(v)
-    t3 = test_utils.time_manager_new_round_time(mgr, t1, v, False, True, t2)
+    t3 = test_utils.time_manager_new_round_time(mgr, t1, v, True, t2)
     with pytest.raises(ValueError, match="Cannot modify non-floating time"):
         test_utils.event_time_set_base(t3, t1, v)
     assert str(t3) == f'T[1]; wait_for(T[2] + int64({s} * 1000000000000))'
