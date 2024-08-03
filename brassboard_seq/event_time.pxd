@@ -14,11 +14,17 @@ from brassboard_seq.utils cimport assume_not_none
 from cpython cimport PyErr_Format, PyFloat_AS_DOUBLE, PyList_GET_SIZE
 
 # 1ps for internal time unit
-cdef extern from *:
-    """
-    static constexpr long long c_time_scale = 1000000000000ll;
-    """
-    long long c_time_scale
+cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
+    long long c_time_scale "brassboard_seq::event_time::time_scale"
+    cppclass EventTimeData:
+        int id
+        bint floating
+        int chain_id # ID of the chain this time is part of
+        bint has_static
+        uint64_t c_offset
+        long long _get_static()
+        long long get_static()
+        void set_static(long long value)
 
 cdef object py_time_scale
 cdef RuntimeValue rt_time_scale
@@ -106,43 +112,6 @@ cdef inline TimeManager new_time_manager():
     status.ntimes = 0
     self.status.reset(status)
     return self
-
-cdef extern from *:
-    """
-struct EventTimeData {
-    int id;
-    bool floating: 1;
-    int chain_id: 31;
-    bool has_static: 1;
-    uint64_t c_offset: 63;
-
-    inline long long _get_static() const
-    {
-        return (long long)c_offset;
-    }
-    inline long long get_static() const
-    {
-        if (has_static)
-            return (long long)c_offset;
-        return -1;
-    }
-
-    inline void set_static(long long value)
-    {
-        has_static = true;
-        c_offset = (uint64_t)value;
-    }
-};
-    """
-    cppclass EventTimeData:
-        int id
-        bint floating
-        int chain_id # ID of the chain this time is part of
-        bint has_static
-        uint64_t c_offset
-        long long _get_static()
-        long long get_static()
-        void set_static(long long value)
 
 cdef class EventTime:
     cdef shared_ptr[TimeManagerStatus] manager_status

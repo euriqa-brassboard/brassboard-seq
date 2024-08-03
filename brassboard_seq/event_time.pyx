@@ -18,78 +18,7 @@ cdef RuntimeValue rt_time_scale = new_const(py_time_scale)
 def time_scale():
     return py_time_scale
 
-cdef extern from *:
-    """
-#include "Python.h"
-
-#include "assert.h"
-
-#include <array>
-#include <charconv>
-
-PyObject *_str_time(long long t)
-{
-    assert(c_time_scale == 1e12);
-    assert(t >= 0);
-
-    std::array<char, 32> str;
-
-    auto [ptr, ec] = std::to_chars(str.data(), str.data() + str.size(), t);
-    if (ec != std::errc()) {
-        PyErr_Format(PyExc_RuntimeError, "%s",
-                     std::make_error_code(ec).message().c_str());
-        return nullptr;
-    }
-    *ptr = 0;
-
-    auto s = c_time_scale;
-    auto ms = s / 1000;
-    auto us = ms / 1000;
-    auto ns = us / 1000;
-
-    int dec = 0;
-    const char *unit = "ps";
-    if (t >= s / 10 * 3) {
-        dec = 12;
-        unit = "s";
-    }
-    else if (t >= ms / 10 * 3) {
-        dec = 9;
-        unit = "ms";
-    }
-    else if (t >= us / 10 * 3) {
-        dec = 6;
-        unit = "us";
-    }
-    else if (t >= ns / 10 * 3) {
-        dec = 3;
-        unit = "ns";
-    }
-    char *end = ptr;
-    assert(end - str.data() >= dec);
-    for (int i = 0; i < dec; i++) {
-        if (ptr[-1 - i] != '0')
-            break;
-        end = &ptr[-1 - i];
-        *end = 0;
-    }
-    auto pdec = ptr - dec;
-    if (pdec == str.data()) {
-        memmove(pdec + 2, pdec, end - pdec);
-        pdec[0] = '0';
-        pdec[1] = '.';
-        end += 2;
-    }
-    else if (pdec != end) {
-        memmove(pdec + 1, pdec, end - pdec);
-        pdec[0] = '.';
-        end += 1;
-    }
-    *end = ' ';
-    memcpy(&end[1], unit, strlen(unit) + 1);
-    return PyUnicode_FromString(str.data());
-}
-    """
+cdef extern from "src/event_time.cpp" namespace "brassboard_seq::event_time":
     cdef str _str_time(long long)
 
 cdef int visit_time(TimeManager self, EventTime t, unordered_set[int] &visited) except -1:
