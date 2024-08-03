@@ -1,6 +1,8 @@
 //
 
 #include "artiq_backend.h"
+
+#include "event_time.h"
 #include "utils.h"
 
 #include <algorithm>
@@ -324,7 +326,7 @@ void generate_rtios(ArtiqBackend *ab, unsigned age, const RuntimeVTable vtable)
                          pyval.get());
             throw 0;
         }
-        delay = int64_t(fdelay * 1e12 + 0.5);
+        delay = int64_t(fdelay * event_time::time_scale + 0.5);
     };
     for (auto &ttlchn: ab->channels.ttlchns) {
         relocate_delay(ttlchn.delay, ttlchn.rt_delay);

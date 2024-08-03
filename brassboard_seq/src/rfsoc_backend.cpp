@@ -1,6 +1,8 @@
 //
 
 #include "rfsoc_backend.h"
+
+#include "event_time.h"
 #include "utils.h"
 
 #include <algorithm>
@@ -758,7 +760,7 @@ void generate_tonedata(RFSOCBackend *rb, unsigned age, const RuntimeVTable vtabl
                 int64_t sp_cycle;
                 double sp_cycle_time;
                 auto update_sp_time = [&] (double t) {
-                    static constexpr double time_scale = 1e12;
+                    static constexpr double time_scale = event_time::time_scale;
                     sp_time = t;
                     sp_seq_time = action_seq_time + int64_t(t * time_scale + 0.5);
                     sp_cycle = seq_time_to_cycle(sp_seq_time);
