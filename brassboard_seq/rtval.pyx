@@ -455,6 +455,7 @@ cdef object rt_eval(RuntimeValue self, unsigned age):
     self.cache = res
     return res
 
+@cython.auto_pickle(False)
 @cython.c_api_binop_methods(True)
 @cython.final
 cdef class RuntimeValue:
@@ -725,12 +726,14 @@ cpdef inline bint same_value(v1, v2) noexcept:
     except:
         return False
 
+@cython.auto_pickle(False)
 cdef class ExternCallback:
     pass
 
 cdef str rtprop_prefix = '_RTProp_value_'
 cdef int rtprop_prefix_len = len(rtprop_prefix)
 
+@cython.auto_pickle(False)
 @cython.final
 cdef class rtprop_callback(ExternCallback):
     cdef obj

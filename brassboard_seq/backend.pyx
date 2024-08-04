@@ -6,6 +6,7 @@ from brassboard_seq.utils cimport PyErr_Format, PyExc_ValueError
 cimport cython
 from cpython cimport PyObject
 
+@cython.auto_pickle(False)
 cdef class Backend:
     cdef int finalize(self) except -1:
         pass
@@ -13,6 +14,7 @@ cdef class Backend:
     cdef int runtime_finalize(self, unsigned age) except -1:
         pass
 
+@cython.auto_pickle(False)
 cdef class SeqCompiler:
     def __init__(self, seq, /):
         self.seq = seq

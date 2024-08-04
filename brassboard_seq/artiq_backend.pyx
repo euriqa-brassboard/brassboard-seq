@@ -178,6 +178,7 @@ cdef int collect_channels(ChannelsInfo *self, str prefix, sys, Seq seq,
     self.dds_chn_map.clear() # Not needed after channel collection
     return 0
 
+@cython.auto_pickle(False)
 @cython.final
 cdef class ArtiqBackend:
     def __init__(self, sys, cnpy.ndarray rtio_array, /):
@@ -231,6 +232,7 @@ cdef class ArtiqBackend:
         bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)
         generate_rtios(self, age, get_runtime_vtable())
 
+@cython.auto_pickle(False)
 @cython.final
 cdef class EvalOnceCallback(ExternCallback):
     cdef object value
@@ -244,6 +246,7 @@ cdef class EvalOnceCallback(ExternCallback):
     def __str__(self):
         return f'({self.callback})()'
 
+@cython.auto_pickle(False)
 @cython.final
 cdef class DatasetCallback(ExternCallback):
     cdef object value

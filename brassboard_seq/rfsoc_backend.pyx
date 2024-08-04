@@ -88,6 +88,7 @@ cdef inline RuntimeVTable get_runtime_vtable() noexcept nogil:
     vt.ramp_get_cubic_spline = ramp_get_cubic_spline
     return vt
 
+@cython.auto_pickle(False)
 cdef class RFSOCOutputGenerator:
     cdef int start(self) except -1:
         pass
@@ -104,6 +105,7 @@ cdef dummy_post_init
 def dummy_post_init(self, /):
     pass
 
+@cython.auto_pickle(False)
 @cython.final
 @cython.no_gc
 cdef class PulseCompilerInfo:
@@ -133,6 +135,7 @@ cdef int init_pulse_compiler_info() except -1:
                                pyfloat_from_double(0), pyfloat_from_double(0))
     pulse_compiler_info = self
 
+@cython.auto_pickle(False)
 @cython.final
 cdef class PulseCompilerGenerator(RFSOCOutputGenerator):
     cdef readonly dict output
@@ -204,6 +207,7 @@ cdef inline set_dds_delay(RFSOCBackend self, int dds, delay):
                      <PyObject*>delay)
     self.channels.set_dds_delay(dds, round_time_int(delay))
 
+@cython.auto_pickle(False)
 @cython.final
 cdef class RFSOCBackend:
     def __init__(self, RFSOCOutputGenerator generator, /):

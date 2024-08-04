@@ -32,6 +32,7 @@ cdef combine_cond(cond1, new_cond):
         return False
     return cond1 & cond2
 
+@cython.auto_pickle(False)
 cdef class TimeSeq:
     def __init__(self):
         PyErr_Format(PyExc_TypeError, "TimeSeq cannot be created directly")
@@ -54,6 +55,7 @@ cdef class TimeSeq:
         if not c:
             raise AssertionError(msg)
 
+@cython.auto_pickle(False)
 @cython.no_gc
 @cython.final
 cdef class TimeStep(TimeSeq):
@@ -123,6 +125,7 @@ cdef int timestep_show(TimeStep self, write, int indent) except -1:
         write(f'{chn}: {str(action)}\n')
     return 0
 
+@cython.auto_pickle(False)
 @cython.final
 cdef class ConditionalWrapper:
     def __init__(self):
@@ -181,6 +184,7 @@ cdef int conditionalwrapper_show(ConditionalWrapper self, write, int indent) exc
         return seq_show(self.seq, write, indent + 2)
     return subseq_show(self.seq, write, indent + 2)
 
+@cython.auto_pickle(False)
 cdef class SubSeq(TimeSeq):
     def __init__(self):
         PyErr_Format(PyExc_TypeError, "SubSeq cannot be created directly")
@@ -339,6 +343,7 @@ cdef int collect_actions(SubSeq self, list actions) except -1:
             _actions.append(action)
     return 0
 
+@cython.auto_pickle(False)
 @cython.no_gc
 @cython.final
 cdef class SeqInfo:
@@ -366,6 +371,7 @@ cdef int _get_channel_id(SeqInfo self, str name) except -1:
     channel_name_map[name] = pycid
     return cid
 
+@cython.auto_pickle(False)
 @cython.final
 cdef class Seq(SubSeq):
     def __init__(self, Config config, /, int max_frame=0):

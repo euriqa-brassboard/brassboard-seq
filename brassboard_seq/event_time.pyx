@@ -72,6 +72,7 @@ cdef int visit_time(TimeManager self, EventTime t, unordered_set[int] &visited) 
     self.event_times.append(t)
     return 0
 
+@cython.auto_pickle(False)
 @cython.final
 cdef class TimeManager:
     def __init__(self):
@@ -250,6 +251,8 @@ cdef long long get_time_value(EventTime self, int base_id, unsigned age,
         value = max(value, wait_for_val)
     cache[tid] = value
     return value
+
+@cython.auto_pickle(False)
 @cython.c_api_binop_methods(True)
 @cython.final
 cdef class EventTime:

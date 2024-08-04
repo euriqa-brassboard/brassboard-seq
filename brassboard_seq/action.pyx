@@ -15,6 +15,7 @@ cnpy._import_array()
 
 from libc cimport math as cmath
 
+@cython.auto_pickle(False)
 @cython.no_gc
 @cython.final
 cdef class Action:
@@ -98,6 +99,7 @@ cdef int ramp_set_runtime_params(RampFunction self, unsigned age) except -1:
     for (name, value) in self.params.items():
         setattr(self, name, get_value(value, age))
 
+@cython.auto_pickle(False)
 @cython.final
 cdef class RampBuffer:
     def __init__(self):
