@@ -25,6 +25,7 @@ cdef extern from "src/utils.h" namespace "brassboard_seq":
 
     int bb_raise(object exc, uintptr_t key) except 0
     int bb_err_format(object exc, uintptr_t key, const char *format, ...) except 0
+    PyObject *PyErr_Format(PyObject *exception, char *format, ...) except NULL
 
     cppclass py_object[T]:
         T *get()
@@ -33,3 +34,12 @@ cdef extern from "src/utils.h" namespace "brassboard_seq":
     object pyfloat_from_double(double v)
     list new_list_of_list(int n)
     object pynum_add_or_sub(object a, object b, bint issub)
+
+# Cython does not declare these in cpython cimport
+cdef extern from *:
+    PyObject *PyExc_AttributeError
+    PyObject *PyExc_KeyError
+    PyObject *PyExc_TypeError
+    PyObject *PyExc_ValueError
+    PyObject *PyExc_RuntimeError
+    PyObject *Py_NotImplemented

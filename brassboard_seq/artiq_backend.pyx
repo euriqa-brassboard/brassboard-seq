@@ -5,10 +5,10 @@ from brassboard_seq.action cimport Action, RampFunction
 from brassboard_seq.event_time cimport EventTime, round_time_int
 from brassboard_seq.rtval cimport ExternCallback, is_rtval, new_extern, \
   RuntimeValue, rt_eval
-from brassboard_seq.utils cimport set_global_tracker
+from brassboard_seq.utils cimport set_global_tracker, PyErr_Format, \
+  PyExc_RuntimeError, PyExc_TypeError, PyExc_ValueError
 
 cimport cython
-from cpython cimport PyErr_Format
 cimport numpy as cnpy
 cnpy._import_array()
 
@@ -85,7 +85,7 @@ artiq_consts.SPI_CONFIG_ADDR = <int?>spi2.SPI_CONFIG_ADDR
 
 cdef PyObject *raise_invalid_channel(tuple path) except NULL:
     name = '/'.join(path)
-    return PyErr_Format(ValueError, 'Invalid channel name %U', <PyObject*>name)
+    return PyErr_Format(PyExc_ValueError, 'Invalid channel name %U', <PyObject*>name)
 
 cdef get_artiq_device(sys, str name):
     if hasattr(sys, 'registry'):
@@ -147,7 +147,7 @@ cdef int add_channel_artiq(ChannelsInfo *self, dev, int64_t delay, PyObject *rt_
         self.add_ttl_channel(idx, (<int?>dev.channel) << 8, True, delay, rt_delay)
     else:
         devstr = str(dev)
-        PyErr_Format(ValueError, 'Unsupported device: %U', <PyObject*>devstr)
+        PyErr_Format(PyExc_ValueError, 'Unsupported device: %U', <PyObject*>devstr)
     return 0
 
 cdef int collect_channels(ChannelsInfo *self, str prefix, sys, Seq seq,
@@ -184,9 +184,9 @@ cdef class ArtiqBackend:
         self.sys = sys
         self.eval_status = False
         if rtio_array.ndim != 1:
-            PyErr_Format(ValueError, "RTIO output must be a 1D array")
+            PyErr_Format(PyExc_ValueError, "RTIO output must be a 1D array")
         if cnpy.PyArray_TYPE(rtio_array) != cnpy.NPY_INT32:
-            PyErr_Format(TypeError, "RTIO output must be a int32 array")
+            PyErr_Format(PyExc_TypeError, "RTIO output must be a int32 array")
         self.rtio_array = rtio_array
         self.device_delay = {}
 
@@ -204,7 +204,7 @@ cdef class ArtiqBackend:
                           bint raising_edge, /):
         dev = get_artiq_device(self.sys, name)
         if not isinstance(dev, DevTTLOut):
-            PyErr_Format(ValueError, 'Invalid start trigger device: %U',
+            PyErr_Format(PyExc_ValueError, 'Invalid start trigger device: %U',
                          <PyObject*>name)
         self.add_start_trigger_ttl(dev.target_o, round_time_int(time),
                                    round_time_int(min_time), raising_edge)
@@ -214,10 +214,10 @@ cdef class ArtiqBackend:
             self.device_delay[name] = delay
             return
         if delay < 0:
-            PyErr_Format(ValueError, "Device time offset %S cannot be negative.",
+            PyErr_Format(PyExc_ValueError, "Device time offset %S cannot be negative.",
                          <PyObject*>delay)
         if delay > 0.1:
-            PyErr_Format(ValueError, "Device time offset %S cannot be more than 100ms.",
+            PyErr_Format(PyExc_ValueError, "Device time offset %S cannot be more than 100ms.",
                          <PyObject*>delay)
         self.device_delay[name] = round_time_int(delay)
 
@@ -238,7 +238,7 @@ cdef class EvalOnceCallback(ExternCallback):
 
     def __call__(self):
         if self.value is None:
-            PyErr_Format(RuntimeError, 'Value evaluated too early')
+            PyErr_Format(PyExc_RuntimeError, 'Value evaluated too early')
         return self.value
 
     def __str__(self):
@@ -254,7 +254,7 @@ cdef class DatasetCallback(ExternCallback):
 
     def __call__(self):
         if self.value is None:
-            PyErr_Format(RuntimeError, 'Value evaluated too early')
+            PyErr_Format(PyExc_RuntimeError, 'Value evaluated too early')
         return self.value
 
     def __str__(self):
@@ -285,7 +285,7 @@ def _eval_all_rtvals(self, /):
             eoval = <EvalOnceCallback>val
             eoval.value = eoval.callback()
         else:
-            PyErr_Format(RuntimeError, 'Unknown object in runtime callbacks')
+            PyErr_Format(PyExc_RuntimeError, 'Unknown object in runtime callbacks')
     self._bb_rt_values = None
     self.call_child_method('_eval_all_rtvals')
 

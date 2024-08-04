@@ -23,14 +23,14 @@ namespace brassboard_seq {
 
 #if bb_has_builtin(__builtin_assume)
 template<typename T>
-static inline T assume(T v)
+static inline __attribute__((always_inline)) T assume(T v)
 {
     __builtin_assume(bool(v));
     return v;
 }
 #elif defined(__GNUC__)
 template<typename T>
-static inline T assume(T v)
+static inline __attribute__((always_inline)) T assume(T v)
 {
     if (!bool(v))
         __builtin_unreachable();
@@ -38,14 +38,14 @@ static inline T assume(T v)
 }
 #else
 template<typename T>
-static inline T assume(T v)
+static inline __attribute__((always_inline)) T assume(T v)
 {
     return v;
 }
 #endif
 
 template<typename T>
-static inline void assume_not_none(T *obj)
+static inline __attribute__((always_inline)) void assume_not_none(T *obj)
 {
     assume((PyObject*)obj != Py_None);
 }
@@ -98,13 +98,13 @@ struct BacktraceTracker {
             return;
         _record(key);
     }
-    inline void record(void *key)
+    inline __attribute__((always_inline)) void record(void *key)
     {
         record((uintptr_t)key);
     }
 
     PyObject *get_backtrace(uintptr_t key);
-    inline PyObject *get_backtrace(void *key)
+    inline __attribute__((always_inline)) PyObject *get_backtrace(void *key)
     {
         return get_backtrace((uintptr_t)key);
     }
@@ -162,15 +162,18 @@ set_global_tracker(BacktraceTracker *tracker)
     return BacktraceTracker::GlobalRestorer(oldval);
 }
 
-static inline uintptr_t event_time_key(void *event_time)
+static inline __attribute__((always_inline,pure))
+uintptr_t event_time_key(void *event_time)
 {
     return (uintptr_t)event_time;
 }
-static inline uintptr_t action_key(int aid)
+static inline __attribute__((always_inline,pure))
+uintptr_t action_key(int aid)
 {
     return (uintptr_t)(aid << 2) | 1;
 }
-static inline uintptr_t assert_key(int aid)
+static inline __attribute__((always_inline,pure))
+uintptr_t assert_key(int aid)
 {
     return (uintptr_t)(aid << 2) | 2;
 }
@@ -181,19 +184,29 @@ void _bb_err_format(PyObject *exc, uintptr_t key, const char *format, ...);
 
 // Wrapper inline function to make it more clear to the C compiler
 // that the function returns 0
-static inline int bb_raise(PyObject *exc, uintptr_t key)
+static inline __attribute__((always_inline))
+int bb_raise(PyObject *exc, uintptr_t key)
 {
     _bb_raise(exc, key);
     return 0;
 }
 template<typename... T>
-inline int bb_err_format(PyObject *exc, uintptr_t key, const char *format, T&&... args)
+inline __attribute__((always_inline))
+int bb_err_format(PyObject *exc, uintptr_t key, const char *format, T&&... args)
 {
     _bb_err_format(exc, key, format, std::forward<T>(args)...);
     return 0;
 }
+template<typename... T>
+static inline __attribute__((always_inline))
+PyObject *PyErr_Format(PyObject *exc, const char *format, T&&... args)
+{
+    ::PyErr_Format(exc, format, std::forward<T>(args)...);
+    return nullptr;
+}
 
-static inline void bb_reraise_and_throw_if(bool cond, uintptr_t key)
+static inline __attribute__((always_inline))
+void bb_reraise_and_throw_if(bool cond, uintptr_t key)
 {
     if (cond) {
         bb_reraise(key);

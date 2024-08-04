@@ -4,7 +4,7 @@
 from brassboard_seq.rtval cimport ifelse, get_value, \
   new_const, new_extern_age, rt_eval, ExternCallback
 from brassboard_seq.utils cimport _assume_not_none, \
-  event_time_key, bb_err_format
+  event_time_key, bb_err_format, PyExc_TypeError
 
 from libcpp.map cimport map as cppmap
 from libcpp.algorithm cimport fill as cppfill
@@ -75,12 +75,12 @@ cdef int visit_time(TimeManager self, EventTime t, unordered_set[int] &visited) 
 @cython.final
 cdef class TimeManager:
     def __init__(self):
-        PyErr_Format(TypeError, "TimeManager cannot be created directly")
+        PyErr_Format(PyExc_TypeError, "TimeManager cannot be created directly")
 
     cdef int finalize(self) except -1:
         status = self.status.get()
         if status.finalized:
-            PyErr_Format(RuntimeError, "Event times already finalized")
+            PyErr_Format(PyExc_RuntimeError, "Event times already finalized")
         status.finalized = True
         old_event_times = self.event_times
         event_times = []
@@ -164,7 +164,7 @@ cdef class TimeManager:
     cdef long long compute_all_times(self, unsigned age) except -1:
         status = self.status.get()
         if not status.finalized:
-            PyErr_Format(RuntimeError, "Event times not finalized")
+            PyErr_Format(PyExc_RuntimeError, "Event times not finalized")
         cdef long long max_time = 0
         event_times = self.event_times
         cdef int ntimes = PyList_GET_SIZE(event_times)
@@ -254,11 +254,11 @@ cdef long long get_time_value(EventTime self, int base_id, unsigned age,
 @cython.final
 cdef class EventTime:
     def __init__(self):
-        PyErr_Format(TypeError, "EventTime cannot be created directly")
+        PyErr_Format(PyExc_TypeError, "EventTime cannot be created directly")
 
     def __sub__(EventTime self, EventTime other):
         if self.manager_status.get() != other.manager_status.get():
-            PyErr_Format(ValueError,
+            PyErr_Format(PyExc_ValueError,
                          "Cannot take the difference between unrelated times")
         diff = <EventTimeDiff>EventTimeDiff.__new__(EventTimeDiff)
         diff.t1 = self
@@ -298,7 +298,7 @@ cdef TimeOrder is_ordered(EventTime t1, EventTime t2) except OrderError:
     assert t1.manager_status.get() == t2.manager_status.get()
     manager_status = t1.manager_status.get()
     if not manager_status.finalized:
-        PyErr_Format(RuntimeError, "Event times not finalized")
+        PyErr_Format(PyExc_RuntimeError, "Event times not finalized")
     if t1 is t2:
         return OrderEqual
     chain1 = t1.data.chain_id
@@ -320,7 +320,7 @@ cdef TimeOrder is_ordered(EventTime t1, EventTime t2) except OrderError:
 cdef EventTime find_common_root(EventTimeDiff self, unsigned age):
     cdef cppmap[int,void*] frontier
     if not self.t1.manager_status.get().finalized:
-        PyErr_Format(RuntimeError, "Event times not finalized")
+        PyErr_Format(PyExc_RuntimeError, "Event times not finalized")
     frontier[self.t1.data.id] = <void*>self.t1
     frontier[self.t2.data.id] = <void*>self.t2
     while frontier.size() > 1:
@@ -357,11 +357,11 @@ cdef class EventTimeDiff(ExternCallback):
     cdef bint in_eval
 
     def __init__(self):
-        PyErr_Format(TypeError, "EventTimeDiff cannot be created directly")
+        PyErr_Format(PyExc_TypeError, "EventTimeDiff cannot be created directly")
 
     def __call__(self, unsigned age, /):
         if self.in_eval:
-            PyErr_Format(ValueError, "Recursive value dependency detected.")
+            PyErr_Format(PyExc_ValueError, "Recursive value dependency detected.")
         self.in_eval = True
         try:
             return timediff_eval(self, age)

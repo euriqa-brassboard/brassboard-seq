@@ -1,8 +1,12 @@
 # cython: language_level=3
 
+# Do not use relative import since it messes up cython file name tracking
+from brassboard_seq.utils cimport PyErr_Format, PyExc_AttributeError, \
+  PyExc_KeyError, PyExc_TypeError
+
 cimport cython
 
-from cpython cimport PyErr_Format, PyObject, PyDict_GetItemWithError, PyDictProxy_New, PyTuple_GET_SIZE, PyDict_Size
+from cpython cimport PyObject, PyDict_GetItemWithError, PyDictProxy_New, PyTuple_GET_SIZE, PyDict_Size
 
 cdef deepcopy_dict(v):
     if not isinstance(v, dict):
@@ -22,9 +26,9 @@ cdef int merge_dict_into(dict tgt, dict src, bint ovr) except -1:
             oldv = <object>oldvp
             was_dict = isinstance(oldv, dict)
             if was_dict and not is_dict:
-                PyErr_Format(TypeError, "Cannot override parameter pack as value")
+                PyErr_Format(PyExc_TypeError, "Cannot override parameter pack as value")
             if not was_dict and is_dict:
-                PyErr_Format(TypeError, "Cannot override value as parameter pack")
+                PyErr_Format(PyExc_TypeError, "Cannot override value as parameter pack")
             if is_dict:
                 merge_dict_into(<dict>oldv, <dict>v, ovr)
             elif ovr:
@@ -54,7 +58,7 @@ cdef dict ensure_dict(ParamPack self):
         field = <object>fieldp
         if isinstance(field, dict):
             return <dict>field
-        PyErr_Format(TypeError, "Cannot access value as parameter pack.")
+        PyErr_Format(PyExc_TypeError, "Cannot access value as parameter pack.")
     field = {}
     values[fieldname] = field
     return <dict>field
@@ -64,10 +68,10 @@ cdef get_value(ParamPack self):
     values = self.values
     cdef PyObject *fieldp = PyDict_GetItemWithError(values, fieldname)
     if fieldp == NULL:
-        PyErr_Format(KeyError, "Value is not assigned")
+        PyErr_Format(PyExc_KeyError, "Value is not assigned")
     field = <object>fieldp
     if isinstance(field, dict):
-        PyErr_Format(TypeError, "Cannot get parameter pack as value")
+        PyErr_Format(PyExc_TypeError, "Cannot get parameter pack as value")
     self.visited[fieldname] = True
     return field
 
@@ -79,7 +83,7 @@ cdef get_value_default(ParamPack self, default_value):
     if fieldp != NULL:
         field = <object>fieldp
         if isinstance(field, dict):
-            PyErr_Format(TypeError, "Cannot get parameter pack as value")
+            PyErr_Format(PyExc_TypeError, "Cannot get parameter pack as value")
         return field
     values[fieldname] = default_value
     self.visited[fieldname] = True
@@ -98,7 +102,7 @@ cdef class ParamPack:
         self_values = ensure_dict(self)
         for arg in args:
             if not isinstance(arg, dict):
-                PyErr_Format(TypeError,
+                PyErr_Format(PyExc_TypeError,
                              "Cannot use value as default value for parameter pack")
             merge_dict_into(self_values, <dict>arg, False)
         if nkws != 0:
@@ -109,14 +113,14 @@ cdef class ParamPack:
             # IPython likes to poke the objects for various properties
             # when trying to show them. Stop all of these by forbidden
             # all attributes that starts with underscore.
-            PyErr_Format(AttributeError,
+            PyErr_Format(PyExc_AttributeError,
                          "'ParamPack' object has no attribute '%U'", <PyObject*>name)
         return new_param_pack(ensure_dict(self), ensure_visited(self), name)
 
     def __setattr__(self, str name, value):
         if name.startswith('_'):
             # To be consistent with __getattr__
-            PyErr_Format(AttributeError,
+            PyErr_Format(PyExc_AttributeError,
                          "'ParamPack' object has no attribute '%U'", <PyObject*>name)
         self_values = ensure_dict(self)
         cdef PyObject *oldvaluep = PyDict_GetItemWithError(self_values, name)
@@ -125,9 +129,9 @@ cdef class ParamPack:
             was_dict = isinstance(oldvalue, dict)
             is_dict = isinstance(value, dict)
             if was_dict and not is_dict:
-                PyErr_Format(TypeError, "Cannot override parameter pack as value")
+                PyErr_Format(PyExc_TypeError, "Cannot override parameter pack as value")
             if not was_dict and is_dict:
-                PyErr_Format(TypeError, "Cannot override value as parameter pack")
+                PyErr_Format(PyExc_TypeError, "Cannot override value as parameter pack")
             if is_dict:
                 merge_dict_into(<dict>oldvalue, <dict>value, True)
             else:
@@ -151,7 +155,7 @@ cdef class ParamPack:
         self_values = ensure_dict(self)
         for arg in args:
             if not isinstance(arg, dict):
-                PyErr_Format(TypeError,
+                PyErr_Format(PyExc_TypeError,
                              "Cannot use value as default value for parameter pack")
             merge_dict_into(self_values, <dict>arg, False)
         if nkws != 0:

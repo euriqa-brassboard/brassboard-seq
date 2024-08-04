@@ -5,13 +5,14 @@ from brassboard_seq.action cimport Action, RampFunction, SeqCubicSpline, \
   new_ramp_buffer, ramp_get_spline_segments, rampbuffer_alloc_input, rampbuffer_eval
 from brassboard_seq.event_time cimport EventTime, round_time_int
 from brassboard_seq.rtval cimport is_rtval, rt_eval, RuntimeValue
-from brassboard_seq.utils cimport pyfloat_from_double, set_global_tracker
+from brassboard_seq.utils cimport pyfloat_from_double, set_global_tracker, \
+  PyErr_Format, PyExc_ValueError
 
 from libcpp.map cimport map as cppmap
 
 cimport cython
 from cython.operator cimport dereference as deref
-from cpython cimport PyDict_GetItemWithError, PyErr_Format
+from cpython cimport PyDict_GetItemWithError
 
 cdef re # hide import
 import re
@@ -190,16 +191,16 @@ cdef class PulseCompilerGenerator(RFSOCOutputGenerator):
 
 cdef PyObject *raise_invalid_channel(tuple path) except NULL:
     name = '/'.join(path)
-    return PyErr_Format(ValueError, 'Invalid channel name %U', <PyObject*>name)
+    return PyErr_Format(PyExc_ValueError, 'Invalid channel name %U', <PyObject*>name)
 
 cdef match_rfsoc_dds = re.compile('^dds(\\d+)$').match
 
 cdef inline set_dds_delay(RFSOCBackend self, int dds, delay):
     if delay < 0:
-        PyErr_Format(ValueError, "DDS time offset %S cannot be negative.",
+        PyErr_Format(PyExc_ValueError, "DDS time offset %S cannot be negative.",
                      <PyObject*>delay)
     if delay > 0.1:
-        PyErr_Format(ValueError, "DDS time offset %S cannot be more than 100ms.",
+        PyErr_Format(PyExc_ValueError, "DDS time offset %S cannot be more than 100ms.",
                      <PyObject*>delay)
     self.channels.set_dds_delay(dds, round_time_int(delay))
 

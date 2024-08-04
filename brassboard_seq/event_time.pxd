@@ -9,9 +9,10 @@ from libc.stdint cimport *
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.rtval cimport is_rtval, new_expr2, round_int64_rt, \
   RuntimeValue, ValueType
-from brassboard_seq.utils cimport assume_not_none
+from brassboard_seq.utils cimport assume_not_none, PyErr_Format, \
+  PyExc_RuntimeError, PyExc_ValueError
 
-from cpython cimport PyErr_Format, PyFloat_AS_DOUBLE, PyList_GET_SIZE, PyObject
+from cpython cimport PyFloat_AS_DOUBLE, PyList_GET_SIZE, PyObject
 
 # 1ps for internal time unit
 cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
@@ -55,13 +56,13 @@ cdef class TimeManager:
                                        bint floating, cond, EventTime wait_for):
         status = self.status.get()
         if status.finalized:
-            PyErr_Format(RuntimeError, "Cannot allocate more time: already finalized")
+            PyErr_Format(PyExc_RuntimeError, "Cannot allocate more time: already finalized")
         tp = <EventTime>EventTime.__new__(EventTime)
         tp.manager_status = self.status
         tp.prev = prev
         tp.wait_for = wait_for
         if offset < 0:
-            PyErr_Format(ValueError, "Time delay cannot be negative")
+            PyErr_Format(PyExc_ValueError, "Time delay cannot be negative")
         tp.data.set_c_offset(offset)
         tp.data.floating = floating
         tp.cond = cond
@@ -77,7 +78,7 @@ cdef class TimeManager:
                                       cond, EventTime wait_for):
         status = self.status.get()
         if status.finalized:
-            PyErr_Format(RuntimeError, "Cannot allocate more time: already finalized")
+            PyErr_Format(PyExc_RuntimeError, "Cannot allocate more time: already finalized")
         tp = <EventTime>EventTime.__new__(EventTime)
         tp.manager_status = self.status
         tp.prev = prev
@@ -131,10 +132,10 @@ cdef class EventTime:
 cdef inline int set_base_int(EventTime self, EventTime base,
                              long long offset) except -1:
     if not self.data.floating:
-        PyErr_Format(ValueError, "Cannot modify non-floating time")
+        PyErr_Format(PyExc_ValueError, "Cannot modify non-floating time")
     self.prev = base
     if offset < 0:
-        PyErr_Format(ValueError, "Time delay cannot be negative")
+        PyErr_Format(PyExc_ValueError, "Time delay cannot be negative")
     self.data.set_c_offset(offset)
     self.data.floating = False
     return 0
@@ -142,7 +143,7 @@ cdef inline int set_base_int(EventTime self, EventTime base,
 cdef inline int set_base_rt(EventTime self, EventTime base,
                             RuntimeValue offset) except -1:
     if not self.data.floating:
-        PyErr_Format(ValueError, "Cannot modify non-floating time")
+        PyErr_Format(PyExc_ValueError, "Cannot modify non-floating time")
     self.prev = base
     self.data.set_rt_offset(offset)
     self.data.floating = False

@@ -2,9 +2,11 @@
 
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.rtval cimport get_value, ifelse, is_rtval
+from brassboard_seq.utils cimport PyErr_Format, Py_NotImplemented, \
+  PyExc_TypeError, PyExc_ValueError
 
 cimport cython
-from cpython cimport PyErr_Format, Py_LT, Py_GT
+from cpython cimport Py_LT, Py_GT
 
 cdef np # hide import
 import numpy as np
@@ -17,20 +19,20 @@ from libc cimport math as cmath
 @cython.final
 cdef class Action:
     def __init__(self):
-        PyErr_Format(TypeError, "Action cannot be created directly")
+        PyErr_Format(PyExc_TypeError, "Action cannot be created directly")
 
     def __richcmp__(self, other, int op):
         # For sorting actions according to their times.
         tid1 = self.tid
         if type(other) is not Action:
             # Action is a final type so we can use direct type comparison
-            return NotImplemented
+            return <object>Py_NotImplemented
         tid2 = (<Action>other).tid
         if op == Py_LT:
             return tid1 < tid2
         elif op == Py_GT:
             return tid1 > tid2
-        return NotImplemented
+        return <object>Py_NotImplemented
 
     def __str__(self):
         name = 'Pulse' if self.data.is_pulse else 'Set'
@@ -99,7 +101,7 @@ cdef int ramp_set_runtime_params(RampFunction self, unsigned age) except -1:
 @cython.final
 cdef class RampBuffer:
     def __init__(self):
-        PyErr_Format(TypeError, "RampBuffer cannot be created directly")
+        PyErr_Format(PyExc_TypeError, "RampBuffer cannot be created directly")
 
 cdef RampBuffer new_ramp_buffer():
     buff = <RampBuffer>RampBuffer.__new__(RampBuffer)
@@ -126,7 +128,7 @@ cdef double *rampbuffer_eval(_self, _func, length, oldval) except NULL:
     func = <RampFunction?>_func
     buff = <cnpy.ndarray?>ramp_eval(func, self.input_buff, length, oldval)
     if buff.ndim != 1 or buff.size != len(self.input_buff):
-        PyErr_Format(ValueError, "Ramp result dimension mismatch")
+        PyErr_Format(PyExc_ValueError, "Ramp result dimension mismatch")
     if cnpy.PyArray_TYPE(buff) != cnpy.NPY_DOUBLE:
         buff = <cnpy.ndarray>cnpy.PyArray_Cast(buff, cnpy.NPY_DOUBLE)
     self.output_buff = buff

@@ -11,13 +11,14 @@ from brassboard_seq.rtval cimport convert_bool, get_value, ifelse, is_rtval, \
   RuntimeValue, rt_eval
 from brassboard_seq.utils cimport assume_not_none, _assume_not_none, \
   action_key, assert_key, bb_err_format, bb_raise, event_time_key, \
-  new_list_of_list, set_global_tracker
+  new_list_of_list, set_global_tracker, \
+  PyErr_Format, PyExc_TypeError, PyExc_ValueError
 
 cdef StringIO # hide import
 from io import StringIO
 
 cimport cython
-from cpython cimport PyErr_Format, PyDict_GetItemWithError, PyList_GET_SIZE, PyTuple_GET_SIZE, PyDict_Size, Py_INCREF, PyLong_AsLong
+from cpython cimport PyDict_GetItemWithError, PyList_GET_SIZE, PyTuple_GET_SIZE, PyDict_Size, Py_INCREF, PyLong_AsLong
 
 cdef combine_cond(cond1, new_cond):
     if cond1 is False:
@@ -33,7 +34,7 @@ cdef combine_cond(cond1, new_cond):
 
 cdef class TimeSeq:
     def __init__(self):
-        PyErr_Format(TypeError, "TimeSeq cannot be created directly")
+        PyErr_Format(PyExc_TypeError, "TimeSeq cannot be created directly")
 
     def get_channel_id(self, str name, /):
         return _get_channel_id(self.seqinfo, name)
@@ -57,7 +58,7 @@ cdef class TimeSeq:
 @cython.final
 cdef class TimeStep(TimeSeq):
     def __init__(self):
-        PyErr_Format(TypeError, "TimeStep cannot be created directly")
+        PyErr_Format(PyExc_TypeError, "TimeStep cannot be created directly")
 
     def set(self, chn, value, /, *, cond=True, bint exact_time=False, **kws):
         timestep_set(self, chn, value, combine_cond(self.cond, cond),
@@ -85,7 +86,7 @@ cdef int timestep_set(TimeStep self, chn, value, cond, bint is_pulse,
         lcid = PyLong_AsLong(chn)
         _assume_not_none(<void*>seqinfo.channel_paths)
         if lcid < 0 or lcid > len(seqinfo.channel_paths):
-            PyErr_Format(ValueError, "Channel id %ld out of bound", lcid)
+            PyErr_Format(PyExc_ValueError, "Channel id %ld out of bound", lcid)
         cid = lcid
     else:
         cid = _get_channel_id(seqinfo, chn)
@@ -93,7 +94,7 @@ cdef int timestep_set(TimeStep self, chn, value, cond, bint is_pulse,
         self.actions.resize(cid + 1)
     elif self.actions[cid].get() != NULL:
         name = '/'.join(seqinfo.channel_paths[cid])
-        PyErr_Format(ValueError,
+        PyErr_Format(PyExc_ValueError,
                      "Multiple actions added for the same channel "
                      "at the same time on %U.", <PyObject*>name)
     self.seqinfo.bt_tracker.record(action_key(seqinfo.action_counter))
@@ -125,7 +126,7 @@ cdef int timestep_show(TimeStep self, write, int indent) except -1:
 @cython.final
 cdef class ConditionalWrapper:
     def __init__(self):
-        PyErr_Format(TypeError, "ConditionalWrapper cannot be created directly")
+        PyErr_Format(PyExc_TypeError, "ConditionalWrapper cannot be created directly")
 
     def conditional(self, cond, /):
         wrapper = <ConditionalWrapper>ConditionalWrapper.__new__(ConditionalWrapper)
@@ -182,7 +183,7 @@ cdef int conditionalwrapper_show(ConditionalWrapper self, write, int indent) exc
 
 cdef class SubSeq(TimeSeq):
     def __init__(self):
-        PyErr_Format(TypeError, "SubSeq cannot be created directly")
+        PyErr_Format(PyExc_TypeError, "SubSeq cannot be created directly")
 
     @property
     def current_time(self):
@@ -265,7 +266,7 @@ cdef TimeSeq add_step_real(SubSeq self, cond, EventTime start_time,
     else:
         sargs = str(args)
         skwargs = str(kwargs)
-        PyErr_Format(ValueError,
+        PyErr_Format(PyExc_ValueError,
                      "Unexpected arguments when creating new time step, %U, %U.",
                      <PyObject*>sargs, <PyObject*>skwargs)
 
@@ -342,7 +343,7 @@ cdef int collect_actions(SubSeq self, list actions) except -1:
 @cython.final
 cdef class SeqInfo:
     def __init__(self):
-        PyErr_Format(TypeError, "SeqInfo cannot be created directly")
+        PyErr_Format(PyExc_TypeError, "SeqInfo cannot be created directly")
 
 cdef int _get_channel_id(SeqInfo self, str name) except -1:
     channel_name_map = self.channel_name_map

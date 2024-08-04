@@ -1,7 +1,8 @@
 # cython: language_level=3
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.utils cimport pynum_add_or_sub
+from brassboard_seq.utils cimport pynum_add_or_sub, PyErr_Format, Py_NotImplemented, \
+  PyExc_TypeError, PyExc_ValueError
 
 cdef StringIO, np # hide import
 from io import StringIO
@@ -10,7 +11,7 @@ cimport numpy as cnpy
 cnpy._import_array()
 
 cimport cython
-from cpython cimport PyErr_Format, PyFloat_AS_DOUBLE
+from cpython cimport PyFloat_AS_DOUBLE
 
 cdef int operator_precedence(ValueType type_) noexcept:
     if type_ == ValueType.Add or type_ == ValueType.Sub:
@@ -444,7 +445,7 @@ cdef inline object _rt_eval(RuntimeValue self, unsigned age):
         return max(arg0, arg1)
     if type_ == ValueType.Min:
         return min(arg0, arg1)
-    PyErr_Format(ValueError, 'Unknown value type')
+    PyErr_Format(PyExc_ValueError, 'Unknown value type')
 
 cdef object rt_eval(RuntimeValue self, unsigned age):
     if self.type_ == ValueType.Const or self.age == age:
@@ -460,7 +461,7 @@ cdef class RuntimeValue:
     def __init__(self):
         # All instances should be constructed within cython code via
         # `RuntimeValue.__new__` or its wrapper.
-        PyErr_Format(TypeError, "RuntimeValue cannot be created directly")
+        PyErr_Format(PyExc_TypeError, "RuntimeValue cannot be created directly")
 
     def eval(self, unsigned age, /):
         return rt_eval(self, age)
@@ -477,7 +478,7 @@ cdef class RuntimeValue:
 
     # It's too easy to accidentally use this in control flow/assertion
     def __bool__(self):
-        PyErr_Format(TypeError, "Cannot convert runtime value to boolean")
+        PyErr_Format(PyExc_TypeError, "Cannot convert runtime value to boolean")
 
     def __add__(self, other):
         return _build_addsub(self, other, False)
@@ -542,7 +543,7 @@ cdef class RuntimeValue:
     # (e.g. compiling/sending it to kernel etc).
     def __array_ufunc__(self, ufunc, methods, /, *inputs, **kws):
         if methods != '__call__':
-            return NotImplemented
+            return <object>Py_NotImplemented
         # Needed for numpy type support
         if ufunc is np_add:
             return _build_addsub(inputs[0], inputs[1], False)
@@ -665,7 +666,7 @@ cdef class RuntimeValue:
             if arg0.type_ == ValueType.Rint:
                 return arg0
             return new_expr1(ValueType.Rint, arg0)
-        return NotImplemented
+        return <object>Py_NotImplemented
 
 cpdef inv(v):
     if type(v) is bool:
@@ -736,7 +737,7 @@ cdef class rtprop_callback(ExternCallback):
     cdef str fieldname
 
     def __init__(self):
-        PyErr_Format(TypeError, "rtprop_callback cannot be created directly")
+        PyErr_Format(PyExc_TypeError, "rtprop_callback cannot be created directly")
 
     def __str__(self):
         name = self.fieldname[rtprop_prefix_len:]
@@ -748,7 +749,7 @@ cdef class rtprop_callback(ExternCallback):
             return _v
         cdef RuntimeValue v = <RuntimeValue>_v
         if (v.type_ == ValueType.ExternAge and v.cb_arg2 is self):
-            PyErr_Format(ValueError, 'RT property have not been assigned.')
+            PyErr_Format(PyExc_ValueError, 'RT property have not been assigned.')
         return rt_eval(v, age)
 
 cdef rtprop_callback new_rtprop_callback(obj, str fieldname):
@@ -766,7 +767,7 @@ cdef rtprop_init_class(RTProp self, cls):
         if isinstance(field, RTProp):
             (<RTProp>field).fieldname = rtprop_prefix + name
     if self.fieldname is None:
-        PyErr_Format(ValueError, 'Cannot determine runtime property name')
+        PyErr_Format(PyExc_ValueError, 'Cannot determine runtime property name')
 
 @cython.final
 cdef class RTProp:
