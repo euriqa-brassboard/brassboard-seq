@@ -293,19 +293,27 @@ catch (...) {
     return nullptr;
 }
 
-template<typename TimeStep, bool is_pulse>
-static PyObject *timestep_set(PyObject *self, PyObject *const *args,
-                              Py_ssize_t nargs, PyObject *kwnames) try
+template<typename CondSeq, bool is_cond, bool is_step=false, bool is_pulse=false>
+static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
+                             Py_ssize_t nargs, PyObject *kwnames) try
 {
-    seq_set_params params(args, nargs, kwnames, is_pulse);
-    TimeStep *step = (TimeStep*)self;
-    CondCombiner cc(step->__pyx_base.cond, params.cond);
-    auto res = seq_vtable.timestep_set(self, params.chn, params.value, cc.cond,
-                                       is_pulse, params.exact_time, params.kwargs());
+    seq_set_params params(args, nargs, kwnames, false);
+    auto self = (CondSeq*)py_self;
+    auto subseq = condseq_get_subseq<is_cond>(self);
+    auto cond = condseq_get_cond<is_cond>(self);
+    CondCombiner cc(cond, params.cond);
+    int res;
+    if constexpr (is_step)
+        res = seq_vtable.timestep_set((PyObject*)subseq, params.chn, params.value,
+                                      cc.cond, is_pulse, params.exact_time,
+                                      params.kwargs());
+    else
+        res = seq_vtable.subseq_set((PyObject*)subseq, params.chn, params.value,
+                                    cc.cond, params.exact_time, params.kwargs());
     if (res == -1)
         return nullptr;
-    Py_INCREF(self);
-    return self;
+    Py_INCREF(py_self);
+    return py_self;
 }
 catch (...) {
     return nullptr;
@@ -316,34 +324,14 @@ static inline void
 update_timestep(PyTypeObject *ty_timestep, TimeStep*)
 {
     static PyMethodDef timestep_set_method = {
-        "set", (PyCFunction)(void*)timestep_set<TimeStep,false>,
+        "set", (PyCFunction)(void*)condseq_set<TimeStep,false,true,false>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef timestep_pulse_method = {
-        "pulse", (PyCFunction)(void*)timestep_set<TimeStep,true>,
+        "pulse", (PyCFunction)(void*)condseq_set<TimeStep,false,true,true>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     type_add_method(ty_timestep, &timestep_set_method);
     type_add_method(ty_timestep, &timestep_pulse_method);
     PyType_Modified(ty_timestep);
-}
-
-template<typename CondSeq, bool is_cond>
-static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
-                             Py_ssize_t nargs, PyObject *kwnames) try
-{
-    seq_set_params params(args, nargs, kwnames, false);
-    auto self = (CondSeq*)py_self;
-    auto subseq = condseq_get_subseq<is_cond>(self);
-    auto cond = condseq_get_cond<is_cond>(self);
-    CondCombiner cc(cond, params.cond);
-    auto res = seq_vtable.subseq_set((PyObject*)subseq, params.chn, params.value,
-                                     cc.cond, params.exact_time, params.kwargs());
-    if (res == -1)
-        return nullptr;
-    Py_INCREF(py_self);
-    return py_self;
-}
-catch (...) {
-    return nullptr;
 }
 
 template<typename SubSeq, typename TimeSeq>
