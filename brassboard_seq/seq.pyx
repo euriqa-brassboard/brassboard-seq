@@ -17,7 +17,7 @@ cdef StringIO # hide import
 from io import StringIO
 
 cimport cython
-from cpython cimport PyErr_Format, PyObject, PyDict_GetItemWithError, PyList_GET_SIZE, PyTuple_GET_SIZE, PyDict_Size
+from cpython cimport PyErr_Format, PyDict_GetItemWithError, PyList_GET_SIZE, PyTuple_GET_SIZE, PyDict_Size, Py_INCREF, PyLong_AsLong
 
 cdef combine_cond(cond1, new_cond):
     if cond1 is False:
@@ -82,14 +82,16 @@ cdef int timestep_set(TimeStep self, chn, value, cond, bint is_pulse,
     cdef int cid
     seqinfo = self.seqinfo
     if type(chn) is int:
-        cid = <int>chn
-        pycid = chn
+        lcid = PyLong_AsLong(chn)
+        _assume_not_none(<void*>seqinfo.channel_paths)
+        if lcid < 0 or lcid > len(seqinfo.channel_paths):
+            PyErr_Format(ValueError, "Channel id %ld out of bound", lcid)
+        cid = lcid
     else:
         cid = _get_channel_id(seqinfo, chn)
-        pycid = cid
-    cdef dict actions = self.actions
-    assume_not_none(actions)
-    if pycid in actions:
+    if cid >= self.actions.size():
+        self.actions.resize(cid + 1)
+    elif self.actions[cid].get() != NULL:
         name = '/'.join(seqinfo.channel_paths[cid])
         PyErr_Format(ValueError,
                      "Multiple actions added for the same channel "
@@ -97,8 +99,8 @@ cdef int timestep_set(TimeStep self, chn, value, cond, bint is_pulse,
     self.seqinfo.bt_tracker.record(action_key(seqinfo.action_counter))
     action = new_action(value, cond, is_pulse, exact_time, kws, seqinfo.action_counter)
     seqinfo.action_counter += 1
-    assume_not_none(actions)
-    actions[pycid] = action
+    Py_INCREF(action)
+    self.actions[cid].reset(<PyObject*>action)
     return 0
 
 cdef int timestep_show(TimeStep self, write, int indent) except -1:
@@ -109,8 +111,13 @@ cdef int timestep_show(TimeStep self, write, int indent) except -1:
         write(f' if {cond}\n')
     else:
         write('\n')
-    for (chn, action) in self.actions.items():
-        chn = '/'.join(self.seqinfo.channel_paths[chn])
+    nactions = self.actions.size()
+    for chn_idx in range(nactions):
+        paction = self.actions[chn_idx].get()
+        if paction == NULL:
+            continue
+        action = <Action>paction
+        chn = '/'.join(self.seqinfo.channel_paths[chn_idx])
         write(' ' * (indent + 2))
         write(f'{chn}: {str(action)}\n')
     return 0
@@ -241,7 +248,6 @@ cdef SubSeq add_custom_step(SubSeq self, cond, EventTime start_time, cb,
 cdef TimeStep add_time_step(SubSeq self, cond, EventTime start_time, length):
     step = <TimeStep>TimeStep.__new__(TimeStep)
     init_timeseq(step, self, start_time, cond)
-    step.actions = {}
     step.length = length
     step.end_time = self.seqinfo.time_mgr.new_round_time(start_time, length,
                                                          cond, None)
@@ -317,10 +323,12 @@ cdef int collect_actions(SubSeq self, list actions) except -1:
         tid = step.start_time.data.id
         end_tid = step.end_time.data.id
         length = step.length
-        _assume_not_none(<void*>step.actions)
-        for (_chn, _action) in step.actions.items():
-            chn = <int>_chn
-            action = <Action>_action
+        nactions = step.actions.size()
+        for chn in range(nactions):
+            paction = step.actions[chn].get()
+            if paction == NULL:
+                continue
+            action = <Action>paction
             action.tid = tid
             action.end_tid = end_tid
             action.length = length

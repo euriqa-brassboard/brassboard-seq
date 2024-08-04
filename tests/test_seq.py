@@ -1165,6 +1165,11 @@ def test_seq_error1():
     with pytest.raises(ValueError, match="Unexpected arguments"):
         c1.add_at(s.start_time, 1, a=2)
 
+    with pytest.raises(ValueError, match="Channel id -1 out of bound"):
+        s.set(-1, True)
+    with pytest.raises(ValueError, match="Channel id 100 out of bound"):
+        s.set(100, True)
+
 def step1(s, len1, *, cond1=None):
     t1 = s.start_time
     assert s.end_time is t1

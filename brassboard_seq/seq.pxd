@@ -3,7 +3,10 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.config cimport Config
 from brassboard_seq.event_time cimport TimeManager, EventTime, new_time_manager
-from brassboard_seq.utils cimport BacktraceTracker
+from brassboard_seq.utils cimport BacktraceTracker, py_object
+
+from libcpp.vector cimport vector
+from cpython cimport PyObject
 
 cdef class TimeSeq:
     # Toplevel parent sequence
@@ -26,8 +29,8 @@ cdef class TimeStep(TimeSeq):
     # This is also the length parameter that'll be passed to the user function
     # if the action added to this step contains ramps.
     cdef object length
-    # The dict of channel -> actions
-    cdef dict actions
+    # The array of channel -> actions
+    cdef vector[py_object[PyObject]] actions
 
 
 cdef class ConditionalWrapper:

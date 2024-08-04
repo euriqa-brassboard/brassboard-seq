@@ -26,6 +26,10 @@ cdef extern from "src/utils.h" namespace "brassboard_seq":
     int bb_raise(object exc, uintptr_t key) except 0
     int bb_err_format(object exc, uintptr_t key, const char *format, ...) except 0
 
+    cppclass py_object[T]:
+        T *get()
+        void reset(T*)
+
     object pyfloat_from_double(double v)
     list new_list_of_list(int n)
     object pynum_add_or_sub(object a, object b, bint issub)
