@@ -250,13 +250,13 @@ cdef long long get_time_value(EventTime self, int base_id, unsigned age,
         value = max(value, wait_for_val)
     cache[tid] = value
     return value
-
+@cython.c_api_binop_methods(True)
 @cython.final
 cdef class EventTime:
     def __init__(self):
         PyErr_Format(TypeError, "EventTime cannot be created directly")
 
-    def __sub__(self, EventTime other):
+    def __sub__(EventTime self, EventTime other):
         if self.manager_status.get() != other.manager_status.get():
             PyErr_Format(ValueError,
                          "Cannot take the difference between unrelated times")
