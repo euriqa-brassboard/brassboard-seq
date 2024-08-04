@@ -720,13 +720,17 @@ def test_cond_ramp_error(max_bt):
     s = new_seq(max_bt)
     s.add_step(0) \
       .set('artiq/urukul0_ch0/amp', action.Blackman(1)) \
-      .pulse('artiq/urukul0_ch1/amp', action.Blackman(1))
+      .pulse('artiq/urukul0_ch1/amp', action.Blackman(1)) \
+      .set('artiq/urukul1_ch0/amp', action.BlackmanSquare(1)) \
+      .pulse('artiq/urukul1_ch1/amp', action.BlackmanSquare(1))
     test_utils.seq_finalize(s)
     test_utils.seq_runtime_finalize(s, 1)
 
     s = new_seq(max_bt)
     s.add_step(rtval.new_extern(lambda: 0)) \
       .set('artiq/urukul0_ch0/amp', action.Blackman(1)) \
-      .pulse('artiq/urukul0_ch1/amp', action.Blackman(1))
+      .pulse('artiq/urukul0_ch1/amp', action.Blackman(1)) \
+      .set('artiq/urukul1_ch0/amp', action.BlackmanSquare(1)) \
+      .pulse('artiq/urukul1_ch1/amp', action.BlackmanSquare(1))
     test_utils.seq_finalize(s)
     test_utils.seq_runtime_finalize(s, 1)

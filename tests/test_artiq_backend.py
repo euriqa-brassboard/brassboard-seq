@@ -1969,3 +1969,15 @@ def test_rt_value():
 
     with pytest.raises(RuntimeError, match="Unknown object in runtime callbacks"):
         sys._eval_all_rtvals()
+
+    sys = dummy_artiq.DummyDaxSystem()
+    submod = dummy_artiq.DummyDaxSystem()
+    sys.register_child(submod)
+
+    rd1 = submod.rt_dataset_sys()
+    assert str(rd1) == f'<dataset_sys <unknown> for {submod}>'
+    rd2 = sys.rt_dataset()
+    assert str(rd2) == f'<dataset <unknown> for {sys}>'
+
+    with pytest.raises(TypeError):
+        sys._eval_all_rtvals()

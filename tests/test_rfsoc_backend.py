@@ -3,7 +3,8 @@
 import dummy_pulse_compiler
 dummy_pulse_compiler.inject()
 
-from brassboard_seq.action import Blackman, LinearRamp, RampFunction, SeqCubicSpline
+from brassboard_seq.action import Blackman, BlackmanSquare, LinearRamp, \
+     RampFunction, SeqCubicSpline
 from brassboard_seq.config import Config
 from brassboard_seq import backend, rfsoc_backend, rtval, seq
 import brassboard_seq_test_utils as test_utils
@@ -1722,7 +1723,9 @@ def test_cond_ramp_error(max_bt):
     rb = add_rfsoc_backend(comp)
     s.add_step(0) \
       .set('rfsoc/dds0/0/amp', Blackman(1)) \
-      .pulse('rfsoc/dds0/1/amp', Blackman(1))
+      .pulse('rfsoc/dds0/1/amp', Blackman(1)) \
+      .set('rfsoc/dds1/0/amp', BlackmanSquare(1)) \
+      .pulse('rfsoc/dds1/1/amp', BlackmanSquare(1))
     comp.finalize()
     comp.runtime_finalize(1)
 
@@ -1730,6 +1733,8 @@ def test_cond_ramp_error(max_bt):
     rb = add_rfsoc_backend(comp)
     s.add_step(rtval.new_extern(lambda: 0)) \
       .set('rfsoc/dds0/0/amp', Blackman(1)) \
-      .pulse('rfsoc/dds0/1/amp', Blackman(1))
+      .pulse('rfsoc/dds0/1/amp', Blackman(1)) \
+      .set('rfsoc/dds1/0/amp', BlackmanSquare(1)) \
+      .pulse('rfsoc/dds1/1/amp', BlackmanSquare(1))
     comp.finalize()
     comp.runtime_finalize(1)
