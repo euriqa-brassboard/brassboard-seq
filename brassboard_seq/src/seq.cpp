@@ -58,6 +58,12 @@ struct SeqVTable {
     int (*subseq_set)(PyObject *self, PyObject *chn, PyObject *value,
                       PyObject *cond, int exact_time, PyObject *kws);
     PyObject *(*combine_cond)(PyObject *cond1, PyObject *new_cond);
+    PyObject *(*new_floating_time)(PyObject *seq, PyObject *cond);
+    PyObject *(*add_custom_step)(PyObject *self, PyObject *cond, PyObject *start_time,
+                                 PyObject *cb, PyObject *args, PyObject *kwargs);
+    PyObject *(*add_time_step)(PyObject *self, PyObject *cond, PyObject *start_time,
+                               PyObject *length);
+    PyTypeObject *event_time_type;
 };
 static SeqVTable seq_vtable;
 
@@ -163,6 +169,130 @@ static inline auto condseq_get_cond(CondSeq *self)
     }
 }
 
+enum class AddStepType {
+    Step,
+    Background,
+    Floating,
+    At,
+};
+
+const char *add_step_name(AddStepType type)
+{
+    if (type == AddStepType::Background)
+        return "add_background";
+    if (type == AddStepType::Floating)
+        return "add_floating";
+    if (type == AddStepType::At)
+        return "add_at";
+    assert(type == AddStepType::Step);
+    return "add_step";
+}
+
+static auto empty_tuple = PyTuple_New(0);
+
+template<typename CondSeq, typename TimeSeq, bool is_cond, AddStepType type>
+static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
+                               Py_ssize_t nargs, PyObject *kwnames) try
+{
+    auto self = (CondSeq*)py_self;
+    auto subseq = condseq_get_subseq<is_cond>(self);
+    auto cond = condseq_get_cond<is_cond>(self);
+    auto nargs_min = type == AddStepType::At ? 2 : 1;
+    if (nargs < nargs_min) {
+        RaiseArgtupleInvalid(add_step_name(type), false, nargs_min, -1, nargs);
+        return nullptr;
+    }
+    auto first_arg = args[nargs_min - 1];
+    py_object<PyObject> start_time;
+    if (type == AddStepType::Background) {
+        Py_INCREF(subseq->__pyx_base.end_time);
+        start_time.reset((PyObject*)subseq->__pyx_base.end_time);
+    }
+    else if (type == AddStepType::Floating) {
+        start_time.reset(seq_vtable.new_floating_time((PyObject*)subseq, cond));
+    }
+    else if (type == AddStepType::At) {
+        if (args[0] != Py_None && Py_TYPE(args[0]) != seq_vtable.event_time_type)
+            return PyErr_Format(PyExc_TypeError,
+                                "Argument 'tp' has incorrect type (expected EventTime, "
+                                "got %.200s)", Py_TYPE(args[0])->tp_name);
+        Py_INCREF(args[0]);
+        start_time.reset(args[0]);
+    }
+    else {
+        assert(type == AddStepType::Step);
+        Py_INCREF(subseq->__pyx_base.end_time);
+        start_time.reset((PyObject*)subseq->__pyx_base.end_time);
+    }
+
+    auto tuple_nargs = nargs - nargs_min;
+    auto get_args_tuple = [&] {
+        if (tuple_nargs == 0) {
+            Py_INCREF(empty_tuple);
+            return empty_tuple;
+        }
+        auto res = PyTuple_New(tuple_nargs);
+        if (!res)
+            throw 0;
+        auto *tuple_args = args + nargs_min;
+        for (auto i = 0; i < tuple_nargs; i++) {
+            Py_INCREF(tuple_args[i]);
+            PyTuple_SET_ITEM(res, i, tuple_args[i]);
+        }
+        return res;
+    };
+
+    py_object<PyObject> kws;
+    if (kwnames) {
+        kws.reset(PyDict_New());
+        if (!kws)
+            return nullptr;
+        auto kwvalues = args + nargs;
+        int nkws = (int)PyTuple_GET_SIZE(kwnames);
+        for (int i = 0; i < nkws; i++) {
+            if (PyDict_SetItem(kws, PyTuple_GET_ITEM(kwnames, i), kwvalues[i]) == -1) {
+                return nullptr;
+            }
+        }
+    }
+
+    PyObject *res;
+    if (Py_TYPE(first_arg)->tp_call) {
+        py_object arg_tuple(get_args_tuple());
+        res = seq_vtable.add_custom_step((PyObject*)subseq, cond, start_time,
+                                         first_arg, arg_tuple,
+                                         kws ? kws.get() : Py_None);
+    }
+    else if (kws) {
+        py_object arg_tuple(get_args_tuple());
+        return PyErr_Format(PyExc_ValueError,
+                            "Unexpected arguments when creating new time step, %S, %S.",
+                            arg_tuple.get(), kws.get());
+    }
+    else if (tuple_nargs == 0) {
+        res = seq_vtable.add_time_step((PyObject*)subseq, cond, start_time, first_arg);
+    }
+    else {
+        py_object arg_tuple(get_args_tuple());
+        return PyErr_Format(PyExc_ValueError,
+                            "Unexpected arguments when creating new time step, %S.",
+                            arg_tuple.get());
+    }
+    if (!res)
+        return nullptr;
+    if (type == AddStepType::Step) {
+        auto new_seq = (TimeSeq*)res;
+        Py_INCREF(new_seq->end_time);
+        auto prev_time = subseq->__pyx_base.end_time;
+        subseq->__pyx_base.end_time = new_seq->end_time;
+        Py_DECREF(prev_time);
+    }
+    return res;
+}
+catch (...) {
+    return nullptr;
+}
+
 template<typename TimeStep, bool is_pulse>
 static PyObject *timestep_set(PyObject *self, PyObject *const *args,
                               Py_ssize_t nargs, PyObject *kwnames) try
@@ -216,25 +346,65 @@ catch (...) {
     return nullptr;
 }
 
-template<typename SubSeq>
+template<typename SubSeq, typename TimeSeq>
 static inline void
-update_subseq(PyTypeObject *ty_subseq, SubSeq*)
+update_subseq(PyTypeObject *ty_subseq, SubSeq*, TimeSeq*)
 {
     static PyMethodDef subseq_set_method = {
         "set", (PyCFunction)(void*)condseq_set<SubSeq,false>,
         METH_FASTCALL|METH_KEYWORDS, 0};
+    static PyMethodDef subseq_add_step_method = {
+        "add_step",
+        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,false,AddStepType::Step>,
+        METH_FASTCALL|METH_KEYWORDS, 0};
+    static PyMethodDef subseq_add_background_method = {
+        "add_background",
+        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,false,AddStepType::Background>,
+        METH_FASTCALL|METH_KEYWORDS, 0};
+    static PyMethodDef subseq_add_floating_method = {
+        "add_floating",
+        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,false,AddStepType::Floating>,
+        METH_FASTCALL|METH_KEYWORDS, 0};
+    static PyMethodDef subseq_add_at_method = {
+        "add_at",
+        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,false,AddStepType::At>,
+        METH_FASTCALL|METH_KEYWORDS, 0};
     type_add_method(ty_subseq, &subseq_set_method);
+    type_add_method(ty_subseq, &subseq_add_step_method);
+    type_add_method(ty_subseq, &subseq_add_background_method);
+    type_add_method(ty_subseq, &subseq_add_floating_method);
+    type_add_method(ty_subseq, &subseq_add_at_method);
     PyType_Modified(ty_subseq);
 }
 
-template<typename ConditionalWrapper>
+template<typename ConditionalWrapper, typename TimeSeq>
 static inline void
-update_conditional(PyTypeObject *ty_conditional, ConditionalWrapper*)
+update_conditional(PyTypeObject *ty_conditional, ConditionalWrapper*, TimeSeq*)
 {
     static PyMethodDef conditional_set_method = {
         "set", (PyCFunction)(void*)condseq_set<ConditionalWrapper,true>,
         METH_FASTCALL|METH_KEYWORDS, 0};
+    static PyMethodDef conditional_add_step_method = {
+        "add_step",
+        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,true,AddStepType::Step>,
+        METH_FASTCALL|METH_KEYWORDS, 0};
+    static PyMethodDef conditional_add_background_method = {
+        "add_background",
+        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,true,AddStepType::Background>,
+        METH_FASTCALL|METH_KEYWORDS, 0};
+    static PyMethodDef conditional_add_floating_method = {
+        "add_floating",
+        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,true,AddStepType::Floating>,
+        METH_FASTCALL|METH_KEYWORDS, 0};
+    static PyMethodDef conditional_add_at_method = {
+        "add_at",
+        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,true,AddStepType::At>,
+        METH_FASTCALL|METH_KEYWORDS, 0};
     type_add_method(ty_conditional, &conditional_set_method);
+    type_add_method(ty_conditional, &conditional_add_step_method);
+    type_add_method(ty_conditional, &conditional_add_background_method);
+    type_add_method(ty_conditional, &conditional_add_floating_method);
+    type_add_method(ty_conditional, &conditional_add_at_method);
     PyType_Modified(ty_conditional);
 }
 

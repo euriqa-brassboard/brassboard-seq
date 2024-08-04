@@ -34,7 +34,7 @@ cdef StringIO # hide import
 from io import StringIO
 
 cimport cython
-from cpython cimport PyDict_GetItemWithError, PyList_GET_SIZE, PyTuple_GET_SIZE, PyDict_Size, Py_INCREF, PyLong_AsLong, PyTypeObject
+from cpython cimport PyDict_GetItemWithError, PyList_GET_SIZE, Py_INCREF, PyLong_AsLong, PyTypeObject
 
 cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
     struct SeqVTable:
@@ -42,20 +42,30 @@ cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
                             bint exact_time, dict kws) except -1
         int (*subseq_set)(self, chn, value, cond, bint exact_time, dict kws) except -1
         object (*combine_cond)(object, object)
+        object (*new_floating_time)(object, object)
+        object (*add_custom_step)(object,object,object,object,object,object)
+        object (*add_time_step)(object,object,object,object)
+        PyTypeObject *event_time_type
     SeqVTable seq_vtable
     void update_timestep(PyTypeObject*, TimeStep)
-    void update_subseq(PyTypeObject*, SubSeq)
-    void update_conditional(PyTypeObject*, ConditionalWrapper)
+    void update_subseq(PyTypeObject*, SubSeq, TimeSeq)
+    void update_conditional(PyTypeObject*, ConditionalWrapper, TimeSeq)
 
 ctypedef int (*timestep_set_func)(object,object,object,object,bint,bint,dict) except -1
 seq_vtable.timestep_set = <timestep_set_func>timestep_set
 ctypedef int (*subseq_set_func)(object,object,object,object,bint,dict) except -1
 seq_vtable.subseq_set = <subseq_set_func>subseq_set
 seq_vtable.combine_cond = combine_cond
+cdef new_floating_time(TimeSeq seq, cond):
+    return seq.seqinfo.time_mgr.new_time_int(None, 0, True, cond, None)
+seq_vtable.new_floating_time = <object (*)(object,object)>new_floating_time
+seq_vtable.add_custom_step = <object (*)(object,object,object,object,object,object)>add_custom_step
+seq_vtable.add_time_step = <object (*)(object,object,object,object)>add_time_step
+seq_vtable.event_time_type = <PyTypeObject*>EventTime
 
 update_timestep(<PyTypeObject*>TimeStep, None)
-update_subseq(<PyTypeObject*>SubSeq, None)
-update_conditional(<PyTypeObject*>ConditionalWrapper, None)
+update_subseq(<PyTypeObject*>SubSeq, None, None)
+update_conditional(<PyTypeObject*>ConditionalWrapper, None, None)
 
 cdef combine_cond(cond1, new_cond):
     if cond1 is False:
@@ -171,32 +181,14 @@ cdef class ConditionalWrapper:
     def wait(self, length, /, *, cond=True):
         wait_cond(self.seq, length, combine_cond(self.cond, cond))
 
-    def add_step(self, first_arg, /, *args, **kwargs):
-        seq = self.seq
-        step = add_step_real(seq, self.cond, seq.end_time, first_arg, args, kwargs)
-        seq.end_time = step.end_time
-        return step
-
-    def add_background(self, first_arg, /, *args, **kwargs):
-        seq = self.seq
-        return add_step_real(seq, self.cond, seq.end_time, first_arg, args, kwargs)
-
-    def add_floating(self, first_arg, /, *args, **kwargs):
-        seq = self.seq
-        cond = self.cond
-        return add_step_real(seq, cond,
-                             seq.seqinfo.time_mgr.new_time_int(None, 0, True,
-                                                               cond, None),
-                             first_arg, args, kwargs)
-
-    def add_at(self, EventTime tp, /, first_arg, *args, **kwargs):
-        seq = self.seq
-        return add_step_real(seq, self.cond, tp, first_arg, args, kwargs)
-
     def wait_for(self, tp, /, offset=0):
         wait_for_cond(self.seq, tp, offset, self.cond)
 
     # Methods defined in c++
+    # def add_step(self, first_arg, /, *args, **kwargs)
+    # def add_background(self, first_arg, /, *args, **kwargs)
+    # def add_floating(self, first_arg, /, *args, **kwargs)
+    # def add_at(self, EventTime tp, first_arg, /, *args, **kwargs)
     # def set(self, chn, value, /, *, cond=True, bint exact_time=False, **kws)
 
     def __str__(self):
@@ -232,28 +224,14 @@ cdef class SubSeq(TimeSeq):
     def wait(self, length, /, *, cond=True):
         wait_cond(self, length, combine_cond(self.cond, cond))
 
-    def add_step(self, first_arg, /, *args, **kwargs):
-        step = add_step_real(self, self.cond, self.end_time, first_arg, args, kwargs)
-        self.end_time = step.end_time
-        return step
-
-    def add_background(self, first_arg, /, *args, **kwargs):
-        return add_step_real(self, self.cond, self.end_time, first_arg, args, kwargs)
-
-    def add_floating(self, first_arg, /, *args, **kwargs):
-        cond = self.cond
-        return add_step_real(self, cond,
-                             self.seqinfo.time_mgr.new_time_int(None, 0, True,
-                                                                cond, None),
-                             first_arg, args, kwargs)
-
-    def add_at(self, EventTime tp, first_arg, /, *args, **kwargs):
-        return add_step_real(self, self.cond, tp, first_arg, args, kwargs)
-
     def wait_for(self, tp, /, offset=0):
         wait_for_cond(self, tp, offset, self.cond)
 
     # Methods defined in c++
+    # def add_step(self, first_arg, /, *args, **kwargs)
+    # def add_background(self, first_arg, /, *args, **kwargs)
+    # def add_floating(self, first_arg, /, *args, **kwargs)
+    # def add_at(self, EventTime tp, first_arg, /, *args, **kwargs)
     # def set(self, chn, value, /, *, cond=True, bint exact_time=False, **kws)
 
     def __str__(self):
@@ -274,7 +252,10 @@ cdef SubSeq add_custom_step(SubSeq self, cond, EventTime start_time, cb,
                             tuple args, dict kwargs):
     subseq = <SubSeq>SubSeq.__new__(SubSeq)
     init_subseq(subseq, self, start_time, cond)
-    cb(subseq, *args, **kwargs)
+    if kwargs is None:
+        cb(subseq, *args)
+    else:
+        cb(subseq, *args, **kwargs)
     _assume_not_none(<void*>self.sub_seqs)
     self.sub_seqs.append(subseq)
     return subseq
@@ -289,19 +270,6 @@ cdef TimeStep add_time_step(SubSeq self, cond, EventTime start_time, length):
     _assume_not_none(<void*>self.sub_seqs)
     self.sub_seqs.append(step)
     return step
-
-cdef TimeSeq add_step_real(SubSeq self, cond, EventTime start_time,
-                           first_arg, tuple args, dict kwargs):
-    if callable(first_arg):
-        return add_custom_step(self, cond, start_time, first_arg, args, kwargs)
-    elif not PyTuple_GET_SIZE(args) and not PyDict_Size(kwargs):
-        return add_time_step(self, cond, start_time, first_arg)
-    else:
-        sargs = str(args)
-        skwargs = str(kwargs)
-        PyErr_Format(PyExc_ValueError,
-                     "Unexpected arguments when creating new time step, %U, %U.",
-                     <PyObject*>sargs, <PyObject*>skwargs)
 
 cdef int wait_for_cond(SubSeq self, _tp0, offset, cond) except -1:
     cdef EventTime tp0
