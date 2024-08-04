@@ -16,8 +16,6 @@
 # License along with this library. If not,
 # see <http://www.gnu.org/licenses/>.
 
-from cpython cimport PyDict_Size
-
 cdef extern from "src/action.h" namespace "brassboard_seq::action":
     cppclass ActionData:
         bint is_pulse;
@@ -44,7 +42,8 @@ cdef inline Action new_action(value, cond, bint is_pulse, bint exact_time, dict 
     self.cond = cond
     self.data.is_pulse = is_pulse
     self.data.exact_time = exact_time
-    self.kws = kws if PyDict_Size(kws) else None
+    if kws is not None:
+        self.kws = kws
     self.aid = aid
     return self
 

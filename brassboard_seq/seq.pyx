@@ -34,7 +34,28 @@ cdef StringIO # hide import
 from io import StringIO
 
 cimport cython
-from cpython cimport PyDict_GetItemWithError, PyList_GET_SIZE, PyTuple_GET_SIZE, PyDict_Size, Py_INCREF, PyLong_AsLong
+from cpython cimport PyDict_GetItemWithError, PyList_GET_SIZE, PyTuple_GET_SIZE, PyDict_Size, Py_INCREF, PyLong_AsLong, PyTypeObject
+
+cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
+    struct SeqVTable:
+        int (*timestep_set)(self, chn, value, cond, bint is_pulse,
+                            bint exact_time, dict kws) except -1
+        int (*subseq_set)(self, chn, value, cond, bint exact_time, dict kws) except -1
+        object (*combine_cond)(object, object)
+    SeqVTable seq_vtable
+    void update_timestep(PyTypeObject*, TimeStep)
+    void update_subseq(PyTypeObject*, SubSeq)
+    void update_conditional(PyTypeObject*, ConditionalWrapper)
+
+ctypedef int (*timestep_set_func)(object,object,object,object,bint,bint,dict) except -1
+seq_vtable.timestep_set = <timestep_set_func>timestep_set
+ctypedef int (*subseq_set_func)(object,object,object,object,bint,dict) except -1
+seq_vtable.subseq_set = <subseq_set_func>subseq_set
+seq_vtable.combine_cond = combine_cond
+
+update_timestep(<PyTypeObject*>TimeStep, None)
+update_subseq(<PyTypeObject*>SubSeq, None)
+update_conditional(<PyTypeObject*>ConditionalWrapper, None)
 
 cdef combine_cond(cond1, new_cond):
     if cond1 is False:
@@ -78,15 +99,9 @@ cdef class TimeStep(TimeSeq):
     def __init__(self):
         PyErr_Format(PyExc_TypeError, "TimeStep cannot be created directly")
 
-    def set(self, chn, value, /, *, cond=True, bint exact_time=False, **kws):
-        timestep_set(self, chn, value, combine_cond(self.cond, cond),
-                     False, exact_time, kws)
-        return self
-
-    def pulse(self, chn, value, /, *, cond=True, bint exact_time=False, **kws):
-        timestep_set(self, chn, value, combine_cond(self.cond, cond),
-                     True, exact_time, kws)
-        return self
+    # Methods defined in c++
+    # def set(self, chn, value, /, *, cond=True, bint exact_time=False, **kws)
+    # def pulse(self, chn, value, /, *, cond=True, bint exact_time=False, **kws)
 
     def __str__(self):
         io = StringIO()
@@ -181,9 +196,8 @@ cdef class ConditionalWrapper:
     def wait_for(self, tp, /, offset=0):
         wait_for_cond(self.seq, tp, offset, self.cond)
 
-    def set(self, chn, value, /, *, cond=True, bint exact_time=False, **kws):
-        subseq_set(self.seq, chn, value, combine_cond(self.cond, cond), exact_time, kws)
-        return self
+    # Methods defined in c++
+    # def set(self, chn, value, /, *, cond=True, bint exact_time=False, **kws)
 
     def __str__(self):
         io = StringIO()
@@ -239,9 +253,8 @@ cdef class SubSeq(TimeSeq):
     def wait_for(self, tp, /, offset=0):
         wait_for_cond(self, tp, offset, self.cond)
 
-    def set(self, chn, value, /, *, cond=True, bint exact_time=False, **kws):
-        subseq_set(self, chn, value, combine_cond(self.cond, cond), exact_time, kws)
-        return self
+    # Methods defined in c++
+    # def set(self, chn, value, /, *, cond=True, bint exact_time=False, **kws)
 
     def __str__(self):
         io = StringIO()
