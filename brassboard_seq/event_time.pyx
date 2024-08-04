@@ -11,6 +11,7 @@ from libcpp.algorithm cimport fill as cppfill
 
 cimport cython
 from cython.operator cimport dereference as deref, predecrement as predec
+from cpython cimport PyTypeObject
 
 cdef object py_time_scale = c_time_scale
 cdef RuntimeValue rt_time_scale = new_const(py_time_scale)
@@ -20,6 +21,9 @@ def time_scale():
 
 cdef extern from "src/event_time.cpp" namespace "brassboard_seq::event_time":
     cdef str _str_time(long long)
+    cdef void update_event_time_gc_callback(PyTypeObject *type, EventTime)
+
+update_event_time_gc_callback(<PyTypeObject*>EventTime, None)
 
 cdef int visit_time(TimeManager self, EventTime t, unordered_set[int] &visited) except -1:
     cdef int id = t.data.id
@@ -32,16 +36,16 @@ cdef int visit_time(TimeManager self, EventTime t, unordered_set[int] &visited) 
         bb_err_format(ValueError, event_time_key(<void*>t), "Time loop detected")
     visited.insert(id)
     cdef long long static_offset
-    rt_offset = t.rt_offset
+    p_rt_offset = t.data.get_rt_offset()
     cond = t.cond
     if cond is True:
-        if rt_offset is not None:
+        if p_rt_offset != NULL:
             static_offset = -1
         else:
-            static_offset = <long long>t.data.c_offset
+            static_offset = <long long>t.data.get_c_offset()
     elif cond is False:
         static_offset = 0
-    elif rt_offset is None and t.data.c_offset == 0:
+    elif p_rt_offset == NULL and t.data.get_c_offset() == 0:
         static_offset = 0
     else:
         static_offset = -1
@@ -192,7 +196,7 @@ cdef long long get_time_value(EventTime self, int base_id, unsigned age,
                               vector[long long] &cache) except -1:
     cdef int tid = self.data.id
     if tid == base_id:
-        if self.data.has_static:
+        if self.data.is_static():
             return self.data._get_static()
         return 0
     assert tid > base_id
@@ -203,7 +207,7 @@ cdef long long get_time_value(EventTime self, int base_id, unsigned age,
     # no time should be floating anymore
     assert not self.data.floating
 
-    if self.data.has_static:
+    if self.data.is_static():
         # If we have a static value it means that the base time has a static value
         # In this case, we are returning the full time and there's no need to
         # compute the offset from the base time.
@@ -219,13 +223,14 @@ cdef long long get_time_value(EventTime self, int base_id, unsigned age,
     cdef bint cond = bool(get_value(self.cond, age))
     cdef long long offset = 0
     if cond:
-        if self.rt_offset is not None:
-            offset = <long long?>rt_eval(self.rt_offset, age)
+        p_rt_offset = self.data.get_rt_offset()
+        if p_rt_offset != NULL:
+            offset = <long long?>rt_eval(<RuntimeValue>p_rt_offset, age)
             if offset < 0:
                 bb_err_format(ValueError, event_time_key(<void*>self),
                               "Time delay cannot be negative")
         else:
-            offset = <long long>self.data.c_offset
+            offset = <long long>self.data.get_c_offset()
 
     cdef EventTime wait_for = self.wait_for
     if wait_for is None:
@@ -264,13 +269,14 @@ cdef class EventTime:
     def __str__(self):
         if self.data.floating:
             return '<floating>'
-        if self.data.has_static:
+        if self.data.is_static():
             return _str_time(self.data._get_static())
         prev = self.prev
-        if self.rt_offset is None:
-            offset = _str_time(<long long>self.data.c_offset)
+        p_rt_offset = self.data.get_rt_offset()
+        if p_rt_offset == NULL:
+            offset = _str_time(<long long>self.data.get_c_offset())
         else:
-            offset = str(self.rt_offset)
+            offset = str(<RuntimeValue>p_rt_offset)
         cond = self.cond
         if prev is None:
             assert cond is True

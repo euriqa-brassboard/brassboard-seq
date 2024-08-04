@@ -114,7 +114,7 @@ void collect_actions(RFSOCBackend *rb, const CompileVTable vtable, Action*, Even
                 rfsoc_action.is_end = is_end;
 
                 auto event_time = (EventTime*)PyList_GET_ITEM(event_times, tid);
-                if (event_time->data.has_static) {
+                if (event_time->data.is_static()) {
                     rfsoc_action.seq_time = event_time->data._get_static();
                 }
                 else {

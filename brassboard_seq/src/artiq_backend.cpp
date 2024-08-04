@@ -116,7 +116,7 @@ void collect_actions(ArtiqBackend *ab, const CompileVTable vtable, Action*, Even
         Relocation reloc{cond_reloc, -1, -1};
 
         auto event_time = (EventTime*)PyList_GET_ITEM(event_times, tid);
-        if (event_time->data.has_static) {
+        if (event_time->data.is_static()) {
             PyObject *rt_delay;
             int64_t delay;
             if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {

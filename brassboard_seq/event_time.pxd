@@ -11,7 +11,7 @@ from brassboard_seq.rtval cimport is_rtval, new_expr2, round_int64_rt, \
   RuntimeValue, ValueType
 from brassboard_seq.utils cimport assume_not_none
 
-from cpython cimport PyErr_Format, PyFloat_AS_DOUBLE, PyList_GET_SIZE
+from cpython cimport PyErr_Format, PyFloat_AS_DOUBLE, PyList_GET_SIZE, PyObject
 
 # 1ps for internal time unit
 cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
@@ -20,11 +20,14 @@ cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
         int id
         bint floating
         int chain_id # ID of the chain this time is part of
-        bint has_static
-        uint64_t c_offset
+        bint is_static()
         long long _get_static()
         long long get_static()
         void set_static(long long value)
+        long long get_c_offset()
+        void set_c_offset(long long value)
+        PyObject *get_rt_offset()
+        void set_rt_offset(object)
 
 cdef object py_time_scale
 cdef RuntimeValue rt_time_scale
@@ -59,8 +62,7 @@ cdef class TimeManager:
         tp.wait_for = wait_for
         if offset < 0:
             PyErr_Format(ValueError, "Time delay cannot be negative")
-        tp.data.has_static = False
-        tp.data.c_offset = offset
+        tp.data.set_c_offset(offset)
         tp.data.floating = floating
         tp.cond = cond
         event_times = self.event_times
@@ -80,9 +82,8 @@ cdef class TimeManager:
         tp.manager_status = self.status
         tp.prev = prev
         tp.wait_for = wait_for
-        tp.rt_offset = offset
+        tp.data.set_rt_offset(offset)
         tp.data.floating = False
-        tp.data.has_static = False
         tp.cond = cond
         event_times = self.event_times
         cdef int ntimes = status.ntimes
@@ -120,8 +121,6 @@ cdef class EventTime:
     # If cond is false, this time point is the same as prev
     cdef object cond
 
-    cdef RuntimeValue rt_offset
-
     cdef EventTimeData data
 
     # The largest index in each chain that we are no earlier than,
@@ -136,7 +135,7 @@ cdef inline int set_base_int(EventTime self, EventTime base,
     self.prev = base
     if offset < 0:
         PyErr_Format(ValueError, "Time delay cannot be negative")
-    self.data.c_offset = offset
+    self.data.set_c_offset(offset)
     self.data.floating = False
     return 0
 
@@ -145,7 +144,7 @@ cdef inline int set_base_rt(EventTime self, EventTime base,
     if not self.data.floating:
         PyErr_Format(ValueError, "Cannot modify non-floating time")
     self.prev = base
-    self.rt_offset = offset
+    self.data.set_rt_offset(offset)
     self.data.floating = False
     return 0
 
