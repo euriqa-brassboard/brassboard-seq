@@ -101,11 +101,11 @@ PyObject *BacktraceTracker::FrameInfo::get_traceback(PyObject *next) try
     py_object globals(throw_if_not(PyDict_New()));
     py_object args(throw_if_not(PyTuple_New(4)));
 
-    PyTuple_SET_ITEM(args, 0, Py_NewRef(next));
-    PyTuple_SET_ITEM(args, 1, (PyObject*)throw_if_not(
+    PyTuple_SET_ITEM(args.get(), 0, Py_NewRef(next));
+    PyTuple_SET_ITEM(args.get(), 1, (PyObject*)throw_if_not(
                          PyFrame_New(tstate, code, globals, nullptr)));
-    PyTuple_SET_ITEM(args, 2, throw_if_not(PyLong_FromLong(lasti)));
-    PyTuple_SET_ITEM(args, 3, throw_if_not(PyLong_FromLong(lineno)));
+    PyTuple_SET_ITEM(args.get(), 2, throw_if_not(PyLong_FromLong(lasti)));
+    PyTuple_SET_ITEM(args.get(), 3, throw_if_not(PyLong_FromLong(lineno)));
     return traceback_new(&PyTraceBack_Type, args, nullptr);
 }
 catch (...) {

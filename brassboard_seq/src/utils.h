@@ -369,7 +369,7 @@ static inline PyObject *new_list_of_list(int n) try
 {
     py_object list(throw_if_not(PyList_New(n)));
     for (int i = 0; i < n; i++)
-        PyList_SET_ITEM(list, i, throw_if_not(PyList_New(0)));
+        PyList_SET_ITEM(list.get(), i, throw_if_not(PyList_New(0)));
     return list.release();
 }
 catch (...) {
