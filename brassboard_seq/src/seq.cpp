@@ -20,6 +20,8 @@
 
 #include <vector>
 
+static PyObject *__pyx_f_14brassboard_seq_3seq_combine_cond(PyObject*, PyObject*);
+
 namespace brassboard_seq::seq {
 
 static void type_add_method(PyTypeObject *type, PyMethodDef *meth)
@@ -39,20 +41,7 @@ static void raise_too_few_args(const char* func_name, bool exact,
     throw 0;
 }
 
-struct SeqVTable {
-    int (*timestep_set)(PyObject *self, PyObject *chn, PyObject *value,
-                        PyObject *cond, int is_pulse, int exact_time, PyObject *kws);
-    int (*subseq_set)(PyObject *self, PyObject *chn, PyObject *value,
-                      PyObject *cond, int exact_time, PyObject *kws);
-    PyObject *(*combine_cond)(PyObject *cond1, PyObject *new_cond);
-    PyObject *(*new_floating_time)(PyObject *seq, PyObject *cond);
-    PyObject *(*add_custom_step)(PyObject *self, PyObject *cond, PyObject *start_time,
-                                 PyObject *cb, PyObject *args, PyObject *kwargs);
-    PyObject *(*add_time_step)(PyObject *self, PyObject *cond, PyObject *start_time,
-                               PyObject *length);
-    PyTypeObject *event_time_type;
-};
-static SeqVTable seq_vtable;
+static PyTypeObject *event_time_type;
 
 struct seq_set_params {
     PyObject *chn;
@@ -95,7 +84,6 @@ struct seq_set_params {
         }
     }
 };
-
 struct CondCombiner {
     PyObject *cond{nullptr};
     bool needs_free{false};
@@ -113,7 +101,7 @@ struct CondCombiner {
         else if (cond2 == Py_False) {
             cond = Py_False;
         }
-        cond = throw_if_not(seq_vtable.combine_cond(cond1, cond2));
+        cond = throw_if_not(__pyx_f_14brassboard_seq_3seq_combine_cond(cond1, cond2));
         needs_free = true;
     }
     ~CondCombiner()
@@ -179,16 +167,20 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
         raise_too_few_args(add_step_name(type), false, nargs_min, nargs);
 
     auto first_arg = args[nargs_min - 1];
+    using EventTime = std::remove_reference_t<decltype(*subseq->__pyx_base.end_time)>;
     py_object<PyObject> start_time;
     if (type == AddStepType::Background) {
         Py_INCREF(subseq->__pyx_base.end_time);
         start_time.reset((PyObject*)subseq->__pyx_base.end_time);
     }
     else if (type == AddStepType::Floating) {
-        start_time.reset(seq_vtable.new_floating_time((PyObject*)subseq, cond));
+        start_time.reset(
+            throw_if_not(
+                __pyx_f_14brassboard_seq_3seq_new_floating_time(&subseq->__pyx_base,
+                                                                cond)));
     }
     else if (type == AddStepType::At) {
-        if (args[0] != Py_None && Py_TYPE(args[0]) != seq_vtable.event_time_type)
+        if (args[0] != Py_None && Py_TYPE(args[0]) != event_time_type)
             return PyErr_Format(PyExc_TypeError,
                                 "Argument 'tp' has incorrect type (expected EventTime, "
                                 "got %.200s)", Py_TYPE(args[0])->tp_name);
@@ -230,9 +222,11 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
     PyObject *res;
     if (Py_TYPE(first_arg)->tp_call) {
         py_object arg_tuple(get_args_tuple());
-        res = seq_vtable.add_custom_step((PyObject*)subseq, cond, start_time,
-                                         first_arg, arg_tuple,
-                                         kws ? kws.get() : Py_None);
+        res = (PyObject*)throw_if_not(
+            __pyx_f_14brassboard_seq_3seq_add_custom_step(
+                subseq, cond, (EventTime*)start_time.get(),
+                first_arg, arg_tuple,
+                kws ? kws.get() : Py_None));
     }
     else if (kws) {
         py_object arg_tuple(get_args_tuple());
@@ -241,7 +235,9 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
                             arg_tuple.get(), kws.get());
     }
     else if (tuple_nargs == 0) {
-        res = seq_vtable.add_time_step((PyObject*)subseq, cond, start_time, first_arg);
+        res = (PyObject*)throw_if_not(
+            __pyx_f_14brassboard_seq_3seq_add_time_step(
+                subseq, cond, (EventTime*)start_time.get(), first_arg));
     }
     else {
         py_object arg_tuple(get_args_tuple());
@@ -249,8 +245,6 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
                             "Unexpected arguments when creating new time step, %S.",
                             arg_tuple.get());
     }
-    if (!res)
-        return nullptr;
     if (type == AddStepType::Step) {
         auto new_seq = (TimeSeq*)res;
         Py_INCREF(new_seq->end_time);
@@ -273,16 +267,16 @@ static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
     auto subseq = condseq_get_subseq<is_cond>(self);
     auto cond = condseq_get_cond<is_cond>(self);
     CondCombiner cc(cond, params.cond);
-    int res;
     if constexpr (is_step)
-        res = seq_vtable.timestep_set((PyObject*)subseq, params.chn, params.value,
-                                      cc.cond, is_pulse, params.exact_time,
-                                      params.kwargs());
+        throw_if_not(
+            __pyx_f_14brassboard_seq_3seq_timestep_set(
+                subseq, params.chn, params.value, cc.cond, is_pulse, params.exact_time,
+                params.kwargs()) == 0);
     else
-        res = seq_vtable.subseq_set((PyObject*)subseq, params.chn, params.value,
-                                    cc.cond, params.exact_time, params.kwargs());
-    if (res == -1)
-        return nullptr;
+        throw_if_not(
+            __pyx_f_14brassboard_seq_3seq_subseq_set(
+                subseq, params.chn, params.value,
+                cc.cond, params.exact_time, params.kwargs()) == 0);
     Py_INCREF(py_self);
     return py_self;
 }

@@ -37,31 +37,14 @@ cimport cython
 from cpython cimport PyDict_GetItemWithError, PyList_GET_SIZE, Py_INCREF, PyLong_AsLong, PyTypeObject
 
 cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
-    struct SeqVTable:
-        int (*timestep_set)(self, chn, value, cond, bint is_pulse,
-                            bint exact_time, dict kws) except -1
-        int (*subseq_set)(self, chn, value, cond, bint exact_time, dict kws) except -1
-        object (*combine_cond)(object, object)
-        object (*new_floating_time)(object, object)
-        object (*add_custom_step)(object,object,object,object,object,object)
-        object (*add_time_step)(object,object,object,object)
-        PyTypeObject *event_time_type
-    SeqVTable seq_vtable
+    PyTypeObject *event_time_type
     void update_timestep(PyTypeObject*, TimeStep) except +
     void update_subseq(PyTypeObject*, SubSeq, TimeSeq) except +
     void update_conditional(PyTypeObject*, ConditionalWrapper, TimeSeq) except +
 
-ctypedef int (*timestep_set_func)(object,object,object,object,bint,bint,dict) except -1
-seq_vtable.timestep_set = <timestep_set_func>timestep_set
-ctypedef int (*subseq_set_func)(object,object,object,object,bint,dict) except -1
-seq_vtable.subseq_set = <subseq_set_func>subseq_set
-seq_vtable.combine_cond = combine_cond
-cdef new_floating_time(TimeSeq seq, cond):
+cdef inline new_floating_time(TimeSeq seq, cond):
     return seq.seqinfo.time_mgr.new_time_int(None, 0, True, cond, None)
-seq_vtable.new_floating_time = <object (*)(object,object)>new_floating_time
-seq_vtable.add_custom_step = <object (*)(object,object,object,object,object,object)>add_custom_step
-seq_vtable.add_time_step = <object (*)(object,object,object,object)>add_time_step
-seq_vtable.event_time_type = <PyTypeObject*>EventTime
+event_time_type = <PyTypeObject*>EventTime
 
 update_timestep(<PyTypeObject*>TimeStep, None)
 update_subseq(<PyTypeObject*>SubSeq, None, None)
@@ -121,8 +104,8 @@ cdef class TimeStep(TimeSeq):
     def __repr__(self):
         return str(self)
 
-cdef int timestep_set(TimeStep self, chn, value, cond, bint is_pulse,
-                      bint exact_time, dict kws) except -1:
+cdef inline int timestep_set(TimeStep self, chn, value, cond, bint is_pulse,
+                             bint exact_time, dict kws) except -1:
     cdef int cid
     seqinfo = self.seqinfo
     if type(chn) is int:
@@ -248,8 +231,8 @@ cdef int wait_cond(SubSeq self, length, cond) except -1:
     self.seqinfo.bt_tracker.record(event_time_key(<void*>self.end_time))
     return 0
 
-cdef SubSeq add_custom_step(SubSeq self, cond, EventTime start_time, cb,
-                            tuple args, dict kwargs):
+cdef inline SubSeq add_custom_step(SubSeq self, cond, EventTime start_time, cb,
+                                   tuple args, dict kwargs):
     subseq = <SubSeq>SubSeq.__new__(SubSeq)
     init_subseq(subseq, self, start_time, cond)
     if kwargs is None:
@@ -260,7 +243,7 @@ cdef SubSeq add_custom_step(SubSeq self, cond, EventTime start_time, cb,
     self.sub_seqs.append(subseq)
     return subseq
 
-cdef TimeStep add_time_step(SubSeq self, cond, EventTime start_time, length):
+cdef inline TimeStep add_time_step(SubSeq self, cond, EventTime start_time, length):
     step = <TimeStep>TimeStep.__new__(TimeStep)
     init_timeseq(step, self, start_time, cond)
     step.length = length
@@ -282,7 +265,8 @@ cdef int wait_for_cond(SubSeq self, _tp0, offset, cond) except -1:
     self.seqinfo.bt_tracker.record(event_time_key(<void*>self.end_time))
     return 0
 
-cdef int subseq_set(SubSeq self, chn, value, cond, bint exact_time, dict kws) except -1:
+cdef inline int subseq_set(SubSeq self, chn, value, cond,
+                           bint exact_time, dict kws) except -1:
     step = self.dummy_step
     start_time = self.end_time
     if step is None or step.end_time is not start_time:
