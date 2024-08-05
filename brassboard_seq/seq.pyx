@@ -383,8 +383,7 @@ cdef class Seq(SubSeq):
         seqinfo = self.seqinfo
         time_mgr = seqinfo.time_mgr
         time_mgr.finalize()
-        _assume_not_none(<void*>seqinfo.channel_name_map)
-        seqinfo.channel_name_map.clear() # Free up memory
+        seqinfo.channel_name_map = None # Free up memory
         cdef int nchn = PyList_GET_SIZE(seqinfo.channel_paths)
         all_actions = new_list_of_list(nchn)
         collect_actions(self, all_actions)
