@@ -24,32 +24,19 @@ namespace brassboard_seq::seq {
 
 static void type_add_method(PyTypeObject *type, PyMethodDef *meth)
 {
-    py_object descr(PyDescr_NewMethod(type, meth));
-    if (!descr || PyDict_SetItemString(type->tp_dict, meth->ml_name, descr) == -1)
-        throw 0;
-    return;
+    py_object descr(throw_if_not(PyDescr_NewMethod(type, meth)));
+    throw_if_not(PyDict_SetItemString(type->tp_dict, meth->ml_name, descr) == 0);
 }
 
-static PyObject *RaiseArgtupleInvalid(const char* func_name, bool exact,
-                                      Py_ssize_t num_min, Py_ssize_t num_max,
-                                      Py_ssize_t num_found)
+static void raise_too_few_args(const char* func_name, bool exact,
+                               Py_ssize_t num_min, Py_ssize_t num_found)
 {
-    Py_ssize_t num_expected;
-    const char *more_or_less;
-    if (num_found < num_min) {
-        num_expected = num_min;
-        more_or_less = "at least";
-    } else {
-        num_expected = num_max;
-        more_or_less = "at most";
-    }
-    if (exact)
-        more_or_less = "exactly";
+    const char *more_or_less = exact ? "exactly" : "at least";
     PyErr_Format(PyExc_TypeError,
                  "%.200s() takes %.8s %zd positional argument%.1s (%zd given)",
-                 func_name, more_or_less, num_expected,
-                 (num_expected == 1) ? "" : "s", num_found);
-    return nullptr;
+                 func_name, more_or_less, num_min,
+                 (num_min == 1) ? "" : "s", num_found);
+    throw 0;
 }
 
 struct SeqVTable {
@@ -82,10 +69,8 @@ struct seq_set_params {
     seq_set_params(PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames,
                    bool is_pulse)
     {
-        if (nargs != 2) {
-            RaiseArgtupleInvalid(is_pulse ? "pulse" : "set", true, 2, 2, nargs);
-            throw 0;
-        }
+        if (nargs != 2)
+            raise_too_few_args((is_pulse ? "pulse" : "set"), true, 2, nargs);
         chn = args[0];
         value = args[1];
 
@@ -102,15 +87,9 @@ struct seq_set_params {
                     exact_time = get_value_bool(value, (uintptr_t)-1);
                 }
                 else {
-                    if (!kws) {
-                        kws.reset(PyDict_New());
-                        if (!kws) {
-                            throw 0;
-                        }
-                    }
-                    if (PyDict_SetItem(kws, name, value) == -1) {
-                        throw 0;
-                    }
+                    if (!kws)
+                        kws.reset(throw_if_not(PyDict_New()));
+                    throw_if_not(PyDict_SetItem(kws, name, value) == 0);
                 }
             }
         }
@@ -134,9 +113,7 @@ struct CondCombiner {
         else if (cond2 == Py_False) {
             cond = Py_False;
         }
-        cond = seq_vtable.combine_cond(cond1, cond2);
-        if (!cond)
-            throw 0;
+        cond = throw_if_not(seq_vtable.combine_cond(cond1, cond2));
         needs_free = true;
     }
     ~CondCombiner()
@@ -198,10 +175,9 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
     auto subseq = condseq_get_subseq<is_cond>(self);
     auto cond = condseq_get_cond<is_cond>(self);
     auto nargs_min = type == AddStepType::At ? 2 : 1;
-    if (nargs < nargs_min) {
-        RaiseArgtupleInvalid(add_step_name(type), false, nargs_min, -1, nargs);
-        return nullptr;
-    }
+    if (nargs < nargs_min)
+        raise_too_few_args(add_step_name(type), false, nargs_min, nargs);
+
     auto first_arg = args[nargs_min - 1];
     py_object<PyObject> start_time;
     if (type == AddStepType::Background) {
@@ -231,9 +207,7 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
             Py_INCREF(empty_tuple);
             return empty_tuple;
         }
-        auto res = PyTuple_New(tuple_nargs);
-        if (!res)
-            throw 0;
+        auto res = throw_if_not(PyTuple_New(tuple_nargs));
         auto *tuple_args = args + nargs_min;
         for (auto i = 0; i < tuple_nargs; i++) {
             Py_INCREF(tuple_args[i]);
@@ -244,15 +218,12 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
 
     py_object<PyObject> kws;
     if (kwnames) {
-        kws.reset(PyDict_New());
-        if (!kws)
-            return nullptr;
+        kws.reset(throw_if_not(PyDict_New()));
         auto kwvalues = args + nargs;
         int nkws = (int)PyTuple_GET_SIZE(kwnames);
         for (int i = 0; i < nkws; i++) {
-            if (PyDict_SetItem(kws, PyTuple_GET_ITEM(kwnames, i), kwvalues[i]) == -1) {
-                return nullptr;
-            }
+            throw_if_not(PyDict_SetItem(kws, PyTuple_GET_ITEM(kwnames, i),
+                                        kwvalues[i]) == 0);
         }
     }
 
@@ -297,7 +268,7 @@ template<typename CondSeq, bool is_cond, bool is_step=false, bool is_pulse=false
 static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
                              Py_ssize_t nargs, PyObject *kwnames) try
 {
-    seq_set_params params(args, nargs, kwnames, false);
+    seq_set_params params(args, nargs, kwnames, is_pulse);
     auto self = (CondSeq*)py_self;
     auto subseq = condseq_get_subseq<is_cond>(self);
     auto cond = condseq_get_cond<is_cond>(self);

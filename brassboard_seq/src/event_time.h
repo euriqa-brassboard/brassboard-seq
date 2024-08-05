@@ -68,7 +68,6 @@ public:
 
     inline long long _get_static() const
     {
-        assert(_is_static && !_is_rt_offset);
         assume(_is_static && !_is_rt_offset);
         return (long long)_c_offset;
     }
@@ -91,14 +90,12 @@ public:
 
     inline long long get_c_offset() const
     {
-        assert(!_is_static && !_is_rt_offset);
         assume(!_is_static && !_is_rt_offset);
         return (long long)_c_offset;
     }
 
     inline void set_c_offset(long long value)
     {
-        assert(!_is_static && !_is_rt_offset);
         assume(!_is_static && !_is_rt_offset);
         _c_offset = (uint64_t)value;
     }
@@ -111,7 +108,6 @@ public:
     }
     inline void set_rt_offset(PyObject *v)
     {
-        assert(v && !_is_static && !_is_rt_offset);
         assume(v && !_is_static && !_is_rt_offset);
         _is_rt_offset = true;
         Py_INCREF(v);

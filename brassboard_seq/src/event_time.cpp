@@ -35,11 +35,9 @@ PyObject *_str_time(long long t)
     std::array<char, 32> str;
 
     auto [ptr, ec] = std::to_chars(str.data(), str.data() + str.size(), t);
-    if (ec != std::errc()) {
-        PyErr_Format(PyExc_RuntimeError, "%s",
-                     std::make_error_code(ec).message().c_str());
-        return nullptr;
-    }
+    if (ec != std::errc())
+        return PyErr_Format(PyExc_RuntimeError, "%s",
+                            std::make_error_code(ec).message().c_str());
     *ptr = 0;
 
     auto s = time_scale;

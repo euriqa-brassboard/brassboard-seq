@@ -47,9 +47,9 @@ cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
         object (*add_time_step)(object,object,object,object)
         PyTypeObject *event_time_type
     SeqVTable seq_vtable
-    void update_timestep(PyTypeObject*, TimeStep)
-    void update_subseq(PyTypeObject*, SubSeq, TimeSeq)
-    void update_conditional(PyTypeObject*, ConditionalWrapper, TimeSeq)
+    void update_timestep(PyTypeObject*, TimeStep) except +
+    void update_subseq(PyTypeObject*, SubSeq, TimeSeq) except +
+    void update_conditional(PyTypeObject*, ConditionalWrapper, TimeSeq) except +
 
 ctypedef int (*timestep_set_func)(object,object,object,object,bint,bint,dict) except -1
 seq_vtable.timestep_set = <timestep_set_func>timestep_set

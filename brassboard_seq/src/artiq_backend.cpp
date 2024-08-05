@@ -327,9 +327,7 @@ void generate_rtios(ArtiqBackend *ab, unsigned age, const RuntimeVTable vtable)
     auto relocate_delay = [&] (int64_t &delay, PyObject *rt_delay) {
         if (!rt_delay)
             return;
-        py_object pyval(vtable.rt_eval((PyObject*)rt_delay, age));
-        if (!pyval)
-            throw 0;
+        py_object pyval(throw_if_not(vtable.rt_eval((PyObject*)rt_delay, age)));
         auto fdelay = get_value_f64(pyval, uintptr_t(-1));
         if (fdelay < 0) {
             PyErr_Format(PyExc_ValueError,
@@ -580,9 +578,7 @@ void generate_rtios(ArtiqBackend *ab, unsigned age, const RuntimeVTable vtable)
     uint32_t *rtio_array_data = (uint32_t*)PyArray_DATA(rtio_array);
     auto resize_rtio = [&] (npy_intp sz) {
         rtio_alloc = sz;
-        if (!PyArray_Resize(rtio_array, &pydims, 0, NPY_CORDER)) {
-            throw 0;
-        }
+        throw_if_not(PyArray_Resize(rtio_array, &pydims, 0, NPY_CORDER));
     };
 
     auto alloc_space = [&] (int n) -> uint32_t* {

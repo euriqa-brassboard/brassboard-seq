@@ -330,10 +330,9 @@ void generate_channel_tonedata(RFSOCBackend *rb, ToneChannel &channel,
                               cubic_spline_t phase, bool sync, bool ff) {
         bb_debug("outputting tone data: chn=%d, cycles=%" PRId64 ", sync=%d, ff=%d\n",
                  channel.chn, cycles, sync, ff);
-        if (_add_tone_data(rb->generator, channel.chn >> 1, channel.chn & 1,
-                           cycles, freq, amp, phase,
-                           { first_output, sync, ff }) < 0)
-            throw 0;
+        throw_if_not(_add_tone_data(rb->generator, channel.chn >> 1, channel.chn & 1,
+                                    cycles, freq, amp, phase,
+                                    { first_output, sync, ff }) >= 0);
         first_output = false;
     };
     assert(!tone_buffer.params[0].empty());

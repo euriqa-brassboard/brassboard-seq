@@ -1274,3 +1274,84 @@ class StaticFunction(action.RampFunction):
 
     def eval(self, t, length, oldval):
         return t / 2 + oldval - length
+
+def test_seq_arg_error():
+    conf = Config()
+    conf.add_supported_prefix('artiq')
+
+    s = seq.Seq(conf)
+    with pytest.raises(TypeError,
+                       match='add_step\\(\\) takes at least 1 positional argument \\(0 given\\)'):
+        s.add_step()
+    with pytest.raises(TypeError,
+                       match='add_background\\(\\) takes at least 1 positional argument \\(0 given\\)'):
+        s.add_background()
+    with pytest.raises(TypeError,
+                       match='add_floating\\(\\) takes at least 1 positional argument \\(0 given\\)'):
+        s.add_floating()
+    with pytest.raises(TypeError,
+                       match='add_at\\(\\) takes at least 2 positional arguments \\(0 given\\)'):
+        s.add_at()
+    with pytest.raises(TypeError,
+                       match='add_at\\(\\) takes at least 2 positional arguments \\(1 given\\)'):
+        s.add_at(1)
+    with pytest.raises(TypeError,
+                       match="Argument 'tp' has incorrect type"):
+        s.add_at(1, 2)
+    with pytest.raises(TypeError,
+                       match='set\\(\\) takes exactly 2 positional arguments \\(0 given\\)'):
+        s.set()
+    with pytest.raises(TypeError,
+                       match='set\\(\\) takes exactly 2 positional arguments \\(1 given\\)'):
+        s.set(1)
+    with pytest.raises(TypeError,
+                       match='set\\(\\) takes exactly 2 positional arguments \\(3 given\\)'):
+        s.set(1, 2, 3)
+    c = s.conditional(True)
+    with pytest.raises(TypeError,
+                       match='add_step\\(\\) takes at least 1 positional argument \\(0 given\\)'):
+        c.add_step()
+    with pytest.raises(TypeError,
+                       match='add_background\\(\\) takes at least 1 positional argument \\(0 given\\)'):
+        c.add_background()
+    with pytest.raises(TypeError,
+                       match='add_floating\\(\\) takes at least 1 positional argument \\(0 given\\)'):
+        c.add_floating()
+    with pytest.raises(TypeError,
+                       match='add_at\\(\\) takes at least 2 positional arguments \\(0 given\\)'):
+        c.add_at()
+    with pytest.raises(TypeError,
+                       match='add_at\\(\\) takes at least 2 positional arguments \\(1 given\\)'):
+        c.add_at(1)
+    with pytest.raises(TypeError,
+                       match="Argument 'tp' has incorrect type"):
+        c.add_at(1, 2)
+    with pytest.raises(TypeError,
+                       match='set\\(\\) takes exactly 2 positional arguments \\(0 given\\)'):
+        c.set()
+    with pytest.raises(TypeError,
+                       match='set\\(\\) takes exactly 2 positional arguments \\(1 given\\)'):
+        c.set(1)
+    with pytest.raises(TypeError,
+                       match='set\\(\\) takes exactly 2 positional arguments \\(3 given\\)'):
+        c.set(1, 2, 3)
+
+    st = s.add_step(1)
+    with pytest.raises(TypeError,
+                       match='set\\(\\) takes exactly 2 positional arguments \\(0 given\\)'):
+        st.set()
+    with pytest.raises(TypeError,
+                       match='set\\(\\) takes exactly 2 positional arguments \\(1 given\\)'):
+        st.set(1)
+    with pytest.raises(TypeError,
+                       match='set\\(\\) takes exactly 2 positional arguments \\(3 given\\)'):
+        st.set(1, 2, 3)
+    with pytest.raises(TypeError,
+                       match='pulse\\(\\) takes exactly 2 positional arguments \\(0 given\\)'):
+        st.pulse()
+    with pytest.raises(TypeError,
+                       match='pulse\\(\\) takes exactly 2 positional arguments \\(1 given\\)'):
+        st.pulse(1)
+    with pytest.raises(TypeError,
+                       match='pulse\\(\\) takes exactly 2 positional arguments \\(3 given\\)'):
+        st.pulse(1, 2, 3)

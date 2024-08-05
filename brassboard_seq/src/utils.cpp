@@ -95,36 +95,21 @@ BacktraceTracker::FrameInfo::FrameInfo(PyFrameObject *frame)
 {
 }
 
-PyObject *BacktraceTracker::FrameInfo::get_traceback(PyObject *next)
+PyObject *BacktraceTracker::FrameInfo::get_traceback(PyObject *next) try
 {
     PyThreadState *tstate = PyThreadState_Get();
-    PyObject *trace = nullptr;
-    PyObject *globals = nullptr;
-    PyObject *args = nullptr;
+    py_object globals(throw_if_not(PyDict_New()));
+    py_object args(throw_if_not(PyTuple_New(4)));
 
-    globals = PyDict_New();
-    args = PyTuple_New(4);
-    if (!globals || !args)
-        goto end;
     PyTuple_SET_ITEM(args, 0, Py_NewRef(next));
-    if (auto frame = PyFrame_New(tstate, code, globals, nullptr))
-        PyTuple_SET_ITEM(args, 1, (PyObject*)frame);
-    else
-        goto end;
-    if (auto py_lasti = PyLong_FromLong(lasti))
-        PyTuple_SET_ITEM(args, 2, py_lasti);
-    else
-        goto end;
-    if (auto py_lineno = PyLong_FromLong(lineno))
-        PyTuple_SET_ITEM(args, 3, py_lineno);
-    else
-        goto end;
-    trace = traceback_new(&PyTraceBack_Type, args, nullptr);
-
-end:
-    Py_XDECREF(globals);
-    Py_XDECREF(args);
-    return trace;
+    PyTuple_SET_ITEM(args, 1, (PyObject*)throw_if_not(
+                         PyFrame_New(tstate, code, globals, nullptr)));
+    PyTuple_SET_ITEM(args, 2, throw_if_not(PyLong_FromLong(lasti)));
+    PyTuple_SET_ITEM(args, 3, throw_if_not(PyLong_FromLong(lineno)));
+    return traceback_new(&PyTraceBack_Type, args, nullptr);
+}
+catch (...) {
+    return nullptr;
 }
 
 void BacktraceTracker::_record(uintptr_t key)
@@ -153,8 +138,7 @@ void BacktraceTracker::_record(uintptr_t key)
 
 PyObject *BacktraceTracker::get_backtrace(uintptr_t key)
 {
-    if (!traceback_new)
-        return Py_NewRef(Py_None);
+    assert(traceback_new);
     auto it = traces.find(key);
     if (it == traces.end())
         return Py_NewRef(Py_None);

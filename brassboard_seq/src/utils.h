@@ -66,6 +66,15 @@ static inline __attribute__((always_inline)) void assume_not_none(T *obj)
     assume((PyObject*)obj != Py_None);
 }
 
+template<typename T>
+static inline __attribute__((always_inline))
+std::remove_reference_t<T> throw_if_not(T &&v)
+{
+    if (!v)
+        throw 0;
+    return std::move(v);
+}
+
 enum BBLogLevel {
     BB_LOG_DEBUG,
     BB_LOG_INFO,
@@ -356,20 +365,15 @@ private:
 template<typename CB>
 ScopeExit(CB) -> ScopeExit<CB>;
 
-static inline PyObject *new_list_of_list(int n)
+static inline PyObject *new_list_of_list(int n) try
 {
-    PyObject *list = PyList_New(n);
-    if (!list)
-        return NULL;
-    for (int i = 0; i < n; i++) {
-        PyObject *sublist = PyList_New(0);
-        if (!sublist) {
-            Py_DECREF(list);
-            return NULL;
-        }
-        PyList_SET_ITEM(list, i, sublist);
-    }
-    return list;
+    py_object list(throw_if_not(PyList_New(n)));
+    for (int i = 0; i < n; i++)
+        PyList_SET_ITEM(list, i, throw_if_not(PyList_New(0)));
+    return list.release();
+}
+catch (...) {
+    return nullptr;
 }
 
 static inline PyObject *pynum_add_or_sub(PyObject *a, PyObject *b, bool issub)
