@@ -287,6 +287,13 @@ cdef _build_addsub(v0, v1, bint issub):
         nv = new_expr2(ValueType.Add, nv0, nv1)
     return _new_addsub(nc, nv, ns)
 
+cdef rt_convert_bool(RuntimeValue v):
+    if v.type_ == ValueType.Int64:
+        v = v.arg0
+    if v.type_ == ValueType.Bool or v.type_ == ValueType.Not:
+        return v
+    return new_expr1(ValueType.Bool, v)
+
 cdef np_add = np.add
 cdef np_subtract = np.subtract
 cdef np_multiply = np.multiply
@@ -295,6 +302,7 @@ cdef np_remainder = np.remainder
 cdef np_bitwise_and = np.bitwise_and
 cdef np_bitwise_or = np.bitwise_or
 cdef np_bitwise_xor = np.bitwise_xor
+cdef np_logical_not = np.logical_not
 cdef np_power = np.power
 cdef np_less = np.less
 cdef np_greater = np.greater
@@ -352,9 +360,7 @@ cdef inline object _rt_eval(RuntimeValue self, unsigned age):
 
     arg0 = rt_eval(self.arg0, age)
     if type_ == ValueType.Not:
-        if type(arg0) is bool:
-            return arg0 is False
-        return ~arg0
+        return not arg0
     if type_ == ValueType.Abs:
         return abs(arg0)
     if type_ == ValueType.Ceil:
@@ -578,6 +584,10 @@ cdef class RuntimeValue:
             return new_expr2_wrap1(ValueType.Or, inputs[0], inputs[1])
         if ufunc is np_bitwise_xor:
             return new_expr2_wrap1(ValueType.Xor, inputs[0], inputs[1])
+        if ufunc is np_logical_not:
+            if self.type_ == ValueType.Not:
+                return rt_convert_bool(self.arg0)
+            return new_expr1(ValueType.Not, self)
         if ufunc is np_power:
             return new_expr2_wrap1(ValueType.Pow, inputs[0], inputs[1])
         if ufunc is np_less:
@@ -671,19 +681,15 @@ cpdef inv(v):
     if is_rtval(v):
         _v = <RuntimeValue>v
         if _v.type_ == ValueType.Not:
-            return _v.arg0
+            return rt_convert_bool(_v.arg0)
         return new_expr1(ValueType.Not, _v)
-    return ~v
+    if isinstance(v, cnpy.ndarray):
+        return np_logical_not(v)
+    return not v
 
 cpdef convert_bool(_v):
-    cdef RuntimeValue v
     if is_rtval(_v):
-        v = <RuntimeValue>(_v)
-        if v.type_ == ValueType.Int64:
-            v = v.arg0
-        if v.type_ == ValueType.Bool:
-            return v
-        return new_expr1(ValueType.Bool, v)
+        return rt_convert_bool(<RuntimeValue>_v)
     if isinstance(_v, cnpy.ndarray):
         return cnpy.PyArray_Cast(_v, cnpy.NPY_BOOL)
     return bool(_v)

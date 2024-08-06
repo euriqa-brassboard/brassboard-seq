@@ -277,11 +277,11 @@ def test_order_error1(max_bt):
     assert str(s) == f"""Seq - T[0]
  T[0]: 0 ps
  T[1]: T[0] + (1 s; if bool({c1}))
- T[2]: T[0] + (2 s; if bool(inv({c1})))
+ T[2]: T[0] + (2 s; if inv({c1}))
   TimeStep(1)@T[0] if bool({c1})
     artiq/ttl1: Set(True, cond=bool({c1}))
-  TimeStep(2)@T[0] if bool(inv({c1}))
-    artiq/ttl1: Set(True, cond=bool(inv({c1})))
+  TimeStep(2)@T[0] if inv({c1})
+    artiq/ttl1: Set(True, cond=inv({c1}))
 """
 
     with pytest.raises(ValueError,
@@ -311,14 +311,14 @@ def test_order_error2(max_bt):
  T[0]: 0 ps
  T[1]: T[0] + (100 ms; if bool({c1}))
  T[2]: T[1] + (0 ps; if bool({c1}))
- T[3]: T[0] + (100 ms; if bool(inv({c1})))
- T[4]: T[3] + (0 ps; if bool(inv({c1})))
+ T[3]: T[0] + (100 ms; if inv({c1}))
+ T[4]: T[3] + (0 ps; if inv({c1}))
   SubSeq@T[0] - T[2] if bool({c1})
     TimeStep(0)@T[1] if bool({c1})
       artiq/ttl1: Set(True, cond=bool({c1}))
-  SubSeq@T[0] - T[4] if bool(inv({c1}))
-    TimeStep(0)@T[3] if bool(inv({c1}))
-      artiq/ttl1: Set(True, cond=bool(inv({c1})))
+  SubSeq@T[0] - T[4] if inv({c1})
+    TimeStep(0)@T[3] if inv({c1})
+      artiq/ttl1: Set(True, cond=inv({c1}))
 """
 
     with pytest.raises(ValueError,

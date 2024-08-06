@@ -105,8 +105,15 @@ def test_rtval():
     assert np.rint(rv1) is rv1
 
     iv1 = rtval.inv(v1)
+    iv2 = np.logical_not(v1)
     assert str(iv1) == f'inv({s1})'
-    assert rtval.inv(iv1) is v1
+    assert str(iv2) == f'inv({s1})'
+    assert str(np.logical_not(iv1)) == f'bool({s1})'
+    assert str(rtval.inv(iv1)) == f'bool({s1})'
+    assert str(np.logical_not(iv2)) == f'bool({s1})'
+    assert str(rtval.inv(iv2)) == f'bool({s1})'
+    assert rtval.convert_bool(iv1) is iv1
+    assert rtval.convert_bool(iv2) is iv2
 
     r64v1 = rtval.round_int64(v1)
     assert str(r64v1) == f'int64({s1})'
@@ -234,11 +241,11 @@ def sum3(v1, v2, v3):
 
 def test_ops():
     olderr = np.seterr(all='ignore')
-    for f in [operator.pos, operator.neg, rtval.inv, abs, np.abs, math.ceil, np.ceil,
-              np.exp, np.expm1, math.floor, np.floor, np.log, np.log1p, np.log2,
-              np.log10, np.sqrt, np.arcsin, np.arccos, np.arctan, np.arcsinh,
-              np.arccosh, np.arctanh, np.sin, np.cos, np.tan, np.sinh, np.cosh,
-              np.tanh, np.rint, rtval.round_int64, rtval.convert_bool]:
+    for f in [operator.pos, operator.neg, rtval.inv, np.logical_not, abs, np.abs,
+              math.ceil, np.ceil, np.exp, np.expm1, math.floor, np.floor, np.log,
+              np.log1p, np.log2, np.log10, np.sqrt, np.arcsin, np.arccos, np.arctan,
+              np.arcsinh, np.arccosh, np.arctanh, np.sin, np.cos, np.tan, np.sinh,
+              np.cosh, np.tanh, np.rint, rtval.round_int64, rtval.convert_bool]:
         run_check_unary(f)
     # Omit np.add from the list since it behaves differently for booleans
     # Omit np.divide, np.remainder, np.power since they handles 0 differently
@@ -257,7 +264,7 @@ def test_ops():
 
 def test_np_ops():
     assert list(rtval.inv(np.array([True, False]))) == [False, True]
-    assert list(rtval.inv(np.array([-2, -1, 0, 1, 2]))) == [ 1,  0, -1, -2, -3]
+    assert list(rtval.inv(np.array([-2, -1, 0, 1, 2]))) == [False, False, True, False, False]
     assert list(rtval.convert_bool(np.array([True, False]))) == [True, False]
     assert list(rtval.convert_bool(np.array([0, -1, 1]))) == [False, True, True]
     assert list(rtval.convert_bool(np.array([0.0, 1.0, -1.0]))) == [False, True, True]
