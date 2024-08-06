@@ -98,11 +98,7 @@ static inline void update_event_time_gc_callback(PyTypeObject *type, EventTime*)
     event_time_base_clear = type->tp_clear;
     type->tp_traverse = [] (PyObject *obj, visitproc visit, void *arg) -> int {
         auto t = (EventTime*)obj;
-        if (auto rt_offset = t->data.get_rt_offset()) {
-            if (auto e = (*visit)(rt_offset, arg)) {
-                return e;
-            }
-        }
+        Py_VISIT(t->data.get_rt_offset());
         return event_time_base_traverse(obj, visit, arg);
     };
     type->tp_clear = [] (PyObject *obj) -> int {
