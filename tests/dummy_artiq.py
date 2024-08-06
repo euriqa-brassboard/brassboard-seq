@@ -205,7 +205,7 @@ sim_ad9910.AD9910 = AD9910
 sim_edge_counter.EdgeCounter = EdgeCounter
 sim_ttl.TTLOut = TTLOut
 
-def inject():
+def inject(dax=True):
     sys.modules['artiq'] = artiq
     sys.modules['artiq.language'] = language
     sys.modules['artiq.language.environment'] = environment
@@ -216,9 +216,10 @@ def inject():
     sys.modules['artiq.coredevice.ttl'] = ttl
     sys.modules['artiq.coredevice.urukul'] = urukul
 
-    sys.modules['dax'] = dax
-    sys.modules['dax.sim'] = sim
-    sys.modules['dax.sim.coredevice'] = sim_coredevice
-    sys.modules['dax.sim.coredevice.ad9910'] = sim_ad9910
-    sys.modules['dax.sim.coredevice.edge_counter'] = sim_edge_counter
-    sys.modules['dax.sim.coredevice.ttl'] = sim_ttl
+    if dax:
+        sys.modules['dax'] = dax
+        sys.modules['dax.sim'] = sim
+        sys.modules['dax.sim.coredevice'] = sim_coredevice
+        sys.modules['dax.sim.coredevice.ad9910'] = sim_ad9910
+        sys.modules['dax.sim.coredevice.edge_counter'] = sim_edge_counter
+        sys.modules['dax.sim.coredevice.ttl'] = sim_ttl

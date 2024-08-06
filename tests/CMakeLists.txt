@@ -9,9 +9,11 @@ python_test("${CMAKE_BINARY_DIR}"
   brassboard_seq_rfsoc_backend_utils.pyx
   dummy_artiq.py
   dummy_pulse_compiler.py
+  check_artiq_backend.py
   test_rtval.py # Keep this as the first in a parallel run since it takes the longest
   test_action.py
   test_artiq_backend.py
+  test_artiq_backend_nodax.py
   test_backend.py
   test_config.py
   test_event_time.py
