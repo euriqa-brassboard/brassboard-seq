@@ -129,10 +129,6 @@ struct BacktraceTracker {
     }
 
     PyObject *get_backtrace(uintptr_t key);
-    inline __attribute__((always_inline)) PyObject *get_backtrace(void *key)
-    {
-        return get_backtrace((uintptr_t)key);
-    }
     ~BacktraceTracker()
     {
         // Do the freeing here instead of in the destructor of the FrameInfo object

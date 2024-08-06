@@ -141,16 +141,17 @@ PyObject *BacktraceTracker::get_backtrace(uintptr_t key)
     assert(traceback_new);
     auto it = traces.find(key);
     if (it == traces.end())
-        return Py_NewRef(Py_None);
+        return nullptr;
     auto &trace = it->second;
-    PyObject *py_trace = Py_NewRef(Py_None);
+    PyObject *py_trace = nullptr;
     for (auto &info: trace) {
-        auto new_trace = info.get_traceback(py_trace);
+        auto new_trace = info.get_traceback(py_trace ? py_trace : Py_None);
         if (!new_trace) {
             // Skip a frame if we couldn't construct it.
             PyErr_Clear();
             continue;
         }
+        Py_XDECREF(py_trace);
         py_trace = new_trace;
     }
     return py_trace;

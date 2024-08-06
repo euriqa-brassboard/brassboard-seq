@@ -28,7 +28,6 @@ cdef extern from "src/utils.h" namespace "brassboard_seq":
     cppclass BacktraceTracker:
         int max_frame
         void record(uintptr_t key)
-        object get_backtrace(uintptr_t key)
 
         cppclass GlobalRestorer:
             pass
