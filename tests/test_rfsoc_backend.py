@@ -319,7 +319,7 @@ def test_channels(max_bt):
     assert rb.has_output
     channels = get_channel_info(rb, s)
     chn_ids = [tone_chn.chn for tone_chn in channels.channels]
-    assert chn_ids == [2, 3, 4, 0]
+    assert chn_ids == [2, 3, 4, 0, 1, 5]
     assert channels.chn_map == {1: (0, 'amp'), 2: (1, 'freq'),
                                 4: (2, 'phase'), 5: (3, 'ff'),
                                 6: (1, 'amp'), 7: (1, 'ff'),
@@ -327,9 +327,11 @@ def test_channels(max_bt):
     comp.runtime_finalize(1)
     assert get_output() == {
         0: [Tone(8, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
+        1: [Tone(8, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
         2: [Tone(8, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
         3: [Tone(8, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
         4: [Tone(8, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
+        5: [Tone(8, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
     }
 
     s, comp = new_seq_compiler(max_bt)
@@ -379,8 +381,9 @@ def test_output1(max_bt):
       .set('rfsoc/dds0/1/ff', True)
     comp.finalize()
     channels = get_channel_info(rb, s)
-    assert len(channels.channels) == 1
+    assert len(channels.channels) == 2
     assert channels.channels[0].chn == 1
+    assert channels.channels[1].chn == 0
     assert len(channels.channels[0].actions[0]) == 1 # freq
     action = channels.channels[0].actions[0][0]
     assert action.cond
@@ -438,6 +441,7 @@ def test_output1(max_bt):
 
     comp.runtime_finalize(1)
     assert get_output() == {
+        0: [Tone(4096008, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
         1: [Tone(4096000, Spline(100e6), Spline(0.2),
                  Spline(0.2 * np.pi), False, True),
             Tone(8, Spline(100e6), Spline(0.0), Spline(0.2 * np.pi), False, True)],
@@ -456,8 +460,9 @@ def test_output2(max_bt):
       .set('rfsoc/dds0/1/ff', rtval.new_extern(lambda: True), sync=False)
     comp.finalize()
     channels = get_channel_info(rb, s)
-    assert len(channels.channels) == 1
+    assert len(channels.channels) == 2
     assert channels.channels[0].chn == 1
+    assert channels.channels[1].chn == 0
     assert len(channels.channels[0].actions[0]) == 1 # freq
     action = channels.channels[0].actions[0][0]
     assert not action.isramp
@@ -504,6 +509,7 @@ def test_output2(max_bt):
 
     comp.runtime_finalize(1)
     assert get_output() == {
+        0: [Tone(4096008, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
         1: [Tone(4096000, Spline(100e6), Spline(0.2),
                  Spline(0.2 * np.pi), True, True),
             Tone(8, Spline(100e6), Spline(0.0), Spline(0.2 * np.pi), False, True)],
@@ -512,6 +518,7 @@ def test_output2(max_bt):
     b1 = False
     comp.runtime_finalize(2)
     assert get_output() == {
+        0: [Tone(8, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
         1: [Tone(8, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
     }
 
@@ -527,8 +534,9 @@ def test_output3(max_bt):
       .set('rfsoc/dds0/1/ff', rtval.new_extern(lambda: True), sync=False)
     comp.finalize()
     channels = get_channel_info(rb, s)
-    assert len(channels.channels) == 1
+    assert len(channels.channels) == 2
     assert channels.channels[0].chn == 1
+    assert channels.channels[1].chn == 0
     assert len(channels.channels[0].actions[0]) == 0 # freq
     assert len(channels.channels[0].actions[1]) == 0 # phase
     assert len(channels.channels[0].actions[2]) == 0 # amp
@@ -536,6 +544,7 @@ def test_output3(max_bt):
 
     comp.runtime_finalize(1)
     assert get_output() == {
+        0: [Tone(8, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
         1: [Tone(8, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
     }
 
@@ -550,8 +559,9 @@ def test_ramp_output1(max_bt):
       .set('rfsoc/dds0/1/phase', ramp2)
     comp.finalize()
     channels = get_channel_info(rb, s)
-    assert len(channels.channels) == 1
+    assert len(channels.channels) == 2
     assert channels.channels[0].chn == 1
+    assert channels.channels[1].chn == 0
     assert len(channels.channels[0].actions[0]) == 0
     assert len(channels.channels[0].actions[1]) == 2 # phase
     action = channels.channels[0].actions[1][0]
@@ -601,6 +611,7 @@ def test_ramp_output1(max_bt):
 
     comp.runtime_finalize(1)
     assert get_output() == {
+        0: [Tone(4096008, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
         1: [Tone(2048000, Spline(0.0), pytest.approx(Spline(-0.01, 0.0025)),
                  pytest.approx(Spline(-0.02 * np.pi, 0.005 * np.pi)), False, False),
             Tone(2048000, Spline(0.0), pytest.approx(Spline(-0.0075, 0.0025)),
@@ -620,8 +631,9 @@ def test_ramp_output2(max_bt):
       .set('rfsoc/dds0/1/phase', ramp2)
     comp.finalize()
     channels = get_channel_info(rb, s)
-    assert len(channels.channels) == 1
+    assert len(channels.channels) == 2
     assert channels.channels[0].chn == 1
+    assert channels.channels[1].chn == 0
     assert len(channels.channels[0].actions[0]) == 0 # freq
     assert len(channels.channels[0].actions[1]) == 2 # phase
     action = channels.channels[0].actions[1][0]
@@ -665,6 +677,7 @@ def test_ramp_output2(max_bt):
 
     comp.runtime_finalize(1)
     assert get_output() == {
+        0: [Tone(4096008, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
         1: [Tone(2048000, Spline(0.0), pytest.approx(Spline(-0.01, 0.0025)),
                  pytest.approx(Spline(-0.02 * np.pi, 0.005 * np.pi)), False, False),
             Tone(2048000, Spline(0.0), pytest.approx(Spline(-0.0075, 0.0025)),
@@ -689,6 +702,7 @@ def test_ramp_output3(max_bt):
 
     comp.runtime_finalize(1)
     assert get_output() == {
+        0: [Tone(2048008, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
         1: [Tone(1024000, Spline(0.0), pytest.approx(Spline(0.1, 0.05, 0.0, 0.0)),
                  Spline(0.0), False, False),
             Tone(1024000, Spline(0.0), pytest.approx(Spline(0.15, 0.05, 0.0, 0.0)),
@@ -699,6 +713,7 @@ def test_ramp_output3(max_bt):
                  pytest.approx(Spline(0.2 * np.pi, 0.2 * np.pi)),
                  False, False),
             Tone(8, Spline(0.0), Spline(0.0), Spline(0.4 * np.pi), False, False)],
+        8: [Tone(2048008, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
         9: [Tone(2048000, Spline(0.0), Spline(0.2, 0.1, 0.9, 0.3),
                  Spline(0.0), False, False),
             Tone(8, Spline(0.0), Spline(1.5), Spline(0.0), False, False)],
@@ -719,6 +734,7 @@ def test_ramp_output4(max_bt):
 
     comp.runtime_finalize(1)
     assert get_output() == {
+        0: [Tone(2048008, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
         1: [Tone(1024000, Spline(0.0), Spline(0.0),
                  pytest.approx(Spline(0.2 * np.pi, 0.1 * np.pi)), False, False),
             Tone(1024000, Spline(0.0), Spline(0.0),
@@ -761,6 +777,7 @@ def test_ramp_output5(max_bt):
             Tone(1024000, pytest.approx(Spline(100e6, -20e6), abs=1e-3),
                  Spline(0.0), Spline(0.0), False, False),
             Tone(8, Spline(80e6), Spline(0.0), Spline(0.0), False, False)],
+        5: [Tone(2048008, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
     }
 
 @with_rfsoc_params
@@ -879,8 +896,10 @@ def test_ramp_output6(max_bt):
                  False, False),
             Tone(409608, Spline(60e6), Spline(0.7),
                  pytest.approx(Spline(0.2 * np.pi)), False, False)],
+        1: [Tone(4505608, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
         4: [Tone(409600, Spline(0.0), Spline(0.0), Spline(0.0), False, False),
             Tone(4096008, Spline(0.0), Spline(0.1), Spline(0.0), False, False)],
+        5: [Tone(4505608, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
     }
 
 @with_rfsoc_params
@@ -975,8 +994,9 @@ def test_short_ramp_output1(max_bt):
       .set('rfsoc/dds0/1/phase', ramp2)
     comp.finalize()
     channels = get_channel_info(rb, s)
-    assert len(channels.channels) == 1
+    assert len(channels.channels) == 2
     assert channels.channels[0].chn == 1
+    assert channels.channels[1].chn == 0
     assert len(channels.channels[0].actions[0]) == 0
     assert len(channels.channels[0].actions[1]) == 2 # phase
     action = channels.channels[0].actions[1][0]
@@ -1026,6 +1046,7 @@ def test_short_ramp_output1(max_bt):
 
     comp.runtime_finalize(1)
     assert get_output() == {
+        0: [Tone(90, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
         1: [Tone(41, Spline(0.0), pytest.approx(Spline(-2e-7, 5e-8), rel=3e-3),
                  pytest.approx(Spline(-4e-7 * np.pi, 1e-7 * np.pi), rel=3e-3),
                  False, False),
@@ -1050,6 +1071,7 @@ def test_short_ramp_output2(max_bt):
 
     comp.runtime_finalize(1)
     assert get_output() == {
+        0: [Tone(10, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
         1: [Tone(4, Spline(0.0),
                  pytest.approx(Spline(0.1, 0.34296875, -1.332421875, 0.889453125),
                                rel=3e-3),
@@ -1060,6 +1082,7 @@ def test_short_ramp_output2(max_bt):
             Tone(6, Spline(0.0), Spline(0.0), pytest.approx(Spline(0.4 * np.pi)),
                  False, False)],
         4: [Tone(10, Spline(0.0), Spline(0.1), Spline(0.0), False, False)],
+        5: [Tone(10, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
     }
 
 @with_rfsoc_params
@@ -1212,6 +1235,7 @@ def test_ff_output(max_bt):
     assert get_output() == {
         0: [Tone(409600, Spline(0.0), Spline(0.0), Spline(0.0), False, False),
             Tone(819208, Spline(0.0), Spline(0.0), Spline(0.0), False, True)],
+        1: [Tone(1228808, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
     }
 
     s, comp = new_seq_compiler(max_bt)
@@ -1230,6 +1254,7 @@ def test_ff_output(max_bt):
         0: [Tone(409600, Spline(0.0), Spline(0.0), Spline(0.0), False, False),
             Tone(409600, Spline(0.0), Spline(0.0), Spline(0.0), False, True),
             Tone(409608, Spline(0.0), Spline(0.0), Spline(0.0), True, True)],
+        1: [Tone(1228808, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
     }
 
 @with_rfsoc_params
@@ -1249,6 +1274,7 @@ def test_param_output(max_bt):
     assert get_output() == {
         0: [Tone(409600, Spline(0.0), Spline(0.0), Spline(0.0), False, False),
             Tone(819208, Spline(0.0), Spline(0.2), Spline(0.0), False, False)],
+        1: [Tone(1228808, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
     }
 
     s, comp = new_seq_compiler(max_bt)
@@ -1267,6 +1293,7 @@ def test_param_output(max_bt):
         0: [Tone(409600, Spline(0.0), Spline(0.0), Spline(0.0), False, False),
             Tone(409600, Spline(0.0), Spline(0.2), Spline(0.0), False, False),
             Tone(409608, Spline(0.0), Spline(0.2), Spline(0.0), True, False)],
+        1: [Tone(1228808, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
     }
 
 @with_rfsoc_params
@@ -1282,6 +1309,7 @@ def test_sync_merge(max_bt):
     comp.runtime_finalize(1)
     assert get_output() == {
         0: [Tone(8, Spline(120e6), Spline(0.0), Spline(0.0), True, False)],
+        1: [Tone(8, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
     }
 
     s, comp = new_seq_compiler(max_bt)
@@ -1295,6 +1323,7 @@ def test_sync_merge(max_bt):
     comp.runtime_finalize(1)
     assert get_output() == {
         0: [Tone(8, Spline(120e6), Spline(0.0), Spline(0.0), True, False)],
+        1: [Tone(8, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
     }
 
     s, comp = new_seq_compiler(max_bt)
@@ -1309,6 +1338,7 @@ def test_sync_merge(max_bt):
     assert get_output() == {
         0: [Tone(4, Spline(120e6), Spline(0.0), Spline(0.0), True, False),
             Tone(5, Spline(120e6), Spline(0.0), Spline(0.0), False, False)],
+        1: [Tone(9, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
     }
 
     s, comp = new_seq_compiler(max_bt)
@@ -1324,6 +1354,7 @@ def test_sync_merge(max_bt):
         0: [Tone(4, Spline(100e6, 110e6, -180e6, 90e6),
                  Spline(0.0), Spline(0.0), True, False),
             Tone(4, Spline(120e6), Spline(0.0), Spline(0.0), False, False)],
+        1: [Tone(8, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
     }
 
     s, comp = new_seq_compiler(max_bt)
@@ -1339,6 +1370,7 @@ def test_sync_merge(max_bt):
         0: [Tone(4, Spline(100e6, 110e6, -180e6, 90e6),
                  Spline(0.0), Spline(0.0), True, False),
             Tone(4, Spline(120e6), Spline(0.0), Spline(0.0), False, False)],
+        1: [Tone(8, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
     }
 
     s, comp = new_seq_compiler(max_bt)
@@ -1354,6 +1386,7 @@ def test_sync_merge(max_bt):
         0: [Tone(4, Spline(100e6, 110e6, -180e6, 90e6),
                  Spline(0.0), Spline(0.0), True, False),
             Tone(5, Spline(120e6), Spline(0.0), Spline(0.0), False, False)],
+        1: [Tone(9, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
     }
 
 @with_rfsoc_params
@@ -1441,6 +1474,7 @@ def test_tight_output1(max_bt):
 
     comp.runtime_finalize(1)
     assert get_output() == {
+        0: [Tone(12, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
         1: [Tone(4, pytest.approx(Spline(100e6, 110e6, -180e6, 90e6),
                                   rel=1e-5, abs=1e-3),
                  pytest.approx(Spline(0.1, 0.55, -0.9, 0.45)),
@@ -1453,6 +1487,7 @@ def test_tight_output1(max_bt):
                  False, True),
             Tone(8, Spline(0.0), Spline(0.3), Spline(0.0),
                  False, True)],
+        5: [Tone(12, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
     }
 
 @with_rfsoc_params
@@ -1485,6 +1520,7 @@ def test_tight_output2(max_bt):
 
     comp.runtime_finalize(1)
     assert get_output() == {
+        0: [Tone(12, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
         1: [Tone(4, pytest.approx(Spline(200e6, -320e6, 600e6, -360e6),
                                   rel=1e-5, abs=1e-3),
                  pytest.approx(Spline(0.1, 0.55, -0.9, 0.45)),
@@ -1497,6 +1533,7 @@ def test_tight_output2(max_bt):
                  False, True),
             Tone(8, Spline(0.0), Spline(0.3), Spline(0.0),
                  False, True)],
+        5: [Tone(12, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
     }
 
 @with_rfsoc_params
@@ -1529,6 +1566,7 @@ def test_tight_output3(max_bt):
 
     comp.runtime_finalize(1)
     assert get_output() == {
+        0: [Tone(12, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
         1: [Tone(4, pytest.approx(Spline(120e6), rel=1e-5, abs=1e-3),
                  pytest.approx(Spline(0.1, 0.55, -0.9, 0.45)),
                  pytest.approx(Spline(0.4 * np.pi)),
@@ -1540,6 +1578,7 @@ def test_tight_output3(max_bt):
                  False, True),
             Tone(8, Spline(0.0), Spline(0.3), Spline(0.0),
                  False, True)],
+        5: [Tone(12, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
     }
 
 @with_rfsoc_params
@@ -1572,6 +1611,7 @@ def test_tight_output4(max_bt):
 
     comp.runtime_finalize(1)
     assert get_output() == {
+        0: [Tone(12, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
         1: [Tone(4, pytest.approx(Spline(200e6, -320e6, 600e6, -360e6),
                                   rel=1e-5, abs=1e-3),
                  pytest.approx(Spline(0.1, 0.55, -0.9, 0.45)),
@@ -1584,6 +1624,7 @@ def test_tight_output4(max_bt):
                  False, True),
             Tone(8, Spline(0.0), Spline(0.3), Spline(0.0),
                  False, True)],
+        5: [Tone(12, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
     }
 
 @with_rfsoc_params
@@ -1616,6 +1657,7 @@ def test_tight_output5(max_bt):
 
     comp.runtime_finalize(1)
     assert get_output() == {
+        0: [Tone(12, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
         1: [Tone(4, pytest.approx(Spline(200e6, -320e6, 600e6, -360e6),
                                   rel=1e-5, abs=1e-3),
                  pytest.approx(Spline(0.1, 0.55, -0.9, 0.45)),
@@ -1628,6 +1670,7 @@ def test_tight_output5(max_bt):
                  False, True),
             Tone(8, Spline(0.0), Spline(0.3), Spline(0.0),
                  False, True)],
+        5: [Tone(12, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
     }
 
 @with_rfsoc_params
@@ -1694,10 +1737,12 @@ def check_dds_delay(max_bt, use_rt):
             Tone(409198, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
         1: [Tone(410, Spline(0.0), Spline(0.0), Spline(0.0), False, False),
             Tone(818798, Spline(0.0), Spline(0.0), Spline(0.4 * np.pi), False, False)],
+        2: [Tone(819208, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
         3: [Tone(409600, Spline(0.0), Spline(0.0), Spline(0.0), False, False),
             Tone(409608, Spline(100e6), Spline(0.0), Spline(0.0), False, False)],
         4: [Tone(409600, Spline(0.0), Spline(0.3), Spline(0.0), False, False),
             Tone(409608, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
+        5: [Tone(819208, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
     }
 
 @with_rfsoc_params

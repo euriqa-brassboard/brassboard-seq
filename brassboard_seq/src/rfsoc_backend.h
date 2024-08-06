@@ -102,6 +102,7 @@ struct ChannelInfo {
     {
         dds_delay[dds] = delay;
     }
+    void ensure_both_tones();
 };
 
 struct DDSParamAction {

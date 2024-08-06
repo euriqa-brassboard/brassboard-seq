@@ -22,6 +22,7 @@
 #include "utils.h"
 
 #include <algorithm>
+#include <bitset>
 
 #include <assert.h>
 
@@ -38,6 +39,25 @@ inline void ChannelInfo::add_seq_channel(int seq_chn, int chn_idx, ToneParam par
 {
     assert(chn_map.count(seq_chn) == 0);
     chn_map.insert({seq_chn, {chn_idx, param}});
+}
+
+inline void ChannelInfo::ensure_both_tones()
+{
+    // Ensuring both tone being availabe seems to make a difference sometimes.
+    // (Could be due to pulse compiler bugs)
+    std::bitset<64> tone_used;
+    for (auto channel: channels)
+        tone_used.set(channel.chn);
+    for (int i = 0; i < 32; i++) {
+        bool tone0 = tone_used.test(i * 2);
+        bool tone1 = tone_used.test(i * 2 + 1);
+        if (tone0 && !tone1) {
+            channels.push_back({ i * 2 + 1 });
+        }
+        else if (!tone0 && tone1) {
+            channels.push_back({ i * 2 });
+        }
+    }
 }
 
 struct CompileVTable {
@@ -91,6 +111,8 @@ void collect_actions(RFSOCBackend *rb, const CompileVTable vtable, Action*, Even
     ValueIndexer<double> float_values;
     std::vector<Relocation> &relocations = rb->relocations;
     auto event_times = seq->__pyx_base.__pyx_base.seqinfo->time_mgr->event_times;
+
+    rb->channels.ensure_both_tones();
 
     for (auto [seq_chn, value]: rb->channels.chn_map) {
         auto [chn_idx, param] = value;
