@@ -23,6 +23,10 @@ jobs:
     - name: Install dependencies
       run: sudo apt-get install cython3 python3-numpy python3-yaml python3-coverage python3-pytest
 
+    - name: Patch cython
+      working-directory: /usr/lib/python3/dist-packages/
+      run: sudo patch -Np1 --no-backup-if-mismatch < ${{github.workspace}}/.github/0001-Set-module-initialization-trace-context-to-the-corre.patch
+
     - name: Configure CMake
       run: CXXFLAGS+=" ${CXXFLAGS_COV}" cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.BUILD_TYPE}} -DENABLE_CYTHON_COVERAGE=On
 

@@ -1,0 +1,64 @@
+From 33968db41ee423faf4f38c1a85ad7a0002fde35c Mon Sep 17 00:00:00 2001
+From: Yichao Yu <yyc1992@gmail.com>
+Date: Tue, 6 Aug 2024 09:14:58 -0400
+Subject: [PATCH] Set module initialization trace context to the correct file
+
+Fix #2882
+Fix #6295
+---
+ Cython/Compiler/ModuleNode.py | 31 ++++++++++++++++++++++++++++---
+ 1 file changed, 28 insertions(+), 3 deletions(-)
+
+diff --git a/Cython/Compiler/ModuleNode.py b/Cython/Compiler/ModuleNode.py
+index 413c6c89e..d79a6ce22 100644
+--- a/Cython/Compiler/ModuleNode.py
++++ b/Cython/Compiler/ModuleNode.py
+@@ -3237,17 +3237,42 @@ class ModuleNode(Nodes.Node, Nodes.BlockNode):
+         code.putln("/*--- Execution code ---*/")
+         code.mark_pos(None)
+ 
++        orig_file = self.pos[0]
++        last_file = None
+         if profile or linetrace:
+-            code.put_trace_call(header3, self.pos, nogil=not code.funcstate.gil_owned)
+             code.funcstate.can_trace = True
+ 
++        def generate_exe_code(node, code):
++            nonlocal last_file
++            if isinstance(node, Nodes.StatListNode):
++                for stat in node.stats:
++                    generate_exe_code(stat, code)
++                return
++            if profile or linetrace and last_file != node.pos[0]:
++                if last_file is not None:
++                    code.put_trace_return("Py_None", nogil=not code.funcstate.gil_owned)
++                    if last_file != orig_file:
++                        code.putln('}')
++                last_file = node.pos[0]
++                code.putln()
++                if last_file != orig_file:
++                    code.putln('{')
++                    code.put_trace_declarations()
++                    code.put_trace_frame_init()
++                code.put_trace_call(header3, (last_file, 1, 0), nogil=not code.funcstate.gil_owned)
++            code.mark_pos(node.pos)
++            node.generate_execution_code(code)
++
+         code.mark_pos(None)
+-        self.body.generate_execution_code(code)
++        generate_exe_code(self.body, code)
+         code.mark_pos(None)
+ 
+         if profile or linetrace:
+             code.funcstate.can_trace = False
+-            code.put_trace_return("Py_None", nogil=not code.funcstate.gil_owned)
++            if last_file is not None:
++                code.put_trace_return("Py_None", nogil=not code.funcstate.gil_owned)
++                if last_file != orig_file:
++                    code.putln('}')
+ 
+         code.putln()
+         code.putln("/*--- Wrapped vars code ---*/")
+-- 
+2.45.2
+
