@@ -208,14 +208,6 @@ cdef void show(io, write, RuntimeValue v):
     else:
         write('Unknown value')
 
-cdef inline RuntimeValue new_expr3(ValueType type_, RuntimeValue arg0,
-                                   RuntimeValue arg1, RuntimeValue arg2):
-    self = _new_rtval(type_)
-    self.arg0 = arg0
-    self.arg1 = arg1
-    self.cb_arg2 = arg2
-    return self
-
 cdef _new_addsub(c, RuntimeValue v, bint s):
     if c == 0 and not s:
         return v
@@ -294,11 +286,6 @@ cdef _build_addsub(v0, v1, bint issub):
     else:
         nv = new_expr2(ValueType.Add, nv0, nv1)
     return _new_addsub(nc, nv, ns)
-
-cdef RuntimeValue wrap_value(v):
-    if is_rtval(v):
-        return <RuntimeValue>v
-    return new_const(v)
 
 cdef np_add = np.add
 cdef np_subtract = np.subtract
@@ -471,6 +458,19 @@ cdef object rt_eval(RuntimeValue self, unsigned age):
     self.cache = res
     return res
 
+cdef inline RuntimeValue new_expr2_wrap1(ValueType type_, arg0, arg1):
+    self = _new_rtval(type_)
+    if not is_rtval(arg0):
+        self.arg0 = new_const(arg0)
+        self.arg1 = <RuntimeValue>arg1
+    else:
+        self.arg0 = <RuntimeValue>arg0
+        if is_rtval(arg1):
+            self.arg1 = <RuntimeValue>arg1
+        else:
+            self.arg1 = new_const(arg1)
+    return self
+
 @cython.auto_pickle(False)
 @cython.c_api_binop_methods(True)
 @cython.final
@@ -503,25 +503,25 @@ cdef class RuntimeValue:
         return _build_addsub(self, other, True)
 
     def __mul__(self, other):
-        return new_expr2(ValueType.Mul, wrap_value(self), wrap_value(other))
+        return new_expr2_wrap1(ValueType.Mul, self, other)
 
     def __truediv__(self, other):
-        return new_expr2(ValueType.Div, wrap_value(self), wrap_value(other))
+        return new_expr2_wrap1(ValueType.Div, self, other)
 
     def __and__(self, other):
-        return new_expr2(ValueType.And, wrap_value(self), wrap_value(other))
+        return new_expr2_wrap1(ValueType.And, self, other)
 
     def __or__(self, other):
-        return new_expr2(ValueType.Or, wrap_value(self), wrap_value(other))
+        return new_expr2_wrap1(ValueType.Or, self, other)
 
     def __xor__(self, other):
-        return new_expr2(ValueType.Xor, wrap_value(self), wrap_value(other))
+        return new_expr2_wrap1(ValueType.Xor, self, other)
 
     def __pow__(self, other):
-        return new_expr2(ValueType.Pow, wrap_value(self), wrap_value(other))
+        return new_expr2_wrap1(ValueType.Pow, self, other)
 
     def __mod__(self, other):
-        return new_expr2(ValueType.Mod, wrap_value(self), wrap_value(other))
+        return new_expr2_wrap1(ValueType.Mod, self, other)
 
     def __pos__(self):
         return self
@@ -558,7 +558,7 @@ cdef class RuntimeValue:
     # Artifically limit the supported ufunc
     # in case we need to do any processing later
     # (e.g. compiling/sending it to kernel etc).
-    def __array_ufunc__(self, ufunc, methods, /, *inputs, **kws):
+    def __array_ufunc__(self, ufunc, methods, /, *inputs):
         if methods != '__call__':
             return <object>Py_NotImplemented
         # Needed for numpy type support
@@ -567,122 +567,101 @@ cdef class RuntimeValue:
         if ufunc is np_subtract:
             return _build_addsub(inputs[0], inputs[1], True)
         if ufunc is np_multiply:
-            return new_expr2(ValueType.Mul,
-                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+            return new_expr2_wrap1(ValueType.Mul, inputs[0], inputs[1])
         if ufunc is np_divide:
-            return new_expr2(ValueType.Div,
-                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+            return new_expr2_wrap1(ValueType.Div, inputs[0], inputs[1])
         if ufunc is np_remainder:
-            return new_expr2(ValueType.Mod,
-                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+            return new_expr2_wrap1(ValueType.Mod, inputs[0], inputs[1])
         if ufunc is np_bitwise_and:
-            return new_expr2(ValueType.And,
-                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+            return new_expr2_wrap1(ValueType.And, inputs[0], inputs[1])
         if ufunc is np_bitwise_or:
-            return new_expr2(ValueType.Or,
-                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+            return new_expr2_wrap1(ValueType.Or, inputs[0], inputs[1])
         if ufunc is np_bitwise_xor:
-            return new_expr2(ValueType.Xor,
-                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+            return new_expr2_wrap1(ValueType.Xor, inputs[0], inputs[1])
         if ufunc is np_power:
-            return new_expr2(ValueType.Pow,
-                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+            return new_expr2_wrap1(ValueType.Pow, inputs[0], inputs[1])
         if ufunc is np_less:
-            return new_expr2(ValueType.CmpLT,
-                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+            return new_expr2_wrap1(ValueType.CmpLT, inputs[0], inputs[1])
         if ufunc is np_greater:
-            return new_expr2(ValueType.CmpGT,
-                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+            return new_expr2_wrap1(ValueType.CmpGT, inputs[0], inputs[1])
         if ufunc is np_less_equal:
-            return new_expr2(ValueType.CmpLE,
-                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+            return new_expr2_wrap1(ValueType.CmpLE, inputs[0], inputs[1])
         if ufunc is np_greater_equal:
-            return new_expr2(ValueType.CmpGE,
-                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+            return new_expr2_wrap1(ValueType.CmpGE, inputs[0], inputs[1])
         if ufunc is np_equal:
-            return new_expr2(ValueType.CmpEQ,
-                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+            return new_expr2_wrap1(ValueType.CmpEQ, inputs[0], inputs[1])
         if ufunc is np_not_equal:
-            return new_expr2(ValueType.CmpNE,
-                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+            return new_expr2_wrap1(ValueType.CmpNE, inputs[0], inputs[1])
         if ufunc is np_fmin:
             v1 = inputs[0]
             v2 = inputs[1]
             if v1 is v2:
                 return v1
-            return new_expr2(ValueType.Min,
-                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+            return new_expr2_wrap1(ValueType.Min, inputs[0], inputs[1])
         if ufunc is np_fmax:
             v1 = inputs[0]
             v2 = inputs[1]
             if v1 is v2:
                 return v1
-            return new_expr2(ValueType.Max,
-                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+            return new_expr2_wrap1(ValueType.Max, inputs[0], inputs[1])
         if ufunc is np_abs:
-            arg0 = <RuntimeValue?>inputs[0]
-            if arg0.type_ == ValueType.Abs:
-                return arg0
-            return new_expr1(ValueType.Abs, arg0)
+            if self.type_ == ValueType.Abs:
+                return self
+            return new_expr1(ValueType.Abs, self)
         if ufunc is np_ceil:
-            arg0 = <RuntimeValue?>inputs[0]
-            if arg0.type_ == ValueType.Ceil:
-                return arg0
-            return new_expr1(ValueType.Ceil, arg0)
+            if self.type_ == ValueType.Ceil:
+                return self
+            return new_expr1(ValueType.Ceil, self)
         if ufunc is np_exp:
-            return new_expr1(ValueType.Exp, <RuntimeValue?>inputs[0])
+            return new_expr1(ValueType.Exp, self)
         if ufunc is np_expm1:
-            return new_expr1(ValueType.Expm1, <RuntimeValue?>inputs[0])
+            return new_expr1(ValueType.Expm1, self)
         if ufunc is np_floor:
-            arg0 = <RuntimeValue?>inputs[0]
-            if arg0.type_ == ValueType.Floor:
-                return arg0
-            return new_expr1(ValueType.Floor, arg0)
+            if self.type_ == ValueType.Floor:
+                return self
+            return new_expr1(ValueType.Floor, self)
         if ufunc is np_log:
-            return new_expr1(ValueType.Log, <RuntimeValue?>inputs[0])
+            return new_expr1(ValueType.Log, self)
         if ufunc is np_log1p:
-            return new_expr1(ValueType.Log1p, <RuntimeValue?>inputs[0])
+            return new_expr1(ValueType.Log1p, self)
         if ufunc is np_log2:
-            return new_expr1(ValueType.Log2, <RuntimeValue?>inputs[0])
+            return new_expr1(ValueType.Log2, self)
         if ufunc is np_log10:
-            return new_expr1(ValueType.Log10, <RuntimeValue?>inputs[0])
+            return new_expr1(ValueType.Log10, self)
         if ufunc is np_sqrt:
-            return new_expr1(ValueType.Sqrt, <RuntimeValue?>inputs[0])
+            return new_expr1(ValueType.Sqrt, self)
         if ufunc is np_arcsin:
-            return new_expr1(ValueType.Asin, <RuntimeValue?>inputs[0])
+            return new_expr1(ValueType.Asin, self)
         if ufunc is np_arccos:
-            return new_expr1(ValueType.Acos, <RuntimeValue?>inputs[0])
+            return new_expr1(ValueType.Acos, self)
         if ufunc is np_arctan:
-            return new_expr1(ValueType.Atan, <RuntimeValue?>inputs[0])
+            return new_expr1(ValueType.Atan, self)
         if ufunc is np_arctan2:
-            return new_expr2(ValueType.Atan2,
-                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+            return new_expr2_wrap1(ValueType.Atan2, inputs[0], inputs[1])
         if ufunc is np_arcsinh:
-            return new_expr1(ValueType.Asinh, <RuntimeValue?>inputs[0])
+            return new_expr1(ValueType.Asinh, self)
         if ufunc is np_arccosh:
-            return new_expr1(ValueType.Acosh, <RuntimeValue?>inputs[0])
+            return new_expr1(ValueType.Acosh, self)
         if ufunc is np_arctanh:
-            return new_expr1(ValueType.Atanh, <RuntimeValue?>inputs[0])
+            return new_expr1(ValueType.Atanh, self)
         if ufunc is np_sin:
-            return new_expr1(ValueType.Sin, <RuntimeValue?>inputs[0])
+            return new_expr1(ValueType.Sin, self)
         if ufunc is np_cos:
-            return new_expr1(ValueType.Cos, <RuntimeValue?>inputs[0])
+            return new_expr1(ValueType.Cos, self)
         if ufunc is np_tan:
-            return new_expr1(ValueType.Tan, <RuntimeValue?>inputs[0])
+            return new_expr1(ValueType.Tan, self)
         if ufunc is np_sinh:
-            return new_expr1(ValueType.Sinh, <RuntimeValue?>inputs[0])
+            return new_expr1(ValueType.Sinh, self)
         if ufunc is np_cosh:
-            return new_expr1(ValueType.Cosh, <RuntimeValue?>inputs[0])
+            return new_expr1(ValueType.Cosh, self)
         if ufunc is np_tanh:
-            return new_expr1(ValueType.Tanh, <RuntimeValue?>inputs[0])
+            return new_expr1(ValueType.Tanh, self)
         if ufunc is np_hypot:
-            return new_expr2(ValueType.Hypot,
-                             wrap_value(inputs[0]), wrap_value(inputs[1]))
+            return new_expr2_wrap1(ValueType.Hypot, inputs[0], inputs[1])
         if ufunc is np_rint:
-            arg0 = <RuntimeValue?>inputs[0]
-            if arg0.type_ == ValueType.Rint:
-                return arg0
-            return new_expr1(ValueType.Rint, arg0)
+            if self.type_ == ValueType.Rint:
+                return self
+            return new_expr1(ValueType.Rint, self)
         return <object>Py_NotImplemented
 
 cpdef inv(v):
@@ -729,7 +708,17 @@ cpdef ifelse(b, v1, v2):
     if same_value(v1, v2):
         return v1
     if is_rtval(b):
-        return new_expr3(ValueType.Select, b, wrap_value(v1), wrap_value(v2))
+        self = _new_rtval(ValueType.Select)
+        self.arg0 = <RuntimeValue>b
+        if is_rtval(v1):
+            self.arg1 = <RuntimeValue>v1
+        else:
+            self.arg1 = new_const(v1)
+        if is_rtval(v2):
+            self.cb_arg2 = v2
+        else:
+            self.cb_arg2 = new_const(v2)
+        return self
     return v1 if b else v2
 
 cpdef inline bint same_value(v1, v2) noexcept:

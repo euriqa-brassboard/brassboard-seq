@@ -48,6 +48,8 @@ def test_rtval():
     with pytest.raises(TypeError):
         np.sum(v1)
     with pytest.raises(TypeError):
+        np.sin.at(v1, 0)
+    with pytest.raises(TypeError):
         np.conj(v1)
 
     c1 = rtval.new_const(1.2)
