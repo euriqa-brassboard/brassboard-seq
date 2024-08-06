@@ -369,14 +369,12 @@ cdef double timediff_eval(EventTimeDiff self, unsigned age) except? -100.0:
     cdef double diff = get_time_value(t1, base_id, age, cache) - get_time_value(t2, base_id, age, cache)
     return diff / c_time_scale
 
+@cython.internal
 @cython.final
 cdef class EventTimeDiff(ExternCallback):
     cdef EventTime t1
     cdef EventTime t2
     cdef bint in_eval
-
-    def __init__(self):
-        PyErr_Format(PyExc_TypeError, "EventTimeDiff cannot be created directly")
 
     def __call__(self, unsigned age, /):
         if self.in_eval:

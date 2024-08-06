@@ -10,8 +10,6 @@ def test_event_time_constructors():
         event_time.TimeManager()
     with pytest.raises(TypeError):
         event_time.EventTime()
-    with pytest.raises(TypeError):
-        event_time.EventTimeDiff()
 
 def test_round_time():
     assert event_time.time_scale() == 1000000000000

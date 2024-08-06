@@ -248,6 +248,7 @@ cdef class ArtiqBackend:
         bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)
         generate_rtios(self, age, get_runtime_vtable())
 
+@cython.internal
 @cython.auto_pickle(False)
 @cython.final
 cdef class EvalOnceCallback(ExternCallback):
@@ -262,6 +263,7 @@ cdef class EvalOnceCallback(ExternCallback):
     def __str__(self):
         return f'({self.callback})()'
 
+@cython.internal
 @cython.auto_pickle(False)
 @cython.final
 cdef class DatasetCallback(ExternCallback):

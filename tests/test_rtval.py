@@ -300,9 +300,6 @@ def test_rtprop():
     assert isinstance(C.p1, rtval.RTProp)
     assert isinstance(C.p2, rtval.RTProp)
 
-    with pytest.raises(TypeError):
-        rtval.rtprop_callback()
-
     c1 = C()
     c2 = C()
 

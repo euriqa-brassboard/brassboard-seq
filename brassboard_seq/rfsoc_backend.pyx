@@ -121,6 +121,7 @@ cdef dummy_post_init
 def dummy_post_init(self, /):
     pass
 
+@cython.internal
 @cython.auto_pickle(False)
 @cython.final
 @cython.no_gc

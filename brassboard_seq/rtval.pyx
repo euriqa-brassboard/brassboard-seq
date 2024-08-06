@@ -749,14 +749,12 @@ cdef class ExternCallback:
 cdef str rtprop_prefix = '_RTProp_value_'
 cdef int rtprop_prefix_len = len(rtprop_prefix)
 
+@cython.internal
 @cython.auto_pickle(False)
 @cython.final
 cdef class rtprop_callback(ExternCallback):
     cdef obj
     cdef str fieldname
-
-    def __init__(self):
-        PyErr_Format(PyExc_TypeError, "rtprop_callback cannot be created directly")
 
     def __str__(self):
         name = self.fieldname[rtprop_prefix_len:]
