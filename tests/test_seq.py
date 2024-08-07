@@ -1268,6 +1268,23 @@ def step2(s, len2, *, cond2=None):
     assert str(s) == repr(s)
     assert str(c1) == repr(c1)
 
+def test_cond_call():
+    conf = Config()
+    conf.add_supported_prefix('artiq')
+
+    s = seq.Seq(conf)
+    @s.conditional(False)
+    def step(s):
+        s.set('artiq/ttl0', True)
+
+    assert str(s) == f"""Seq - T[0]
+ T[0]: 0 ps
+ T[1]: T[0] + (0 ps; if False)
+  SubSeq@T[0] - T[1] if False
+    TimeStep(0)@T[0] if False
+      artiq/ttl0: Set(True, cond=False)
+"""
+
 class StaticFunction(action.RampFunction):
     def __init__(self):
         action.RampFunction.__init__(self)

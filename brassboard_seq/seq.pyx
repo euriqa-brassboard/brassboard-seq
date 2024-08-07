@@ -174,6 +174,10 @@ cdef class ConditionalWrapper:
     # def add_at(self, EventTime tp, first_arg, /, *args, **kwargs)
     # def set(self, chn, value, /, *, cond=True, bint exact_time=False, **kws)
 
+    # Shorthand for add_step of custom step. Meant to be used as decorator
+    def __call__(self, cb, /):
+        return add_custom_step(self.seq, self.cond, self.seq.end_time, cb, None, None)
+
     def __str__(self):
         io = StringIO()
         conditionalwrapper_show(self, io.write, 0)
@@ -235,10 +239,12 @@ cdef inline SubSeq add_custom_step(SubSeq self, cond, EventTime start_time, cb,
                                    tuple args, dict kwargs):
     subseq = <SubSeq>SubSeq.__new__(SubSeq)
     init_subseq(subseq, self, start_time, cond)
-    if kwargs is None:
+    if kwargs is not None:
+        cb(subseq, *args, **kwargs)
+    elif args is not None:
         cb(subseq, *args)
     else:
-        cb(subseq, *args, **kwargs)
+        cb(subseq)
     _assume_not_none(<void*>self.sub_seqs)
     self.sub_seqs.append(subseq)
     return subseq
