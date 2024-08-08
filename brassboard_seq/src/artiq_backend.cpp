@@ -79,8 +79,8 @@ inline int ChannelsInfo::get_dds_channel_id(uint32_t bus_id, double ftw_per_hz,
     if (it != dds_chn_map.end())
         return it->second;
     auto dds_id = (int)ddschns.size();
-    ddschns.push_back({ftw_per_hz, bus_id, chip_select,
-            .delay = delay, .rt_delay = rt_delay });
+    ddschns.push_back({ .ftw_per_hz = ftw_per_hz, .bus_id = bus_id,
+            .chip_select = chip_select, .delay = delay, .rt_delay = rt_delay });
     dds_chn_map[key] = dds_id;
     return dds_id;
 }
