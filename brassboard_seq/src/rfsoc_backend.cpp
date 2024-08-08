@@ -795,32 +795,28 @@ void generate_tonedata(RFSOCBackend *rb, unsigned age, const RuntimeVTable vtabl
                 double sp_time;
                 int64_t sp_seq_time;
                 int64_t sp_cycle;
-                double sp_cycle_time;
                 auto update_sp_time = [&] (double t) {
                     static constexpr double time_scale = event_time::time_scale;
                     sp_time = t;
                     sp_seq_time = action_seq_time + int64_t(t * time_scale + 0.5);
                     sp_cycle = seq_time_to_cycle(sp_seq_time);
-                    auto sp_cycle_seq_time = cycle_to_seq_time(sp_cycle);
-                    sp_cycle_time = (sp_cycle_seq_time - action_seq_time) / time_scale;
                 };
                 update_sp_time(0);
                 auto add_spline = [&] (double t2, cubic_spline_t sp) {
-                    auto t1 = sp_time;
-                    auto resample_t1 = (sp_cycle_time - t1) / (t2 - t1);
+                    assert(t2 >= sp_time);
                     auto cycle1 = sp_cycle;
                     update_sp_time(t2);
-                    auto resample_t2 = (sp_cycle_time - t1) / (t2 - t1);
                     auto cycle2 = sp_cycle;
                     bb_debug("adding %s spline: [%" PRId64 ", %" PRId64 "], "
                              "cycle_len=%" PRId64 ", sync=%d, "
                              "val=spline(%f, %f, %f, %f)\n",
                              param_name(param), cycle1, cycle2, cycle2 - cycle1, sync,
                              sp.order0, sp.order1, sp.order2, sp.order3);
-                    assert(t2 >= t1);
-                    param_action.push_back({ cycle2 - cycle1, sync,
-                            spline_resample(sp, resample_t1, resample_t2)
-                        });
+                    // The spline may not actually start on the cycle.
+                    // However, attempting to resample the spline results in
+                    // more unique splines being created which seems to be overflowing
+                    // the buffer on the hardware.
+                    param_action.push_back({ cycle2 - cycle1, sync, sp });
                     sync = false;
                 };
                 if (cubic_spline_t sp; vtable.ramp_get_cubic_spline(ramp_func, &sp)) {

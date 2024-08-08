@@ -1073,10 +1073,8 @@ def test_short_ramp_output2(max_bt):
     assert get_output() == {
         0: [Tone(10, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
         1: [Tone(4, Spline(0.0),
-                 pytest.approx(Spline(0.1, 0.34296875, -1.332421875, 0.889453125),
-                               rel=3e-3),
-                 pytest.approx(Spline(0.6283185307179586, 1.5266195503332707,
-                                      -0.8320358549228715, -0.06626516469243882),
+                 pytest.approx(Spline(0.1, 0.35, -1.35, 0.9), rel=3e-3),
+                 pytest.approx(Spline(0.2 * np.pi, 0.5 * np.pi, -0.3 * np.pi, 0),
                                rel=3e-3),
                  False, False),
             Tone(6, Spline(0.0), Spline(0.0), pytest.approx(Spline(0.4 * np.pi)),
