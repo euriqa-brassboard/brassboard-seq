@@ -27,7 +27,42 @@ cimport numpy as cnpy
 cnpy._import_array()
 
 cimport cython
-from cpython cimport PyFloat_AS_DOUBLE, PyTuple_GET_ITEM
+from cpython cimport PyObject, PyFloat_AS_DOUBLE, PyTuple_GET_ITEM
+
+cdef extern from "src/rtval.cpp" namespace "brassboard_seq::rtval":
+    PyObject *cnpy_ceil
+    PyObject *cnpy_exp
+    PyObject *cnpy_expm1
+    PyObject *cnpy_floor
+    PyObject *cnpy_log
+    PyObject *cnpy_log1p
+    PyObject *cnpy_log2
+    PyObject *cnpy_log10
+    PyObject *cnpy_sqrt
+    PyObject *cnpy_arcsin
+    PyObject *cnpy_arccos
+    PyObject *cnpy_arctan
+    PyObject *cnpy_arcsinh
+    PyObject *cnpy_arccosh
+    PyObject *cnpy_arctanh
+    PyObject *cnpy_sin
+    PyObject *cnpy_cos
+    PyObject *cnpy_tan
+    PyObject *cnpy_sinh
+    PyObject *cnpy_cosh
+    PyObject *cnpy_tanh
+    PyObject *cnpy_rint
+    PyObject *cnpy_hypot
+    PyObject *cnpy_arctan2
+
+    void rt_eval_cache(RuntimeValue self, unsigned age) except +
+
+cdef inline call0(f):
+    return f()
+cdef inline call1(f, arg0):
+    return f(arg0)
+cdef inline call2(f, arg0, arg1):
+    return f(arg0, arg1)
 
 cdef int operator_precedence(ValueType type_) noexcept:
     if type_ == ValueType.Add or type_ == ValueType.Sub:
@@ -340,6 +375,31 @@ cdef np_tanh = np.tanh
 cdef np_hypot = np.hypot
 cdef np_rint = np.rint
 
+cnpy_ceil = <PyObject*>np_ceil
+cnpy_exp = <PyObject*>np_exp
+cnpy_expm1 = <PyObject*>np_expm1
+cnpy_floor = <PyObject*>np_floor
+cnpy_log = <PyObject*>np_log
+cnpy_log1p = <PyObject*>np_log1p
+cnpy_log2 = <PyObject*>np_log2
+cnpy_log10 = <PyObject*>np_log10
+cnpy_sqrt = <PyObject*>np_sqrt
+cnpy_arcsin = <PyObject*>np_arcsin
+cnpy_arccos = <PyObject*>np_arccos
+cnpy_arctan = <PyObject*>np_arctan
+cnpy_arcsinh = <PyObject*>np_arcsinh
+cnpy_arccosh = <PyObject*>np_arccosh
+cnpy_arctanh = <PyObject*>np_arctanh
+cnpy_sin = <PyObject*>np_sin
+cnpy_cos = <PyObject*>np_cos
+cnpy_tan = <PyObject*>np_tan
+cnpy_sinh = <PyObject*>np_sinh
+cnpy_cosh = <PyObject*>np_cosh
+cnpy_tanh = <PyObject*>np_tanh
+cnpy_rint = <PyObject*>np_rint
+cnpy_hypot = <PyObject*>np_hypot
+cnpy_arctan2 = <PyObject*>np_arctan2
+
 cdef inline _round_int64(v):
     if type(v) is int:
         return v
@@ -350,119 +410,9 @@ cdef inline _round_int64(v):
         return vi
     return int(round(v))
 
-cdef inline object _rt_eval(RuntimeValue self, unsigned age):
-    cdef ValueType type_ = self.type_
-
-    if type_ == ValueType.Extern:
-        return self.cb_arg2()
-    if type_ == ValueType.ExternAge:
-        return self.cb_arg2(age)
-
-    arg0 = rt_eval(self.arg0, age)
-    if type_ == ValueType.Not:
-        return not arg0
-    if type_ == ValueType.Abs:
-        return abs(arg0)
-    if type_ == ValueType.Ceil:
-        return np_ceil(arg0)
-    if type_ == ValueType.Exp:
-        return np_exp(arg0)
-    if type_ == ValueType.Expm1:
-        return np_expm1(arg0)
-    if type_ == ValueType.Floor:
-        return np_floor(arg0)
-    if type_ == ValueType.Log:
-        return np_log(arg0)
-    if type_ == ValueType.Log1p:
-        return np_log1p(arg0)
-    if type_ == ValueType.Log2:
-        return np_log2(arg0)
-    if type_ == ValueType.Log10:
-        return np_log10(arg0)
-    if type_ == ValueType.Sqrt:
-        return np_sqrt(arg0)
-    if type_ == ValueType.Asin:
-        return np_arcsin(arg0)
-    if type_ == ValueType.Acos:
-        return np_arccos(arg0)
-    if type_ == ValueType.Atan:
-        return np_arctan(arg0)
-    if type_ == ValueType.Asinh:
-        return np_arcsinh(arg0)
-    if type_ == ValueType.Acosh:
-        return np_arccosh(arg0)
-    if type_ == ValueType.Atanh:
-        return np_arctanh(arg0)
-    if type_ == ValueType.Sin:
-        return np_sin(arg0)
-    if type_ == ValueType.Cos:
-        return np_cos(arg0)
-    if type_ == ValueType.Tan:
-        return np_tan(arg0)
-    if type_ == ValueType.Sinh:
-        return np_sinh(arg0)
-    if type_ == ValueType.Cosh:
-        return np_cosh(arg0)
-    if type_ == ValueType.Tanh:
-        return np_tanh(arg0)
-    if type_ == ValueType.Rint:
-        return np_rint(arg0)
-    if type_ == ValueType.Int64:
-        return _round_int64(arg0)
-    if type_ == ValueType.Bool:
-        return bool(arg0)
-
-    if type_ == ValueType.Select:
-        return rt_eval(self.arg1 if arg0 else <RuntimeValue>self.cb_arg2, age)
-
-    arg1 = rt_eval(self.arg1, age)
-    if type_ == ValueType.Add:
-        return arg0 + arg1
-    if type_ == ValueType.Sub:
-        return arg0 - arg1
-    if type_ == ValueType.Mul:
-        return arg0 * arg1
-    if type_ == ValueType.Div:
-        return arg0 / arg1
-    if type_ == ValueType.CmpLT:
-        return arg0 < arg1
-    if type_ == ValueType.CmpGT:
-        return arg0 > arg1
-    if type_ == ValueType.CmpLE:
-        return arg0 <= arg1
-    if type_ == ValueType.CmpGE:
-        return arg0 >= arg1
-    if type_ == ValueType.CmpNE:
-        return arg0 != arg1
-    if type_ == ValueType.CmpEQ:
-        return arg0 == arg1
-    if type_ == ValueType.And:
-        return arg0 & arg1
-    if type_ == ValueType.Or:
-        return arg0 | arg1
-    if type_ == ValueType.Xor:
-        return arg0 ^ arg1
-    if type_ == ValueType.Pow:
-        return arg0**arg1
-    if type_ == ValueType.Hypot:
-        return np_hypot(arg0, arg1)
-    if type_ == ValueType.Atan2:
-        return np_arctan2(arg0, arg1)
-    if type_ == ValueType.Mod:
-        return arg0 % arg1
-    if type_ == ValueType.Max:
-        return max(arg0, arg1)
-    if type_ == ValueType.Min:
-        return min(arg0, arg1)
-    PyErr_Format(PyExc_ValueError, 'Unknown value type')
-
 cdef object rt_eval(RuntimeValue self, unsigned age):
-    if self.type_ == ValueType.Const or self.age == age:
-        return self.cache
-    res = _rt_eval(self, age)
-    self.age = age
-    self.cache = res
-    return res
+    rt_eval_cache(self, age)
+    return self.cache;
 
 cdef inline RuntimeValue new_expr2_wrap1(ValueType type_, arg0, arg1):
     self = _new_rtval(type_)
@@ -487,7 +437,8 @@ cdef class RuntimeValue:
         PyErr_Format(PyExc_TypeError, "RuntimeValue cannot be created directly")
 
     def eval(self, unsigned age, /):
-        return rt_eval(self, age)
+        rt_eval_cache(self, age)
+        return self.cache;
 
     def __str__(self):
         io = StringIO()
@@ -787,7 +738,8 @@ cdef class rtprop_callback(ExternCallback):
         cdef RuntimeValue v = <RuntimeValue>_v
         if (v.type_ == ValueType.ExternAge and v.cb_arg2 is self):
             PyErr_Format(PyExc_ValueError, 'RT property have not been assigned.')
-        return rt_eval(v, age)
+        rt_eval_cache(v, age)
+        return v.cache;
 
 cdef rtprop_callback new_rtprop_callback(obj, str fieldname):
     self = <rtprop_callback>rtprop_callback.__new__(rtprop_callback)
