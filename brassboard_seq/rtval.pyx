@@ -118,6 +118,8 @@ cdef void show(io, write, RuntimeValue v):
             write(str(cb))
         else:
             write(f'extern_age({cb})')
+    elif type_ == ValueType.Arg:
+        write(f'arg({v.cb_arg2})')
     elif type_ == ValueType.Const:
         print(v.cache.to_py(), end='', file=io)
     elif type_ == ValueType.Add:

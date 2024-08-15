@@ -526,3 +526,9 @@ def test_type():
 
     with pytest.raises(TypeError, match=f"Unknown runtime value type '{list}'"):
         rtval.new_extern(lambda: True, list)
+
+def test_arg():
+    r = test_utils.new_arg(0)
+    assert str(r) == "arg(0)"
+    with pytest.raises(ValueError, match="Cannot evaluate unknown argument"):
+        r.eval(1)

@@ -28,6 +28,7 @@
 namespace brassboard_seq::rtval {
 
 enum ValueType {
+    Arg = -3,
     ExternAge = -2,
     Const = -1,
     Extern = 0,

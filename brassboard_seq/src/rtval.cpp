@@ -676,6 +676,9 @@ void rt_eval_cache(RuntimeValue *self, unsigned age, py_object &pyage)
 
     auto type = self->type_;
     switch (type) {
+    case Arg:
+        PyErr_Format(PyExc_ValueError, "Cannot evaluate unknown argument");
+        throw 0;
     case Const:
         return;
     case Extern:

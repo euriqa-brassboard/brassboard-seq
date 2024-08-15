@@ -13,6 +13,9 @@ def new_invalid_rtval():
     rv.arg1 = rtval.new_const(1)
     return rv
 
+def new_arg(idx):
+    return rtval.new_arg(idx)
+
 def new_action(value, cond, bint is_pulse, bint exact_time, dict kws, int aid):
     return action.new_action(value, cond, is_pulse, exact_time, kws, aid)
 

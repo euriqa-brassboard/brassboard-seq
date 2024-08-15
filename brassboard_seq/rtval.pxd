@@ -23,6 +23,7 @@ from libc.stdint cimport *
 
 cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
     enum ValueType:
+        Arg
         ExternAge
         Const
         Extern
@@ -130,6 +131,11 @@ cdef inline RuntimeValue _new_rtval(ValueType type_, DataType dt):
     return self
 
 cpdef RuntimeValue new_const(v)
+
+cdef inline RuntimeValue new_arg(idx, ty=float):
+    self = _new_rtval(ValueType.Arg, pytype_to_datatype(ty))
+    self.cb_arg2 = idx
+    return self
 
 cpdef inline RuntimeValue new_extern(cb, ty=float):
     self = _new_rtval(ValueType.Extern, pytype_to_datatype(ty))
