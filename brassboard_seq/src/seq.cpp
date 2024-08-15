@@ -170,8 +170,7 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
     using EventTime = std::remove_reference_t<decltype(*subseq->__pyx_base.end_time)>;
     py_object<PyObject> start_time;
     if (type == AddStepType::Background) {
-        Py_INCREF(subseq->__pyx_base.end_time);
-        start_time.reset((PyObject*)subseq->__pyx_base.end_time);
+        start_time.reset(py_newref((PyObject*)subseq->__pyx_base.end_time));
     }
     else if (type == AddStepType::Floating) {
         start_time.reset(
@@ -184,27 +183,21 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
             return PyErr_Format(PyExc_TypeError,
                                 "Argument 'tp' has incorrect type (expected EventTime, "
                                 "got %.200s)", Py_TYPE(args[0])->tp_name);
-        Py_INCREF(args[0]);
-        start_time.reset(args[0]);
+        start_time.reset(py_newref(args[0]));
     }
     else {
         assert(type == AddStepType::Step);
-        Py_INCREF(subseq->__pyx_base.end_time);
-        start_time.reset((PyObject*)subseq->__pyx_base.end_time);
+        start_time.reset(py_newref((PyObject*)subseq->__pyx_base.end_time));
     }
 
     auto tuple_nargs = nargs - nargs_min;
     auto get_args_tuple = [&] {
-        if (tuple_nargs == 0) {
-            Py_INCREF(empty_tuple);
-            return empty_tuple;
-        }
+        if (tuple_nargs == 0)
+            return py_newref(empty_tuple);
         auto res = throw_if_not(PyTuple_New(tuple_nargs));
         auto *tuple_args = args + nargs_min;
-        for (auto i = 0; i < tuple_nargs; i++) {
-            Py_INCREF(tuple_args[i]);
-            PyTuple_SET_ITEM(res, i, tuple_args[i]);
-        }
+        for (auto i = 0; i < tuple_nargs; i++)
+            PyTuple_SET_ITEM(res, i, py_newref(tuple_args[i]));
         return res;
     };
 
@@ -247,9 +240,8 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
     }
     if (type == AddStepType::Step) {
         auto new_seq = (TimeSeq*)res;
-        Py_INCREF(new_seq->end_time);
         auto prev_time = subseq->__pyx_base.end_time;
-        subseq->__pyx_base.end_time = new_seq->end_time;
+        subseq->__pyx_base.end_time = py_newref(new_seq->end_time);
         Py_DECREF(prev_time);
     }
     return res;
@@ -277,8 +269,7 @@ static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
             __pyx_f_14brassboard_seq_3seq_subseq_set(
                 subseq, params.chn, params.value,
                 cc.cond, params.exact_time, params.kwargs()) == 0);
-    Py_INCREF(py_self);
-    return py_self;
+    return py_newref(py_self);
 }
 catch (...) {
     return nullptr;

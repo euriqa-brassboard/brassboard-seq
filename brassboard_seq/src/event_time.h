@@ -110,8 +110,7 @@ public:
     {
         assume(v && !_is_static && !_is_rt_offset);
         _is_rt_offset = true;
-        Py_INCREF(v);
-        _rt_offset = v;
+        _rt_offset = py_newref(v);
         // Assume PyObject alignment
         assert(!_is_static);
     }

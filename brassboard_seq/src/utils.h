@@ -89,6 +89,20 @@ extern BBLogLevel bb_logging_level;
 #define bb_debug(...) bb_log(BB_LOG_DEBUG, __VA_ARGS__)
 #define bb_info(...) bb_log(BB_LOG_INFO, __VA_ARGS__)
 
+template<typename T>
+static inline T *py_newref(T *obj)
+{
+    Py_INCREF(obj);
+    return obj;
+}
+
+template<typename T>
+static inline T *py_xnewref(T *obj)
+{
+    Py_XINCREF(obj);
+    return obj;
+}
+
 struct BacktraceTracker {
     // Record the backtrace to be used later.
     // We'd like to do this with the lowest overhead possible at record time.
@@ -303,24 +317,19 @@ static inline PyObject*
 pyfloat_from_double(double v)
 {
     if (v == -1) {
-        Py_INCREF(pyfloat_m1);
-        return pyfloat_m1;
+        return py_newref(pyfloat_m1);
     }
     else if (v == -0.5) {
-        Py_INCREF(pyfloat_m0_5);
-        return pyfloat_m0_5;
+        return py_newref(pyfloat_m0_5);
     }
     else if (v == 0) {
-        Py_INCREF(pyfloat_0);
-        return pyfloat_0;
+        return py_newref(pyfloat_0);
     }
     else if (v == 0.5) {
-        Py_INCREF(pyfloat_0_5);
-        return pyfloat_0_5;
+        return py_newref(pyfloat_0_5);
     }
     else if (v == 1) {
-        Py_INCREF(pyfloat_1);
-        return pyfloat_1;
+        return py_newref(pyfloat_1);
     }
     return PyFloat_FromDouble(v);
 }
