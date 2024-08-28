@@ -92,6 +92,22 @@ cdef class SeqCubicSpline:
         self._spline_segments = (order0, order1, order2, order3)
         self._eval = cubic_spline_eval
 
+    @property
+    def order0(self):
+        return (<tuple>self._spline_segments)[0]
+
+    @property
+    def order1(self):
+        return (<tuple>self._spline_segments)[1]
+
+    @property
+    def order2(self):
+        return (<tuple>self._spline_segments)[2]
+
+    @property
+    def order3(self):
+        return (<tuple>self._spline_segments)[3]
+
 cdef ramp_eval(RampFunction self, t, length, oldval):
     return self._eval(self, t, length, oldval)
 

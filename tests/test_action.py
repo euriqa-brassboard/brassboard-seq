@@ -183,6 +183,10 @@ def test_spline():
         ro3 = rtval.new_extern(lambda: o3) if rt3 else o3
 
         sp_seq = action.SeqCubicSpline(ro0, ro1, ro2, ro3)
+        assert sp_seq.order0 is ro0
+        assert sp_seq.order1 is ro1
+        assert sp_seq.order2 is ro2
+        assert sp_seq.order3 is ro3
         sp_py = PyCubicSpline(ro0, ro1, ro2, ro3)
         assert test_utils.ramp_get_spline_segments(sp_seq, 1, 0) == ()
         assert test_utils.ramp_get_spline_segments(sp_py, 1, 0) == ()
