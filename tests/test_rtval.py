@@ -14,6 +14,8 @@ class CmpError:
 
 def cmp_value(v1, v2):
     if np.isfinite(v1) and np.isfinite(v2):
+        if isinstance(v2, np.float32):
+            return v1 == pytest.approx(v2, rel=1e-4)
         return v1 == pytest.approx(v2)
     if math.isnan(v1):
         return math.isnan(v2)
