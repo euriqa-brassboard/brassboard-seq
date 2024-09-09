@@ -137,3 +137,25 @@ def test_constructor():
     assert str(scan.ParamPack({})) == '{}\n'
     assert str(scan.ParamPack({'A': 123})) == 'A: 123\n'
     assert str(scan.ParamPack(B=23)) == 'B: 23\n'
+
+
+def test_getitem():
+    p = scan.ParamPack()
+    d = p[:]
+    assert d == {}
+    assert d is not p[:]
+    with pytest.raises(ValueError, match="Invalid index for ParamPack: 1"):
+        p[1]
+
+    p.a = 2
+    assert d == {}
+    assert p[:] == {"a": 2}
+
+    p.b = {}
+    d2 = p[:]
+    assert d2 == {"a": 2, "b": {}}
+    d2["b"]["c"] = 2
+    assert p[:] == {"a": 2, "b": {}}
+    p.b.c = 3
+    assert p[:] == {"a": 2, "b": {"c": 3}}
+    assert d2["b"]["c"] == 2

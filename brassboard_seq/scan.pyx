@@ -18,7 +18,7 @@
 
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.utils cimport PyErr_Format, PyExc_AttributeError, \
-  PyExc_KeyError, PyExc_TypeError
+  PyExc_KeyError, PyExc_TypeError, PyExc_ValueError
 
 cimport cython
 
@@ -123,6 +123,20 @@ cdef class ParamPack:
             merge_dict_into(self_values, <dict>arg, False)
         if nkws != 0:
             merge_dict_into(self_values, kwargs, False)
+
+    def __getitem__(self, key):
+        if key != slice(None):
+            PyErr_Format(PyExc_ValueError,
+                         "Invalid index for ParamPack: %S", <PyObject*>key)
+        fieldname = self.fieldname
+        values = self.values
+        cdef PyObject *fieldp = PyDict_GetItemWithError(values, fieldname)
+        if fieldp == NULL:
+            return {}
+        field = <object>fieldp
+        if not isinstance(field, dict):
+            PyErr_Format(PyExc_TypeError, "Cannot access value as parameter pack.")
+        return {k: deepcopy_dict(v) for k, v in (<dict>field).items()}
 
     def __getattr__(self, str name):
         if name.startswith('_'):
