@@ -37,11 +37,6 @@ def get_sys_info():
         except AttributeError:
             magic_tag = ''
     print("magic_tag:%s" % magic_tag)
-    try:
-        import Cython
-        print('cython_version:%s' % Cython.__version__)
-    except:
-        print('cython_version:')
     import importlib
     print('extension_suffix:%s' % importlib.machinery.EXTENSION_SUFFIXES[0])
     return 0

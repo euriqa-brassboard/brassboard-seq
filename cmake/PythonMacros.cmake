@@ -72,15 +72,17 @@ if(python_config)
   endif()
   string(REGEX REPLACE ".*\nmagic_tag:([^\n]*).*$" "\\1"
     PYTHON_MAGIC_TAG ${python_config})
-  string(REGEX REPLACE ".*\ncython_version:([^\n]*).*$" "\\1"
-    CYTHON_VERSION ${python_config})
-  if("${CYTHON_VERSION}" STREQUAL "")
-    set(CYTHON_FOUND False CACHE INTERNAL "Cython status" FORCE)
-  else()
-    set(CYTHON_FOUND True CACHE INTERNAL "Cython status" FORCE)
-  endif()
   string(REGEX REPLACE ".*\nextension_suffix:([^\n]*).*$" "\\1"
     PYTHON_EXTENSION_SUFFIX ${python_config})
+endif()
+
+find_program(CYTHON_PATH NAMES cython cython3)
+execute_process(COMMAND "${CYTHON_PATH}" --version OUTPUT_VARIABLE cython_config)
+string(REGEX REPLACE ".*version ([.0-9]*).*$" "\\1" CYTHON_VERSION ${cython_config})
+if("${CYTHON_VERSION}" STREQUAL "")
+  set(CYTHON_FOUND False CACHE INTERNAL "Cython status" FORCE)
+else()
+  set(CYTHON_FOUND True CACHE INTERNAL "Cython status" FORCE)
 endif()
 
 option(ENABLE_CYTHON "Whether cython should be enabled if detected" On)
@@ -270,7 +272,7 @@ function(_cython_compile SOURCE_FILE OUT_PYX OUT_PXD OUT_C OUT_SO OUT_TGT)
     endforeach()
     add_custom_command(
       OUTPUT "${dst_c}"
-      COMMAND ${Python_EXECUTABLE} -m cython ${lang_args} ${include_args} -o "${dst_c}"
+      COMMAND "${CYTHON_PATH}" ${lang_args} ${include_args} -o "${dst_c}"
       -w "${basedir}" --depfile ${coverage_args} "${src}"
       COMMAND ${Python_EXECUTABLE} "${_py_cmake_module_dir}/fix-deps-file.py"
       "${dst_c}.dep" "${basedir}"
