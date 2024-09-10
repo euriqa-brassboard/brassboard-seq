@@ -55,6 +55,7 @@ cdef extern from *:
     PyObject *PyExc_AttributeError
     PyObject *PyExc_KeyError
     PyObject *PyExc_IndexError
+    PyObject *PyExc_SyntaxError
     PyObject *PyExc_TypeError
     PyObject *PyExc_ValueError
     PyObject *PyExc_RuntimeError
