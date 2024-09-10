@@ -195,4 +195,17 @@ PyObject *pyfloat_0(PyFloat_FromDouble(0));
 PyObject *pyfloat_0_5(PyFloat_FromDouble(0.5));
 PyObject *pyfloat_1(PyFloat_FromDouble(1));
 
+PyObject *pytuple_append1(PyObject *tuple, PyObject *obj) try
+{
+    Py_ssize_t nele = PyTuple_GET_SIZE(tuple);
+    py_object res(throw_if_not(PyTuple_New(nele + 1)));
+    for (Py_ssize_t i = 0; i < nele; i++)
+        PyTuple_SET_ITEM(res.get(), i, py_newref(PyTuple_GET_ITEM(tuple, i)));
+    PyTuple_SET_ITEM(res.get(), nele, py_newref(obj));
+    return res.release();
+}
+catch (...) {
+    return nullptr;
+}
+
 }
