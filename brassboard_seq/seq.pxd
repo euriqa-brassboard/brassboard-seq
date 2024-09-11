@@ -20,6 +20,7 @@
 from brassboard_seq.config cimport Config
 from brassboard_seq.event_time cimport TimeManager, EventTime, new_time_manager
 from brassboard_seq.utils cimport BacktraceTracker, py_object
+from brassboard_seq.scan cimport ParamPack
 
 from libcpp.vector cimport vector
 from cpython cimport PyObject
@@ -37,6 +38,7 @@ cdef class TimeSeq:
     # This can be either a runtime value or `True` or `False`.
     # This is also always guaranteed to be true only if the parent's condition is true.
     cdef object cond
+    cdef readonly ParamPack C
 
 
 cdef class TimeStep(TimeSeq):
@@ -52,6 +54,7 @@ cdef class TimeStep(TimeSeq):
 cdef class ConditionalWrapper:
     cdef SubSeq seq
     cdef object cond
+    cdef readonly ParamPack C
 
 
 cdef class SubSeq(TimeSeq):

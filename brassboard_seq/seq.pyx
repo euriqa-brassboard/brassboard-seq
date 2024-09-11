@@ -159,6 +159,7 @@ cdef class ConditionalWrapper:
         wrapper = <ConditionalWrapper>ConditionalWrapper.__new__(ConditionalWrapper)
         wrapper.seq = self.seq
         wrapper.cond = combine_cond(self.cond, cond)
+        wrapper.C = self.C
         return wrapper
 
     def wait(self, length, /, *, cond=True):
@@ -208,6 +209,7 @@ cdef class SubSeq(TimeSeq):
         wrapper = <ConditionalWrapper>ConditionalWrapper.__new__(ConditionalWrapper)
         wrapper.seq = self
         wrapper.cond = combine_cond(self.cond, cond)
+        wrapper.C = self.C
         return wrapper
 
     def wait(self, length, /, *, cond=True):
@@ -241,6 +243,7 @@ cdef inline SubSeq add_custom_step(SubSeq self, cond, EventTime start_time, cb,
                                    tuple args, dict kwargs):
     subseq = <SubSeq>SubSeq.__new__(SubSeq)
     init_subseq(subseq, self, start_time, cond)
+    subseq.C = self.C
     if kwargs is not None:
         cb(subseq, *args, **kwargs)
     elif args is not None:
@@ -254,6 +257,7 @@ cdef inline SubSeq add_custom_step(SubSeq self, cond, EventTime start_time, cb,
 cdef inline TimeStep add_time_step(SubSeq self, cond, EventTime start_time, length):
     step = <TimeStep>TimeStep.__new__(TimeStep)
     init_timeseq(step, self, start_time, cond)
+    step.C = self.C
     step.length = length
     step.end_time = self.seqinfo.time_mgr.new_round_time(start_time, length,
                                                          cond, None)
@@ -365,6 +369,7 @@ cdef int _get_channel_id(SeqInfo self, str name) except -1:
 cdef class Seq(SubSeq):
     def __init__(self, Config config, /, int max_frame=0):
         init_subseq(self, None, None, True)
+        self.C = ParamPack()
         seqinfo = <SeqInfo>SeqInfo.__new__(SeqInfo)
         seqinfo.config = config
         seqinfo.time_mgr = new_time_manager()

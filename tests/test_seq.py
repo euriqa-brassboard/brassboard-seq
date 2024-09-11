@@ -1,7 +1,7 @@
 #
 
 from brassboard_seq.config import Config
-from brassboard_seq import seq, rtval, action
+from brassboard_seq import seq, rtval, action, scan
 import brassboard_seq_test_utils as test_utils
 import pytest
 
@@ -1372,3 +1372,11 @@ def test_seq_arg_error():
     with pytest.raises(TypeError,
                        match='pulse\\(\\) takes exactly 2 positional arguments \\(3 given\\)'):
         st.pulse(1, 2, 3)
+
+def test_seq_C():
+    conf = Config()
+
+    s = seq.Seq(conf)
+    assert isinstance(s.C, scan.ParamPack)
+    assert s.C.a(1) == 1
+    assert s.C[:] == dict(a=1)
