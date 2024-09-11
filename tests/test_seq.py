@@ -1277,7 +1277,7 @@ def test_cond_call():
     def step(s):
         s.set('artiq/ttl0', True)
 
-    assert str(s) == f"""Seq - T[0]
+    assert str(s) == f"""Seq - T[1]
  T[0]: 0 ps
  T[1]: T[0] + (0 ps; if False)
   SubSeq@T[0] - T[1] if False

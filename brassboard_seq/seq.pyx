@@ -176,7 +176,9 @@ cdef class ConditionalWrapper:
 
     # Shorthand for add_step of custom step. Meant to be used as decorator
     def __call__(self, cb, /):
-        return add_custom_step(self.seq, self.cond, self.seq.end_time, cb, None, None)
+        step = add_custom_step(self.seq, self.cond, self.seq.end_time, cb, None, None)
+        self.seq.end_time = step.end_time
+        return step
 
     def __str__(self):
         io = StringIO()
