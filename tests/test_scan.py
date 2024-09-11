@@ -12,14 +12,22 @@ def test_parampack():
     assert isinstance(scan.get_param(None), scan.ParamPack)
 
     assert str(p) == '<Undefined>'
+    assert not 'a' in p
+    assert str(p) == '<Undefined>'
 
     assert isinstance(p.a, scan.ParamPack)
     assert isinstance(p.b, scan.ParamPack)
 
     assert str(p) == '{}\n'
     assert repr(p) == '{}\n'
+    assert 'a' not in p
+    assert 'b' not in p
 
     assert p.a(1) == 1
+    assert 'a' in p
+    with pytest.raises(TypeError, match="Scalar value"):
+        assert 'b' not in p.a
+    assert 'b' not in p
     assert scan.get_visited(p) == dict(a=True)
     assert scan.get_visited(p.a) is True
     assert p.a() == 1

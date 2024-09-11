@@ -124,6 +124,17 @@ cdef class ParamPack:
         if nkws != 0:
             merge_dict_into(self_values, kwargs, False)
 
+    def __contains__(self, str key):
+        fieldname = self.fieldname
+        values = self.values
+        cdef PyObject *fieldp = PyDict_GetItemWithError(values, fieldname)
+        if fieldp == NULL:
+            return False
+        field = <object>fieldp
+        if not isinstance(field, dict):
+            PyErr_Format(PyExc_TypeError, "Scalar value does not have field")
+        return key in <dict>field
+
     def __getitem__(self, key):
         if key != slice(None):
             PyErr_Format(PyExc_ValueError,
