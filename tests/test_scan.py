@@ -158,6 +158,8 @@ def test_getitem():
     p.a = 2
     assert d == {}
     assert p[:] == {"a": 2}
+    with pytest.raises(TypeError, match="Cannot access value as parameter pack."):
+        p.a[:]
 
     p.b = {}
     d2 = p[:]
