@@ -30,4 +30,5 @@ python_install_module("${CMAKE_CURRENT_SOURCE_DIR}/.." brassboard_seq
   rtval.pyx
   scan.pyx
   seq.pyx
-  utils.pxd)
+  utils.pxd
+  yaml.pyx)

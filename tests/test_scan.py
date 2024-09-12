@@ -18,8 +18,8 @@ def test_parampack():
     assert isinstance(p.a, scan.ParamPack)
     assert isinstance(p.b, scan.ParamPack)
 
-    assert str(p) == '{}\n'
-    assert repr(p) == '{}\n'
+    assert str(p) == '{}'
+    assert repr(p) == '{}'
     assert 'a' not in p
     assert 'b' not in p
 
@@ -84,7 +84,7 @@ def test_parampack():
 
     p.c = dict(y=3)
     assert scan.get_visited(p.c) == dict(x=True)
-    assert str(p.c) == 'x: 3.4\ny: 3\n'
+    assert str(p.c) == 'x: 3.4\ny: 3'
     assert scan.get_visited(p.c) == dict(x=True)
     assert str(p.c.y) == "3"
     assert p.c.y() == 3
@@ -97,7 +97,7 @@ def test_parampack():
 
     p.c = dict(y=4)
     assert p.c.y() == 4
-    assert str(p.c) == 'x: 3.4\ny: 4\n'
+    assert str(p.c) == 'x: 3.4\ny: 4'
     p.c.z = dict(y=4, x=3, d=dict(a=2, b=3))
     assert scan.get_visited(p.c) == dict(x=True, y=True)
     assert p.c.z.y() == 4
@@ -142,9 +142,9 @@ def test_constructor():
     with pytest.raises(TypeError,
                        match="Cannot use value as default value for parameter pack"):
         scan.ParamPack(1)
-    assert str(scan.ParamPack({})) == '{}\n'
-    assert str(scan.ParamPack({'A': 123})) == 'A: 123\n'
-    assert str(scan.ParamPack(B=23)) == 'B: 23\n'
+    assert str(scan.ParamPack({})) == '{}'
+    assert str(scan.ParamPack({'A': 123})) == 'A: 123'
+    assert str(scan.ParamPack(B=23)) == 'B: 23'
 
 
 def test_getitem():

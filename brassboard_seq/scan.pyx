@@ -19,6 +19,7 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.utils cimport PyErr_Format, PyExc_AttributeError, \
   PyExc_KeyError, PyExc_TypeError, PyExc_ValueError
+from brassboard_seq.yaml cimport sprint as yaml_print
 
 cimport cython
 
@@ -212,11 +213,7 @@ cdef class ParamPack:
         field = <object>fieldp
         if not isinstance(field, dict):
             return str(field)
-        try:
-            import yaml
-            return yaml.dump(field)
-        except:
-            return str(field)
+        return yaml_print(field)
 
     def __repr__(self):
         return str(self)
