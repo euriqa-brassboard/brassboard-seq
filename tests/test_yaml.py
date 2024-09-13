@@ -64,3 +64,8 @@ def test_print():
     assert yaml_print(dict(abcd="a" * 70)) == 'abcd: ' + 'a' * 70
     assert yaml_print(dict(abcd="a" * 90)) == 'abcd:\n  ' + 'a' * 90
     assert yaml_print(dict(abcd=[[1, 2], [3, 4]])) == 'abcd:\n  - [1, 2]\n  - [3, 4]'
+
+    assert yaml_print(dict(x=dict(y=False), a=dict(x=2, y=3)), 2) == """x.y: false
+  a:
+    x: 2
+    y: 3"""

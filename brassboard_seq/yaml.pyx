@@ -82,7 +82,10 @@ cdef str print_dict_field(k, v, int indent):
     if isinstance(v, dict) and PyDict_Size(v) == 1:
         return print_single_field_dict(v, indent, indent, k)
     cdef int new_indent = indent + 2 + keylen
-    return k + ': ' + print_generic(v, indent + 2, indent + 2 + keylen)
+    s = print_generic(v, indent + 2, indent + 2 + keylen)
+    if s.startswith('\n'):
+        return k + ':' + s
+    return k + ': ' + s
 
 cdef str print_dict(dict obj, int indent, int cur_indent):
     assume_not_none(obj)
