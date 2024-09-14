@@ -370,15 +370,12 @@ private:
 template<typename CB>
 ScopeExit(CB) -> ScopeExit<CB>;
 
-static inline PyObject *new_list_of_list(int n) try
+static inline PyObject *new_list_of_list(int n)
 {
     py_object list(throw_if_not(PyList_New(n)));
     for (int i = 0; i < n; i++)
         PyList_SET_ITEM(list.get(), i, throw_if_not(PyList_New(0)));
     return list.release();
-}
-catch (...) {
-    return nullptr;
 }
 
 static inline PyObject *pynum_add_or_sub(PyObject *a, PyObject *b, bool issub)

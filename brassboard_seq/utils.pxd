@@ -47,9 +47,9 @@ cdef extern from "src/utils.h" namespace "brassboard_seq":
         void reset(T*)
 
     object pyfloat_from_double(double v)
-    list new_list_of_list(int n)
+    list new_list_of_list(int n) except +
     object pynum_add_or_sub(object a, object b, bint issub)
-    tuple pytuple_append1(tuple, object)
+    tuple pytuple_append1(tuple, object) except +
     object pydict_deepcopy(object) except +
 
 # Cython does not declare these in cpython cimport
