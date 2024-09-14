@@ -208,4 +208,32 @@ catch (...) {
     return nullptr;
 }
 
+static PyObject *_pydict_deepcopy(PyObject *d)
+{
+    py_object res(throw_if_not(PyDict_New()));
+
+    PyObject *key;
+    PyObject *value;
+    Py_ssize_t pos = 0;
+    while (PyDict_Next(d, &pos, &key, &value)) {
+        if (!PyDict_Check(value)) {
+            if (PyDict_SetItem(res.get(), key, value) < 0)
+                throw 0;
+            continue;
+        }
+        py_object new_value(_pydict_deepcopy(value));
+        if (PyDict_SetItem(res.get(), key, new_value.get()) < 0) {
+            throw 0;
+        }
+    }
+    return res.release();
+}
+
+PyObject *pydict_deepcopy(PyObject *d)
+{
+    if (!PyDict_Check(d))
+        return py_newref(d);
+    return _pydict_deepcopy(d);
+}
+
 }

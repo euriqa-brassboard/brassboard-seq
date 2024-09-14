@@ -392,6 +392,7 @@ static inline PyObject *pynum_add_or_sub(PyObject *a, PyObject *b, bool issub)
 }
 
 PyObject *pytuple_append1(PyObject *tuple, PyObject *obj);
+PyObject *pydict_deepcopy(PyObject *d);
 
 }
 

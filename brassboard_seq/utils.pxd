@@ -50,6 +50,7 @@ cdef extern from "src/utils.h" namespace "brassboard_seq":
     list new_list_of_list(int n)
     object pynum_add_or_sub(object a, object b, bint issub)
     tuple pytuple_append1(tuple, object)
+    object pydict_deepcopy(object) except +
 
 # Cython does not declare these in cpython cimport
 cdef extern from *:

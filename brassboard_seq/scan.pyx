@@ -19,7 +19,8 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.utils cimport PyErr_Format, PyExc_AttributeError, \
   PyExc_IndexError, PyExc_KeyError, PyExc_SyntaxError, PyExc_TypeError, \
-  PyExc_ValueError, assume_not_none, _assume_not_none, pytuple_append1
+  PyExc_ValueError, assume_not_none, _assume_not_none, pytuple_append1, \
+  pydict_deepcopy
 from brassboard_seq.yaml cimport sprint as yaml_print
 
 cdef StringIO # hide import
@@ -37,15 +38,6 @@ from cpython cimport PyObject, \
   PyUnicode_CompareWithASCIIString
 
 from libcpp.vector cimport vector
-
-cdef deepcopy_dict(v):
-    if not isinstance(v, dict):
-        return v
-    cdef dict oldd = <dict>v
-    cdef dict newd = {}
-    for k, v in oldd.items():
-        newd[k] = deepcopy_dict(v)
-    return newd
 
 cdef int merge_dict_into(dict tgt, dict src, bint ovr) except -1:
     cdef PyObject *oldvp
@@ -65,7 +57,7 @@ cdef int merge_dict_into(dict tgt, dict src, bint ovr) except -1:
                 tgt[k] = v
             continue
         if is_dict:
-            tgt[k] = deepcopy_dict(v)
+            tgt[k] = pydict_deepcopy(v)
         else:
             tgt[k] = v
     return 0
@@ -161,7 +153,7 @@ cdef class ParamPack:
         field = <object>fieldp
         if not isinstance(field, dict):
             PyErr_Format(PyExc_TypeError, "Cannot access value as parameter pack.")
-        return {k: deepcopy_dict(v) for k, v in (<dict>field).items()}
+        return {k: pydict_deepcopy(v) for k, v in (<dict>field).items()}
 
     def __getattr__(self, str name):
         if name.startswith('_'):
@@ -192,7 +184,7 @@ cdef class ParamPack:
             else:
                 self_values[name] = value
         else:
-            self_values[name] = deepcopy_dict(value)
+            self_values[name] = pydict_deepcopy(value)
 
     def __call__(self, *args, **kwargs):
         # Supported syntax
@@ -337,7 +329,7 @@ cdef Scan1D new_scan1d():
 cdef Scan1D copy_scan1d(Scan1D self):
     copy = <Scan1D>Scan1D.__new__(Scan1D)
     copy.size = self.size
-    copy.params = deepcopy_dict(self.params)
+    copy.params = pydict_deepcopy(self.params)
     return copy
 
 cdef dict dump_scan1d(Scan1D self):
@@ -362,7 +354,7 @@ cdef Scan1D load_scan1d(dict data):
     if params is None:
         self.params = {}
     else:
-        self.params = deepcopy_dict(<dict?>params)
+        self.params = pydict_deepcopy(<dict?>params)
         foreach_nondict(load_scan1d_checksize_cb, <void*><long>self.size, self.params)
     return self
 
@@ -397,7 +389,7 @@ cdef bint contains_path(ScanND self, tuple path) except -1:
 cdef ScanND copy_scannd(ScanND self):
     copy = <ScanND>ScanND.__new__(ScanND)
     copy.baseidx = self.baseidx
-    copy.fixed = deepcopy_dict(self.fixed)
+    copy.fixed = pydict_deepcopy(self.fixed)
     copy.vars = []
     _assume_not_none(<void*>self.vars)
     for scan1d in self.vars:
@@ -417,7 +409,7 @@ cdef ScanND load_scannd(dict data):
     if fixed is None:
         self.fixed = {}
     else:
-        self.fixed = deepcopy_dict(fixed)
+        self.fixed = pydict_deepcopy(fixed)
     vars = data.get('vars', None)
     if vars is None:
         self.vars = []
@@ -447,7 +439,7 @@ cdef int scannd_getseq_setparam_cb(v, tuple path, void *p) except -1:
 @cython.cdivision(True)
 cdef dict scannd_getseq(ScanND scan, int seqidx):
     cdef int orig_idx = seqidx
-    seq = <dict>deepcopy_dict(scan.fixed)
+    seq = <dict>pydict_deepcopy(scan.fixed)
     cdef scannd_getseq_setparam_data data
     data.seq = <PyObject*>seq
     cdef int subidx
@@ -751,7 +743,7 @@ cdef class ScanGroup:
             new_scan = copy_scannd((<ScanWrapper>v).scan)
         elif isinstance(v, dict):
             new_scan = new_scannd()
-            new_scan.fixed = deepcopy_dict(<dict>v)
+            new_scan.fixed = pydict_deepcopy(<dict>v)
         else:
             T = type(v)
             PyErr_Format(PyExc_TypeError, "Invalid type %S in scan assignment.",
