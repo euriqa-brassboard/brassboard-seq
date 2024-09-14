@@ -39,28 +39,8 @@ from cpython cimport PyObject, \
 
 from libcpp.vector cimport vector
 
-cdef int merge_dict_into(dict tgt, dict src, bint ovr) except -1:
-    cdef PyObject *oldvp
-    for k, v in src.items():
-        is_dict = isinstance(v, dict)
-        oldvp = PyDict_GetItemWithError(tgt, k)
-        if oldvp != NULL:
-            oldv = <object>oldvp
-            was_dict = isinstance(oldv, dict)
-            if was_dict and not is_dict:
-                PyErr_Format(PyExc_TypeError, "Cannot override parameter pack as value")
-            if not was_dict and is_dict:
-                PyErr_Format(PyExc_TypeError, "Cannot override value as parameter pack")
-            if is_dict:
-                merge_dict_into(<dict>oldv, <dict>v, ovr)
-            elif ovr:
-                tgt[k] = v
-            continue
-        if is_dict:
-            tgt[k] = pydict_deepcopy(v)
-        else:
-            tgt[k] = v
-    return 0
+cdef extern from "src/scan.cpp" namespace "brassboard_seq::scan":
+    void merge_dict_into(object tgt, object src, bint ovr) except +
 
 cdef dict ensure_visited(ParamPack self):
     fieldname = self.fieldname
