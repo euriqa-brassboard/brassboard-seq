@@ -531,11 +531,11 @@ cdef class ScanWrapper:
         io = StringIO()
         write = io.write
         if PyTuple_GET_SIZE(self.path):
-            path_str = "." + ".".join(self.path)
+            path_str = ".".join(self.path)
             if self.idx == -1:
-                write(f'Scan Base [{path_str}]:\n')
+                write(f'Scan Base [.{path_str}]:\n')
             else:
-                write(f'Scan {self.idx} [{path_str}]:\n')
+                write(f'Scan {self.idx} [.{path_str}]:\n')
         else:
             if self.idx == -1:
                 write('Scan Base:\n')
