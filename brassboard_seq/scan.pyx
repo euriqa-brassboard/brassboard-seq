@@ -35,7 +35,7 @@ from cpython cimport PyObject, \
   PyDict_GetItemWithError, PyDictProxy_New, \
   PyTuple_GET_SIZE, PyTuple_GET_ITEM, \
   PyList_GET_SIZE, PyList_GET_ITEM, \
-  PyUnicode_CompareWithASCIIString
+  PyUnicode_CompareWithASCIIString, PyObject_GenericGetAttr
 
 from libcpp.vector cimport vector
 
@@ -94,7 +94,7 @@ cdef class ParamPack:
     def __getattribute__(self, str name):
         assume_not_none(name)
         if name.startswith('_'):
-            return object.__getattribute__(self, name)
+            return PyObject_GenericGetAttr(self, name)
         return new_param_pack(ensure_dict(self), ensure_visited(self), name)
 
     def __setattr__(self, str name, value):
@@ -392,7 +392,7 @@ cdef class ScanWrapper:
     def __getattribute__(self, str name):
         assume_not_none(name)
         if name.startswith('_'):
-            return object.__getattribute__(self, name)
+            return PyObject_GenericGetAttr(self, name)
         return new_scan_wrapper(self.sg, self.scan,
                                 pytuple_append1(self.path, name), self.idx)
 
