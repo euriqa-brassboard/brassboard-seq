@@ -135,18 +135,16 @@ cdef class ParamPack:
             PyErr_Format(PyExc_TypeError, "Cannot access value as parameter pack.")
         return {k: pydict_deepcopy(v) for k, v in (<dict>field).items()}
 
-    def __getattr__(self, str name):
+    def __getattribute__(self, str name):
+        assume_not_none(name)
         if name.startswith('_'):
-            # IPython likes to poke the objects for various properties
-            # when trying to show them. Stop all of these by forbidden
-            # all attributes that starts with underscore.
-            PyErr_Format(PyExc_AttributeError,
-                         "'ParamPack' object has no attribute '%U'", <PyObject*>name)
+            return object.__getattribute__(self, name)
         return new_param_pack(ensure_dict(self), ensure_visited(self), name)
 
     def __setattr__(self, str name, value):
+        assume_not_none(name)
         if name.startswith('_'):
-            # To be consistent with __getattr__
+            # To be consistent with __getattribute__
             PyErr_Format(PyExc_AttributeError,
                          "'ParamPack' object has no attribute '%U'", <PyObject*>name)
         self_values = ensure_dict(self)
@@ -446,13 +444,10 @@ cdef class ScanWrapper:
     cdef tuple path
     cdef int idx
 
-    def __getattr__(self, name):
+    def __getattribute__(self, str name):
+        assume_not_none(name)
         if name.startswith('_'):
-            # IPython likes to poke the objects for various properties
-            # when trying to show them. Stop all of these by forbidden
-            # all attributes that starts with underscore.
-            PyErr_Format(PyExc_AttributeError,
-                         "'ScanWrapper' object has no attribute '%U'", <PyObject*>name)
+            return object.__getattribute__(self, name)
         return new_scan_wrapper(self.sg, self.scan,
                                 pytuple_append1(self.path, name), self.idx)
 
@@ -489,10 +484,11 @@ cdef class ScanWrapper:
         set_scan_param(self.sg, self.scan, self.path[:-1], self.idx, idx, v)
 
     def __setattr__(self, str name, v):
+        assume_not_none(name)
         if name.startswith('_'):
-            # To be consistent with __getattr__
+            # To be consistent with __getattribute__
             PyErr_Format(PyExc_AttributeError,
-                         "'ScanWrapper' object has no attribute '%U'", <PyObject*>name)
+                         "'brassboard_seq.scan.ScanWrapper' object has no attribute '%U'", <PyObject*>name)
         set_fixed_param(self.sg, self.scan, pytuple_append1(self.path, name),
                         self.idx, v)
 

@@ -249,11 +249,11 @@ def test_scan():
         sg.getseq_in_scan(1, 0)
 
     with pytest.raises(AttributeError,
-                       match="'ScanWrapper' object has no attribute '_a'"):
+                       match="'brassboard_seq.scan.ScanWrapper' object has no attribute '_a'"):
         sg[:]._a
 
     with pytest.raises(AttributeError,
-                       match="'ScanWrapper' object has no attribute '_b'"):
+                       match="'brassboard_seq.scan.ScanWrapper' object has no attribute '_b'"):
         sg[:]._b = 2
 
     with pytest.raises(SyntaxError, match="Invalid scan syntax"):
