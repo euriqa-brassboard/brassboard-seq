@@ -62,3 +62,4 @@ cdef extern from *:
     PyObject *PyExc_ValueError
     PyObject *PyExc_RuntimeError
     PyObject *Py_NotImplemented
+    Py_ssize_t PyDict_GET_SIZE(object)

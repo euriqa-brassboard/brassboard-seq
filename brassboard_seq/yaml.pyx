@@ -17,12 +17,12 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.utils cimport assume_not_none
+from brassboard_seq.utils cimport assume_not_none, PyDict_GET_SIZE
 
 cdef np
 import numpy as np
 
-from cpython cimport PyList_GET_SIZE, PyList_GET_ITEM, PyTuple_GET_SIZE, PyDict_Size
+from cpython cimport PyList_GET_SIZE, PyList_GET_ITEM, PyTuple_GET_SIZE
 
 from libcpp.vector cimport vector
 
@@ -60,7 +60,7 @@ cdef str print_single_field_dict(obj, int indent, int cur_indent, str prefix_nam
     if prefix_name is not None:
         strary.append(prefix_name)
     while isinstance(obj, dict):
-        if PyDict_Size(obj) != 1:
+        if PyDict_GET_SIZE(obj) != 1:
             break
         for k, v in (<dict>obj).items():
             strary.append(k)
@@ -79,7 +79,7 @@ cdef str print_single_field_dict(obj, int indent, int cur_indent, str prefix_nam
 
 cdef str print_dict_field(k, v, int indent):
     cdef int keylen = len(k)
-    if isinstance(v, dict) and PyDict_Size(v) == 1:
+    if isinstance(v, dict) and PyDict_GET_SIZE(v) == 1:
         return print_single_field_dict(v, indent, indent, k)
     cdef int new_indent = indent + 2 + keylen
     s = print_generic(v, indent + 2, indent + 2 + keylen)
@@ -89,7 +89,7 @@ cdef str print_dict_field(k, v, int indent):
 
 cdef str print_dict(dict obj, int indent, int cur_indent):
     assume_not_none(obj)
-    cdef int nmembers = PyDict_Size(obj)
+    cdef int nmembers = PyDict_GET_SIZE(obj)
     if nmembers == 0:
         return '{}'
     elif nmembers == 1:
@@ -131,7 +131,7 @@ cdef str print_array(ary, int indent, int cur_indent):
               (isinstance(v, tuple) and PyTuple_GET_SIZE(v) == 0) or
               (isinstance(v, np_array) and len(v) == 0)):
             strary.append("[]")
-        elif isinstance(v, dict) and PyDict_Size(v) == 0:
+        elif isinstance(v, dict) and PyDict_GET_SIZE(v) == 0:
             strary.append("{}")
         else:
             strary.append(print_generic(v, indent + 2, indent + 2))

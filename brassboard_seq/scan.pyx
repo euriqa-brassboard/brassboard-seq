@@ -20,7 +20,7 @@
 from brassboard_seq.utils cimport PyErr_Format, PyExc_AttributeError, \
   PyExc_IndexError, PyExc_KeyError, PyExc_SyntaxError, PyExc_TypeError, \
   PyExc_ValueError, assume_not_none, _assume_not_none, pytuple_append1, \
-  pydict_deepcopy
+  pydict_deepcopy, PyDict_GET_SIZE
 from brassboard_seq.yaml cimport sprint as yaml_print
 
 cdef StringIO # hide import
@@ -32,7 +32,7 @@ import numpy as np
 cimport cython
 
 from cpython cimport PyObject, \
-  PyDict_GetItemWithError, PyDictProxy_New, PyDict_Size, \
+  PyDict_GetItemWithError, PyDictProxy_New, \
   PyTuple_GET_SIZE, PyTuple_GET_ITEM, \
   PyList_GET_SIZE, PyList_GET_ITEM, \
   PyUnicode_CompareWithASCIIString
@@ -98,7 +98,7 @@ cdef class ParamPack:
         self.visited = {}
         self.fieldname = 'root'
         nargs = PyTuple_GET_SIZE(args)
-        nkws = PyDict_Size(kwargs)
+        nkws = PyDict_GET_SIZE(kwargs)
         if nkws == 0 and nargs == 0:
             return
         self_values = ensure_dict(self)
@@ -172,7 +172,7 @@ cdef class ParamPack:
         # (value) -> get value with default
         # (*dicts, **kwargs) -> get parameter pack with default
         nargs = PyTuple_GET_SIZE(args)
-        nkws = PyDict_Size(kwargs)
+        nkws = PyDict_GET_SIZE(kwargs)
         if nkws == 0 and nargs == 0:
             return get_value(self)
         if nkws == 0 and nargs == 1:
@@ -354,7 +354,7 @@ cdef ScanND new_scannd():
     return self
 
 cdef inline bint scannd_is_default(ScanND self) except -1:
-    return (self.baseidx == -1 and not PyDict_Size(self.fixed) and
+    return (self.baseidx == -1 and not PyDict_GET_SIZE(self.fixed) and
             not PyList_GET_SIZE(self.vars))
 
 cdef bint contains_path(ScanND self, tuple path) except -1:
