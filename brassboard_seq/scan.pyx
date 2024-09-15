@@ -41,74 +41,30 @@ from libcpp.vector cimport vector
 
 cdef extern from "src/scan.cpp" namespace "brassboard_seq::scan":
     void merge_dict_into(object tgt, object src, bint ovr) except +
-
-cdef dict ensure_visited(ParamPack self):
-    fieldname = self.fieldname
-    self_visited = self.visited
-    cdef PyObject *visitedp = PyDict_GetItemWithError(self_visited, fieldname)
-    if visitedp == NULL:
-        visited = {}
-        self_visited[fieldname] = visited
-        return visited
-    return <dict>visitedp
-
-cdef dict ensure_dict(ParamPack self):
-    fieldname = self.fieldname
-    values = self.values
-    cdef PyObject *fieldp = PyDict_GetItemWithError(values, fieldname)
-    if fieldp != NULL:
-        field = <object>fieldp
-        if isinstance(field, dict):
-            return <dict>field
-        PyErr_Format(PyExc_TypeError, "Cannot access value as parameter pack.")
-    field = {}
-    values[fieldname] = field
-    return <dict>field
-
-cdef get_value(ParamPack self):
-    fieldname = self.fieldname
-    values = self.values
-    cdef PyObject *fieldp = PyDict_GetItemWithError(values, fieldname)
-    if fieldp == NULL:
-        PyErr_Format(PyExc_KeyError, "Value is not assigned")
-    field = <object>fieldp
-    if isinstance(field, dict):
-        PyErr_Format(PyExc_TypeError, "Cannot get parameter pack as value")
-    self.visited[fieldname] = True
-    return field
-
-cdef get_value_default(ParamPack self, default_value):
-    assert not isinstance(default_value, dict)
-    fieldname = self.fieldname
-    values = self.values
-    cdef PyObject *fieldp = PyDict_GetItemWithError(values, fieldname)
-    if fieldp != NULL:
-        field = <object>fieldp
-        if isinstance(field, dict):
-            PyErr_Format(PyExc_TypeError, "Cannot get parameter pack as value")
-        return field
-    values[fieldname] = default_value
-    self.visited[fieldname] = True
-    return default_value
+    dict ensure_visited(ParamPack self)
+    dict ensure_dict(ParamPack self)
+    object get_value(ParamPack self)
+    object get_value_default(ParamPack self, object)
+    object parampack_call(ParamPack self, tuple args, dict kwargs) except +
 
 @cython.final
 cdef class ParamPack:
     def __init__(self, *args, **kwargs):
-        self.values = {}
         self.visited = {}
         self.fieldname = 'root'
-        nargs = PyTuple_GET_SIZE(args)
-        nkws = PyDict_GET_SIZE(kwargs)
-        if nkws == 0 and nargs == 0:
+        cdef int nargs = PyTuple_GET_SIZE(args)
+        if PyDict_GET_SIZE(kwargs) == 0 and nargs == 0:
+            self.values = {}
             return
-        self_values = ensure_dict(self)
-        for arg in args:
-            if not isinstance(arg, dict):
+        self.values = {'root': kwargs}
+        cdef int i
+        cdef PyObject *argp
+        for i in range(nargs):
+            argp = PyTuple_GET_ITEM(args, nargs - 1 - i)
+            if not isinstance(<object>argp, dict):
                 PyErr_Format(PyExc_TypeError,
                              "Cannot use value as default value for parameter pack")
-            merge_dict_into(self_values, <dict>arg, False)
-        if nkws != 0:
-            merge_dict_into(self_values, kwargs, False)
+            merge_dict_into(kwargs, <dict>argp, True)
 
     def __contains__(self, str key):
         fieldname = self.fieldname
@@ -150,18 +106,19 @@ cdef class ParamPack:
         self_values = ensure_dict(self)
         cdef PyObject *oldvaluep = PyDict_GetItemWithError(self_values, name)
         if oldvaluep != NULL:
-            oldvalue = <object>oldvaluep
-            was_dict = isinstance(oldvalue, dict)
+            was_dict = isinstance(<object>oldvaluep, dict)
             is_dict = isinstance(value, dict)
             if was_dict and not is_dict:
                 PyErr_Format(PyExc_TypeError, "Cannot override parameter pack as value")
             if not was_dict and is_dict:
                 PyErr_Format(PyExc_TypeError, "Cannot override value as parameter pack")
             if is_dict:
-                merge_dict_into(<dict>oldvalue, <dict>value, True)
+                merge_dict_into(<dict>oldvaluep, <dict>value, True)
             else:
+                assume_not_none(self_values)
                 self_values[name] = value
         else:
+            assume_not_none(self_values)
             self_values[name] = pydict_deepcopy(value)
 
     def __call__(self, *args, **kwargs):
@@ -169,23 +126,7 @@ cdef class ParamPack:
         # () -> get value without default
         # (value) -> get value with default
         # (*dicts, **kwargs) -> get parameter pack with default
-        nargs = PyTuple_GET_SIZE(args)
-        nkws = PyDict_GET_SIZE(kwargs)
-        if nkws == 0 and nargs == 0:
-            return get_value(self)
-        if nkws == 0 and nargs == 1:
-            arg0 = args[0]
-            if not isinstance(arg0, dict):
-                return get_value_default(self, arg0)
-        self_values = ensure_dict(self)
-        for arg in args:
-            if not isinstance(arg, dict):
-                PyErr_Format(PyExc_TypeError,
-                             "Cannot use value as default value for parameter pack")
-            merge_dict_into(self_values, <dict>arg, False)
-        if nkws != 0:
-            merge_dict_into(self_values, kwargs, False)
-        return self
+        return parampack_call(self, args, kwargs)
 
     def __str__(self):
         fieldname = self.fieldname
@@ -212,6 +153,7 @@ cpdef get_visited(ParamPack self):
         return res
     if isinstance(self.values.get(fieldname), dict):
         res = {}
+        assume_not_none(visited)
         visited[fieldname] = res
         return PyDictProxy_New(res)
     return False
@@ -271,10 +213,12 @@ cdef int recursive_assign(dict d, tuple path, v) except -1:
         vp = PyDict_GetItemWithError(d, <object>f)
         if vp == NULL or not isinstance(<object>vp, dict):
             newd = {}
+            assume_not_none(d)
             d[<object>f] = newd
             d = newd
             continue
         d = <dict>vp
+    assume_not_none(d)
     d[<object>PyTuple_GET_ITEM(path, pathlen - 1)] = v
 
 ctypedef int (*foreach_nondict_cb)(object, tuple, void*) except -1
@@ -377,6 +321,7 @@ cdef ScanND copy_scannd(ScanND self):
 cdef dict dump_scannd(ScanND self, bint dumpbase):
     res = dict(params=self.fixed, vars=[dump_scan1d(<Scan1D>var) for var in self.vars])
     if dumpbase:
+        assume_not_none(res)
         res['baseidx'] = self.baseidx + 1
     return res
 
@@ -422,8 +367,8 @@ cdef dict scannd_getseq(ScanND scan, int seqidx):
     data.seq = <PyObject*>seq
     cdef int subidx
     for i in range(PyList_GET_SIZE(scan.vars)):
-        assume_not_none(<Scan1D>scan.vars)
-        var = <Scan1D>scan.vars[i]
+        _assume_not_none(<void*>scan.vars)
+        var = <Scan1D>PyList_GET_ITEM(scan.vars, i)
         if var.size == 0:
             continue
         subidx = seqidx % var.size

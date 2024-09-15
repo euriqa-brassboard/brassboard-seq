@@ -25,6 +25,7 @@ from brassboard_seq.event_time cimport is_ordered, round_time_int, round_time_rt
   set_base_int, set_base_rt
 from brassboard_seq.rtval cimport convert_bool, get_value, ifelse, is_rtval, \
   RuntimeValue, rt_eval
+from brassboard_seq.scan cimport new_param_pack
 from brassboard_seq.utils cimport assume_not_none, _assume_not_none, \
   action_key, assert_key, bb_err_format, bb_raise, event_time_key, \
   new_list_of_list, set_global_tracker, \
@@ -369,7 +370,7 @@ cdef int _get_channel_id(SeqInfo self, str name) except -1:
 cdef class Seq(SubSeq):
     def __init__(self, Config config, /, int max_frame=0):
         init_subseq(self, None, None, True)
-        self.C = ParamPack()
+        self.C = new_param_pack({}, {}, 'root')
         seqinfo = <SeqInfo>SeqInfo.__new__(SeqInfo)
         seqinfo.config = config
         seqinfo.time_mgr = new_time_manager()
