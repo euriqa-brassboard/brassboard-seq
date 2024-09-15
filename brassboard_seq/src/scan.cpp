@@ -45,18 +45,14 @@ static void merge_dict_into(PyObject *tgt, PyObject *src, bool ovr)
             else if (is_dict) {
                 merge_dict_into(oldv, value, ovr);
             }
-            else if (ovr && PyDict_SetItem(tgt, key, value) < 0) {
-                throw 0;
+            else if (ovr) {
+                throw_if_not(PyDict_SetItem(tgt, key, value) == 0);
             }
-        }
-        else if (PyErr_Occurred()) {
-            throw 0;
         }
         else {
+            throw_if(PyErr_Occurred());
             py_object copied(pydict_deepcopy(value));
-            if (PyDict_SetItem(tgt, key, copied.get()) < 0) {
-                throw 0;
-            }
+            throw_if_not(PyDict_SetItem(tgt, key, copied.get()) == 0);
         }
     }
 }
@@ -115,8 +111,8 @@ static PyObject *_ensure_dict_kws(ParamPack *self, PyObject *kws)
                      "Cannot access value as parameter pack.");
         throw 0;
     }
-    if (PyErr_Occurred() || PyDict_SetItem(self_values, fieldname, kws) < 0)
-        throw 0;
+    throw_if(PyErr_Occurred());
+    throw_if_not(PyDict_SetItem(self_values, fieldname, kws) == 0);
     return kws;
 }
 

@@ -75,6 +75,15 @@ std::remove_reference_t<T> throw_if_not(T &&v)
     return std::move(v);
 }
 
+template<typename T>
+static inline __attribute__((always_inline))
+std::remove_reference_t<T> throw_if(T &&v)
+{
+    if (v)
+        throw 0;
+    return std::move(v);
+}
+
 enum BBLogLevel {
     BB_LOG_DEBUG,
     BB_LOG_INFO,
