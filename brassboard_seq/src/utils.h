@@ -398,7 +398,25 @@ static inline PyObject *pynum_add_or_sub(PyObject *a, PyObject *b, bool issub)
 }
 
 PyObject *pytuple_append1(PyObject *tuple, PyObject *obj);
+PyObject *pytuple_prepend1(PyObject *tuple, PyObject *obj);
 PyObject *pydict_deepcopy(PyObject *d);
+
+// Copied from cython
+static inline PyObject* pyobject_call(PyObject *func, PyObject *arg,
+                                      PyObject *kw=nullptr)
+{
+    auto call = Py_TYPE(func)->tp_call;
+    if (!call)
+        return PyObject_Call(func, arg, kw);
+    if (Py_EnterRecursiveCall(" while calling a Python object"))
+        return nullptr;
+    auto result = call(func, arg, kw);
+    Py_LeaveRecursiveCall();
+    if (!result && !PyErr_Occurred())
+        PyErr_SetString(PyExc_SystemError,
+                        "NULL result without error in PyObject_Call");
+    return result;
+}
 
 }
 

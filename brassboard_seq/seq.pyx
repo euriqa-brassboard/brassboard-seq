@@ -28,7 +28,7 @@ from brassboard_seq.rtval cimport convert_bool, get_value, ifelse, is_rtval, \
 from brassboard_seq.scan cimport new_param_pack
 from brassboard_seq.utils cimport assume_not_none, _assume_not_none, \
   action_key, assert_key, bb_err_format, bb_raise, event_time_key, \
-  new_list_of_list, set_global_tracker, \
+  new_list_of_list, set_global_tracker, pyobject_call, pytuple_prepend1, \
   PyErr_Format, PyExc_TypeError, PyExc_ValueError
 
 cdef StringIO # hide import
@@ -246,9 +246,9 @@ cdef inline SubSeq add_custom_step(SubSeq self, cond, EventTime start_time, cb,
     init_subseq(subseq, self, start_time, cond)
     subseq.C = self.C
     if kwargs is not None:
-        cb(subseq, *args, **kwargs)
+        pyobject_call(cb, pytuple_prepend1(args, subseq), kwargs)
     elif args is not None:
-        cb(subseq, *args)
+        pyobject_call(cb, pytuple_prepend1(args, subseq))
     else:
         cb(subseq)
     _assume_not_none(<void*>self.sub_seqs)
