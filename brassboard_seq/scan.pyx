@@ -54,7 +54,7 @@ cdef class ParamPack:
         self.fieldname = 'root'
         cdef int nargs = PyTuple_GET_SIZE(args)
         if PyDict_GET_SIZE(kwargs) == 0 and nargs == 0:
-            self.values = {}
+            self.values = kwargs # Use the "free" dict
             return
         self.values = {'root': kwargs}
         cdef int i
