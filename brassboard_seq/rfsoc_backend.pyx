@@ -22,7 +22,7 @@ from brassboard_seq.action cimport Action, RampFunction, SeqCubicSpline, \
 from brassboard_seq.event_time cimport EventTime, round_time_int
 from brassboard_seq.rtval cimport is_rtval, rt_eval, RuntimeValue
 from brassboard_seq.utils cimport pyfloat_from_double, set_global_tracker, \
-  PyErr_Format, PyExc_ValueError
+  PyErr_Format, PyExc_ValueError, assume_not_none, _assume_not_none
 
 from libcpp.map cimport map as cppmap
 
@@ -163,6 +163,7 @@ cdef class PulseCompilerGenerator(RFSOCOutputGenerator):
 
     cdef int start(self) except -1:
         pulse_compiler_info.ToneData.__post_init__ = dummy_post_init
+        _assume_not_none(<void*>self.output)
         self.output.clear()
 
     cdef int add_tone_data(self, int channel, int tone, int64_t duration_cycles,
@@ -196,14 +197,18 @@ cdef class PulseCompilerGenerator(RFSOCOutputGenerator):
             channel, tone, duration_cycles, sp_freq, sp_amp, sp_phase,
             pulse_compiler_info.cubic_0, flags.wait_trigger, flags.sync, False,
             flags.feedback_enable, bypass_lookup_tables=False)
+        _assume_not_none(<void*>pulse_compiler_info.channel_list)
         key = pulse_compiler_info.channel_list[(channel << 1) | tone]
-        ptonedatas = PyDict_GetItemWithError(self.output, key)
+        output = <void*>self.output
+        ptonedatas = PyDict_GetItemWithError(<dict>output, key)
         cdef list tonedatas
         if ptonedatas != NULL:
             tonedatas = <list>ptonedatas
         else:
             tonedatas = []
-            self.output[key] = tonedatas
+            _assume_not_none(output)
+            (<dict>output)[key] = tonedatas
+        assume_not_none(tonedatas)
         tonedatas.append(tonedata)
 
     cdef int finish(self) except -1:

@@ -22,7 +22,7 @@ from brassboard_seq.utils cimport PyErr_Format, Py_NotImplemented, \
   PyExc_TypeError, PyExc_ValueError
 
 cimport cython
-from cpython cimport Py_LT, Py_GT
+from cpython cimport Py_LT, Py_GT, PyTuple_GET_ITEM
 
 cdef np # hide import
 import numpy as np
@@ -83,7 +83,7 @@ def cubic_spline_eval(SeqCubicSpline self, t, length, oldval, /):
     t = t / length
     if self.compile_mode:
         orders = <tuple>self._spline_segments
-        return orders[0] + (orders[1] + (orders[2] + orders[3] * t) * t) * t
+        return (<object>PyTuple_GET_ITEM(orders, 0)) + ((<object>PyTuple_GET_ITEM(orders, 1)) + ((<object>PyTuple_GET_ITEM(orders, 2)) + (<object>PyTuple_GET_ITEM(orders, 3)) * t) * t) * t
     return self.order0 + (self.order1 + (self.order2 + self.order3 * t) * t) * t
 
 @cython.final
@@ -94,19 +94,19 @@ cdef class SeqCubicSpline:
 
     @property
     def order0(self):
-        return (<tuple>self._spline_segments)[0]
+        return <object>PyTuple_GET_ITEM(self._spline_segments, 0)
 
     @property
     def order1(self):
-        return (<tuple>self._spline_segments)[1]
+        return <object>PyTuple_GET_ITEM(self._spline_segments, 1)
 
     @property
     def order2(self):
-        return (<tuple>self._spline_segments)[2]
+        return <object>PyTuple_GET_ITEM(self._spline_segments, 2)
 
     @property
     def order3(self):
-        return (<tuple>self._spline_segments)[3]
+        return <object>PyTuple_GET_ITEM(self._spline_segments, 3)
 
 cdef ramp_eval(RampFunction self, t, length, oldval):
     return self._eval(self, t, length, oldval)
@@ -122,10 +122,10 @@ cdef int ramp_set_runtime_params(RampFunction self, unsigned age) except -1:
     if type(self) is SeqCubicSpline:
         sp = <SeqCubicSpline>self
         orders = <tuple>sp._spline_segments
-        sp.order0 = get_value(orders[0], age)
-        sp.order1 = get_value(orders[1], age)
-        sp.order2 = get_value(orders[2], age)
-        sp.order3 = get_value(orders[3], age)
+        sp.order0 = get_value(<object>PyTuple_GET_ITEM(orders, 0), age)
+        sp.order1 = get_value(<object>PyTuple_GET_ITEM(orders, 1), age)
+        sp.order2 = get_value(<object>PyTuple_GET_ITEM(orders, 2), age)
+        sp.order3 = get_value(<object>PyTuple_GET_ITEM(orders, 3), age)
         sp.compile_mode = False
         return 0
     for (name, value) in self.params.items():
