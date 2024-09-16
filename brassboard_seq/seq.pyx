@@ -35,7 +35,8 @@ cdef StringIO # hide import
 from io import StringIO
 
 cimport cython
-from cpython cimport PyDict_GetItemWithError, PyList_GET_SIZE, Py_INCREF, PyLong_AsLong, PyTypeObject
+from cpython cimport PyDict_GetItemWithError, PyList_GET_SIZE, PyList_GET_ITEM, \
+  Py_INCREF, PyLong_AsLong, PyTypeObject, PyTuple_GET_ITEM
 
 cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
     PyTypeObject *event_time_type
@@ -331,8 +332,7 @@ cdef int collect_actions(SubSeq self, list actions) except -1:
             action.tid = tid
             action.end_tid = end_tid
             action.length = length
-            assume_not_none(actions)
-            _actions = <list>actions[chn]
+            _actions = <list>PyList_GET_ITEM(actions, chn)
             assume_not_none(_actions)
             _actions.append(action)
     return 0
@@ -429,8 +429,7 @@ cdef class Seq(SubSeq):
                                   "Multiple actions added for the same channel "
                                   "at the same time on %U.", <PyObject*>name)
                 tid = action.tid
-                assume_not_none(event_times)
-                start_time = <EventTime>event_times[tid]
+                start_time = <EventTime>PyList_GET_ITEM(event_times, tid)
                 if last_time is not None:
                     o = is_ordered(last_time, start_time)
                     if (o != event_time.OrderBefore and
@@ -446,8 +445,8 @@ cdef class Seq(SubSeq):
                     last_is_start = not isramp
                     if action.cond is False:
                         if isramp:
-                            assume_not_none(event_times)
-                            last_time = <EventTime>event_times[action.end_tid]
+                            last_time = <EventTime>PyList_GET_ITEM(event_times,
+                                                                   action.end_tid)
                         else:
                             last_time = start_time
                     elif isramp:
@@ -459,14 +458,13 @@ cdef class Seq(SubSeq):
                         except Exception as ex:
                             bb_raise(ex, action_key(action.aid))
                         value = ifelse(action.cond, new_value, value)
-                        assume_not_none(event_times)
-                        last_time = <EventTime>event_times[action.end_tid]
+                        last_time = <EventTime>PyList_GET_ITEM(event_times,
+                                                               action.end_tid)
                     else:
                         value = ifelse(action.cond, action_value, value)
                         last_time = start_time
                 else:
-                    assume_not_none(event_times)
-                    last_time = <EventTime>event_times[action.end_tid]
+                    last_time = <EventTime>PyList_GET_ITEM(event_times, action.end_tid)
                     last_is_start = False
                 action.end_val = value
         self.all_actions = all_actions
@@ -480,9 +478,10 @@ cdef class Seq(SubSeq):
         cdef int assert_id = 0
         for _a in self.seqinfo.assertions:
             a = <tuple>_a
-            c = <RuntimeValue>a[0]
+            c = <RuntimeValue>PyTuple_GET_ITEM(a, 0)
             if not rt_eval(c, age):
-                bb_raise(AssertionError(a[1]), assert_key(assert_id))
+                bb_raise(AssertionError(<object>PyTuple_GET_ITEM(a, 1)),
+                         assert_key(assert_id))
             assert_id += 1
         cdef long long prev_time
         cdef bint cond_val
