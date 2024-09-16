@@ -89,7 +89,7 @@ void _rt_eval_cache(RuntimeValue *self, unsigned age, py_object<PyObject> &pyage
         break;
     }
 
-    auto rtarg0 = (RuntimeValue*)self->arg0;
+    auto rtarg0 = self->arg0;
     _rt_eval_cache(rtarg0, age, pyage);
     auto eval1 = [&] (auto &&cb) {
         set_cache(cb(rtarg0->cache));
@@ -185,7 +185,7 @@ void _rt_eval_cache(RuntimeValue *self, unsigned age, py_object<PyObject> &pyage
         break;
     }
 
-    auto rtarg1 = (RuntimeValue*)self->arg1;
+    auto rtarg1 = self->arg1;
     if (type == Select) {
         auto rtarg2 = (RuntimeValue*)self->cb_arg2;
         auto rtres = get_value_bool(rtarg0->cache, uintptr_t(-1)) ? rtarg1 : rtarg2;
