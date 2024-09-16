@@ -22,7 +22,9 @@ from brassboard_seq.event_time cimport EventTime, round_time_int
 from brassboard_seq.rtval cimport ExternCallback, is_rtval, new_extern, \
   RuntimeValue, rt_eval
 from brassboard_seq.utils cimport set_global_tracker, PyErr_Format, \
-  PyExc_RuntimeError, PyExc_TypeError, PyExc_ValueError
+  PyExc_RuntimeError, PyExc_TypeError, PyExc_ValueError, pyobject_call
+
+from cpython cimport PyMethod_Check, PyMethod_GET_FUNCTION, PyMethod_GET_SELF
 
 cimport cython
 cimport numpy as cnpy
@@ -268,10 +270,9 @@ cdef class EvalOnceCallback(ExternCallback):
 @cython.final
 cdef class DatasetCallback(ExternCallback):
     cdef object value
-    cdef object obj
+    cdef object cb
     cdef tuple args
     cdef dict kwargs
-    cdef bint is_sys
 
     def __call__(self):
         if self.value is None:
@@ -283,9 +284,14 @@ cdef class DatasetCallback(ExternCallback):
             name = self.args[0]
         else:
             name = '<unknown>'
-        if self.is_sys:
-            return f'<dataset_sys {name} for {self.obj}>'
-        return f'<dataset {name} for {self.obj}>'
+        cb = self.cb
+        if not PyMethod_Check(cb):
+            return f'<dataset {name} for {self.cb}>'
+        func = PyMethod_GET_FUNCTION(cb)
+        obj = PyMethod_GET_SELF(cb)
+        if <str?>(<object>func).__name__ == 'get_dataset_sys':
+            return f'<dataset_sys {name} for {<object>obj}>'
+        return f'<dataset {name} for {<object>obj}>'
 
 cdef _eval_all_rtvals
 def _eval_all_rtvals(self, /):
@@ -298,10 +304,7 @@ def _eval_all_rtvals(self, /):
     for val in vals:
         if type(val) is DatasetCallback:
             dval = <DatasetCallback>val
-            if dval.is_sys:
-                dval.value = dval.obj.get_dataset_sys(*dval.args, **dval.kwargs)
-            else:
-                dval.value = dval.obj.get_dataset(*dval.args, **dval.kwargs)
+            dval.value = pyobject_call(dval.cb, dval.args, dval.kwargs)
         elif type(val) is EvalOnceCallback:
             eoval = <EvalOnceCallback>val
             eoval.value = eoval.callback()
@@ -331,26 +334,26 @@ def rt_value(self, cb, /):
 cdef rt_dataset
 def rt_dataset(self, /, *args, **kwargs):
     vals = check_bb_rt_values(self)
+    cb = self.get_dataset
     if vals is None:
-        return self.get_dataset(*args, **kwargs)
+        return pyobject_call(cb, args, kwargs)
     rtcb = <DatasetCallback>DatasetCallback.__new__(DatasetCallback)
-    rtcb.obj = self
+    rtcb.cb = cb
     rtcb.args = args
     rtcb.kwargs = kwargs
-    rtcb.is_sys = False
     (<list?>vals).append(rtcb)
     return new_extern(rtcb)
 
 cdef rt_dataset_sys
 def rt_dataset_sys(self, /, *args, **kwargs):
     vals = check_bb_rt_values(self)
+    cb = self.get_dataset_sys
     if vals is None:
-        return self.get_dataset_sys(*args, **kwargs)
+        return pyobject_call(cb, args, kwargs)
     rtcb = <DatasetCallback>DatasetCallback.__new__(DatasetCallback)
-    rtcb.obj = self
+    rtcb.cb = cb
     rtcb.args = args
     rtcb.kwargs = kwargs
-    rtcb.is_sys = True
     (<list?>vals).append(rtcb)
     return new_extern(rtcb)
 
