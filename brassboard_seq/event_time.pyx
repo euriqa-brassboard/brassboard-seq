@@ -67,6 +67,7 @@ cdef int visit_time(TimeManager self, EventTime t, unordered_set[int] &visited) 
         static_offset = -1
 
     cdef long long static_prev = 0
+    cdef long long static_wait_for = 0
     prev = t.prev
     if prev is not None:
         visit_time(self, prev, visited)
