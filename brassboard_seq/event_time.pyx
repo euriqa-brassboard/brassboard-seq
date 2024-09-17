@@ -20,7 +20,7 @@
 from brassboard_seq.rtval cimport ifelse, get_value, \
   new_const, new_extern_age, rt_eval, ExternCallback
 from brassboard_seq.utils cimport _assume_not_none, \
-  event_time_key, bb_err_format, PyExc_TypeError
+  event_time_key, bb_err_format, bb_raise, PyExc_TypeError
 
 from libcpp.map cimport map as cppmap
 from libcpp.algorithm cimport fill as cppfill
@@ -243,7 +243,10 @@ cdef long long get_time_value(EventTime self, int base_id, unsigned age,
     if cond:
         p_rt_offset = self.data.get_rt_offset()
         if p_rt_offset != NULL:
-            offset = <long long?>rt_eval(<RuntimeValue>p_rt_offset, age)
+            try:
+                offset = <long long?>rt_eval(<RuntimeValue>p_rt_offset, age)
+            except Exception as ex:
+                bb_raise(ex, event_time_key(<void*>self))
             if offset < 0:
                 bb_err_format(ValueError, event_time_key(<void*>self),
                               "Time delay cannot be negative")
