@@ -16,6 +16,8 @@
 # License along with this library. If not,
 # see <http://www.gnu.org/licenses/>.
 
+from libc.stdint cimport *
+
 cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
     enum ValueType:
         ExternAge
@@ -76,6 +78,28 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
         Bool
 
     ValueType pycmp2valcmp(int op) noexcept
+
+    enum class DataType(uint8_t):
+        Bool
+        Int64
+        Float64
+    DataType promote_type(DataType t1, DataType t2)
+    DataType pytype_to_datatype(object) except +
+
+    union GenVal:
+        bint b_val
+        int64_t i64_val
+        double f64_val
+
+    cppclass TagVal:
+        DataType type
+        GenVal val
+        TagVal()
+        T get[T]()
+        @staticmethod
+        TagVal from_py(object obj) except +
+        object to_py()
+        bint is_zero()
 
 cdef class RuntimeValue:
     cdef ValueType type_

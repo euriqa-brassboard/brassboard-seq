@@ -20,6 +20,8 @@
 
 #include "utils.h"
 
+#include "numpy/arrayobject.h"
+
 static PyObject *__pyx_f_14brassboard_seq_5rtval_call0(PyObject *f);
 static PyObject *__pyx_f_14brassboard_seq_5rtval_call1(PyObject *f, PyObject *arg0);
 static PyObject *__pyx_f_14brassboard_seq_5rtval_call2(PyObject *f, PyObject *arg0,
@@ -264,6 +266,42 @@ void rt_eval_cache(RuntimeValue *self, unsigned age, py_object &pyage)
     default:
         PyErr_Format(PyExc_ValueError, "Unknown value type");
         throw 0;
+    }
+}
+
+static inline bool is_numpy_int(PyObject *value)
+{
+    if (PyArray_IsScalar(value, Integer))
+        return true;
+    return PyArray_IsZeroDim(value) && PyArray_ISINTEGER((PyArrayObject*)value);
+}
+
+inline TagVal TagVal::from_py(PyObject *value)
+{
+    if (value == Py_True)
+        return true;
+    if (value == Py_False)
+        return false;
+    if (PyLong_Check(value) || is_numpy_int(value)) {
+        auto val = PyLong_AsLong(value);
+        throw_if(val == -1 && PyErr_Occurred());
+        return TagVal(val);
+    }
+    auto val = PyFloat_AsDouble(value);
+    throw_if(val == -1 && PyErr_Occurred());
+    return TagVal(val);
+}
+
+inline PyObject *TagVal::to_py() const
+{
+    switch (type) {
+    case DataType::Bool:
+        return py_newref(val.b_val ? Py_True : Py_False);
+    case DataType::Int64:
+        return PyLong_FromLong(val.i64_val);
+    default:
+    case DataType::Float64:
+        return pyfloat_from_double(val.f64_val);
     }
 }
 

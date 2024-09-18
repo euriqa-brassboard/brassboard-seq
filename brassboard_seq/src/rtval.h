@@ -21,6 +21,8 @@
 
 #include "Python.h"
 
+#include <stdint.h>
+
 namespace brassboard_seq::rtval {
 
 enum ValueType {
@@ -96,6 +98,117 @@ static inline ValueType pycmp2valcmp(int op)
     case Py_EQ: return CmpEQ;
     }
 }
+
+enum class DataType: uint8_t {
+    Bool,
+    Int64,
+    Float64,
+};
+
+static inline DataType pytype_to_datatype(PyObject *type)
+{
+    if (type == (PyObject *)&PyFloat_Type)
+        return DataType::Float64;
+    if (type == (PyObject *)&PyInt_Type)
+        return DataType::Int64;
+    if (type == (PyObject *)&PyBool_Type)
+        return DataType::Bool;
+    PyErr_Format(PyExc_TypeError, "Unknown runtime value type '%S'", type);
+    throw 0;
+}
+
+template<typename T> static constexpr DataType data_type_v = DataType::Bool;
+template<> constexpr DataType data_type_v<bool> = DataType::Bool;
+template<> constexpr DataType data_type_v<int64_t> = DataType::Int64;
+template<> constexpr DataType data_type_v<double> = DataType::Float64;
+
+template<DataType DT> struct _data_type;
+template<> struct _data_type<DataType::Bool> { using type = bool; };
+template<> struct _data_type<DataType::Int64> { using type = int64_t; };
+template<> struct _data_type<DataType::Float64> { using type = double; };
+template<DataType DT> using data_type_t = typename _data_type<DT>::type;
+static constexpr inline DataType promote_type(DataType t1, DataType t2)
+{
+    return DataType(std::max(uint8_t(t1), uint8_t(t2)));
+}
+
+union GenVal {
+    bool b_val;
+    int64_t i64_val;
+    double f64_val;
+
+    template<typename T> struct _getter;
+
+    template<typename T>
+    T &get()
+    {
+        return _getter<T>::get(*this);
+    }
+    template<typename T>
+    const T &get() const
+    {
+        return _getter<T>::get(*this);
+    }
+};
+template<> struct GenVal::_getter<bool> {
+    static inline bool &get(GenVal &v) { return v.b_val; };
+    static inline const bool &get(const GenVal &v) { return v.b_val; };
+};
+template<> struct GenVal::_getter<int64_t> {
+    static inline int64_t &get(GenVal &v) { return v.i64_val; };
+    static inline const int64_t &get(const GenVal &v) { return v.i64_val; };
+};
+template<> struct GenVal::_getter<double> {
+    static inline double &get(GenVal &v) { return v.f64_val; };
+    static inline const double &get(const GenVal &v) { return v.f64_val; };
+};
+
+struct TagVal {
+    TagVal(bool b)
+        : type(DataType::Bool),
+          val{ .b_val = b }
+    {}
+    template<typename T>
+    TagVal(T i, std::enable_if_t<std::is_integral_v<T>>* = nullptr)
+        : type(DataType::Int64),
+          val{ .i64_val = int64_t(i) }
+    {}
+    template<typename T>
+    TagVal(T f, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr)
+        : type(DataType::Float64),
+          val{ .f64_val = double(f) }
+    {}
+    TagVal(DataType type=DataType::Bool)
+        : type(type)
+    {}
+    DataType type;
+    GenVal val{ .i64_val = 0 };
+    template<typename T> T get(void) const
+    {
+        switch (type) {
+        case DataType::Bool:
+            return T(val.get<bool>());
+        case DataType::Int64:
+            return T(val.get<int64_t>());
+        case DataType::Float64:
+            return T(val.get<double>());
+        default:
+            return T(false);
+        }
+    }
+    static TagVal from_py(PyObject *obj);
+    PyObject *to_py() const;
+    bool is_zero() const
+    {
+        switch (type) {
+        case DataType::Bool:
+            return !val.b_val;
+        default:
+            return val.i64_val == 0;
+        }
+    }
+
+};
 
 }
 
