@@ -512,6 +512,9 @@ cdef class RuntimeValue:
             return self
         return new_expr1(ValueType.Floor, self)
 
+    def __round__(self):
+        return round_int64_rt(self)
+
     # Artifically limit the supported ufunc
     # in case we need to do any processing later
     # (e.g. compiling/sending it to kernel etc).

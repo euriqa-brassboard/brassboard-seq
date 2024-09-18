@@ -120,6 +120,7 @@ def test_rtval():
     r64v1 = rtval.round_int64(v1)
     assert str(r64v1) == f'int64({s1})'
     assert rtval.round_int64(r64v1) is r64v1
+    assert round(r64v1) is r64v1
     assert str(rtval.convert_bool(r64v1)) == f'bool({s1})'
 
     bv1 = rtval.convert_bool(v1)
