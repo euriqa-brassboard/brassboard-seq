@@ -17,7 +17,7 @@
 # see <http://www.gnu.org/licenses/>.
 
 cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
-    cdef enum ValueType:
+    enum ValueType:
         ExternAge
         Const
         Extern
