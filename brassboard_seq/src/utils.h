@@ -66,6 +66,24 @@ static inline __attribute__((always_inline)) void assume_not_none(T *obj)
     assume((PyObject*)obj != Py_None);
 }
 
+template<typename T1, typename T2>
+static inline __attribute__((always_inline)) T1 expect(T1 val, T2 exp)
+{
+    return __builtin_expect(val, exp);
+}
+
+template<typename T>
+static inline __attribute__((always_inline)) bool likely(T x)
+{
+    return expect(bool(x), true);
+}
+
+template<typename T>
+static inline __attribute__((always_inline)) bool unlikely(T x)
+{
+    return expect(bool(x), false);
+}
+
 template<typename T>
 static inline __attribute__((always_inline))
 std::remove_reference_t<T> throw_if_not(T &&v)
