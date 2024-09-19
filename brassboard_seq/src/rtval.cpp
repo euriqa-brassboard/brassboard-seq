@@ -54,8 +54,8 @@ static PyObject *cnpy_hypot;
 static PyObject *cnpy_arctan2;
 
 template<typename RuntimeValue>
-static __attribute__((flatten))
-void _rt_eval_cache(RuntimeValue *self, unsigned age, py_object &pyage)
+static inline __attribute__((flatten))
+void rt_eval_cache(RuntimeValue *self, unsigned age, py_object &pyage)
 {
     if (self->age == age)
         return;
@@ -90,7 +90,7 @@ void _rt_eval_cache(RuntimeValue *self, unsigned age, py_object &pyage)
     }
 
     auto rtarg0 = self->arg0;
-    _rt_eval_cache(rtarg0, age, pyage);
+    rt_eval_cache(rtarg0, age, pyage);
     auto eval1 = [&] (auto &&cb) {
         set_cache(cb(rtarg0->cache));
     };
@@ -189,11 +189,11 @@ void _rt_eval_cache(RuntimeValue *self, unsigned age, py_object &pyage)
     if (type == Select) {
         auto rtarg2 = (RuntimeValue*)self->cb_arg2;
         auto rtres = get_value_bool(rtarg0->cache, uintptr_t(-1)) ? rtarg1 : rtarg2;
-        _rt_eval_cache(rtres, age, pyage);
+        rt_eval_cache(rtres, age, pyage);
         set_cache(py_newref(rtres->cache));
         return;
     }
-    _rt_eval_cache(rtarg1, age, pyage);
+    rt_eval_cache(rtarg1, age, pyage);
 
     auto arg0 = rtarg0->cache;
     auto arg1 = rtarg1->cache;
@@ -265,14 +265,6 @@ void _rt_eval_cache(RuntimeValue *self, unsigned age, py_object &pyage)
         PyErr_Format(PyExc_ValueError, "Unknown value type");
         throw 0;
     }
-}
-
-template<typename RuntimeValue>
-static inline  __attribute__((always_inline))
-void rt_eval_cache(RuntimeValue *self, unsigned age)
-{
-    py_object pyage;
-    _rt_eval_cache(self, age, pyage);
 }
 
 }

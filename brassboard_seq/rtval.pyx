@@ -18,7 +18,7 @@
 
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.utils cimport pynum_add_or_sub, PyErr_Format, Py_NotImplemented, \
-  PyExc_TypeError, PyExc_ValueError
+  PyExc_TypeError, PyExc_ValueError, py_object
 
 cdef StringIO, np # hide import
 from io import StringIO
@@ -55,7 +55,7 @@ cdef extern from "src/rtval.cpp" namespace "brassboard_seq::rtval":
     PyObject *cnpy_hypot
     PyObject *cnpy_arctan2
 
-    void rt_eval_cache(RuntimeValue self, unsigned age) except +
+    void rt_eval_cache(RuntimeValue self, unsigned age, py_object pyage) except +
 
 cdef inline call0(f):
     return f()
@@ -411,7 +411,8 @@ cdef inline _round_int64(v):
     return int(round(v))
 
 cdef object rt_eval(RuntimeValue self, unsigned age):
-    rt_eval_cache(self, age)
+    cdef py_object pyage
+    rt_eval_cache(self, age, pyage)
     return self.cache;
 
 cdef inline RuntimeValue new_expr2_wrap1(ValueType type_, arg0, arg1):
@@ -436,8 +437,11 @@ cdef class RuntimeValue:
         # `RuntimeValue.__new__` or its wrapper.
         PyErr_Format(PyExc_TypeError, "RuntimeValue cannot be created directly")
 
-    def eval(self, unsigned age, /):
-        rt_eval_cache(self, age)
+    def eval(self, age, /):
+        cdef py_object pyage
+        if isinstance(age, int):
+            pyage.set_obj(age)
+        rt_eval_cache(self, <unsigned>age, pyage)
         return self.cache;
 
     def __str__(self):
@@ -734,14 +738,16 @@ cdef class rtprop_callback(ExternCallback):
         name = self.fieldname[rtprop_prefix_len:]
         return f'<RTProp {name} for {self.obj}>'
 
-    def __call__(self, unsigned age, /):
+    def __call__(self, age, /):
         _v = getattr(self.obj, self.fieldname)
         if not is_rtval(_v):
             return _v
         cdef RuntimeValue v = <RuntimeValue>_v
         if (v.type_ == ValueType.ExternAge and v.cb_arg2 is self):
             PyErr_Format(PyExc_ValueError, 'RT property have not been assigned.')
-        rt_eval_cache(v, age)
+        cdef py_object pyage
+        pyage.set_obj(age)
+        rt_eval_cache(v, <unsigned>age, pyage)
         return v.cache;
 
 cdef rtprop_callback new_rtprop_callback(obj, str fieldname):
