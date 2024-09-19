@@ -17,8 +17,8 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.utils cimport pynum_add_or_sub, PyErr_Format, Py_NotImplemented, \
-  PyExc_TypeError, PyExc_ValueError, py_object
+from brassboard_seq.utils cimport PyErr_Format, Py_NotImplemented, \
+  PyExc_TypeError, PyExc_ValueError
 
 cdef StringIO, np # hide import
 from io import StringIO
@@ -27,34 +27,9 @@ cimport numpy as cnpy
 cnpy._import_array()
 
 cimport cython
-from cpython cimport PyObject, PyFloat_AS_DOUBLE, PyTuple_GET_ITEM
+from cpython cimport PyFloat_AS_DOUBLE, PyTuple_GET_ITEM
 
 cdef extern from "src/rtval.cpp" namespace "brassboard_seq::rtval":
-    PyObject *cnpy_ceil
-    PyObject *cnpy_exp
-    PyObject *cnpy_expm1
-    PyObject *cnpy_floor
-    PyObject *cnpy_log
-    PyObject *cnpy_log1p
-    PyObject *cnpy_log2
-    PyObject *cnpy_log10
-    PyObject *cnpy_sqrt
-    PyObject *cnpy_arcsin
-    PyObject *cnpy_arccos
-    PyObject *cnpy_arctan
-    PyObject *cnpy_arcsinh
-    PyObject *cnpy_arccosh
-    PyObject *cnpy_arctanh
-    PyObject *cnpy_sin
-    PyObject *cnpy_cos
-    PyObject *cnpy_tan
-    PyObject *cnpy_sinh
-    PyObject *cnpy_cosh
-    PyObject *cnpy_tanh
-    PyObject *cnpy_rint
-    PyObject *cnpy_hypot
-    PyObject *cnpy_arctan2
-
     DataType unary_return_type(ValueType, DataType t1)
     DataType binary_return_type(ValueType, DataType t1, DataType t2)
     TagVal tagval_add_or_sub(TagVal, TagVal, bint)
@@ -65,8 +40,6 @@ cdef inline call0(f):
     return f()
 cdef inline call1(f, arg0):
     return f(arg0)
-cdef inline call2(f, arg0, arg1):
-    return f(arg0, arg1)
 
 cdef int operator_precedence(ValueType type_) noexcept:
     if type_ == ValueType.Add or type_ == ValueType.Sub:
@@ -151,7 +124,7 @@ cdef void show(io, write, RuntimeValue v):
         else:
             write(f'extern_age({cb})')
     elif type_ == ValueType.Const:
-        print(v.cache, end='', file=io)
+        print(v.cache.to_py(), end='', file=io)
     elif type_ == ValueType.Add:
         show_binary(io, write, v, ' + ', type_)
     elif type_ == ValueType.Sub:
@@ -247,22 +220,23 @@ cdef void show(io, write, RuntimeValue v):
     else:
         write('Unknown value')
 
-cdef _new_addsub(c, RuntimeValue v, bint s):
-    if c == 0 and not s:
+cdef _new_addsub(TagVal c, RuntimeValue v, bint s):
+    if c.is_zero() and not s:
         return v
-    return new_expr2(ValueType.Sub if s else ValueType.Add, new_const(c), v)
+    return new_expr2(ValueType.Sub if s else ValueType.Add, new_const_tagval(c), v)
 
 cdef _build_addsub(v0, v1, bint issub):
     cdef bint ns0 = False
     cdef bint ns1 = False
+    cdef TagVal nc
     cdef RuntimeValue nv0
     cdef RuntimeValue nv1
     cdef ValueType type_
     if not is_rtval(v0):
-        nc = v0
+        nc = TagVal.from_py(v0)
         nv0 = None
     else:
-        nc = False
+        nc = TagVal()
         nv0 = <RuntimeValue>v0
         type_ = nv0.type_
         if type_ == ValueType.Const:
@@ -282,26 +256,26 @@ cdef _build_addsub(v0, v1, bint issub):
                 nc = arg0.cache
                 nv0 = nv0.arg1
     if not is_rtval(v1):
-        nc = pynum_add_or_sub(nc, v1, issub)
+        nc = tagval_add_or_sub(nc, TagVal.from_py(v1), issub)
         nv1 = None
     else:
         nv1 = <RuntimeValue>v1
         type_ = nv1.type_
         if type_ == ValueType.Const:
-            nc = pynum_add_or_sub(nc, nv1.cache, issub)
+            nc = tagval_add_or_sub(nc, nv1.cache, issub)
             nv1 = None
         elif type_ == ValueType.Add:
             arg0 = nv1.arg0
             # Add/Sub should only have the first argument as constant
             if arg0.type_ == ValueType.Const:
-                nc = pynum_add_or_sub(nc, arg0.cache, issub)
+                nc = tagval_add_or_sub(nc, arg0.cache, issub)
                 nv1 = nv1.arg1
         elif type_ == ValueType.Sub:
             arg0 = nv1.arg0
             # Add/Sub should only have the first argument as constant
             if arg0.type_ == ValueType.Const:
                 ns1 = True
-                nc = pynum_add_or_sub(nc, arg0.cache, issub)
+                nc = tagval_add_or_sub(nc, arg0.cache, issub)
                 nv1 = nv1.arg1
     if nv0 is v0 and v1 is nv1:
         return new_expr2(ValueType.Sub if issub else ValueType.Add, v0, v1)
@@ -309,7 +283,7 @@ cdef _build_addsub(v0, v1, bint issub):
         ns1 = not ns1
     if nv0 is None:
         if nv1 is None:
-            return new_const(nc)
+            return new_const_tagval(nc)
         return _new_addsub(nc, nv1, ns1)
     if nv1 is None:
         return _new_addsub(nc, nv0, ns0)
@@ -379,31 +353,6 @@ cdef np_tanh = np.tanh
 cdef np_hypot = np.hypot
 cdef np_rint = np.rint
 
-cnpy_ceil = <PyObject*>np_ceil
-cnpy_exp = <PyObject*>np_exp
-cnpy_expm1 = <PyObject*>np_expm1
-cnpy_floor = <PyObject*>np_floor
-cnpy_log = <PyObject*>np_log
-cnpy_log1p = <PyObject*>np_log1p
-cnpy_log2 = <PyObject*>np_log2
-cnpy_log10 = <PyObject*>np_log10
-cnpy_sqrt = <PyObject*>np_sqrt
-cnpy_arcsin = <PyObject*>np_arcsin
-cnpy_arccos = <PyObject*>np_arccos
-cnpy_arctan = <PyObject*>np_arctan
-cnpy_arcsinh = <PyObject*>np_arcsinh
-cnpy_arccosh = <PyObject*>np_arccosh
-cnpy_arctanh = <PyObject*>np_arctanh
-cnpy_sin = <PyObject*>np_sin
-cnpy_cos = <PyObject*>np_cos
-cnpy_tan = <PyObject*>np_tan
-cnpy_sinh = <PyObject*>np_sinh
-cnpy_cosh = <PyObject*>np_cosh
-cnpy_tanh = <PyObject*>np_tanh
-cnpy_rint = <PyObject*>np_rint
-cnpy_hypot = <PyObject*>np_hypot
-cnpy_arctan2 = <PyObject*>np_arctan2
-
 cdef inline _round_int64(v):
     if type(v) is int:
         return v
@@ -414,13 +363,48 @@ cdef inline _round_int64(v):
         return vi
     return int(round(v))
 
-cdef object rt_eval(RuntimeValue self, unsigned age):
-    cdef py_object pyage
+cdef int rt_eval_tagval(RuntimeValue self, unsigned age, py_object &pyage) except -1:
     rt_eval_cache(self, age, pyage)
-    return self.cache;
+    throw_py_error(self.cache.err)
+
+cdef _get_value(v, unsigned age, py_object &pyage):
+    if is_rtval(v):
+        rt_eval_cache(<RuntimeValue>v, age, pyage)
+        return (<RuntimeValue>v).cache.to_py()
+    return v
+
+def get_value(v, age):
+    cdef py_object pyage
+    if isinstance(age, int):
+        pyage.set_obj(age)
+    return _get_value(v, age, pyage)
+
+cdef inline RuntimeValue new_const_tagval(TagVal v):
+    self = <RuntimeValue>RuntimeValue.__new__(RuntimeValue)
+    self.type_ = ValueType.Const
+    self.cache = v
+    self.age = -1
+    return self
+
+cpdef RuntimeValue new_const(v):
+    return new_const_tagval(TagVal.from_py(v))
+
+cdef RuntimeValue new_expr1(ValueType type_, RuntimeValue arg0):
+    self = _new_rtval(type_, unary_return_type(type_, arg0.cache.type))
+    self.arg0 = arg0
+    return self
+
+cdef RuntimeValue new_expr2(ValueType type_, RuntimeValue arg0, RuntimeValue arg1):
+    self = _new_rtval(type_, binary_return_type(type_, arg0.cache.type,
+                                                arg1.cache.type))
+    self.arg0 = arg0
+    self.arg1 = arg1
+    return self
 
 cdef inline RuntimeValue new_expr2_wrap1(ValueType type_, arg0, arg1):
-    self = _new_rtval(type_)
+    self = <RuntimeValue>RuntimeValue.__new__(RuntimeValue)
+    self.type_ = type_
+    self.age = -1
     if not is_rtval(arg0):
         self.arg0 = new_const(arg0)
         self.arg1 = <RuntimeValue>arg1
@@ -430,6 +414,8 @@ cdef inline RuntimeValue new_expr2_wrap1(ValueType type_, arg0, arg1):
             self.arg1 = <RuntimeValue>arg1
         else:
             self.arg1 = new_const(arg1)
+    self.cache.type = binary_return_type(type_, self.arg0.cache.type,
+                                         self.arg1.cache.type)
     return self
 
 @cython.auto_pickle(False)
@@ -446,7 +432,7 @@ cdef class RuntimeValue:
         if isinstance(age, int):
             pyage.set_obj(age)
         rt_eval_cache(self, <unsigned>age, pyage)
-        return self.cache;
+        return self.cache.to_py()
 
     def __str__(self):
         io = StringIO()
@@ -701,7 +687,9 @@ cpdef ifelse(b, v1, v2):
     if same_value(v1, v2):
         return v1
     if is_rtval(b):
-        self = _new_rtval(ValueType.Select)
+        self = <RuntimeValue>RuntimeValue.__new__(RuntimeValue)
+        self.type_ = ValueType.Select
+        self.age = -1
         self.arg0 = <RuntimeValue>b
         if is_rtval(v1):
             self.arg1 = <RuntimeValue>v1
@@ -711,6 +699,8 @@ cpdef ifelse(b, v1, v2):
             self.cb_arg2 = v2
         else:
             self.cb_arg2 = new_const(v2)
+        self.cache.type = promote_type(self.arg1.cache.type,
+                                       (<RuntimeValue>self.cb_arg2).cache.type)
         return self
     return v1 if b else v2
 
@@ -752,7 +742,7 @@ cdef class rtprop_callback(ExternCallback):
         cdef py_object pyage
         pyage.set_obj(age)
         rt_eval_cache(v, <unsigned>age, pyage)
-        return v.cache;
+        return v.cache.to_py()
 
 cdef rtprop_callback new_rtprop_callback(obj, str fieldname):
     self = <rtprop_callback>rtprop_callback.__new__(rtprop_callback)

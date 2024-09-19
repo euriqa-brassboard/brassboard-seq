@@ -1166,7 +1166,7 @@ def test_val_error(max_bt):
         s.set('rfsoc/dds0/0/ff', rtval.new_extern(lambda: np.array([1, 2])))
     js89j308joro82qwe()
     comp.finalize()
-    with pytest.raises(ValueError) as exc:
+    with pytest.raises(TypeError) as exc:
         comp.runtime_finalize(1)
     check_bt(exc, max_bt, 'js89j308joro82qwe')
 
@@ -1685,7 +1685,7 @@ def test_dds_delay_rt_error(max_bt):
     rb.set_dds_delay(1, rtval.new_extern(lambda: 1))
     comp.finalize()
     with pytest.raises(ValueError,
-                       match="DDS time offset 1 cannot be more than 100ms."):
+                       match="DDS time offset 1.0 cannot be more than 100ms."):
         comp.runtime_finalize(1)
 
 @with_rfsoc_params
@@ -1703,7 +1703,7 @@ def check_dds_delay(max_bt, use_rt):
     with pytest.raises(ValueError, match="DDS time offset -0.001 cannot be negative."):
         rb.set_dds_delay(0, -0.001)
     with pytest.raises(ValueError,
-                       match="DDS time offset 1 cannot be more than 100ms."):
+                       match="DDS time offset 1.0 cannot be more than 100ms."):
         rb.set_dds_delay(1, 1)
 
     rb.set_dds_delay(1, wrap_value(1e-3))

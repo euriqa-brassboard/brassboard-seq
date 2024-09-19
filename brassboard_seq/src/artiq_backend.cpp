@@ -273,7 +273,7 @@ void collect_actions(ArtiqBackend *ab, const CompileVTable vtable, Action*, Even
 }
 
 struct RuntimeVTable {
-    PyObject *(*rt_eval)(PyObject*, unsigned age);
+    int (*rt_eval_tagval)(PyObject*, unsigned age, py_object &pyage);
 };
 
 template<typename ArtiqBackend>
@@ -303,38 +303,41 @@ void reraise_reloc_error(ArtiqBackend *ab, size_t reloc_idx, bool isbool)
     throw 0;
 }
 
-template<typename ArtiqBackend>
+template<typename ArtiqBackend, typename RuntimeValue>
 static __attribute__((always_inline)) inline
-void generate_rtios(ArtiqBackend *ab, unsigned age, const RuntimeVTable vtable)
+void generate_rtios(ArtiqBackend *ab, unsigned age, const RuntimeVTable vtable,
+                    RuntimeValue*)
 {
+    py_object pyage;
     bb_debug("generate_rtios: start\n");
     auto seq = ab->__pyx_base.seq;
     for (size_t i = 0, nreloc = ab->bool_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = ab->bool_values[i];
-        py_object pyval(vtable.rt_eval((PyObject*)rtval, age));
-        if (!pyval)
+        if (vtable.rt_eval_tagval((PyObject*)rtval, age, pyage) < 0)
             reraise_reloc_error(ab, i, true);
-        val = get_value_bool(pyval, [&] { reraise_reloc_error(ab, i, true); });
+        val = !((RuntimeValue*)rtval)->cache.is_zero();
     }
     for (size_t i = 0, nreloc = ab->float_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = ab->float_values[i];
-        py_object pyval(vtable.rt_eval((PyObject*)rtval, age));
-        if (!pyval)
+        if (vtable.rt_eval_tagval((PyObject*)rtval, age, pyage) < 0)
             reraise_reloc_error(ab, i, false);
-        val = get_value_f64(pyval, [&] { reraise_reloc_error(ab, i, false); });
+        val = ((RuntimeValue*)rtval)->cache.template get<double>();
     }
     int64_t max_delay = 0;
     auto relocate_delay = [&] (int64_t &delay, PyObject *rt_delay) {
         if (!rt_delay)
             return;
-        py_object pyval(throw_if_not(vtable.rt_eval((PyObject*)rt_delay, age)));
-        auto fdelay = get_value_f64(pyval, uintptr_t(-1));
+        if (vtable.rt_eval_tagval((PyObject*)rt_delay, age, pyage) < 0)
+            throw 0;
+        auto fdelay = ((RuntimeValue*)rt_delay)->cache.template get<double>();
         if (fdelay < 0) {
+            py_object pyval(pyfloat_from_double(fdelay));
             PyErr_Format(PyExc_ValueError,
                          "Device time offset %S cannot be negative.", pyval.get());
             throw 0;
         }
         else if (fdelay > 0.1) {
+            py_object pyval(pyfloat_from_double(fdelay));
             PyErr_Format(PyExc_ValueError,
                          "Device time offset %S cannot be more than 100ms.",
                          pyval.get());

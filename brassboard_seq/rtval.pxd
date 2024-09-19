@@ -16,6 +16,9 @@
 # License along with this library. If not,
 # see <http://www.gnu.org/licenses/>.
 
+# Do not use relative import since it messes up cython file name tracking
+from brassboard_seq.utils cimport py_object
+
 from libc.stdint cimport *
 
 cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
@@ -113,44 +116,33 @@ cdef class RuntimeValue:
     cdef RuntimeValue arg0
     cdef RuntimeValue arg1
     cdef object cb_arg2
-    cdef object cache
+    cdef TagVal cache
 
-cdef rt_eval(RuntimeValue self, unsigned age)
+cdef int rt_eval_tagval(RuntimeValue self, unsigned age, py_object &pyage) except -1
 
-cdef inline RuntimeValue _new_rtval(ValueType type_):
+cdef inline RuntimeValue _new_rtval(ValueType type_, DataType dt):
     # Avoid passing arguments to the constructor which requires the arguments
     # to be boxed and put in a tuple. This improves the performance by about 20%.
     self = <RuntimeValue>RuntimeValue.__new__(RuntimeValue)
     self.type_ = type_
+    self.cache.type = dt
     self.age = -1
     return self
 
-cpdef inline RuntimeValue new_const(v):
-    self = _new_rtval(ValueType.Const)
-    self.cache = v
-    return self
+cpdef RuntimeValue new_const(v)
 
-cpdef inline RuntimeValue new_extern(cb):
-    self = _new_rtval(ValueType.Extern)
+cpdef inline RuntimeValue new_extern(cb, ty=float):
+    self = _new_rtval(ValueType.Extern, pytype_to_datatype(ty))
     self.cb_arg2 = cb
     return self
 
-cpdef inline RuntimeValue new_extern_age(cb):
-    self = _new_rtval(ValueType.ExternAge)
+cpdef inline RuntimeValue new_extern_age(cb, ty=float):
+    self = _new_rtval(ValueType.ExternAge, pytype_to_datatype(ty))
     self.cb_arg2 = cb
     return self
 
-cdef inline RuntimeValue new_expr1(ValueType type_, RuntimeValue arg0):
-    self = _new_rtval(type_)
-    self.arg0 = arg0
-    return self
-
-cdef inline RuntimeValue new_expr2(ValueType type_, RuntimeValue arg0,
-                                   RuntimeValue arg1):
-    self = _new_rtval(type_)
-    self.arg0 = arg0
-    self.arg1 = arg1
-    return self
+cdef RuntimeValue new_expr1(ValueType type_, RuntimeValue arg0)
+cdef RuntimeValue new_expr2(ValueType type_, RuntimeValue arg0, RuntimeValue arg1)
 
 cdef inline RuntimeValue round_int64_rt(RuntimeValue v):
     if v.type_ == ValueType.Int64:
@@ -165,10 +157,21 @@ cpdef ifelse(b, v1, v2)
 cdef inline bint is_rtval(v) noexcept:
     return type(v) is RuntimeValue
 
-cpdef inline get_value(v, unsigned age):
+cdef _get_value(v, unsigned age, py_object &pyage)
+
+cdef inline bint get_value_bool(v, unsigned age, py_object &pyage) except -1:
     if is_rtval(v):
-        return rt_eval(<RuntimeValue>v, age)
-    return v
+        rt_eval_tagval(<RuntimeValue>v, age, pyage)
+        return not (<RuntimeValue>v).cache.is_zero()
+    else:
+        return bool(v)
+
+cdef inline double get_value_f64(v, unsigned age, py_object &pyage) except? -1:
+    if is_rtval(v):
+        rt_eval_tagval(<RuntimeValue>v, age, pyage)
+        return (<RuntimeValue>v).cache.get[double]()
+    else:
+        return <double>v
 
 cdef class ExternCallback:
     pass

@@ -16,6 +16,9 @@
 # License along with this library. If not,
 # see <http://www.gnu.org/licenses/>.
 
+# Do not use relative import since it messes up cython file name tracking
+from brassboard_seq.utils cimport py_object
+
 cdef extern from "src/action.h" namespace "brassboard_seq::action":
     cppclass ActionData:
         bint is_pulse;
@@ -61,7 +64,8 @@ cdef class SeqCubicSpline(RampFunction):
 
 cdef ramp_eval(RampFunction self, t, length, oldval)
 cdef int ramp_set_compile_params(RampFunction self) except -1
-cdef int ramp_set_runtime_params(RampFunction self, unsigned age) except -1
+cdef int ramp_set_runtime_params(RampFunction self, unsigned age,
+                                 py_object &pyage) except -1
 cdef inline ramp_get_spline_segments(RampFunction self, length, oldval):
     if self._spline_segments is None:
         return None

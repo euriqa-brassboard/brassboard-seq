@@ -26,7 +26,7 @@ from libc.stdint cimport *
 from brassboard_seq.rtval cimport is_rtval, new_expr2, round_int64_rt, \
   RuntimeValue, ValueType
 from brassboard_seq.utils cimport assume_not_none, PyErr_Format, \
-  PyExc_RuntimeError, PyExc_ValueError
+  PyExc_RuntimeError, PyExc_ValueError, py_object
 
 from cpython cimport PyFloat_AS_DOUBLE, PyList_GET_SIZE, PyObject
 
@@ -49,12 +49,15 @@ cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
 cdef object py_time_scale
 cdef RuntimeValue rt_time_scale
 
+cdef inline long long round_time_f64(double v) noexcept:
+    vf = v * <double>c_time_scale
+    return <long long>(vf + 0.5)
+
 cdef inline long long round_time_int(v):
     if type(v) is int:
         return (<long long>v) * c_time_scale
     else:
-        vf = (<double>v) * <double>c_time_scale
-        return <long long>(vf + 0.5)
+        return round_time_f64(v)
 
 cdef inline RuntimeValue round_time_rt(RuntimeValue v):
     return round_int64_rt(new_expr2(ValueType.Mul, v, rt_time_scale))
@@ -120,7 +123,7 @@ cdef class TimeManager:
                                      False, cond, wait_for)
 
     cdef int finalize(self) except -1
-    cdef long long compute_all_times(self, unsigned age) except -1
+    cdef long long compute_all_times(self, unsigned age, py_object &pyage) except -1
 
 cdef inline TimeManager new_time_manager():
     self = <TimeManager>TimeManager.__new__(TimeManager)

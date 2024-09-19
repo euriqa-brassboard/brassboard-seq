@@ -20,9 +20,9 @@
 from brassboard_seq.action cimport Action, RampFunction
 from brassboard_seq.event_time cimport EventTime, round_time_int
 from brassboard_seq.rtval cimport ExternCallback, is_rtval, new_extern, \
-  RuntimeValue, rt_eval
+  RuntimeValue, rt_eval_tagval
 from brassboard_seq.utils cimport set_global_tracker, PyErr_Format, \
-  PyExc_RuntimeError, PyExc_TypeError, PyExc_ValueError, pyobject_call
+  PyExc_RuntimeError, PyExc_TypeError, PyExc_ValueError, pyobject_call, py_object
 
 from cpython cimport PyMethod_Check, PyMethod_GET_FUNCTION, PyMethod_GET_SELF
 
@@ -74,9 +74,10 @@ cdef extern from "src/artiq_backend.cpp" namespace "brassboard_seq::artiq_backen
                          CompileVTable vtable, Action, EventTime) except +
 
     struct RuntimeVTable:
-        object (*rt_eval)(object, unsigned)
+        int (*rt_eval_tagval)(object, unsigned, py_object&) except -1
 
-    void generate_rtios(ArtiqBackend ab, unsigned age, RuntimeVTable vtable) except +
+    void generate_rtios(ArtiqBackend ab, unsigned age, RuntimeVTable vtable,
+                        RuntimeValue) except +
 
 cdef inline bint is_ramp(obj) noexcept:
     return isinstance(obj, RampFunction)
@@ -87,9 +88,11 @@ cdef inline CompileVTable get_compile_vtable() noexcept nogil:
     vt.is_ramp = is_ramp
     return vt
 
+ctypedef int (*rt_eval_tagval_t)(object, unsigned, py_object&) except -1
+
 cdef inline RuntimeVTable get_runtime_vtable() noexcept nogil:
     cdef RuntimeVTable vt
-    vt.rt_eval = <object (*)(object, unsigned)>rt_eval
+    vt.rt_eval_tagval = <rt_eval_tagval_t>rt_eval_tagval
     return vt
 
 artiq_consts.COUNTER_ENABLE = <int?>edge_counter.CONFIG_COUNT_RISING | <int?>edge_counter.CONFIG_RESET_TO_ZERO
@@ -248,7 +251,7 @@ cdef class ArtiqBackend:
 
     cdef int runtime_finalize(self, unsigned age) except -1:
         bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)
-        generate_rtios(self, age, get_runtime_vtable())
+        generate_rtios(self, age, get_runtime_vtable(), None)
 
 @cython.internal
 @cython.auto_pickle(False)

@@ -23,8 +23,8 @@ from brassboard_seq.config cimport translate_channel
 from brassboard_seq cimport event_time
 from brassboard_seq.event_time cimport is_ordered, round_time_int, round_time_rt, \
   set_base_int, set_base_rt
-from brassboard_seq.rtval cimport convert_bool, get_value, ifelse, is_rtval, \
-  RuntimeValue, rt_eval
+from brassboard_seq.rtval cimport convert_bool, get_value_bool, ifelse, is_rtval, \
+  RuntimeValue, rt_eval_tagval, throw_py_error
 from brassboard_seq.scan cimport new_param_pack
 from brassboard_seq.utils cimport assume_not_none, _assume_not_none, \
   action_key, assert_key, bb_err_format, bb_raise, event_time_key, \
@@ -472,15 +472,20 @@ cdef class Seq(SubSeq):
         return 0
 
     cdef int runtime_finalize(self, unsigned age) except -1:
+        cdef py_object pyage
         bt_guard = set_global_tracker(&self.seqinfo.bt_tracker)
         time_mgr = self.seqinfo.time_mgr
-        self.total_time = time_mgr.compute_all_times(age)
+        self.total_time = time_mgr.compute_all_times(age, pyage)
         _assume_not_none(<void*>self.seqinfo.assertions)
         cdef int assert_id = 0
         for _a in self.seqinfo.assertions:
             a = <tuple>_a
             c = <RuntimeValue>PyTuple_GET_ITEM(a, 0)
-            if not rt_eval(c, age):
+            try:
+                rt_eval_tagval(c, age, pyage)
+            except Exception as ex:
+                bb_raise(ex, assert_key(assert_id))
+            if c.cache.is_zero():
                 bb_raise(AssertionError(<object>PyTuple_GET_ITEM(a, 1)),
                          assert_key(assert_id))
             assert_id += 1
@@ -495,7 +500,7 @@ cdef class Seq(SubSeq):
             for _action in actions:
                 action = <Action>_action
                 try:
-                    cond_val = get_value(action.cond, age)
+                    cond_val = get_value_bool(action.cond, age, pyage)
                 except Exception as ex:
                     bb_raise(ex, action_key(action.aid))
                 action.data.cond_val = cond_val
@@ -504,7 +509,7 @@ cdef class Seq(SubSeq):
                 action_value = action.value
                 is_ramp = isinstance(action_value, RampFunction)
                 if is_ramp:
-                    ramp_set_runtime_params(<RampFunction>action_value, age)
+                    ramp_set_runtime_params(<RampFunction>action_value, age, pyage)
                 start_time = time_mgr.time_values[action.tid]
                 end_time = time_mgr.time_values[action.end_tid]
                 if prev_time > start_time or start_time > end_time:

@@ -17,8 +17,8 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.rtval cimport ifelse, get_value, \
-  new_const, new_extern_age, rt_eval, ExternCallback
+from brassboard_seq.rtval cimport ifelse, get_value_bool, \
+  new_const, new_extern_age, rt_eval_tagval, ExternCallback, throw_py_error
 from brassboard_seq.utils cimport _assume_not_none, \
   event_time_key, bb_err_format, bb_raise, PyExc_TypeError
 
@@ -179,7 +179,7 @@ cdef class TimeManager:
 
         return 0
 
-    cdef long long compute_all_times(self, unsigned age) except -1:
+    cdef long long compute_all_times(self, unsigned age, py_object &pyage) except -1:
         status = self.status.get()
         if not status.finalized:
             PyErr_Format(PyExc_RuntimeError, "Event times not finalized")
@@ -190,7 +190,7 @@ cdef class TimeManager:
         cppfill(self.time_values.begin(), self.time_values.end(), -1)
         assume_not_none(event_times)
         for t in event_times:
-            tv = get_time_value(<EventTime>t, -1, age, self.time_values)
+            tv = get_time_value(<EventTime>t, -1, age, pyage, self.time_values)
             if tv > max_time:
                 max_time = tv
         return max_time
@@ -211,7 +211,7 @@ cdef void update_chain_pos(EventTime self, EventTime prev, int nchains) noexcept
 # we can compute the diff without computing the base time,
 # while if the base time is known, we can use the static values in the computation
 cdef long long get_time_value(EventTime self, int base_id, unsigned age,
-                              vector[long long] &cache) except -1:
+                              py_object &pyage, vector[long long] &cache) except -1:
     cdef int tid = self.data.id
     if tid == base_id:
         if self.data.is_static():
@@ -236,17 +236,18 @@ cdef long long get_time_value(EventTime self, int base_id, unsigned age,
     cdef EventTime prev = self.prev
     cdef long long prev_val = 0
     if prev is not None:
-        prev_val = get_time_value(prev, base_id, age, cache)
+        prev_val = get_time_value(prev, base_id, age, pyage, cache)
 
-    cdef bint cond = bool(get_value(self.cond, age))
+    cdef bint cond = get_value_bool(self.cond, age, pyage)
     cdef long long offset = 0
     if cond:
         p_rt_offset = self.data.get_rt_offset()
         if p_rt_offset != NULL:
             try:
-                offset = <long long?>rt_eval(<RuntimeValue>p_rt_offset, age)
+                rt_eval_tagval(<RuntimeValue>p_rt_offset, age, pyage)
             except Exception as ex:
                 bb_raise(ex, event_time_key(<void*>self))
+            offset = (<RuntimeValue>p_rt_offset).cache.get[int64_t]()
             if offset < 0:
                 bb_err_format(ValueError, event_time_key(<void*>self),
                               "Time delay cannot be negative")
@@ -267,7 +268,7 @@ cdef long long get_time_value(EventTime self, int base_id, unsigned age,
         # Do not try to evaluate wait_for unless the condition is true
         # When a base_id is supplied, the wait_for event time may not share
         # this base if the condition isn't true.
-        wait_for_val = get_time_value(wait_for, base_id, age, cache) + offset
+        wait_for_val = get_time_value(wait_for, base_id, age, pyage, cache) + offset
         value = max(value, wait_for_val)
     cache[tid] = value
     return value
@@ -340,7 +341,7 @@ cdef TimeOrder is_ordered(EventTime t1, EventTime t2) except OrderError:
         return OrderAfter
     return NoOrder
 
-cdef EventTime find_common_root(EventTimeDiff self, unsigned age):
+cdef EventTime find_common_root(EventTimeDiff self, unsigned age, py_object &pyage):
     cdef cppmap[int,void*] frontier
     if not self.t1.manager_status.get().finalized:
         PyErr_Format(PyExc_RuntimeError, "Event times not finalized")
@@ -356,13 +357,14 @@ cdef EventTime find_common_root(EventTimeDiff self, unsigned age):
         frontier[prev.data.id] = <void*>prev
         wait_for = t.wait_for
         if wait_for is not None:
-            if not get_value(t.cond, age):
+            if not get_value_bool(t.cond, age, pyage):
                 continue
             frontier[wait_for.data.id] = <void*>wait_for
     return <EventTime>deref(frontier.begin()).second
 
 cdef double timediff_eval(EventTimeDiff self, unsigned age) except? -100.0:
-    cdef EventTime common_root = find_common_root(self, age)
+    cdef py_object pyage
+    cdef EventTime common_root = find_common_root(self, age, pyage)
     cdef int base_id = -1
     if common_root is not None:
         base_id = common_root.data.id
@@ -370,7 +372,8 @@ cdef double timediff_eval(EventTimeDiff self, unsigned age) except? -100.0:
     t2 = self.t2
     cdef vector[long long] cache
     cache.resize(t1.manager_status.get().ntimes, -1)
-    cdef double diff = get_time_value(t1, base_id, age, cache) - get_time_value(t2, base_id, age, cache)
+    cdef double diff = (get_time_value(t1, base_id, age, pyage, cache) -
+                        get_time_value(t2, base_id, age, pyage, cache))
     return diff / c_time_scale
 
 @cython.internal

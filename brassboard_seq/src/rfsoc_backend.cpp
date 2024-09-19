@@ -209,7 +209,7 @@ void collect_actions(RFSOCBackend *rb, const CompileVTable vtable, Action*, Even
 }
 
 struct RuntimeVTable {
-    PyObject *(*rt_eval)(PyObject*, unsigned age);
+    int (*rt_eval_tagval)(PyObject*, unsigned age, py_object &pyage);
     int (*rampbuffer_eval_segments)(PyObject *buff, PyObject *func, PyObject *length,
                                     PyObject *oldval, double **input, double **output);
     double *(*rampbuffer_alloc_input)(PyObject *buff, int size);
@@ -590,25 +590,24 @@ void generate_channel_tonedata(RFSOCBackend *rb, ToneChannel &channel,
     }
 }
 
-template<typename RFSOCBackend>
+template<typename RFSOCBackend, typename RuntimeValue>
 static __attribute__((always_inline)) inline
-void generate_tonedata(RFSOCBackend *rb, unsigned age, const RuntimeVTable vtable)
+void generate_tonedata(RFSOCBackend *rb, unsigned age, py_object &pyage,
+                       const RuntimeVTable vtable, RuntimeValue*)
 {
     bb_debug("generate_tonedata: start\n");
     auto seq = rb->__pyx_base.seq;
     for (size_t i = 0, nreloc = rb->bool_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = rb->bool_values[i];
-        py_object pyval(vtable.rt_eval((PyObject*)rtval, age));
-        if (!pyval)
+        if (vtable.rt_eval_tagval((PyObject*)rtval, age, pyage) < 0)
             reraise_reloc_error(rb, i, true);
-        val = get_value_bool(pyval, [&] { reraise_reloc_error(rb, i, true); });
+        val = !((RuntimeValue*)rtval)->cache.is_zero();
     }
     for (size_t i = 0, nreloc = rb->float_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = rb->float_values[i];
-        py_object pyval(vtable.rt_eval((PyObject*)rtval, age));
-        if (!pyval)
+        if (vtable.rt_eval_tagval((PyObject*)rtval, age, pyage) < 0)
             reraise_reloc_error(rb, i, false);
-        val = get_value_f64(pyval, [&] { reraise_reloc_error(rb, i, false); });
+        val = ((RuntimeValue*)rtval)->cache.template get<double>();
     }
     auto &time_values = seq->__pyx_base.__pyx_base.seqinfo->time_mgr->time_values;
     auto reloc_action = [rb, &time_values] (const RFSOCAction &action,

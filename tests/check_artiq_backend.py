@@ -257,7 +257,7 @@ def test_val_error(max_bt):
         s.set('artiq/ttl0', rtval.new_extern(lambda: np.array([1, 2])))
     ajquo1827uhfasd()
     comp.finalize()
-    with pytest.raises(ValueError) as exc:
+    with pytest.raises(TypeError) as exc:
         comp.runtime_finalize(1)
     check_bt(exc, max_bt, 'ajquo1827uhfasd')
 

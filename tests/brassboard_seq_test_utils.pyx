@@ -1,7 +1,6 @@
 # cython: language_level=3
 
-from brassboard_seq cimport action, event_time, rtval, seq
-from cpython cimport PyObject
+from brassboard_seq cimport action, event_time, rtval, seq, utils
 
 import numpy as np
 
@@ -9,7 +8,7 @@ def new_invalid_rtval():
     # This should only happen if something really wrong happens.
     # We'll just test that we behave reasonably enough.
     # (it's unavoidable that we'll crash in some cases)
-    rv = rtval._new_rtval(<rtval.ValueType>1000)
+    rv = rtval._new_rtval(<rtval.ValueType>1000, rtval.DataType.Float64)
     rv.arg0 = rtval.new_const(1)
     rv.arg1 = rtval.new_const(1)
     return rv
@@ -54,7 +53,8 @@ cdef class RampBufferTest:
         return action.ramp_eval(self.func, t, length, oldval)
 
     def eval_runtime(self, age, ts, length, oldval):
-        action.ramp_set_runtime_params(self.func, age)
+        cdef utils.py_object pyage
+        action.ramp_set_runtime_params(self.func, age, pyage)
         nt = len(ts)
         cdef double *buff_ptr = action.rampbuffer_alloc_input(self.buff, nt)
         for i in range(nt):
@@ -96,7 +96,8 @@ def time_manager_finalize(event_time.TimeManager time_manager):
     time_manager.finalize()
 
 def time_manager_compute_all_times(event_time.TimeManager time_manager, unsigned age):
-    max_time = time_manager.compute_all_times(age)
+    cdef utils.py_object pyage
+    max_time = time_manager.compute_all_times(age, pyage)
     ntimes = time_manager.time_values.size()
     values = []
     for i in range(ntimes):

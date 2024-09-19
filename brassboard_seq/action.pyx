@@ -17,7 +17,8 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.rtval cimport get_value, ifelse, is_rtval
+from brassboard_seq.rtval cimport _get_value, get_value_f64, ifelse, is_rtval, \
+  rt_eval_tagval, RuntimeValue
 from brassboard_seq.utils cimport PyErr_Format, Py_NotImplemented, \
   PyExc_TypeError, PyExc_ValueError
 
@@ -118,18 +119,19 @@ cdef int ramp_set_compile_params(RampFunction self) except -1:
     for (name, value) in self.params.items():
         setattr(self, name, value)
 
-cdef int ramp_set_runtime_params(RampFunction self, unsigned age) except -1:
+cdef int ramp_set_runtime_params(RampFunction self, unsigned age,
+                                 py_object &pyage) except -1:
     if type(self) is SeqCubicSpline:
         sp = <SeqCubicSpline>self
         orders = <tuple>sp._spline_segments
-        sp.order0 = get_value(<object>PyTuple_GET_ITEM(orders, 0), age)
-        sp.order1 = get_value(<object>PyTuple_GET_ITEM(orders, 1), age)
-        sp.order2 = get_value(<object>PyTuple_GET_ITEM(orders, 2), age)
-        sp.order3 = get_value(<object>PyTuple_GET_ITEM(orders, 3), age)
+        sp.order0 = get_value_f64(<object>PyTuple_GET_ITEM(orders, 0), age, pyage)
+        sp.order1 = get_value_f64(<object>PyTuple_GET_ITEM(orders, 1), age, pyage)
+        sp.order2 = get_value_f64(<object>PyTuple_GET_ITEM(orders, 2), age, pyage)
+        sp.order3 = get_value_f64(<object>PyTuple_GET_ITEM(orders, 3), age, pyage)
         sp.compile_mode = False
         return 0
     for (name, value) in self.params.items():
-        setattr(self, name, get_value(value, age))
+        setattr(self, name, _get_value(value, age, pyage))
 
 @cython.auto_pickle(False)
 @cython.final

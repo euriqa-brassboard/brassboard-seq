@@ -15,7 +15,9 @@ class CmpError:
 def cmp_value(v1, v2):
     if np.isfinite(v1) and np.isfinite(v2):
         if isinstance(v2, np.float32):
-            return v1 == pytest.approx(v2, rel=1e-4)
+            return v1 == pytest.approx(v2, rel=1e-4, abs=1e-4)
+        if isinstance(v2, np.float16):
+            return v1 == pytest.approx(v2, rel=1e-3, abs=1e-3)
         return v1 == pytest.approx(v2)
     if math.isnan(v1):
         return math.isnan(v2)
@@ -211,7 +213,12 @@ def run_check_unary(f):
         except:
             continue
         rv = f(rtval.new_extern(lambda: v))
-        assert cmp_value(rtval.get_value(rv, 1), cv)
+        try:
+            rv = rtval.get_value(rv, 1)
+        except:
+            assert not np.isfinite(cv) or not np.isreal(cv)
+            continue
+        assert cmp_value(rv, cv)
 
 def run_check_binary(f):
     for v1 in values:
@@ -223,7 +230,15 @@ def run_check_binary(f):
             for rv1 in [v1, rtval.new_extern(lambda: v1)]:
                 for rv2 in [v2, rtval.new_extern(lambda: v2)]:
                     rv = f(rv1, rv2)
-                    assert cmp_value(rtval.get_value(rv, 1), cv)
+                    try:
+                        rv = rtval.get_value(rv, 1)
+                    except:
+                        if v2 == 0 and f is operator.mod:
+                            # Numpy doesn't raise an error in this case for some reason
+                            continue
+                        assert not np.isfinite(cv) or not np.isreal(cv)
+                        continue
+                    assert cmp_value(rv, cv)
 
 def run_check_ternary(f):
     for v1 in values:

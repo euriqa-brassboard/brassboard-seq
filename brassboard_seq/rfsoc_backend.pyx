@@ -19,10 +19,10 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.action cimport Action, RampFunction, SeqCubicSpline, \
   new_ramp_buffer, ramp_get_spline_segments, rampbuffer_alloc_input, rampbuffer_eval
-from brassboard_seq.event_time cimport EventTime, round_time_int
-from brassboard_seq.rtval cimport is_rtval, rt_eval, RuntimeValue
+from brassboard_seq.event_time cimport EventTime, round_time_f64
+from brassboard_seq.rtval cimport is_rtval, rt_eval_tagval, RuntimeValue
 from brassboard_seq.utils cimport pyfloat_from_double, set_global_tracker, \
-  PyErr_Format, PyExc_ValueError, assume_not_none, _assume_not_none
+  PyErr_Format, PyExc_ValueError, assume_not_none, _assume_not_none, py_object
 
 from libcpp.map cimport map as cppmap
 
@@ -41,14 +41,15 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
                          CompileVTable vtable, Action, EventTime) except+
 
     struct RuntimeVTable:
-        object (*rt_eval)(object, unsigned)
+        int (*rt_eval_tagval)(object, unsigned, py_object&) except -1
         int (*rampbuffer_eval_segments)(object, object, object, object,
                                         double **input, double **output) except -1
         double *(*rampbuffer_alloc_input)(object, int) except NULL
         double *(*rampbuffer_eval)(object, object, object, object) except NULL
         bint (*ramp_get_cubic_spline)(object, cubic_spline_t *sp) noexcept
 
-    void generate_tonedata(RFSOCBackend ab, unsigned age, RuntimeVTable vtable) except +
+    void generate_tonedata(RFSOCBackend ab, unsigned age, py_object&,
+                           RuntimeVTable vtable, RuntimeValue) except +
 
 cdef inline bint is_ramp(obj) noexcept:
     return isinstance(obj, RampFunction)
@@ -95,9 +96,11 @@ cdef inline CompileVTable get_compile_vtable() noexcept nogil:
     vt.is_ramp = is_ramp
     return vt
 
+ctypedef int (*rt_eval_tagval_t)(object, unsigned, py_object&) except -1
+
 cdef inline RuntimeVTable get_runtime_vtable() noexcept nogil:
     cdef RuntimeVTable vt
-    vt.rt_eval = <object (*)(object, unsigned)>rt_eval
+    vt.rt_eval_tagval = <rt_eval_tagval_t>rt_eval_tagval
     vt.rampbuffer_eval_segments = rampbuffer_eval_segments
     vt.rampbuffer_alloc_input = rampbuffer_alloc_input
     vt.rampbuffer_eval = rampbuffer_eval
@@ -220,14 +223,16 @@ cdef PyObject *raise_invalid_channel(tuple path) except NULL:
 
 cdef match_rfsoc_dds = re.compile('^dds(\\d+)$').match
 
-cdef inline set_dds_delay(RFSOCBackend self, int dds, delay):
+cdef inline set_dds_delay(RFSOCBackend self, int dds, double delay):
     if delay < 0:
+        py_delay = <object>delay
         PyErr_Format(PyExc_ValueError, "DDS time offset %S cannot be negative.",
-                     <PyObject*>delay)
+                     <PyObject*>py_delay)
     if delay > 0.1:
+        py_delay = <object>delay
         PyErr_Format(PyExc_ValueError, "DDS time offset %S cannot be more than 100ms.",
-                     <PyObject*>delay)
-    self.channels.set_dds_delay(dds, round_time_int(delay))
+                     <PyObject*>py_delay)
+    self.channels.set_dds_delay(dds, round_time_f64(delay))
 
 @cython.auto_pickle(False)
 @cython.final
@@ -246,7 +251,7 @@ cdef class RFSOCBackend:
         if is_rtval(delay):
             self.rt_dds_delay[dds] = delay
             return
-        set_dds_delay(self, dds, delay)
+        set_dds_delay(self, dds, <double>delay)
 
     cdef int finalize(self) except -1:
         bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)
@@ -296,11 +301,13 @@ cdef class RFSOCBackend:
         collect_actions(self, get_compile_vtable(), None, None)
 
     cdef int runtime_finalize(self, unsigned age) except -1:
+        cdef py_object pyage
         bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)
         for dds, delay in self.rt_dds_delay.items():
-            set_dds_delay(self, dds, rt_eval(<RuntimeValue>delay, age))
+            rt_eval_tagval(<RuntimeValue>delay, age, pyage)
+            set_dds_delay(self, dds, (<RuntimeValue>delay).cache.get[double]())
         self.generator.start()
         try:
-            generate_tonedata(self, age, get_runtime_vtable())
+            generate_tonedata(self, age, pyage, get_runtime_vtable(), None)
         finally:
             self.generator.finish()
