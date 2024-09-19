@@ -91,14 +91,20 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
         int64_t i64_val
         double f64_val
 
+    enum class EvalError(uint8_t):
+        pass
+    void throw_py_error(EvalError) except +
+    void throw_py_error(EvalError, uintptr_t) except +
+
     cppclass TagVal:
         DataType type
+        EvalError err
         GenVal val
         TagVal()
         T get[T]()
         @staticmethod
         TagVal from_py(object obj) except +
-        object to_py()
+        object to_py() except +
         bint is_zero()
 
 cdef class RuntimeValue:

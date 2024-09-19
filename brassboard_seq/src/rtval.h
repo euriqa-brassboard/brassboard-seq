@@ -19,6 +19,8 @@
 #ifndef BRASSBOARD_SEQ_SRC_RTVAL_H
 #define BRASSBOARD_SEQ_SRC_RTVAL_H
 
+#include "utils.h"
+
 #include "Python.h"
 
 #include <stdint.h>
@@ -163,6 +165,69 @@ template<> struct GenVal::_getter<double> {
     static inline const double &get(const GenVal &v) { return v.f64_val; };
 };
 
+enum class EvalError: uint8_t {
+    NoError = 0,
+    ZeroDivide = 1,
+    PowComplex = 2,
+    LogicInexact = 3,
+    LogNeg = 4,
+    SqrtNeg = 5,
+    TrigDomain = 6,
+};
+
+static inline void throw_py_error(EvalError err, uintptr_t key=uintptr_t(-1))
+{
+    switch (err) {
+    case EvalError::ZeroDivide:
+        bb_err_format(PyExc_ZeroDivisionError, key, "division by zero");
+        throw 0;
+    case EvalError::PowComplex:
+        bb_err_format(PyExc_ValueError, key, "power of negative number");
+        throw 0;
+    case EvalError::LogicInexact:
+        bb_err_format(PyExc_ValueError, key,
+                      "bitwise operation on floating point numbers");
+        throw 0;
+    case EvalError::LogNeg:
+        bb_err_format(PyExc_ValueError, key, "log of negative number");
+        throw 0;
+    case EvalError::SqrtNeg:
+        bb_err_format(PyExc_ValueError, key, "sqrt of negative number");
+        throw 0;
+    case EvalError::TrigDomain:
+        // Too lazy to think of a name...
+        bb_err_format(PyExc_ValueError, key, "math domain error");
+        throw 0;
+    default:
+    case EvalError::NoError:
+        return;
+    }
+}
+
+namespace {
+template<typename E, typename ... Es>
+struct ErrorCombiner {
+    static inline E combine(E e, Es ... es)
+    {
+        return unlikely(uint8_t(e)) ? e : ErrorCombiner<Es...>::combine(es...);
+    }
+};
+template<typename E>
+struct ErrorCombiner<E> {
+    static inline E combine(E e)
+    {
+        return e;
+    }
+};
+}
+
+template<typename ... Es>
+static inline __attribute__((always_inline,flatten))
+EvalError combine_error(Es ... es)
+{
+    return ErrorCombiner<Es...>::combine(es...);
+}
+
 struct TagVal {
     TagVal(bool b)
         : type(DataType::Bool),
@@ -178,10 +243,12 @@ struct TagVal {
         : type(DataType::Float64),
           val{ .f64_val = double(f) }
     {}
-    TagVal(DataType type=DataType::Bool)
-        : type(type)
+    TagVal(DataType type=DataType::Bool, EvalError err=EvalError::NoError)
+        : type(type),
+          err(err)
     {}
     DataType type;
+    EvalError err{EvalError::NoError};
     GenVal val{ .i64_val = 0 };
     template<typename T> T get(void) const
     {
@@ -194,6 +261,24 @@ struct TagVal {
             return T(val.get<double>());
         default:
             return T(false);
+        }
+    }
+    TagVal convert(DataType new_type) const
+    {
+        if (new_type == type)
+            return *this;
+        if (err != EvalError::NoError)
+            return { new_type, err };
+
+        switch (new_type) {
+        case DataType::Bool:
+            return get<bool>();
+        case DataType::Int64:
+            return get<int64_t>();
+        case DataType::Float64:
+            return get<double>();
+        default:
+            return { new_type };
         }
     }
     static TagVal from_py(PyObject *obj);

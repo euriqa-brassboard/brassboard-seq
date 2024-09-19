@@ -55,6 +55,10 @@ cdef extern from "src/rtval.cpp" namespace "brassboard_seq::rtval":
     PyObject *cnpy_hypot
     PyObject *cnpy_arctan2
 
+    DataType unary_return_type(ValueType, DataType t1)
+    DataType binary_return_type(ValueType, DataType t1, DataType t2)
+    TagVal tagval_add_or_sub(TagVal, TagVal, bint)
+
     void rt_eval_cache(RuntimeValue self, unsigned age, py_object pyage) except +
 
 cdef inline call0(f):
