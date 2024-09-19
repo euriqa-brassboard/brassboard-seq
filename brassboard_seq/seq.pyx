@@ -35,7 +35,8 @@ cdef StringIO # hide import
 from io import StringIO
 
 cimport cython
-from cpython cimport PyDict_GetItemWithError, PyList_GET_SIZE, PyList_GET_ITEM, \
+from cpython cimport PyObject, PyDict_GetItemWithError, \
+  PyList_GET_SIZE, PyList_GET_ITEM, \
   Py_INCREF, PyLong_AsLong, PyTypeObject, PyTuple_GET_ITEM
 
 cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":

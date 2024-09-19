@@ -55,7 +55,7 @@ static PyObject *cnpy_arctan2;
 
 template<typename RuntimeValue>
 static __attribute__((flatten))
-void _rt_eval_cache(RuntimeValue *self, unsigned age, py_object<PyObject> &pyage)
+void _rt_eval_cache(RuntimeValue *self, unsigned age, py_object &pyage)
 {
     if (self->age == age)
         return;
@@ -271,7 +271,7 @@ template<typename RuntimeValue>
 static inline  __attribute__((always_inline))
 void rt_eval_cache(RuntimeValue *self, unsigned age)
 {
-    py_object<PyObject> pyage;
+    py_object pyage;
     _rt_eval_cache(self, age, pyage);
 }
 

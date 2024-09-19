@@ -23,7 +23,6 @@ from brassboard_seq.utils cimport BacktraceTracker, py_object
 from brassboard_seq.scan cimport ParamPack
 
 from libcpp.vector cimport vector
-from cpython cimport PyObject
 
 cdef class TimeSeq:
     # Toplevel parent sequence
@@ -48,7 +47,7 @@ cdef class TimeStep(TimeSeq):
     # if the action added to this step contains ramps.
     cdef object length
     # The array of channel -> actions
-    cdef vector[py_object[PyObject]] actions
+    cdef vector[py_object] actions
 
 
 cdef class ConditionalWrapper:

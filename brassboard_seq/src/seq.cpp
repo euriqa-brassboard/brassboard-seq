@@ -48,7 +48,7 @@ struct seq_set_params {
     PyObject *value;
     bool exact_time{false};
     PyObject *cond{Py_True};
-    py_object<PyObject> kws;
+    py_object kws;
 
     PyObject *kwargs() const
     {
@@ -168,7 +168,7 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
 
     auto first_arg = args[nargs_min - 1];
     using EventTime = std::remove_reference_t<decltype(*subseq->__pyx_base.end_time)>;
-    py_object<PyObject> start_time;
+    py_object start_time;
     if (type == AddStepType::Background) {
         start_time.reset(py_newref((PyObject*)subseq->__pyx_base.end_time));
     }
@@ -201,7 +201,7 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
         return res;
     };
 
-    py_object<PyObject> kws;
+    py_object kws;
     if (kwnames) {
         kws.reset(throw_if_not(PyDict_New()));
         auto kwvalues = args + nargs;

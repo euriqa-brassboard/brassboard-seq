@@ -308,13 +308,14 @@ struct PyDeleter {
         }
     }
 };
-template<typename T>
-struct py_object : std::unique_ptr<T,PyDeleter> {
-    using std::unique_ptr<T,PyDeleter>::unique_ptr;
-    operator T*() { return this->get(); };
+struct py_object : std::unique_ptr<PyObject,PyDeleter> {
+    using std::unique_ptr<PyObject,PyDeleter>::unique_ptr;
+    operator PyObject*() { return this->get(); };
+    void set_obj(PyObject *p)
+    {
+        reset(py_newref(p));
+    }
 };
-template<typename T>
-py_object(T*) -> py_object<T>;
 
 extern PyObject *pyfloat_m1;
 extern PyObject *pyfloat_m0_5;
