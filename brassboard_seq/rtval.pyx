@@ -36,11 +36,6 @@ cdef extern from "src/rtval.cpp" namespace "brassboard_seq::rtval":
 
     void rt_eval_cache(RuntimeValue self, unsigned age, py_object pyage) except +
 
-cdef inline call0(f):
-    return f()
-cdef inline call1(f, arg0):
-    return f(arg0)
-
 cdef int operator_precedence(ValueType type_) noexcept:
     if type_ == ValueType.Add or type_ == ValueType.Sub:
         return 3

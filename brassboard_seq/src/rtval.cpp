@@ -24,9 +24,6 @@
 
 #include "numpy/arrayobject.h"
 
-static PyObject *__pyx_f_14brassboard_seq_5rtval_call0(PyObject *f);
-static PyObject *__pyx_f_14brassboard_seq_5rtval_call1(PyObject *f, PyObject *arg0);
-
 namespace brassboard_seq::rtval {
 
 template<typename T>
@@ -701,12 +698,6 @@ void rt_eval_cache(RuntimeValue *self, unsigned age, py_object &pyage)
     if (self->age == age)
         return;
 
-    auto get_pyage = [&] {
-        if (!pyage)
-            pyage.reset(throw_if_not(PyLong_FromLong(age)));
-        return pyage.get();
-    };
-
     // Take the reference from the argument
     auto set_cache = [&] (TagVal v) {
         assert(v.type == self->cache.type);
@@ -725,11 +716,15 @@ void rt_eval_cache(RuntimeValue *self, unsigned age, py_object &pyage)
     case Const:
         return;
     case Extern:
-        set_cache_py(__pyx_f_14brassboard_seq_5rtval_call0(self->cb_arg2));
+        set_cache_py(_PyObject_Vectorcall(self->cb_arg2, nullptr, 0, nullptr));
         return;
-    case ExternAge:
-        set_cache_py(__pyx_f_14brassboard_seq_5rtval_call1(self->cb_arg2, get_pyage()));
+    case ExternAge: {
+        if (!pyage)
+            pyage.reset(throw_if_not(PyLong_FromLong(age)));
+        PyObject *args[] = { pyage.get() };
+        set_cache_py(_PyObject_Vectorcall(self->cb_arg2, args, 1, nullptr));
         return;
+    }
     default:
         break;
     }
