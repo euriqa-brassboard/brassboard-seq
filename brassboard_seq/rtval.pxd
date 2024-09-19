@@ -20,6 +20,7 @@
 from brassboard_seq.utils cimport py_object
 
 from libc.stdint cimport *
+from libcpp.vector cimport vector
 
 cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
     enum ValueType:
@@ -105,21 +106,32 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
         EvalError err
         GenVal val
         TagVal()
+        TagVal(double)
         T get[T]()
         @staticmethod
         TagVal from_py(object obj) except +
         object to_py() except +
         bint is_zero()
 
+    cppclass InterpFunction:
+        void set_value(RuntimeValue, vector[DataType]&) except +
+        void eval_all(unsigned, py_object&, RuntimeValue) except +
+        TagVal call()
+
 cdef class RuntimeValue:
     cdef ValueType type_
     cdef unsigned age
     cdef RuntimeValue arg0
     cdef RuntimeValue arg1
-    cdef object cb_arg2
+    cdef object cb_arg2 # Also used as argument index
     cdef TagVal cache
 
 cdef int rt_eval_tagval(RuntimeValue self, unsigned age, py_object &pyage) except -1
+cdef int interp_function_set_value(InterpFunction &func, val,
+                                   vector[DataType] &args) except -1
+cdef int interp_function_eval_all(InterpFunction &func, unsigned age,
+                                  py_object &pyage) except -1
+cdef TagVal interp_function_call(InterpFunction &func) noexcept
 
 cdef inline RuntimeValue _new_rtval(ValueType type_, DataType dt):
     # Avoid passing arguments to the constructor which requires the arguments

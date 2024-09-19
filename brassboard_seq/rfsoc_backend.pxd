@@ -19,7 +19,6 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.seq cimport Seq
 from brassboard_seq.backend cimport Backend
-from brassboard_seq.action cimport RampBuffer
 
 from libc.stdint cimport *
 from libcpp.vector cimport vector
@@ -97,7 +96,6 @@ cdef class RFSOCBackend(Backend):
     cdef vector[pair[void*,double]] float_values
     cdef vector[Relocation] relocations
     cdef bint eval_status
-    cdef RampBuffer ramp_buffer
     cdef ToneBuffer tone_buffer
 
     cdef dict rt_dds_delay

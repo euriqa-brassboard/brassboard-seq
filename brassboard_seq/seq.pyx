@@ -441,8 +441,8 @@ cdef class Seq(SubSeq):
                                       <PyObject*>name)
                 action.prev_val = value
                 action_value = action.value
+                isramp = isinstance(action_value, RampFunction)
                 if not action.data.is_pulse:
-                    isramp = isinstance(action_value, RampFunction)
                     last_is_start = not isramp
                     if action.cond is False:
                         if isramp:
@@ -453,8 +453,8 @@ cdef class Seq(SubSeq):
                     elif isramp:
                         rampf = <RampFunction>action_value
                         try:
-                            ramp_set_compile_params(rampf)
                             length = action.length
+                            ramp_set_compile_params(rampf, length, value)
                             new_value = ramp_eval(rampf, length, length, value)
                         except Exception as ex:
                             bb_raise(ex, action_key(action.aid))
@@ -465,6 +465,12 @@ cdef class Seq(SubSeq):
                         value = ifelse(action.cond, action_value, value)
                         last_time = start_time
                 else:
+                    if action.cond is not False and isramp:
+                        rampf = <RampFunction>action_value
+                        try:
+                            ramp_set_compile_params(rampf, action.length, value)
+                        except Exception as ex:
+                            bb_raise(ex, action_key(action.aid))
                     last_time = <EventTime>PyList_GET_ITEM(event_times, action.end_tid)
                     last_is_start = False
                 action.end_val = value

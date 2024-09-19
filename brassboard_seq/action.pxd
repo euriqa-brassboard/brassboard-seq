@@ -17,7 +17,10 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
+from brassboard_seq.rtval cimport InterpFunction, TagVal
 from brassboard_seq.utils cimport py_object
+
+from libcpp.memory cimport unique_ptr
 
 cdef extern from "src/action.h" namespace "brassboard_seq::action":
     cppclass ActionData:
@@ -54,6 +57,8 @@ cdef class RampFunction:
     cdef dict params
     cdef object _eval
     cdef object _spline_segments
+    cdef object _fvalue
+    cdef unique_ptr[InterpFunction] interp_func
 
 cdef class SeqCubicSpline(RampFunction):
     cdef double order0
@@ -63,7 +68,7 @@ cdef class SeqCubicSpline(RampFunction):
     cdef bint compile_mode
 
 cdef ramp_eval(RampFunction self, t, length, oldval)
-cdef int ramp_set_compile_params(RampFunction self) except -1
+cdef int ramp_set_compile_params(RampFunction self, length, oldval) except -1
 cdef int ramp_set_runtime_params(RampFunction self, unsigned age,
                                  py_object &pyage) except -1
 cdef inline ramp_get_spline_segments(RampFunction self, length, oldval):
@@ -80,3 +85,4 @@ cdef class RampBuffer:
 cdef RampBuffer new_ramp_buffer()
 cdef double *rampbuffer_alloc_input(self, int size) except NULL
 cdef double *rampbuffer_eval(self, func, length, oldval) except NULL
+cdef TagVal ramp_interp_eval(RampFunction self, double t) noexcept

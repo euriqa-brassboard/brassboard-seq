@@ -351,6 +351,17 @@ cdef np_tanh = np.tanh
 cdef np_hypot = np.hypot
 cdef np_rint = np.rint
 
+cdef int interp_function_set_value(InterpFunction &func, val,
+                                    vector[DataType] &args) except -1:
+    func.set_value(<RuntimeValue>val, args)
+
+cdef int interp_function_eval_all(InterpFunction &func, unsigned age,
+                                  py_object &pyage) except -1:
+    func.eval_all(age, pyage, None)
+
+cdef TagVal interp_function_call(InterpFunction &func) noexcept:
+    return func.call()
+
 cdef inline _round_int64(v):
     if type(v) is int:
         return v

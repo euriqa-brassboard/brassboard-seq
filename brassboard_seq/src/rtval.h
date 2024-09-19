@@ -25,6 +25,9 @@
 
 #include <stdint.h>
 
+#include <map>
+#include <vector>
+
 namespace brassboard_seq::rtval {
 
 enum ValueType {
@@ -294,6 +297,56 @@ struct TagVal {
         }
     }
 
+};
+
+struct InterpFunction {
+    std::vector<int> code;
+    std::vector<GenVal> data;
+    std::vector<EvalError> errors;
+    std::vector<void*> rt_vals;
+
+    DataType ret_type;
+
+    struct Builder {
+        struct ValueInfo {
+            bool is_const{false};
+            bool dynamic{false};
+            bool inited{false};
+            int idx{-1};
+            TagVal val;
+        };
+        int nargs;
+        std::vector<DataType> &types;
+        std::map<void*,ValueInfo> value_infos{};
+    };
+
+    int ensure_index(Builder::ValueInfo &info, Builder &builder)
+    {
+        if (info.idx >= 0)
+            return info.idx;
+        int idx = data.size();
+        info.idx = idx;
+        data.push_back(info.val.val);
+        builder.types.push_back(info.val.type);
+        return idx;
+    }
+
+    template<typename RuntimeValue>
+    void set_value(RuntimeValue *value, std::vector<DataType> &args);
+
+    template<typename RuntimeValue>
+    void set_value(RuntimeValue *value, std::vector<DataType> &&args)
+    {
+        set_value(value, args);
+    }
+
+    template<typename RuntimeValue>
+    Builder::ValueInfo &visit_value(RuntimeValue *value, Builder &builder);
+
+    template<typename RuntimeValue>
+    void eval_all(unsigned age, py_object &pyage, RuntimeValue*);
+
+    TagVal call();
 };
 
 }

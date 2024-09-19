@@ -18,12 +18,14 @@
 
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.rtval cimport _get_value, get_value_f64, ifelse, is_rtval, \
-  rt_eval_tagval, RuntimeValue
+  new_arg, new_const, new_expr2, ValueType, DataType, rt_eval_tagval, RuntimeValue, \
+  interp_function_set_value, interp_function_eval_all, interp_function_call
 from brassboard_seq.utils cimport PyErr_Format, Py_NotImplemented, \
   PyExc_TypeError, PyExc_ValueError
 
 cimport cython
-from cpython cimport Py_LT, Py_GT, PyTuple_GET_ITEM
+from cython.operator cimport dereference as deref
+from cpython cimport Py_LT, Py_GT, PyTuple_GET_ITEM, PyFloat_AS_DOUBLE
 
 cdef np # hide import
 import numpy as np
@@ -31,6 +33,11 @@ cimport numpy as cnpy
 cnpy._import_array()
 
 from libc cimport math as cmath
+from libcpp.vector cimport vector
+from libcpp.utility cimport move
+
+cdef extern from "src/action.cpp" namespace "brassboard_seq::action":
+    void rampfunc_set_time(RampFunction self, double t)
 
 @cython.auto_pickle(False)
 @cython.no_gc
@@ -69,6 +76,9 @@ cdef class Action:
 
     def __repr__(self):
         return str(self)
+
+cdef RuntimeValue arg0 = new_arg(0)
+cdef RuntimeValue const0 = new_const(0.0)
 
 cdef class RampFunction:
     def __init__(self, *, **params):
@@ -112,12 +122,25 @@ cdef class SeqCubicSpline:
 cdef ramp_eval(RampFunction self, t, length, oldval):
     return self._eval(self, t, length, oldval)
 
-cdef int ramp_set_compile_params(RampFunction self) except -1:
+cdef int ramp_set_compile_params(RampFunction self, length, oldval) except -1:
     if type(self) is SeqCubicSpline:
         (<SeqCubicSpline>self).compile_mode = True
         return 0
     for (name, value) in self.params.items():
         setattr(self, name, value)
+    fvalue = ramp_eval(self, arg0, length, oldval)
+    cdef vector[DataType] args
+    cdef unique_ptr[InterpFunction] interp_func
+    if is_rtval(fvalue):
+        interp_func.reset(new InterpFunction())
+        args.push_back(DataType.Float64)
+        if (<RuntimeValue>fvalue).cache.type != DataType.Float64:
+            fvalue = new_expr2(ValueType.Add, fvalue, const0)
+        interp_function_set_value(deref(interp_func), <RuntimeValue>fvalue, args)
+        self.interp_func = move(interp_func)
+    else:
+        fvalue = <double>fvalue
+    self._fvalue = fvalue
 
 cdef int ramp_set_runtime_params(RampFunction self, unsigned age,
                                  py_object &pyage) except -1:
@@ -132,6 +155,20 @@ cdef int ramp_set_runtime_params(RampFunction self, unsigned age,
         return 0
     for (name, value) in self.params.items():
         setattr(self, name, _get_value(value, age, pyage))
+    if self.interp_func:
+        interp_function_eval_all(deref(self.interp_func), age, pyage)
+
+cdef TagVal ramp_interp_eval(RampFunction self, double t) noexcept:
+    if type(self) is SeqCubicSpline:
+        sp = <SeqCubicSpline>self
+        return TagVal(sp.order0 + (sp.order1 + (sp.order2 + sp.order3 * t) * t) * t)
+    cdef void *fvalue
+    if not self.interp_func:
+        # Avoid reference counting
+        fvalue = <void*>self._fvalue
+        return TagVal(PyFloat_AS_DOUBLE(<object>fvalue))
+    rampfunc_set_time(self, t)
+    return interp_function_call(deref(self.interp_func))
 
 @cython.auto_pickle(False)
 @cython.final

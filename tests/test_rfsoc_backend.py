@@ -1128,9 +1128,8 @@ def test_rampfunc_error(max_bt):
     def j98asdf():
         st.pulse('rfsoc/dds0/1/freq', ErrorEval())
     j98asdf()
-    comp.finalize()
     with pytest.raises(ValueError, match="XXXJJFSJkdfFDSDF") as exc:
-        comp.runtime_finalize(1)
+        comp.finalize()
     check_bt(exc, max_bt, 'j98asdf')
 
 @with_rfsoc_params

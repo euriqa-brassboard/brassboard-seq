@@ -55,7 +55,7 @@ cdef class RampBufferTest:
         self.buff = action.new_ramp_buffer()
 
     def eval_compile(self, t, length, oldval):
-        action.ramp_set_compile_params(self.func)
+        action.ramp_set_compile_params(self.func, length, oldval)
         return action.ramp_eval(self.func, t, length, oldval)
 
     def eval_runtime(self, age, ts, length, oldval):

@@ -18,9 +18,9 @@
 
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.action cimport Action, RampFunction, SeqCubicSpline, \
-  new_ramp_buffer, ramp_get_spline_segments, rampbuffer_alloc_input, rampbuffer_eval
+  ramp_get_spline_segments, ramp_interp_eval
 from brassboard_seq.event_time cimport EventTime, round_time_f64
-from brassboard_seq.rtval cimport is_rtval, rt_eval_tagval, RuntimeValue
+from brassboard_seq.rtval cimport is_rtval, rt_eval_tagval, RuntimeValue, TagVal
 from brassboard_seq.utils cimport pyfloat_from_double, set_global_tracker, \
   PyErr_Format, PyExc_ValueError, assume_not_none, _assume_not_none, py_object, \
   _PyObject_Vectorcall, Py_True, Py_False
@@ -43,14 +43,11 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
 
     struct RuntimeVTable:
         int (*rt_eval_tagval)(object, unsigned, py_object&) except -1
-        int (*rampbuffer_eval_segments)(object, object, object, object,
-                                        double **input, double **output) except -1
-        double *(*rampbuffer_alloc_input)(object, int) except NULL
-        double *(*rampbuffer_eval)(object, object, object, object) except NULL
         bint (*ramp_get_cubic_spline)(object, cubic_spline_t *sp) noexcept
+        TagVal (*ramp_interp_eval)(object, double) noexcept
 
     void generate_tonedata(RFSOCBackend ab, unsigned age, py_object&,
-                           RuntimeVTable vtable, RuntimeValue) except +
+                           RuntimeVTable vtable, RuntimeValue, RampFunction) except +
 
 cdef inline bint is_ramp(obj) noexcept:
     return isinstance(obj, RampFunction)
@@ -64,33 +61,6 @@ cdef inline bint ramp_get_cubic_spline(_ramp, cubic_spline_t *sp) noexcept:
                            (<SeqCubicSpline>_ramp).order3)
     return True
 
-cdef inline int rampbuffer_eval_segments(_buff, _func, length, oldval,
-                                         double **input, double **output) except -1:
-    cdef RampBuffer buff = <RampBuffer>_buff
-    cdef RampFunction func = <RampFunction>_func
-    pts = ramp_get_spline_segments(func, length, oldval)
-    if pts is None:
-        return 0
-    cdef int npts = len(pts)
-    pin = rampbuffer_alloc_input(buff, npts * 3 + 4)
-    input[0] = pin
-    cdef double prev_v = 0
-    cdef double v
-    pin[0] = 0
-    cdef int i
-    for i in range(npts):
-        v = pts[i]
-        pin[3 * i + 1] = v * (1 / 3) + prev_v * (2 / 3)
-        pin[3 * i + 2] = v * (2 / 3) + prev_v * (1 / 3)
-        pin[3 * i + 3] = v
-        prev_v = v
-    v = <double?>length
-    pin[3 * npts + 1] = v * (1 / 3) + prev_v * (2 / 3)
-    pin[3 * npts + 2] = v * (2 / 3) + prev_v * (1 / 3)
-    pin[3 * npts + 3] = v
-    output[0] = rampbuffer_eval(buff, func, length, oldval)
-    return npts * 3 + 4
-
 cdef inline CompileVTable get_compile_vtable() noexcept nogil:
     cdef CompileVTable vt
     vt.is_rtval = is_rtval
@@ -102,10 +72,8 @@ ctypedef int (*rt_eval_tagval_t)(object, unsigned, py_object&) except -1
 cdef inline RuntimeVTable get_runtime_vtable() noexcept nogil:
     cdef RuntimeVTable vt
     vt.rt_eval_tagval = <rt_eval_tagval_t>rt_eval_tagval
-    vt.rampbuffer_eval_segments = rampbuffer_eval_segments
-    vt.rampbuffer_alloc_input = rampbuffer_alloc_input
-    vt.rampbuffer_eval = rampbuffer_eval
     vt.ramp_get_cubic_spline = ramp_get_cubic_spline
+    vt.ramp_interp_eval = <TagVal (*)(object, double) noexcept>ramp_interp_eval
     return vt
 
 @cython.auto_pickle(False)
@@ -258,7 +226,6 @@ cdef class RFSOCBackend:
     def __init__(self, RFSOCOutputGenerator generator, /):
         self.eval_status = False
         self.generator = generator
-        self.ramp_buffer = new_ramp_buffer()
         self.rt_dds_delay = {}
 
     @property
@@ -325,6 +292,6 @@ cdef class RFSOCBackend:
             set_dds_delay(self, dds, (<RuntimeValue>delay).cache.get[double]())
         self.generator.start()
         try:
-            generate_tonedata(self, age, pyage, get_runtime_vtable(), None)
+            generate_tonedata(self, age, pyage, get_runtime_vtable(), None, None)
         finally:
             self.generator.finish()

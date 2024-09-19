@@ -18,6 +18,8 @@
 
 #include "rfsoc_backend.h"
 
+#include "rtval.h"
+
 #include "event_time.h"
 #include "utils.h"
 
@@ -210,12 +212,8 @@ void collect_actions(RFSOCBackend *rb, const CompileVTable vtable, Action*, Even
 
 struct RuntimeVTable {
     int (*rt_eval_tagval)(PyObject*, unsigned age, py_object &pyage);
-    int (*rampbuffer_eval_segments)(PyObject *buff, PyObject *func, PyObject *length,
-                                    PyObject *oldval, double **input, double **output);
-    double *(*rampbuffer_alloc_input)(PyObject *buff, int size);
-    double *(*rampbuffer_eval)(PyObject *buff, PyObject *func,
-                               PyObject *length, PyObject *oldval);
     int (*ramp_get_cubic_spline)(PyObject*, cubic_spline_t *sp);
+    rtval::TagVal (*ramp_interp_eval)(PyObject*, double);
 };
 
 template<typename RFSOCBackend>
@@ -289,11 +287,14 @@ void _generate_splines(EvalCB &eval_cb, AddSample &add_sample,
         SplineBuffer buff0;
         {
             double ts[6];
-            for (int i = 0; i < 6; i++)
-                ts[i] = (buff.t[i] + buff.t[i + 1]) / 2;
+            double vs[6];
+            for (int i = 0; i < 6; i++) {
+                double t = (buff.t[i] + buff.t[i + 1]) / 2;
+                ts[i] = t;
+                vs[i] = eval_cb(t);
+            }
             bb_debug("evaluate on {%f, %f, %f, %f, %f, %f}\n",
                      ts[0], ts[1], ts[2], ts[3], ts[4], ts[5]);
-            auto vs = eval_cb(6, ts);
             buff0 = {
                 { buff.t[0], ts[0], buff.t[1], ts[1], buff.t[2], ts[2], buff.t[3] },
                 { buff.v[0], vs[0], buff.v[1], vs[1], buff.v[2], vs[2], buff.v[3] },
@@ -315,9 +316,11 @@ void generate_splines(EvalCB &eval_cb, AddSample &add_sample, double len,
 {
     bb_debug("generate_splines: len=%f\n", len);
     SplineBuffer buff;
-    for (int i = 0; i < 7; i++)
-        buff.t[i] = len * i / 6;
-    memcpy(buff.v, eval_cb(7, buff.t), sizeof(double) * 7);
+    for (int i = 0; i < 7; i++) {
+        auto t = len * i / 6;
+        buff.t[i] = t;
+        buff.v[i] = eval_cb(t);
+    }
     _generate_splines(eval_cb, add_sample, buff, threshold);
 }
 
@@ -590,10 +593,10 @@ void generate_channel_tonedata(RFSOCBackend *rb, ToneChannel &channel,
     }
 }
 
-template<typename RFSOCBackend, typename RuntimeValue>
+template<typename RFSOCBackend, typename RuntimeValue, typename RampFunction>
 static __attribute__((always_inline)) inline
 void generate_tonedata(RFSOCBackend *rb, unsigned age, py_object &pyage,
-                       const RuntimeVTable vtable, RuntimeValue*)
+                       const RuntimeVTable vtable, RuntimeValue*, RampFunction*)
 {
     bb_debug("generate_tonedata: start\n");
     auto seq = rb->__pyx_base.seq;
@@ -632,7 +635,6 @@ void generate_tonedata(RFSOCBackend *rb, unsigned age, py_object &pyage,
 
     bool eval_status = !rb->eval_status;
     rb->eval_status = eval_status;
-    auto ramp_buff = rb->ramp_buffer;
 
     constexpr double spline_threshold[3] = {
         [ToneFreq] = 10,
@@ -834,15 +836,6 @@ void generate_tonedata(RFSOCBackend *rb, unsigned age, py_object &pyage,
                              "new cycle:%" PRId64 "\n", param_name(param), cur_cycle);
                     continue;
                 }
-                py_object py_oldval(pyfloat_from_double(val));
-                py_object py_len(pyfloat_from_double(len));
-                bb_reraise_and_throw_if(!py_oldval || !py_len, action_key(action.aid));
-                double *input;
-                double *output;
-                int n = vtable.rampbuffer_eval_segments(
-                    (PyObject*)ramp_buff, ramp_func, py_len, py_oldval,
-                    &input, &output);
-                bb_reraise_and_throw_if(n < 0, action_key(action.aid));
                 auto add_sample = [&] (double t2, double v0, double v1,
                                        double v2, double v3) {
                     auto sp = spline_from_values(v0 * value_scale, v1 * value_scale,
@@ -850,29 +843,80 @@ void generate_tonedata(RFSOCBackend *rb, unsigned age, py_object &pyage,
                     add_spline(t2, sp);
                     val = v3;
                 };
-                if (n > 0) {
-                    assert(input[0] == 0);
+                auto eval_ramp = [&] (double t) {
+                    auto v = vtable.ramp_interp_eval(ramp_func, t);
+                    throw_py_error(v.err);
+                    return v.val.f64_val;
+                };
+                if (auto rampf = (RampFunction*)ramp_func;
+                    rampf->_spline_segments != Py_None) {
+
+                    py_object py_oldval(pyfloat_from_double(val));
+                    py_object py_len(pyfloat_from_double(len));
+                    bb_reraise_and_throw_if(!py_oldval || !py_len,
+                                            action_key(action.aid));
+                    PyObject *args[] = { ramp_func, py_len.get(), py_oldval.get() };
+                    py_object pts(_PyObject_Vectorcall(rampf->_spline_segments,
+                                                       args, 3, nullptr));
+                    bb_reraise_and_throw_if(!pts, action_key(action.aid));
+                    if (pts == Py_None)
+                        goto adaptive;
+                    py_object iter(PyObject_GetIter(pts));
+                    bb_reraise_and_throw_if(!iter, action_key(action.aid));
+                    double prev_t = 0;
+                    double prev_v = eval_ramp(0);
                     bb_debug("Use ramp function provided segments on %s spline: "
                              "old cycle:%" PRId64 "\n", param_name(param), cur_cycle);
-                    for (int i = 0; i < n - 1; i += 3)
-                        add_sample(input[i + 3], output[i], output[i + 1],
-                                   output[i + 2], output[i + 3]);
+                    while (PyObject *_item = PyIter_Next(iter.get())) {
+                        py_object item(_item);
+                        double t = PyFloat_AsDouble(item.get());
+                        if (!likely(t > prev_t)) {
+                            if (!PyErr_Occurred()) {
+                                if (t < 0) {
+                                    PyErr_Format(PyExc_ValueError,
+                                                 "Segment time cannot be negative");
+                                }
+                                else {
+                                    PyErr_Format(PyExc_ValueError,
+                                                 "Segment time point must "
+                                                 "monotonically increase");
+                                }
+                            }
+                            bb_reraise_and_throw_if(true, action_key(action.aid));
+                        }
+                        auto t1 = t * (1.0 / 3.0) + prev_t * (2.0 / 3.0);
+                        auto t2 = t * (2.0 / 3.0) + prev_t * (1.0 / 3.0);
+                        auto t3 = t;
+                        auto v0 = prev_v;
+                        auto v1 = eval_ramp(t1);
+                        auto v2 = eval_ramp(t2);
+                        auto v3 = eval_ramp(t3);
+                        add_sample(t3, v0, v1, v2, v3);
+                        prev_t = t3;
+                        prev_v = v3;
+                    }
+                    bb_reraise_and_throw_if(PyErr_Occurred(), action_key(action.aid));
+                    if (!likely(prev_t < len)) {
+                        PyErr_Format(PyExc_ValueError, "Segment time point must not "
+                                     "exceed action length.");
+                        bb_reraise_and_throw_if(true, action_key(action.aid));
+                    }
+                    else {
+                        auto t1 = len * (1.0 / 3.0) + prev_t * (2.0 / 3.0);
+                        auto t2 = len * (2.0 / 3.0) + prev_t * (1.0 / 3.0);
+                        auto t3 = len;
+                        auto v0 = prev_v;
+                        auto v1 = eval_ramp(t1);
+                        auto v2 = eval_ramp(t2);
+                        auto v3 = eval_ramp(t3);
+                        add_sample(t3, v0, v1, v2, v3);
+                    }
                     cur_cycle = sp_cycle;
                     bb_debug("Use ramp function provided segments on %s spline: "
                              "new cycle:%" PRId64 "\n", param_name(param), cur_cycle);
                     continue;
                 }
-                auto eval_ramp = [&] (int sz, double *inputs) {
-                    auto input_buff =
-                        vtable.rampbuffer_alloc_input((PyObject*)ramp_buff, sz);
-                    bb_reraise_and_throw_if(!input_buff, action_key(action.aid));
-                    memcpy(input_buff, inputs, sizeof(double) * sz);
-                    auto output_buff =
-                        vtable.rampbuffer_eval((PyObject*)ramp_buff, ramp_func,
-                                               py_len, py_oldval);
-                    bb_reraise_and_throw_if(!output_buff, action_key(action.aid));
-                    return output_buff;
-                };
+            adaptive:
                 bb_debug("Use adaptive segments on %s spline: "
                          "old cycle:%" PRId64 "\n", param_name(param), cur_cycle);
                 generate_splines(eval_ramp, add_sample, len,
