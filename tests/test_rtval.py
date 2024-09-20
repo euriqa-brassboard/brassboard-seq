@@ -461,7 +461,7 @@ def test_error_propagate():
 
     v3 = 2
     r3 = rtval.new_extern(lambda: v3)
-    op2 = np.asin(r3)
+    op2 = np.arcsin(r3)
 
     res = op1 + op2
 
@@ -473,7 +473,7 @@ def test_error_propagate():
         res.eval(1)
 
     v2 = 0.2
-    assert res.eval(2) == pytest.approx(v1 / v2 + np.asin(v3))
+    assert res.eval(2) == pytest.approx(v1 / v2 + np.arcsin(v3))
 
     v3 = 3
     with pytest.raises(ValueError, match="math domain error"):
