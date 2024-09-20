@@ -861,8 +861,8 @@ inline PyObject *TagVal::to_py() const
 
 static inline TagVal tagval_add_or_sub(TagVal v1, TagVal v2, bool issub)
 {
-    if (auto err = combine_error(v1.err, v2.err); err != EvalError::NoError)
-        return { promote_type(v1.type, v2.type), err };
+    assert(v1.err == EvalError::NoError);
+    assert(v2.err == EvalError::NoError);
     return (issub ? Sub_op::generic_eval(v1, v2) : Add_op::generic_eval(v1, v2));
 }
 
