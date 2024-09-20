@@ -77,12 +77,4 @@ cdef inline ramp_get_spline_segments(RampFunction self, length, oldval):
     if type(self) is SeqCubicSpline:
         return ()
     return self._spline_segments(self, length, oldval)
-
-cdef class RampBuffer:
-    cdef object input_buff
-    cdef object output_buff
-
-cdef RampBuffer new_ramp_buffer()
-cdef double *rampbuffer_alloc_input(self, int size) except NULL
-cdef double *rampbuffer_eval(self, func, length, oldval) except NULL
 cdef TagVal ramp_interp_eval(RampFunction self, double t) noexcept
