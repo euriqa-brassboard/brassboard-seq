@@ -478,3 +478,26 @@ def test_error_propagate():
     v3 = 3
     with pytest.raises(ValueError, match="math domain error"):
         res.eval(3)
+
+def test_type():
+    vb = rtval.new_extern(lambda: True, bool)
+    vi = rtval.new_extern(lambda: True, int)
+    vf = rtval.new_extern(lambda: True, float)
+    assert vb.eval(0) is True
+    assert isinstance(vb.eval(0), bool)
+    assert vi.eval(0) == 1
+    assert isinstance(vi.eval(0), int)
+    assert vf.eval(0) == 1.0
+    assert isinstance(vf.eval(0), float)
+    vb = rtval.new_extern_age(lambda age: True, bool)
+    vi = rtval.new_extern_age(lambda age: True, int)
+    vf = rtval.new_extern_age(lambda age: True, float)
+    assert vb.eval(0) is True
+    assert isinstance(vb.eval(0), bool)
+    assert vi.eval(0) == 1
+    assert isinstance(vi.eval(0), int)
+    assert vf.eval(0) == 1.0
+    assert isinstance(vf.eval(0), float)
+
+    with pytest.raises(TypeError, match=f"Unknown runtime value type '{list}'"):
+        rtval.new_extern(lambda: True, list)
