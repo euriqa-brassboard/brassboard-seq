@@ -206,19 +206,27 @@ values = [True, False, -5, -4, -12, -2, -1, 0, 1, 2, 3, 4, 10,
           0.12, 0.34, 0.56, 1.02, 3.04, -0.12, -0.34, -0.56, -1.02, -3.04,
           np.int32(2), np.float32(3.4)]
 
+def get_value_options(v):
+    if isinstance(v, bool):
+        return [v, rtval.new_extern(lambda: v, bool), rtval.new_extern(lambda: v)]
+    if isinstance(v, int) or isinstance(v, np.integer):
+        return [v, rtval.new_extern(lambda: v, int), rtval.new_extern(lambda: v)]
+    return [v, rtval.new_extern(lambda: v)]
+
 def run_check_unary(f):
     for v in values:
         try:
             cv = f(v)
         except:
             continue
-        rv = f(rtval.new_extern(lambda: v))
-        try:
-            rv = rtval.get_value(rv, 1)
-        except:
-            assert not np.isfinite(cv) or not np.isreal(cv)
-            continue
-        assert cmp_value(rv, cv)
+        for rv1 in get_value_options(v):
+            rv = f(rv1)
+            try:
+                rv = rtval.get_value(rv, 1)
+            except:
+                assert not np.isfinite(cv) or not np.isreal(cv)
+                continue
+            assert cmp_value(rv, cv)
 
 def run_check_binary(f):
     for v1 in values:
@@ -227,8 +235,8 @@ def run_check_binary(f):
                 cv = f(v1, v2)
             except:
                 continue
-            for rv1 in [v1, rtval.new_extern(lambda: v1)]:
-                for rv2 in [v2, rtval.new_extern(lambda: v2)]:
+            for rv1 in get_value_options(v1):
+                for rv2 in get_value_options(v2):
                     rv = f(rv1, rv2)
                     try:
                         rv = rtval.get_value(rv, 1)
@@ -248,9 +256,9 @@ def run_check_ternary(f):
                     cv = f(v1, v2, v3)
                 except:
                     continue
-                for rv1 in [v1, rtval.new_extern(lambda: v1)]:
-                    for rv2 in [v2, rtval.new_extern(lambda: v2)]:
-                        for rv3 in [v3, rtval.new_extern(lambda: v3)]:
+                for rv1 in get_value_options(v1):
+                    for rv2 in get_value_options(v2):
+                        for rv3 in get_value_options(v3):
                             rv = f(rv1, rv2, rv3)
                             assert cmp_value(rtval.get_value(rv, 1), cv)
 
@@ -384,3 +392,45 @@ def test_invalid():
     assert str(r) == "Unknown value"
     with pytest.raises(ValueError, match="Unknown value type"):
         r.eval(1)
+
+def test_logical():
+    v1 = 1.0
+    v2 = 2
+    r1 = rtval.new_extern(lambda: v1)
+    r2 = rtval.new_extern(lambda: v2)
+
+    r_or = r1 | r2
+    r_and = r1 & r2
+    r_xor = r1 ^ r2
+    assert r_or.eval(0) == 3
+    assert isinstance(r_or.eval(0), int)
+    assert r_and.eval(0) == 0
+    assert isinstance(r_and.eval(0), int)
+    assert r_xor.eval(0) == 3
+    assert isinstance(r_xor.eval(0), int)
+
+    v1 = 1.2
+    with pytest.raises(ValueError, match="bitwise operation on floating point numbers"):
+        r_or.eval(1)
+    with pytest.raises(ValueError, match="bitwise operation on floating point numbers"):
+        r_and.eval(1)
+    with pytest.raises(ValueError, match="bitwise operation on floating point numbers"):
+        r_xor.eval(1)
+
+    v1 = 1
+    v2 = 1.2
+    with pytest.raises(ValueError, match="bitwise operation on floating point numbers"):
+        r_or.eval(2)
+    with pytest.raises(ValueError, match="bitwise operation on floating point numbers"):
+        r_and.eval(2)
+    with pytest.raises(ValueError, match="bitwise operation on floating point numbers"):
+        r_xor.eval(2)
+
+    v1 = 0b1100
+    v2 = 0b1010
+    assert r_or.eval(3) == 0b1110
+    assert isinstance(r_or.eval(3), int)
+    assert r_and.eval(3) == 0b1000
+    assert isinstance(r_and.eval(3), int)
+    assert r_xor.eval(3) == 0b0110
+    assert isinstance(r_xor.eval(3), int)
