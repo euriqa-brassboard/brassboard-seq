@@ -87,9 +87,7 @@ class PyCubicSpline(action.RampFunction):
     def spline_segments(self, length, oldval):
         return ()
 
-def test_rampbuffer():
-    with pytest.raises(TypeError):
-        action.RampBuffer()
+def test_ramp_eval():
     with pytest.raises(AttributeError):
         # Subclass of RampFunction must have eval defined.
         action.RampFunction()
@@ -101,21 +99,21 @@ def test_rampbuffer():
     slen = str(rlen)
     sold = str(rold)
 
-    test = test_utils.RampBufferTest(StaticFunction())
-    rv = test.eval_compile(rt, rlen, rold)
+    test = test_utils.RampTest(StaticFunction(), rlen, rold)
+    rv = test.eval_compile(rt)
     assert str(rv) == f'({st} / 2 + {sold}) - {slen}'
     assert rtval.get_value(rv, 0) == 1 / 2 + -0.2 - 2
 
     ts = np.linspace(-1, 1, 1000)
-    vs = test.eval_runtime(0, ts, 2, -0.2)
+    vs = test.eval_runtime(0, ts)
     assert (vs == ts / 2 + -0.2 - 2).all()
 
     ts = np.linspace(-1, 1, 100)
-    vs = test.eval_runtime(0, ts, 2, -0.2)
+    vs = test.eval_runtime(0, ts)
     assert (vs == ts / 2 + -0.2 - 2).all()
 
     ts = np.linspace(-1, 1, 2000)
-    vs = test.eval_runtime(0, ts, 2, -0.2)
+    vs = test.eval_runtime(0, ts)
     assert (vs == ts / 2 + -0.2 - 2).all()
 
     ramp = rtval.new_extern(lambda: 2)
@@ -123,50 +121,37 @@ def test_rampbuffer():
     rphase = 2.3
     samp = str(ramp)
     sfreq = str(rfreq)
-    test = test_utils.RampBufferTest(SinFunction(ramp, rfreq, rphase))
-    rv = test.eval_compile(rt, rlen, rold)
+    test = test_utils.RampTest(SinFunction(ramp, rfreq, rphase), rlen, rold)
+    rv = test.eval_compile(rt)
     assert str(rv) == f'{sold} + {samp} * sin(2.3 + {sfreq} * {st})'
     assert rtval.get_value(rv, 0) == -0.2 + 2 * np.sin(2.3 + 1.2 * 1)
 
     ts = np.linspace(-1, 1, 1000)
-    vs = test.eval_runtime(0, ts, 2, -0.2)
+    vs = test.eval_runtime(0, ts)
     assert (vs == -0.2 + 2 * np.sin(2.3 + 1.2 * ts)).all()
 
     ts = np.linspace(-1, 1, 100)
-    vs = test.eval_runtime(0, ts, 2, -0.2)
+    vs = test.eval_runtime(0, ts)
     assert (vs == -0.2 + 2 * np.sin(2.3 + 1.2 * ts)).all()
 
     ts = np.linspace(-1, 1, 2000)
-    vs = test.eval_runtime(0, ts, 2, -0.2)
+    vs = test.eval_runtime(0, ts)
     assert (vs == -0.2 + 2 * np.sin(2.3 + 1.2 * ts)).all()
 
     wtfunc = WrongValueFunction([])
-    test = test_utils.RampBufferTest(wtfunc)
     with pytest.raises(TypeError):
-        test.eval_runtime(0, ts, 2, -0.2)
+        test_utils.RampTest(wtfunc, rlen, rold)
     wtfunc.res = 1
-    with pytest.raises(TypeError):
-        test.eval_runtime(0, ts, 2, -0.2)
+    test = test_utils.RampTest(wtfunc, rlen, rold)
+    assert test.eval_compile(0) == 1
+    assert test.eval_runtime(0, [1, 2, 3]) == [1, 1, 1]
     wtfunc.res = np.empty((2, 2))
-    with pytest.raises(ValueError):
-        test.eval_runtime(0, ts, 2, -0.2)
-
-    wtfunc.res = np.empty(len(ts))
-    test.eval_runtime(0, ts, 2, -0.2)
-    wtfunc.res = np.empty(len(ts) + 2)
-    with pytest.raises(ValueError):
-        test.eval_runtime(0, ts, 2, -0.2)
-
-    # Test type conversion
-    wtfunc.res = np.random.randint(1000, size=len(ts))
-    assert (test.eval_runtime(0, ts, 2, -0.2) == wtfunc.res).all()
+    with pytest.raises(TypeError):
+        test_utils.RampTest(wtfunc, rlen, rold)
 
     efunc = ErrorFunction(ValueError("AAAAA"))
-    test = test_utils.RampBufferTest(efunc)
     with pytest.raises(ValueError, match="^AAAAA$"):
-        test.eval_compile(rt, rlen, rold)
-    with pytest.raises(ValueError, match="^AAAAA$"):
-        test.eval_runtime(0, ts, 2, -0.2)
+        test_utils.RampTest(efunc, rlen, rold)
 
 def test_spline():
     assert test_utils.ramp_get_spline_segments(SinFunction(1.0, 2.0, 0.1), 1, 0) is None
@@ -191,25 +176,25 @@ def test_spline():
         assert test_utils.ramp_get_spline_segments(sp_seq, 1, 0) == ()
         assert test_utils.ramp_get_spline_segments(sp_py, 1, 0) == ()
 
-        test_seq = test_utils.RampBufferTest(sp_seq)
-        test_py = test_utils.RampBufferTest(sp_py)
+        test_seq = test_utils.RampTest(sp_seq, 1, 0.2)
+        test_py = test_utils.RampTest(sp_py, 1, 0.2)
 
-        v0_seq = test_seq.eval_compile(0, 1, 0.2)
-        v05_seq = test_seq.eval_compile(0.5, 1, 0.2)
-        v1_seq = test_seq.eval_compile(1, 1, 0.2)
+        v0_seq = test_seq.eval_compile(0)
+        v05_seq = test_seq.eval_compile(0.5)
+        v1_seq = test_seq.eval_compile(1)
         assert rtval.get_value(v0_seq, 1) == 0.1
         assert rtval.get_value(v05_seq, 1) == pytest.approx(0.4875)
         assert rtval.get_value(v1_seq, 1) == 1.6
 
-        v0_py = test_py.eval_compile(0, 1, 0.2)
-        v05_py = test_py.eval_compile(0.5, 1, 0.2)
-        v1_py = test_py.eval_compile(1, 1, 0.2)
+        v0_py = test_py.eval_compile(0)
+        v05_py = test_py.eval_compile(0.5)
+        v1_py = test_py.eval_compile(1)
         assert rtval.get_value(v0_py, 1) == 0.1
         assert rtval.get_value(v05_py, 1) == pytest.approx(0.4875)
         assert rtval.get_value(v1_py, 1) == 1.6
 
-        assert list(test_seq.eval_runtime(2, [0, 0.5, 1], 1, 10)) == pytest.approx([0.1, 0.4875, 1.6])
-        assert list(test_py.eval_runtime(2, [0, 0.5, 1], 1, 10)) == pytest.approx([0.1, 0.4875, 1.6])
+        assert list(test_seq.eval_runtime(2, [0, 0.5, 1])) == pytest.approx([0.1, 0.4875, 1.6])
+        assert list(test_py.eval_runtime(2, [0, 0.5, 1])) == pytest.approx([0.1, 0.4875, 1.6])
 
     for i in range(15):
         check_spline(i & 1, i & 2, i & 4, i & 8)
@@ -219,11 +204,11 @@ def blackman_func(t): # t in [0, 1]
     return 21/50 + 1/2 * np.cos(theta) + 2/25 * np.cos(2 * theta)
 
 def test_blackman():
-    test1 = test_utils.RampBufferTest(action.Blackman(0.9, 0.1))
-    test2 = test_utils.RampBufferTest(action.BlackmanSquare(0.6, -0.1))
+    test1 = test_utils.RampTest(action.Blackman(0.9, 0.1), 1, 0)
+    test2 = test_utils.RampTest(action.BlackmanSquare(0.6, -0.1), 1, 0)
     ts = np.linspace(0, 1, 1000)
-    v1 = list(test1.eval_runtime(0, ts, 1, 0))
-    v2 = list(test2.eval_runtime(0, ts, 1, 0))
+    v1 = test1.eval_runtime(0, ts)
+    v2 = test2.eval_runtime(0, ts)
     bs = blackman_func(ts)
     expect1 = list(0.1 + 0.9 * bs)
     expect2 = list(-0.1 + 0.6 * bs**2)

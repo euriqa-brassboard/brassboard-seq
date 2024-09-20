@@ -47,30 +47,28 @@ def action_get_compile_info(action.Action action):
 def action_get_cond_val(action.Action action):
     return action.data.cond_val
 
-cdef class RampBufferTest:
+cdef double tagval_to_float(rtval.TagVal tv):
+    rtval.throw_py_error(tv.err)
+    return tv.val.f64_val
+
+cdef class RampTest:
     cdef action.RampFunction func
-    cdef action.RampBuffer buff
-    def __init__(self, func):
+    cdef object length
+    cdef object oldval
+
+    def __init__(self, func, length, oldval):
         self.func = func
-        self.buff = action.new_ramp_buffer()
+        self.length = length
+        self.oldval = oldval
+        action.ramp_set_compile_params(func, length, oldval)
 
-    def eval_compile(self, t, length, oldval):
-        action.ramp_set_compile_params(self.func, length, oldval)
-        return action.ramp_eval(self.func, t, length, oldval)
+    def eval_compile(self, t):
+        return action.ramp_eval(self.func, t, self.length, self.oldval)
 
-    def eval_runtime(self, age, ts, length, oldval):
+    def eval_runtime(self, age, ts):
         cdef utils.py_object pyage
         action.ramp_set_runtime_params(self.func, age, pyage)
-        nt = len(ts)
-        cdef double *buff_ptr = action.rampbuffer_alloc_input(self.buff, nt)
-        for i in range(nt):
-            buff_ptr[i] = ts[i]
-        cdef double *output_ptr = action.rampbuffer_eval(self.buff, self.func,
-                                                         length, oldval)
-        output = np.empty(nt)
-        for i in range(nt):
-            output[i] = output_ptr[i]
-        return output
+        return [tagval_to_float(action.ramp_interp_eval(self.func, t)) for t in ts]
 
 def ramp_get_spline_segments(action.RampFunction self, length, oldval):
     return action.ramp_get_spline_segments(self, length, oldval)

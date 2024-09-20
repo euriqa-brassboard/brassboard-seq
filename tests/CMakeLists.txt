@@ -3,6 +3,8 @@
 cython_include_directories("${CMAKE_BINARY_DIR}")
 include_directories("${CMAKE_SOURCE_DIR}/brassboard_seq")
 
+cython_link_libraries(brassboard_seq_utils)
+
 python_test("${CMAKE_BINARY_DIR}"
   brassboard_seq_test_utils.pyx
   brassboard_seq_artiq_backend_utils.pyx
