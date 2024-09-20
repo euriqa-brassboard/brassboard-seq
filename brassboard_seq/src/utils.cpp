@@ -224,14 +224,11 @@ static PyObject *_pydict_deepcopy(PyObject *d)
     Py_ssize_t pos = 0;
     while (PyDict_Next(d, &pos, &key, &value)) {
         if (!PyDict_Check(value)) {
-            if (PyDict_SetItem(res.get(), key, value) < 0)
-                throw 0;
+            throw_if(PyDict_SetItem(res.get(), key, value) < 0);
             continue;
         }
         py_object new_value(_pydict_deepcopy(value));
-        if (PyDict_SetItem(res.get(), key, new_value.get()) < 0) {
-            throw 0;
-        }
+        throw_if(PyDict_SetItem(res.get(), key, new_value.get()) < 0);
     }
     return res.release();
 }
