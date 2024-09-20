@@ -17,8 +17,7 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.action cimport Action, RampFunction, SeqCubicSpline, \
-  ramp_get_spline_segments, ramp_interp_eval
+from brassboard_seq.action cimport Action, RampFunction, SeqCubicSpline
 from brassboard_seq.event_time cimport EventTime, round_time_f64
 from brassboard_seq.rtval cimport is_rtval, rt_eval_tagval, RuntimeValue, TagVal
 from brassboard_seq.utils cimport pyfloat_from_double, set_global_tracker, \
@@ -44,7 +43,6 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
     struct RuntimeVTable:
         int (*rt_eval_tagval)(object, unsigned, py_object&) except -1
         bint (*ramp_get_cubic_spline)(object, cubic_spline_t *sp) noexcept
-        TagVal (*ramp_interp_eval)(object, double) noexcept
 
     void generate_tonedata(RFSOCBackend ab, unsigned age, py_object&,
                            RuntimeVTable vtable, RuntimeValue, RampFunction) except +
@@ -73,7 +71,6 @@ cdef inline RuntimeVTable get_runtime_vtable() noexcept nogil:
     cdef RuntimeVTable vt
     vt.rt_eval_tagval = <rt_eval_tagval_t>rt_eval_tagval
     vt.ramp_get_cubic_spline = ramp_get_cubic_spline
-    vt.ramp_interp_eval = <TagVal (*)(object, double) noexcept>ramp_interp_eval
     return vt
 
 @cython.auto_pickle(False)

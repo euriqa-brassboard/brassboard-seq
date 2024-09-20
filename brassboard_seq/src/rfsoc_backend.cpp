@@ -213,7 +213,6 @@ void collect_actions(RFSOCBackend *rb, const CompileVTable vtable, Action*, Even
 struct RuntimeVTable {
     int (*rt_eval_tagval)(PyObject*, unsigned age, py_object &pyage);
     int (*ramp_get_cubic_spline)(PyObject*, cubic_spline_t *sp);
-    rtval::TagVal (*ramp_interp_eval)(PyObject*, double);
 };
 
 template<typename RFSOCBackend>
@@ -789,7 +788,7 @@ void generate_tonedata(RFSOCBackend *rb, unsigned age, py_object &pyage,
                     continue;
                 }
                 auto len = action.float_value;
-                auto ramp_func = action.ramp;
+                auto ramp_func = (RampFunction*)action.ramp;
                 bb_debug("processing ramp on %s: @%" PRId64 ", "
                          "sync=%d, len=%f, func=%p\n",
                          param_name(param), cur_cycle, sync, len, ramp_func);
@@ -820,7 +819,8 @@ void generate_tonedata(RFSOCBackend *rb, unsigned age, py_object &pyage,
                     param_action.push_back({ cycle2 - cycle1, sync, sp });
                     sync = false;
                 };
-                if (cubic_spline_t sp; vtable.ramp_get_cubic_spline(ramp_func, &sp)) {
+                if (cubic_spline_t sp;
+                    vtable.ramp_get_cubic_spline((PyObject*)ramp_func, &sp)) {
                     bb_debug("found SeqCubicSpline on %s spline: "
                              "old cycle:%" PRId64 "\n", param_name(param), cur_cycle);
                     val = sp.order0 + sp.order1 + sp.order2 + sp.order3;
@@ -843,86 +843,76 @@ void generate_tonedata(RFSOCBackend *rb, unsigned age, py_object &pyage,
                     add_spline(t2, sp);
                     val = v3;
                 };
+                auto _runtime_eval = ramp_func->__pyx_vtab->runtime_eval;
                 auto eval_ramp = [&] (double t) {
-                    auto v = vtable.ramp_interp_eval(ramp_func, t);
+                    auto v = _runtime_eval(ramp_func, t);
                     throw_py_error(v.err);
                     return v.val.f64_val;
                 };
-                if (auto rampf = (RampFunction*)ramp_func;
-                    rampf->_spline_segments != Py_None) {
-
-                    py_object py_oldval(pyfloat_from_double(val));
-                    py_object py_len(pyfloat_from_double(len));
-                    bb_reraise_and_throw_if(!py_oldval || !py_len,
-                                            action_key(action.aid));
-                    PyObject *args[] = { ramp_func, py_len.get(), py_oldval.get() };
-                    py_object pts(_PyObject_Vectorcall(rampf->_spline_segments,
-                                                       args, 3, nullptr));
-                    bb_reraise_and_throw_if(!pts, action_key(action.aid));
-                    if (pts == Py_None)
-                        goto adaptive;
-                    py_object iter(PyObject_GetIter(pts));
-                    bb_reraise_and_throw_if(!iter, action_key(action.aid));
-                    double prev_t = 0;
-                    double prev_v = eval_ramp(0);
-                    bb_debug("Use ramp function provided segments on %s spline: "
+                py_object pts(ramp_func->__pyx_vtab->spline_segments(ramp_func, len, val));
+                bb_reraise_and_throw_if(!pts, action_key(action.aid));
+                if (pts == Py_None) {
+                    bb_debug("Use adaptive segments on %s spline: "
                              "old cycle:%" PRId64 "\n", param_name(param), cur_cycle);
-                    while (PyObject *_item = PyIter_Next(iter.get())) {
-                        py_object item(_item);
-                        double t = PyFloat_AsDouble(item.get());
-                        if (!likely(t > prev_t)) {
-                            if (!PyErr_Occurred()) {
-                                if (t < 0) {
-                                    PyErr_Format(PyExc_ValueError,
-                                                 "Segment time cannot be negative");
-                                }
-                                else {
-                                    PyErr_Format(PyExc_ValueError,
-                                                 "Segment time point must "
-                                                 "monotonically increase");
-                                }
-                            }
-                            bb_reraise_and_throw_if(true, action_key(action.aid));
-                        }
-                        auto t1 = t * (1.0 / 3.0) + prev_t * (2.0 / 3.0);
-                        auto t2 = t * (2.0 / 3.0) + prev_t * (1.0 / 3.0);
-                        auto t3 = t;
-                        auto v0 = prev_v;
-                        auto v1 = eval_ramp(t1);
-                        auto v2 = eval_ramp(t2);
-                        auto v3 = eval_ramp(t3);
-                        add_sample(t3, v0, v1, v2, v3);
-                        prev_t = t3;
-                        prev_v = v3;
-                    }
-                    bb_reraise_and_throw_if(PyErr_Occurred(), action_key(action.aid));
-                    if (!likely(prev_t < len)) {
-                        PyErr_Format(PyExc_ValueError, "Segment time point must not "
-                                     "exceed action length.");
-                        bb_reraise_and_throw_if(true, action_key(action.aid));
-                    }
-                    else {
-                        auto t1 = len * (1.0 / 3.0) + prev_t * (2.0 / 3.0);
-                        auto t2 = len * (2.0 / 3.0) + prev_t * (1.0 / 3.0);
-                        auto t3 = len;
-                        auto v0 = prev_v;
-                        auto v1 = eval_ramp(t1);
-                        auto v2 = eval_ramp(t2);
-                        auto v3 = eval_ramp(t3);
-                        add_sample(t3, v0, v1, v2, v3);
-                    }
+                    generate_splines(eval_ramp, add_sample, len,
+                                     spline_threshold[param]);
                     cur_cycle = sp_cycle;
-                    bb_debug("Use ramp function provided segments on %s spline: "
+                    bb_debug("Use adaptive segments on %s spline: "
                              "new cycle:%" PRId64 "\n", param_name(param), cur_cycle);
                     continue;
                 }
-            adaptive:
-                bb_debug("Use adaptive segments on %s spline: "
+                py_object iter(PyObject_GetIter(pts));
+                bb_reraise_and_throw_if(!iter, action_key(action.aid));
+                double prev_t = 0;
+                double prev_v = eval_ramp(0);
+                bb_debug("Use ramp function provided segments on %s spline: "
                          "old cycle:%" PRId64 "\n", param_name(param), cur_cycle);
-                generate_splines(eval_ramp, add_sample, len,
-                                 spline_threshold[param]);
+                while (PyObject *_item = PyIter_Next(iter.get())) {
+                    py_object item(_item);
+                    double t = PyFloat_AsDouble(item.get());
+                    if (!likely(t > prev_t)) {
+                        if (!PyErr_Occurred()) {
+                            if (t < 0) {
+                                PyErr_Format(PyExc_ValueError,
+                                             "Segment time cannot be negative");
+                            }
+                            else {
+                                PyErr_Format(PyExc_ValueError,
+                                             "Segment time point must "
+                                             "monotonically increase");
+                            }
+                        }
+                        bb_reraise_and_throw_if(true, action_key(action.aid));
+                    }
+                    auto t1 = t * (1.0 / 3.0) + prev_t * (2.0 / 3.0);
+                    auto t2 = t * (2.0 / 3.0) + prev_t * (1.0 / 3.0);
+                    auto t3 = t;
+                    auto v0 = prev_v;
+                    auto v1 = eval_ramp(t1);
+                    auto v2 = eval_ramp(t2);
+                    auto v3 = eval_ramp(t3);
+                    add_sample(t3, v0, v1, v2, v3);
+                    prev_t = t3;
+                    prev_v = v3;
+                }
+                bb_reraise_and_throw_if(PyErr_Occurred(), action_key(action.aid));
+                if (!likely(prev_t < len)) {
+                    PyErr_Format(PyExc_ValueError, "Segment time point must not "
+                                 "exceed action length.");
+                    bb_reraise_and_throw_if(true, action_key(action.aid));
+                }
+                else {
+                    auto t1 = len * (1.0 / 3.0) + prev_t * (2.0 / 3.0);
+                    auto t2 = len * (2.0 / 3.0) + prev_t * (1.0 / 3.0);
+                    auto t3 = len;
+                    auto v0 = prev_v;
+                    auto v1 = eval_ramp(t1);
+                    auto v2 = eval_ramp(t2);
+                    auto v3 = eval_ramp(t3);
+                    add_sample(t3, v0, v1, v2, v3);
+                }
                 cur_cycle = sp_cycle;
-                bb_debug("Use adaptive segments on %s spline: "
+                bb_debug("Use ramp function provided segments on %s spline: "
                          "new cycle:%" PRId64 "\n", param_name(param), cur_cycle);
             }
             param_action.push_back({ total_cycle - cur_cycle, sync,

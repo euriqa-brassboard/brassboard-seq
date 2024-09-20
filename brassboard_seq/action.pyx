@@ -21,11 +21,11 @@ from brassboard_seq.rtval cimport _get_value, get_value_f64, ifelse, is_rtval, \
   new_arg, new_const, new_expr2, ValueType, DataType, rt_eval_tagval, RuntimeValue, \
   interp_function_set_value, interp_function_eval_all, interp_function_call
 from brassboard_seq.utils cimport PyErr_Format, Py_NotImplemented, \
-  PyExc_TypeError, PyExc_ValueError
+  PyExc_TypeError, PyExc_ValueError, _PyObject_Vectorcall, pyfloat_from_double
 
 cimport cython
 from cython.operator cimport dereference as deref
-from cpython cimport Py_LT, Py_GT, PyTuple_GET_ITEM, PyFloat_AS_DOUBLE
+from cpython cimport PyObject, Py_LT, Py_GT, PyFloat_AS_DOUBLE
 
 cdef np # hide import
 import numpy as np
@@ -77,155 +77,254 @@ cdef class Action:
 
 cdef RuntimeValue arg0 = new_arg(0)
 cdef RuntimeValue const0 = new_const(0.0)
+cdef dummy_spline_segments = []
 
 cdef class RampFunction:
     def __init__(self, *, **params):
-        self.params = params
-        self._eval = getattr(type(self), 'eval')
-        try:
-            self._spline_segments = getattr(type(self), 'spline_segments')
-        except AttributeError:
-            pass
+        for (name, value) in params.items():
+            setattr(self, name, value)
 
-cdef cubic_spline_eval
-def cubic_spline_eval(SeqCubicSpline self, t, length, oldval, /):
-    t = t / length
-    if self.compile_mode:
-        orders = <tuple>self._spline_segments
-        return (<object>PyTuple_GET_ITEM(orders, 0)) + ((<object>PyTuple_GET_ITEM(orders, 1)) + ((<object>PyTuple_GET_ITEM(orders, 2)) + (<object>PyTuple_GET_ITEM(orders, 3)) * t) * t) * t
-    return self.order0 + (self.order1 + (self.order2 + self.order3 * t) * t) * t
+    cdef eval(self, t, length, oldval):
+        cdef PyObject *_eval = <PyObject*>self._eval
+        if <object>_eval is None:
+            self._eval = type(self).eval
+            _eval = <PyObject*>self._eval
+        cdef PyObject *args[4]
+        args[0] = <PyObject*>self
+        args[1] = <PyObject*>t
+        args[2] = <PyObject*>length
+        args[3] = <PyObject*>oldval
+        return _PyObject_Vectorcall(_eval, args, 4, NULL)
+
+    cdef spline_segments(self, double length, double oldval):
+        cdef PyObject *_spline_segments = <PyObject*>self._spline_segments
+        if <object>_spline_segments is None:
+            try:
+                self._spline_segments = type(self).spline_segments
+            except AttributeError:
+                self._spline_segments = dummy_spline_segments
+            _spline_segments = <PyObject*>self._spline_segments
+        if <object>_spline_segments is dummy_spline_segments:
+            return
+        cdef PyObject *args[3]
+        cdef object pylen = pyfloat_from_double(length)
+        cdef object pyoldval = pyfloat_from_double(oldval)
+        args[0] = <PyObject*>self
+        args[1] = <PyObject*>pylen
+        args[2] = <PyObject*>pyoldval
+        return _PyObject_Vectorcall(_spline_segments, args, 3, NULL)
+
+    cdef int set_compile_params(self, length, oldval) except -1:
+        fvalue = self.eval(arg0, length, oldval)
+        cdef vector[DataType] args
+        cdef unique_ptr[InterpFunction] interp_func
+        if is_rtval(fvalue):
+            interp_func.reset(new InterpFunction())
+            args.push_back(DataType.Float64)
+            if (<RuntimeValue>fvalue).cache.type != DataType.Float64:
+                fvalue = new_expr2(ValueType.Add, fvalue, const0)
+            interp_function_set_value(deref(interp_func), <RuntimeValue>fvalue, args)
+            self.interp_func = move(interp_func)
+        else:
+            fvalue = <double>fvalue
+        self._fvalue = fvalue
+
+    cdef int set_runtime_params(self, unsigned age, py_object &pyage) except -1:
+        if self.interp_func:
+            interp_function_eval_all(deref(self.interp_func), age, pyage)
+
+    cdef TagVal runtime_eval(self, double t) noexcept:
+        cdef void *fvalue
+        if not self.interp_func:
+            # Avoid reference counting
+            fvalue = <void*>self._fvalue
+            return TagVal(PyFloat_AS_DOUBLE(<object>fvalue))
+        rampfunc_set_time(self, t)
+        return interp_function_call(deref(self.interp_func))
 
 @cython.final
 cdef class SeqCubicSpline:
-    def __init__(self, order0, order1=0.0, order2=0.0, order3=0.0):
-        self._spline_segments = (order0, order1, order2, order3)
-        self._eval = cubic_spline_eval
-
     @property
     def order0(self):
-        return <object>PyTuple_GET_ITEM(self._spline_segments, 0)
+        return self._spline_segments
 
     @property
     def order1(self):
-        return <object>PyTuple_GET_ITEM(self._spline_segments, 1)
+        return self._fvalue
 
-    @property
-    def order2(self):
-        return <object>PyTuple_GET_ITEM(self._spline_segments, 2)
+    def __init__(self, order0, order1=0.0, order2=0.0, order3=0.0):
+        self._spline_segments = order0
+        self._fvalue = order1
+        self.order2 = order2
+        self.order3 = order3
 
-    @property
-    def order3(self):
-        return <object>PyTuple_GET_ITEM(self._spline_segments, 3)
+    cdef eval(self, t, length, oldval):
+        t = t / length
+        return self._spline_segments + (self._fvalue + (self.order2 + self.order3 * t) * t) * t
 
-cdef ramp_eval(RampFunction self, t, length, oldval):
-    return self._eval(self, t, length, oldval)
+    cdef spline_segments(self, double length, double oldval):
+        return ()
 
-cdef int ramp_set_compile_params(RampFunction self, length, oldval) except -1:
-    if type(self) is SeqCubicSpline:
-        (<SeqCubicSpline>self).compile_mode = True
-        return 0
-    for (name, value) in self.params.items():
-        setattr(self, name, value)
-    fvalue = ramp_eval(self, arg0, length, oldval)
-    cdef vector[DataType] args
-    cdef unique_ptr[InterpFunction] interp_func
-    if is_rtval(fvalue):
-        interp_func.reset(new InterpFunction())
-        args.push_back(DataType.Float64)
-        if (<RuntimeValue>fvalue).cache.type != DataType.Float64:
-            fvalue = new_expr2(ValueType.Add, fvalue, const0)
-        interp_function_set_value(deref(interp_func), <RuntimeValue>fvalue, args)
-        self.interp_func = move(interp_func)
-    else:
-        fvalue = <double>fvalue
-    self._fvalue = fvalue
+    cdef int set_compile_params(self, length, oldval) except -1:
+        self._eval = length
 
-cdef int ramp_set_runtime_params(RampFunction self, unsigned age,
-                                 py_object &pyage) except -1:
-    if type(self) is SeqCubicSpline:
-        sp = <SeqCubicSpline>self
-        orders = <tuple>sp._spline_segments
-        sp.order0 = get_value_f64(<object>PyTuple_GET_ITEM(orders, 0), age, pyage)
-        sp.order1 = get_value_f64(<object>PyTuple_GET_ITEM(orders, 1), age, pyage)
-        sp.order2 = get_value_f64(<object>PyTuple_GET_ITEM(orders, 2), age, pyage)
-        sp.order3 = get_value_f64(<object>PyTuple_GET_ITEM(orders, 3), age, pyage)
-        sp.compile_mode = False
-        return 0
-    for (name, value) in self.params.items():
-        setattr(self, name, _get_value(value, age, pyage))
-    if self.interp_func:
-        interp_function_eval_all(deref(self.interp_func), age, pyage)
+    cdef int set_runtime_params(self, unsigned age, py_object &pyage) except -1:
+        self.f_order0 = get_value_f64(self._spline_segments, age, pyage)
+        self.f_order1 = get_value_f64(self._fvalue, age, pyage)
+        self.f_order2 = get_value_f64(self.order2, age, pyage)
+        self.f_order3 = get_value_f64(self.order3, age, pyage)
+        self.f_length = get_value_f64(self._eval, age, pyage)
 
-cdef TagVal ramp_interp_eval(RampFunction self, double t) noexcept:
-    if type(self) is SeqCubicSpline:
-        sp = <SeqCubicSpline>self
-        return TagVal(sp.order0 + (sp.order1 + (sp.order2 + sp.order3 * t) * t) * t)
-    cdef void *fvalue
-    if not self.interp_func:
-        # Avoid reference counting
-        fvalue = <void*>self._fvalue
-        return TagVal(PyFloat_AS_DOUBLE(<object>fvalue))
-    rampfunc_set_time(self, t)
-    return interp_function_call(deref(self.interp_func))
+    @cython.cdivision(True)
+    cdef TagVal runtime_eval(self, double t) noexcept:
+        t = t / self.f_length
+        return TagVal(self.f_order0 + (self.f_order1 +
+                                       (self.f_order2 + self.f_order3 * t) * t) * t)
 
 # These can be implemented in python code but are provided here
 # to be slightly more efficient.
 cdef np_cos = np.cos
 cdef m_pi = cmath.pi
 cdef m_2pi = cmath.pi * 2
-cdef blackman_eval
-def blackman_eval(Blackman self, t, length, oldval, /):
-    if not is_rtval(length) and length == 0:
-        val = t * 0
-    else:
-        theta = t * (m_2pi / length) - m_pi
-        cost = np_cos(theta)
-        val = self.amp * (0.34 + cost * (0.5 + 0.16 * cost))
-        val = ifelse(length == 0, t * 0, val)
-    return val + self.offset
 
 @cython.final
 cdef class Blackman(RampFunction):
-    cdef public object amp
-    cdef public object offset
-    def __init__(self, amp, offset=0):
-        self.params = {'amp': amp, 'offset': offset}
-        self._eval = blackman_eval
+    # _eval -> length
+    # _spline_segments -> amp
+    # _fvalue -> offset
+    @property
+    def amp(self):
+        return self._spline_segments
 
-cdef blackman_square_eval
-def blackman_square_eval(BlackmanSquare self, t, length, oldval, /):
-    if not is_rtval(length) and length == 0:
-        val = t * 0
-    else:
-        theta = t * (m_2pi / length) - m_pi
-        cost = np_cos(theta)
-        val = 0.34 + cost * (0.5 + 0.16 * cost)
-        val = self.amp * val * val
-        val = ifelse(length == 0, t * 0, val)
-    return val + self.offset
+    @property
+    def offset(self):
+        return self._fvalue
+
+    cdef double f_amp
+    cdef double f_offset
+    cdef double f_length
+    def __init__(self, amp, offset=0):
+        self._spline_segments = amp
+        self._fvalue = offset
+
+    cdef eval(self, t, length, oldval):
+        if not is_rtval(length) and length == 0:
+            val = 0.0
+        else:
+            theta = t * (m_2pi / length) - m_pi
+            cost = np_cos(theta)
+            val = self._spline_segments * (0.34 + cost * (0.5 + 0.16 * cost))
+            val = ifelse(length == 0, 0.0, val)
+        return val + self._fvalue
+
+    cdef spline_segments(self, double length, double oldval):
+        pass
+
+    cdef int set_compile_params(self, length, oldval) except -1:
+        self._eval = length
+
+    cdef int set_runtime_params(self, unsigned age, py_object &pyage) except -1:
+        self.f_length = get_value_f64(self._eval, age, pyage)
+        self.f_amp = get_value_f64(self._spline_segments, age, pyage)
+        self.f_offset = get_value_f64(self._fvalue, age, pyage)
+
+    @cython.cdivision(True)
+    cdef TagVal runtime_eval(self, double t) noexcept:
+        if self.f_length == 0:
+            return TagVal(self.f_offset)
+        theta = t * (cmath.pi * 2 / self.f_length) - cmath.pi
+        cost = cmath.cos(theta)
+        val = self.f_amp * (0.34 + cost * (0.5 + 0.16 * cost))
+        return TagVal(val + self.f_offset)
 
 @cython.final
 cdef class BlackmanSquare(RampFunction):
-    cdef public object amp
-    cdef public object offset
+    # _eval -> length
+    # _spline_segments -> amp
+    # _fvalue -> offset
+    @property
+    def amp(self):
+        return self._spline_segments
+
+    @property
+    def offset(self):
+        return self._fvalue
+
+    cdef double f_amp
+    cdef double f_offset
+    cdef double f_length
     def __init__(self, amp, offset=0):
-        self.params = {'amp': amp, 'offset': offset}
-        self._eval = blackman_square_eval
+        self._spline_segments = amp
+        self._fvalue = offset
 
-cdef linear_eval
-def linear_eval(LinearRamp self, t, length, oldval, /):
-    t = t / length
-    return self.start * (1 - t) + self.end * t
+    cdef eval(self, t, length, oldval):
+        if not is_rtval(length) and length == 0:
+            val = 0.0
+        else:
+            theta = t * (m_2pi / length) - m_pi
+            cost = np_cos(theta)
+            val = 0.34 + cost * (0.5 + 0.16 * cost)
+            val = self._spline_segments * val * val
+            val = ifelse(length == 0, 0.0, val)
+        return val + self._fvalue
 
-cdef linear_spline_segments
-def linear_spline_segments(self, length, oldval, /):
-    return ()
+    cdef spline_segments(self, double length, double oldval):
+        pass
+
+    cdef int set_compile_params(self, length, oldval) except -1:
+        self._eval = length
+
+    cdef int set_runtime_params(self, unsigned age, py_object &pyage) except -1:
+        self.f_length = get_value_f64(self._eval, age, pyage)
+        self.f_amp = get_value_f64(self._spline_segments, age, pyage)
+        self.f_offset = get_value_f64(self._fvalue, age, pyage)
+
+    @cython.cdivision(True)
+    cdef TagVal runtime_eval(self, double t) noexcept:
+        if self.f_length == 0:
+            return TagVal(self.f_offset)
+        theta = t * (cmath.pi * 2 / self.f_length) - cmath.pi
+        cost = cmath.cos(theta)
+        cdef double val = 0.34 + cost * (0.5 + 0.16 * cost)
+        val = self.f_amp * val * val
+        return TagVal(val + self.f_offset)
 
 @cython.final
 cdef class LinearRamp(RampFunction):
-    cdef public object start
-    cdef public object end
+    # _eval -> length
+    # _spline_segments -> start
+    # _fvalue -> end
+    @property
+    def start(self):
+        return self._spline_segments
+
+    @property
+    def end(self):
+        return self._fvalue
+
+    cdef double f_start
+    cdef double f_end
+    cdef double f_length
     def __init__(self, start, end):
-        self.params = {'start': start, 'end': end}
-        self._eval = linear_eval
-        self._spline_segments = linear_spline_segments
+        self._spline_segments = start
+        self._fvalue = end
+
+    cdef eval(self, t, length, oldval):
+        t = t / length
+        return self._spline_segments * (1 - t) + self._fvalue * t
+
+    cdef spline_segments(self, double length, double oldval):
+        return ()
+
+    cdef int set_compile_params(self, length, oldval) except -1:
+        self._eval = length
+
+    cdef int set_runtime_params(self, unsigned age, py_object &pyage) except -1:
+        self.f_length = get_value_f64(self._eval, age, pyage)
+        self.f_start = get_value_f64(self._spline_segments, age, pyage)
+        self.f_end = get_value_f64(self._fvalue, age, pyage)
+
+    @cython.cdivision(True)
+    cdef TagVal runtime_eval(self, double t) noexcept:
+        t = t / self.f_length
+        return TagVal(self.f_start * (1 - t) + self.f_end * t)

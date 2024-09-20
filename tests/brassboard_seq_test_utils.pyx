@@ -60,18 +60,18 @@ cdef class RampTest:
         self.func = func
         self.length = length
         self.oldval = oldval
-        action.ramp_set_compile_params(func, length, oldval)
+        self.func.set_compile_params(length, oldval)
 
     def eval_compile(self, t):
-        return action.ramp_eval(self.func, t, self.length, self.oldval)
+        return self.func.eval(t, self.length, self.oldval)
 
     def eval_runtime(self, age, ts):
         cdef utils.py_object pyage
-        action.ramp_set_runtime_params(self.func, age, pyage)
-        return [tagval_to_float(action.ramp_interp_eval(self.func, t)) for t in ts]
+        self.func.set_runtime_params(age, pyage)
+        return [tagval_to_float(self.func.runtime_eval(t)) for t in ts]
 
 def ramp_get_spline_segments(action.RampFunction self, length, oldval):
-    return action.ramp_get_spline_segments(self, length, oldval)
+    return self.spline_segments(length, oldval)
 
 def round_time(v):
     if rtval.is_rtval(v):

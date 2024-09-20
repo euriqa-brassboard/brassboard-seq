@@ -88,10 +88,6 @@ class PyCubicSpline(action.RampFunction):
         return ()
 
 def test_ramp_eval():
-    with pytest.raises(AttributeError):
-        # Subclass of RampFunction must have eval defined.
-        action.RampFunction()
-
     rt = rtval.new_extern(lambda: 1)
     rlen = rtval.new_extern(lambda: 2)
     rold = rtval.new_extern(lambda: -0.2)

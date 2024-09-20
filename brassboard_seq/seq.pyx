@@ -17,8 +17,7 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.action cimport new_action, Action, RampFunction, \
-  ramp_eval, ramp_set_compile_params, ramp_set_runtime_params
+from brassboard_seq.action cimport new_action, Action, RampFunction
 from brassboard_seq.config cimport translate_channel
 from brassboard_seq cimport event_time
 from brassboard_seq.event_time cimport is_ordered, round_time_int, round_time_rt, \
@@ -454,8 +453,8 @@ cdef class Seq(SubSeq):
                         rampf = <RampFunction>action_value
                         try:
                             length = action.length
-                            ramp_set_compile_params(rampf, length, value)
-                            new_value = ramp_eval(rampf, length, length, value)
+                            rampf.set_compile_params(length, value)
+                            new_value = rampf.eval(length, length, value)
                         except Exception as ex:
                             bb_raise(ex, action_key(action.aid))
                         value = ifelse(action.cond, new_value, value)
@@ -468,7 +467,7 @@ cdef class Seq(SubSeq):
                     if action.cond is not False and isramp:
                         rampf = <RampFunction>action_value
                         try:
-                            ramp_set_compile_params(rampf, action.length, value)
+                            rampf.set_compile_params(action.length, value)
                         except Exception as ex:
                             bb_raise(ex, action_key(action.aid))
                     last_time = <EventTime>PyList_GET_ITEM(event_times, action.end_tid)
@@ -514,7 +513,7 @@ cdef class Seq(SubSeq):
                 action_value = action.value
                 is_ramp = isinstance(action_value, RampFunction)
                 if is_ramp:
-                    ramp_set_runtime_params(<RampFunction>action_value, age, pyage)
+                    (<RampFunction>action_value).set_runtime_params(age, pyage)
                 start_time = time_mgr.time_values[action.tid]
                 end_time = time_mgr.time_values[action.end_tid]
                 if prev_time > start_time or start_time > end_time:

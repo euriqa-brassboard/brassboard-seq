@@ -54,27 +54,25 @@ cdef inline Action new_action(value, cond, bint is_pulse, bint exact_time, dict 
     return self
 
 cdef class RampFunction:
-    cdef dict params
     cdef object _eval
     cdef object _spline_segments
     cdef object _fvalue
     cdef unique_ptr[InterpFunction] interp_func
 
-cdef class SeqCubicSpline(RampFunction):
-    cdef double order0
-    cdef double order1
-    cdef double order2
-    cdef double order3
-    cdef bint compile_mode
+    cdef eval(self, t, length, oldval)
+    cdef spline_segments(self, double length, double oldval)
+    cdef int set_compile_params(self, length, oldval) except -1
+    cdef int set_runtime_params(self, unsigned age, py_object &pyage) except -1
+    cdef TagVal runtime_eval(self, double t) noexcept
 
-cdef ramp_eval(RampFunction self, t, length, oldval)
-cdef int ramp_set_compile_params(RampFunction self, length, oldval) except -1
-cdef int ramp_set_runtime_params(RampFunction self, unsigned age,
-                                 py_object &pyage) except -1
-cdef inline ramp_get_spline_segments(RampFunction self, length, oldval):
-    if self._spline_segments is None:
-        return None
-    if type(self) is SeqCubicSpline:
-        return ()
-    return self._spline_segments(self, length, oldval)
-cdef TagVal ramp_interp_eval(RampFunction self, double t) noexcept
+cdef class SeqCubicSpline(RampFunction):
+    # _eval -> length
+    # _spline_segments -> order0
+    # _fvalue -> order1
+    cdef readonly object order2
+    cdef readonly object order3
+    cdef double f_order0
+    cdef double f_order1
+    cdef double f_order2
+    cdef double f_order3
+    cdef double f_length
