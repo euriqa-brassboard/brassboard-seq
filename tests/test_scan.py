@@ -138,6 +138,21 @@ def test_parampack():
                                                 d=dict(a=True, b=True, c=True),
                                                 f=dict(a=True, b=True)))
 
+    p = scan.ParamPack()
+    a = p.a(dict(a=1), dict(b=2))
+    assert a.a() == 1
+    assert a.b() == 2
+    a = p.a(dict(c=2), dict(c=3))
+    assert a.c() == 2
+    assert a.c(3) == 2
+
+    with pytest.raises(TypeError, match="Cannot use value as default value"):
+        p.b(1, 2)
+
+    p.a(c=0, d=100)
+    assert p.a.c(1) == 2
+    assert p.a.d(0) == 100
+
 
 def test_constructor():
     with pytest.raises(TypeError,
