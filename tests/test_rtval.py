@@ -434,3 +434,47 @@ def test_logical():
     assert isinstance(r_and.eval(3), int)
     assert r_xor.eval(3) == 0b0110
     assert isinstance(r_xor.eval(3), int)
+
+def test_pow():
+    v1 = -1
+    v2 = 0.5
+    r1 = rtval.new_extern(lambda: v1)
+    r2 = rtval.new_extern(lambda: v2)
+
+    rpow = r1**r2
+    with pytest.raises(ValueError, match="power of negative number"):
+        rpow.eval(0)
+
+    v1 = 1
+    assert rpow.eval(1) == 1.0
+
+    v1 = 2.0
+    v2 = math.nan
+    assert math.isnan(rpow.eval(2))
+
+def test_error_propagate():
+    v1 = 1
+    v2 = 0
+    r1 = rtval.new_extern(lambda: v1)
+    r2 = rtval.new_extern(lambda: v2)
+    op1 = r1 / r2
+
+    v3 = 2
+    r3 = rtval.new_extern(lambda: v3)
+    op2 = np.asin(r3)
+
+    res = op1 + op2
+
+    with pytest.raises(ZeroDivisionError, match="division by zero"):
+        res.eval(0)
+
+    v3 = 0.1
+    with pytest.raises(ZeroDivisionError, match="division by zero"):
+        res.eval(1)
+
+    v2 = 0.2
+    assert res.eval(2) == pytest.approx(v1 / v2 + np.asin(v3))
+
+    v3 = 3
+    with pytest.raises(ValueError, match="math domain error"):
+        res.eval(3)
