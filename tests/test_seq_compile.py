@@ -675,6 +675,17 @@ def test_rt_assert(max_bt):
     c1val = True
     test_utils.seq_runtime_finalize(s, 3)
 
+    s = new_seq(max_bt)
+    def assert_cb_JALKDFJOIADF():
+        raise ValueError("XXX YYY ZZZ")
+    c1 = rtval.new_extern(assert_cb_JALKDFJOIADF)
+    japsidfjpaoisdjpafosd()
+    test_utils.seq_finalize(s)
+    with pytest.raises(ValueError, match="XXX YYY ZZZ") as exc:
+        test_utils.seq_runtime_finalize(s, 1)
+    check_bt(exc, max_bt, 'japsidfjpaoisdjpafosd')
+    check_bt(exc, 1, 'assert_cb_JALKDFJOIADF')
+
 @with_seq_params
 def test_cond_error(max_bt):
     s = new_seq(max_bt)

@@ -1910,6 +1910,9 @@ def check_device_delay(max_bt, use_rt):
     ]
 
 
+class DummySystem:
+    pass
+
 def test_rt_value():
     sys = dummy_artiq.DummyDaxSystem()
     submod = dummy_artiq.DummyDaxSystem()
@@ -1980,3 +1983,8 @@ def test_rt_value():
 
     with pytest.raises(TypeError):
         sys._eval_all_rtvals()
+
+    sys = DummySystem()
+    sys.get_dataset = lambda *args, **kwargs: 1
+    v = dummy_artiq.DummyDaxSystem.rt_dataset(sys, 'abc')
+    assert str(v) == f'<dataset abc for {sys.get_dataset}>'
