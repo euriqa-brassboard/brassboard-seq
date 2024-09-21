@@ -463,41 +463,66 @@ def test_error_propagate():
     r3 = rtval.new_extern(lambda: v3)
     op2 = np.arcsin(r3)
 
+    b = True
+    rb = rtval.new_extern(lambda: b, bool)
+
     res = op1 + op2
+    sel = rtval.ifelse(rb, op1, op2)
 
     with pytest.raises(ZeroDivisionError, match="division by zero"):
         res.eval(0)
+    b = True
+    with pytest.raises(ZeroDivisionError, match="division by zero"):
+        sel.eval(0)
+    b = False
+    with pytest.raises(ValueError, match="math domain error"):
+        sel.eval(1)
 
     v3 = 0.1
     with pytest.raises(ZeroDivisionError, match="division by zero"):
-        res.eval(1)
+        res.eval(2)
+    b = True
+    with pytest.raises(ZeroDivisionError, match="division by zero"):
+        sel.eval(2)
+    b = False
+    assert sel.eval(3) == pytest.approx(np.arcsin(v3))
 
     v2 = 0.2
-    assert res.eval(2) == pytest.approx(v1 / v2 + np.arcsin(v3))
+    assert res.eval(4) == pytest.approx(v1 / v2 + np.arcsin(v3))
+    b = True
+    assert sel.eval(4) == pytest.approx(v1 / v2)
+    b = False
+    assert sel.eval(5) == pytest.approx(np.arcsin(v3))
 
     v3 = 3
     with pytest.raises(ValueError, match="math domain error"):
-        res.eval(3)
+        res.eval(6)
+    b = True
+    assert sel.eval(6) == pytest.approx(v1 / v2)
+    b = False
+    with pytest.raises(ValueError, match="math domain error"):
+        sel.eval(7)
 
 def test_type():
-    vb = rtval.new_extern(lambda: True, bool)
-    vi = rtval.new_extern(lambda: True, int)
-    vf = rtval.new_extern(lambda: True, float)
-    assert vb.eval(0) is True
-    assert isinstance(vb.eval(0), bool)
-    assert vi.eval(0) == 1
-    assert isinstance(vi.eval(0), int)
-    assert vf.eval(0) == 1.0
-    assert isinstance(vf.eval(0), float)
-    vb = rtval.new_extern_age(lambda age: True, bool)
-    vi = rtval.new_extern_age(lambda age: True, int)
-    vf = rtval.new_extern_age(lambda age: True, float)
-    assert vb.eval(0) is True
-    assert isinstance(vb.eval(0), bool)
-    assert vi.eval(0) == 1
-    assert isinstance(vi.eval(0), int)
-    assert vf.eval(0) == 1.0
-    assert isinstance(vf.eval(0), float)
+    for v in [True, 1, 1.0]:
+        vb = rtval.new_extern(lambda: v, bool)
+        vi = rtval.new_extern(lambda: v, int)
+        vf = rtval.new_extern(lambda: v, float)
+        assert vb.eval(0) is True
+        assert isinstance(vb.eval(0), bool)
+        assert vi.eval(0) == 1
+        assert isinstance(vi.eval(0), int)
+        assert vf.eval(0) == 1.0
+        assert isinstance(vf.eval(0), float)
+        vb = rtval.new_extern_age(lambda age: v, bool)
+        vi = rtval.new_extern_age(lambda age: v, int)
+        vf = rtval.new_extern_age(lambda age: v, float)
+        assert vb.eval(0) is True
+        assert isinstance(vb.eval(0), bool)
+        assert vi.eval(0) == 1
+        assert isinstance(vi.eval(0), int)
+        assert vf.eval(0) == 1.0
+        assert isinstance(vf.eval(0), float)
 
     with pytest.raises(TypeError, match=f"Unknown runtime value type '{list}'"):
         rtval.new_extern(lambda: True, list)
