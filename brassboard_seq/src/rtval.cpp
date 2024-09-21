@@ -589,43 +589,6 @@ struct Tanh_op : float_uni_op<Tanh_op>, no_error_op<Tanh_op> {
     }
 };
 
-struct Select_op {
-    static constexpr DataType return_type(DataType, DataType t2, DataType t3)
-    {
-        return promote_type(t2, t3);
-    }
-    static inline __attribute__((flatten,always_inline)) TagVal
-    generic_eval(TagVal tv0, TagVal tv1, TagVal tv2)
-    {
-        bool b = bool(tv0.val.i64_val);
-#define HANDLE_BINARY(t1, t2)                                           \
-        if (tv1.type == DataType::t1 && tv2.type == DataType::t2) {     \
-            constexpr auto out_dt = promote_type(DataType::t1, DataType::t2); \
-            using T1 = data_type_t<DataType::t1>;                       \
-            using T2 = data_type_t<DataType::t2>;                       \
-            using Tout = data_type_t<out_dt>;                           \
-            auto v1 = Tout(tv1.val.get<T1>());                          \
-            auto v2 = Tout(tv2.val.get<T2>());                          \
-            auto _res = b ? v1 : v2;                                    \
-            TagVal res{};                                               \
-            res.type = out_dt;                                          \
-            res.val.get<Tout>() = _res;                                 \
-            return res;                                                 \
-        }
-        HANDLE_BINARY(Bool, Bool);
-        HANDLE_BINARY(Bool, Int64);
-        HANDLE_BINARY(Bool, Float64);
-        HANDLE_BINARY(Int64, Bool);
-        HANDLE_BINARY(Int64, Int64);
-        HANDLE_BINARY(Int64, Float64);
-        HANDLE_BINARY(Float64, Bool);
-        HANDLE_BINARY(Float64, Int64);
-        HANDLE_BINARY(Float64, Float64);
-#undef HANDLE_BINARY
-        return {};
-    }
-};
-
 static inline DataType unary_return_type(ValueType type, DataType t1)
 {
     switch (type) {
