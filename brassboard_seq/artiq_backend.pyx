@@ -249,7 +249,7 @@ cdef class ArtiqBackend:
                          self.device_delay)
         collect_actions(self, get_compile_vtable(), None, None)
 
-    cdef int runtime_finalize(self, unsigned age) except -1:
+    cdef int runtime_finalize(self, unsigned age, py_object &pyage) except -1:
         bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)
         generate_rtios(self, age, get_runtime_vtable(), None)
 

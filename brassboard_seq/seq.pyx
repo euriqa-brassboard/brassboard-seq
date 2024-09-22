@@ -471,8 +471,7 @@ cdef class Seq(SubSeq):
         self.all_actions = all_actions
         return 0
 
-    cdef int runtime_finalize(self, unsigned age) except -1:
-        cdef py_object pyage
+    cdef int runtime_finalize(self, unsigned age, py_object &pyage) except -1:
         bt_guard = set_global_tracker(&self.seqinfo.bt_tracker)
         time_mgr = self.seqinfo.time_mgr
         self.total_time = time_mgr.compute_all_times(age, pyage)

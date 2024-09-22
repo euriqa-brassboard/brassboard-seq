@@ -300,8 +300,7 @@ cdef class RFSOCBackend:
             self.channels.add_seq_channel(idx, chn_idx, param_enum)
         collect_actions(self, get_compile_vtable(), None, None)
 
-    cdef int runtime_finalize(self, unsigned age) except -1:
-        cdef py_object pyage
+    cdef int runtime_finalize(self, unsigned age, py_object &pyage) except -1:
         bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)
         for dds, delay in self.rt_dds_delay.items():
             rt_eval_tagval(<RuntimeValue>delay, age, pyage)

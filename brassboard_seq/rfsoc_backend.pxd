@@ -101,6 +101,3 @@ cdef class RFSOCBackend(Backend):
     cdef ToneBuffer tone_buffer
 
     cdef dict rt_dds_delay
-
-    cdef int finalize(self) except -1
-    cdef int runtime_finalize(self, unsigned age) except -1

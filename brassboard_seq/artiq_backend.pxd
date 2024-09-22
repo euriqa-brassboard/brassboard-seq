@@ -127,6 +127,3 @@ cdef class ArtiqBackend(Backend):
 
     cdef int add_start_trigger_ttl(self, uint32_t tgt, long long time,
                                    int min_time, bint raising_edge) except -1
-
-    cdef int finalize(self) except -1
-    cdef int runtime_finalize(self, unsigned age) except -1

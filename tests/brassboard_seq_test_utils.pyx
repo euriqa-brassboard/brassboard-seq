@@ -161,7 +161,8 @@ def seq_get_all_actions(seq.Seq s):
     return s.all_actions
 
 def seq_runtime_finalize(seq.Seq s, unsigned age):
-    s.runtime_finalize(age)
+    cdef utils.py_object pyage
+    s.runtime_finalize(age, pyage)
 
 def seq_get_all_times(seq.Seq s):
     time_mgr = s.seqinfo.time_mgr

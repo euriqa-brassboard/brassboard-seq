@@ -85,4 +85,4 @@ cdef class Seq(SubSeq):
 
     cdef int finalize(self) except -1
 
-    cdef int runtime_finalize(self, unsigned age) except -1
+    cdef int runtime_finalize(self, unsigned age, py_object &pyage) except -1

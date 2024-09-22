@@ -27,7 +27,7 @@ cdef class Backend:
     cdef int finalize(self) except -1:
         pass
 
-    cdef int runtime_finalize(self, unsigned age) except -1:
+    cdef int runtime_finalize(self, unsigned age, py_object &pyage) except -1:
         pass
 
 @cython.auto_pickle(False)
@@ -53,7 +53,13 @@ cdef class SeqCompiler:
         for backend in self.backends.values():
             (<Backend>backend).finalize()
 
-    def runtime_finalize(self, unsigned age, /):
-        self.seq.runtime_finalize(age)
-        for backend in self.backends.values():
-            (<Backend>backend).runtime_finalize(age)
+    def runtime_finalize(self, age, /):
+        cdef py_object pyage
+        if isinstance(age, int):
+            pyage.set_obj(age)
+        runtime_finalize(self, age, pyage)
+
+cdef int runtime_finalize(SeqCompiler self, unsigned age, py_object &pyage):
+    self.seq.runtime_finalize(age, pyage)
+    for backend in self.backends.values():
+        (<Backend>backend).runtime_finalize(age, pyage)
