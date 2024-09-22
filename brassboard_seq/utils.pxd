@@ -58,6 +58,9 @@ cdef extern from "src/utils.h" namespace "brassboard_seq":
 
 # Cython does not declare these in cpython cimport
 cdef extern from *:
+    PyObject *Py_None
+    PyObject *Py_True
+    PyObject *Py_False
     PyObject *PyExc_AttributeError
     PyObject *PyExc_KeyError
     PyObject *PyExc_IndexError
@@ -67,3 +70,4 @@ cdef extern from *:
     PyObject *PyExc_RuntimeError
     PyObject *Py_NotImplemented
     Py_ssize_t PyDict_GET_SIZE(object)
+    object _PyObject_Vectorcall(PyObject*, PyObject**, size_t, PyObject*)

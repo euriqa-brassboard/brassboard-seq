@@ -22,13 +22,14 @@ from brassboard_seq.action cimport Action, RampFunction, SeqCubicSpline, \
 from brassboard_seq.event_time cimport EventTime, round_time_f64
 from brassboard_seq.rtval cimport is_rtval, rt_eval_tagval, RuntimeValue
 from brassboard_seq.utils cimport pyfloat_from_double, set_global_tracker, \
-  PyErr_Format, PyExc_ValueError, assume_not_none, _assume_not_none, py_object
+  PyErr_Format, PyExc_ValueError, assume_not_none, _assume_not_none, py_object, \
+  _PyObject_Vectorcall, Py_True, Py_False
 
 from libcpp.map cimport map as cppmap
 
 cimport cython
 from cython.operator cimport dereference as deref
-from cpython cimport PyDict_GetItemWithError
+from cpython cimport PyDict_GetItemWithError, PyList_GET_ITEM
 
 cdef re # hide import
 import re
@@ -155,6 +156,46 @@ cdef int init_pulse_compiler_info() except -1:
                                pyfloat_from_double(0), pyfloat_from_double(0))
     pulse_compiler_info = self
 
+cdef inline new_cubic_spline(cubic_spline_t sp):
+    if sp == cubic_spline_t(0, 0, 0, 0):
+        return pulse_compiler_info.cubic_0
+    o0 = pyfloat_from_double(sp.order0)
+    o1 = pyfloat_from_double(sp.order1)
+    o2 = pyfloat_from_double(sp.order2)
+    o3 = pyfloat_from_double(sp.order3)
+    cdef PyObject *args[4]
+    args[0] = <PyObject*>o0
+    args[1] = <PyObject*>o1
+    args[2] = <PyObject*>o2
+    args[3] = <PyObject*>o3
+    return _PyObject_Vectorcall(<PyObject*>pulse_compiler_info.CubicSpline,
+                                args, 4, NULL)
+
+cdef tonedata_kwarg_names = ('bypass_lookup_tables',)
+cdef py_tone0_num = 0
+cdef py_tone1_num = 1
+cdef py_channel_nums = list(range(31))
+
+cdef inline new_tone_data(int channel, int tone, int64_t duration_cycles,
+                          sp_freq, sp_amp, sp_phase, output_flags_t flags):
+    cdef PyObject *args[12]
+    args[0] = PyList_GET_ITEM(py_channel_nums, channel)
+    args[1] = (<PyObject*>py_tone1_num) if tone == 1 else (<PyObject*>py_tone0_num)
+    cdef py_duration = duration_cycles
+    args[2] = <PyObject*>py_duration
+    args[3] = <PyObject*>sp_freq
+    args[4] = <PyObject*>sp_amp
+    args[5] = <PyObject*>sp_phase
+    args[6] = <PyObject*>pulse_compiler_info.cubic_0
+    args[7] = Py_True if flags.wait_trigger else Py_False
+    args[8] = Py_True if flags.sync else Py_False
+    args[9] = Py_False
+    args[10] = Py_True if flags.feedback_enable else Py_False
+    args[11] = Py_False
+    return _PyObject_Vectorcall(<PyObject*>pulse_compiler_info.ToneData,
+                                args, 11, <PyObject*>tonedata_kwarg_names)
+
+
 @cython.auto_pickle(False)
 @cython.final
 cdef class PulseCompilerGenerator(RFSOCOutputGenerator):
@@ -172,34 +213,11 @@ cdef class PulseCompilerGenerator(RFSOCOutputGenerator):
     cdef int add_tone_data(self, int channel, int tone, int64_t duration_cycles,
                            cubic_spline_t frequency_hz, cubic_spline_t amplitude,
                            cubic_spline_t phase_rad, output_flags_t flags) except -1:
-        if frequency_hz == cubic_spline_t(0, 0, 0, 0):
-            sp_freq = pulse_compiler_info.cubic_0
-        else:
-            sp_freq = pulse_compiler_info.CubicSpline(
-                pyfloat_from_double(frequency_hz.order0),
-                pyfloat_from_double(frequency_hz.order1),
-                pyfloat_from_double(frequency_hz.order2),
-                pyfloat_from_double(frequency_hz.order3))
-        if amplitude == cubic_spline_t(0, 0, 0, 0):
-            sp_amp = pulse_compiler_info.cubic_0
-        else:
-            sp_amp = pulse_compiler_info.CubicSpline(
-                pyfloat_from_double(amplitude.order0),
-                pyfloat_from_double(amplitude.order1),
-                pyfloat_from_double(amplitude.order2),
-                pyfloat_from_double(amplitude.order3))
-        if phase_rad == cubic_spline_t(0, 0, 0, 0):
-            sp_phase = pulse_compiler_info.cubic_0
-        else:
-            sp_phase = pulse_compiler_info.CubicSpline(
-                pyfloat_from_double(phase_rad.order0),
-                pyfloat_from_double(phase_rad.order1),
-                pyfloat_from_double(phase_rad.order2),
-                pyfloat_from_double(phase_rad.order3))
-        tonedata = pulse_compiler_info.ToneData(
-            channel, tone, duration_cycles, sp_freq, sp_amp, sp_phase,
-            pulse_compiler_info.cubic_0, flags.wait_trigger, flags.sync, False,
-            flags.feedback_enable, bypass_lookup_tables=False)
+        sp_freq = new_cubic_spline(frequency_hz)
+        sp_amp = new_cubic_spline(amplitude)
+        sp_phase = new_cubic_spline(phase_rad)
+        tonedata = new_tone_data(channel, tone, duration_cycles,
+                                 sp_freq, sp_amp, sp_phase, flags)
         _assume_not_none(<void*>pulse_compiler_info.channel_list)
         key = pulse_compiler_info.channel_list[(channel << 1) | tone]
         output = <void*>self.output
