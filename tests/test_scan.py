@@ -48,6 +48,11 @@ def test_parampack():
     assert scan.get_visited(p.b.c) is True
     assert scan.get_visited(p.b.undefined) is False
 
+    with pytest.raises(TypeError, match="Cannot access value as parameter pack."):
+        p.b.x.a
+    with pytest.raises(TypeError, match="Cannot access value as parameter pack."):
+        p.b.x.b = 1
+
     with pytest.raises(TypeError, match="Cannot access"):
         p.a(b=1)
 

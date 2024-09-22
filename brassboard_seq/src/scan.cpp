@@ -57,6 +57,15 @@ static void merge_dict_into(PyObject *tgt, PyObject *src, bool ovr)
     }
 }
 
+static inline PyObject*
+set_new_dict(PyObject *dict, PyObject *fieldname)
+{
+    py_object new_item(PyDict_New());
+    if (!new_item || PyDict_SetItem(dict, fieldname, new_item.get()) < 0)
+        return nullptr;
+    return new_item.release();
+}
+
 template<typename ParamPack>
 static PyObject *ensure_visited(ParamPack *self)
 {
@@ -67,12 +76,7 @@ static PyObject *ensure_visited(ParamPack *self)
         return py_newref(visited);
     if (PyErr_Occurred())
         return nullptr;
-    visited = PyDict_New();
-    if (!visited || PyDict_SetItem(self_visited, fieldname, visited) < 0) {
-        Py_XDECREF(visited);
-        return nullptr;
-    }
-    return visited;
+    return set_new_dict(self_visited, fieldname);
 }
 
 template<typename ParamPack>
@@ -89,12 +93,7 @@ static PyObject *ensure_dict(ParamPack *self)
     }
     if (PyErr_Occurred())
         return nullptr;
-    values = PyDict_New();
-    if (!values || PyDict_SetItem(self_values, fieldname, values) < 0) {
-        Py_XDECREF(values);
-        return nullptr;
-    }
-    return values;
+    return set_new_dict(self_values, fieldname);
 }
 
 // Return borrowed reference
