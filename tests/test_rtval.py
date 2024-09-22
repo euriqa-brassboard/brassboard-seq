@@ -341,6 +341,8 @@ def test_rtprop():
     prop2 = rtval.RTProp()
     with pytest.raises(ValueError, match="Cannot determine runtime property name"):
         prop2.__get__(c1, C)
+    with pytest.raises(ValueError, match="Cannot determine runtime property name"):
+        prop2.__set__(c1, 1)
 
     c1p1 = c1.p1
     assert isinstance(c1p1, rtval.RuntimeValue)

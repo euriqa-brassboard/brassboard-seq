@@ -747,29 +747,23 @@ cdef rtprop_callback new_rtprop_callback(obj, str fieldname):
     self.fieldname = fieldname
     return self
 
-cdef rtprop_init_class(RTProp self, cls):
-    if self.fieldname is not None:
-        return
-    for _name in dir(cls):
-        name = <str>_name
-        field = getattr(cls, name)
-        if isinstance(field, RTProp):
-            (<RTProp>field).fieldname = rtprop_prefix + name
-    if self.fieldname is None:
-        PyErr_Format(PyExc_ValueError, 'Cannot determine runtime property name')
-
 @cython.final
 cdef class RTProp:
     cdef str fieldname
 
+    def __set_name__(self, owner, name):
+        self.fieldname = rtprop_prefix + name
+
     def __set__(self, obj, value):
-        rtprop_init_class(self, type(obj))
+        if self.fieldname is None:
+            PyErr_Format(PyExc_ValueError, 'Cannot determine runtime property name')
         setattr(obj, self.fieldname, value)
 
     def __get__(self, obj, objtype):
         if obj is None:
             return self
-        rtprop_init_class(self, type(obj))
+        if self.fieldname is None:
+            PyErr_Format(PyExc_ValueError, 'Cannot determine runtime property name')
         fieldname = self.fieldname
         try:
             return getattr(obj, fieldname)
