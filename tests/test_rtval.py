@@ -56,8 +56,8 @@ def test_rtval():
     with pytest.raises(TypeError):
         np.conj(v1)
 
-    c1 = rtval.new_const(1.2)
-    c2 = rtval.new_const(2.3)
+    c1 = test_utils.new_const(1.2)
+    c2 = test_utils.new_const(2.3)
     assert str(c1) == '1.2'
     assert str(c2) == '2.3'
     c3 = c1 + c2
@@ -188,8 +188,8 @@ def test_rtval():
     v4 = 1.2 + v2
     assert str(v3) == f'2 + {s1}'
     assert str(v4) == f'1.2 + {s2}'
-    assert str(v1 + rtval.new_const(2)) == f'2 + {s1}'
-    assert str(rtval.new_const(1.2) + v2) == f'1.2 + {s2}'
+    assert str(v1 + test_utils.new_const(2)) == f'2 + {s1}'
+    assert str(test_utils.new_const(1.2) + v2) == f'1.2 + {s2}'
 
     assert str(v3 + v4) == f'3.2 + {s1} + {s2}'
     assert str(v3 - v4) == f'0.8 + {s1} - {s2}'

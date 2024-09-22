@@ -130,7 +130,7 @@ cdef inline RuntimeValue _new_rtval(ValueType type_, DataType dt):
     self.age = -1
     return self
 
-cpdef RuntimeValue new_const(v)
+cdef RuntimeValue new_const(v)
 
 cdef inline RuntimeValue new_arg(idx, ty=float):
     self = _new_rtval(ValueType.Arg, pytype_to_datatype(ty))
@@ -155,9 +155,7 @@ cdef inline RuntimeValue round_int64_rt(RuntimeValue v):
         return v
     return new_expr1(ValueType.Int64, v)
 
-cpdef inv(v)
 cpdef convert_bool(v)
-cpdef round_int64(v)
 cpdef ifelse(b, v1, v2)
 
 cdef inline bint is_rtval(v) noexcept:

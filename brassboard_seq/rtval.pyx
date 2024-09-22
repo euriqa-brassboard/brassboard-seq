@@ -383,7 +383,7 @@ cdef inline RuntimeValue new_const_tagval(TagVal v):
     self.age = -1
     return self
 
-cpdef RuntimeValue new_const(v):
+cdef RuntimeValue new_const(v):
     return new_const_tagval(TagVal.from_py(v))
 
 cdef RuntimeValue new_expr1(ValueType type_, RuntimeValue arg0):
@@ -644,7 +644,7 @@ cdef class RuntimeValue:
             return new_expr1(ValueType.Rint, self)
         return <object>Py_NotImplemented
 
-cpdef inv(v):
+def inv(v, /):
     if type(v) is bool:
         return v is False
     cdef RuntimeValue _v
@@ -664,7 +664,7 @@ cpdef convert_bool(_v):
         return cnpy.PyArray_Cast(_v, cnpy.NPY_BOOL)
     return bool(_v)
 
-cpdef round_int64(_v):
+def round_int64(_v, /):
     cdef RuntimeValue v
     if is_rtval(_v):
         return round_int64_rt(<RuntimeValue>_v)

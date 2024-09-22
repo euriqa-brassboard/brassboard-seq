@@ -13,6 +13,9 @@ def new_invalid_rtval():
     rv.arg1 = rtval.new_const(1)
     return rv
 
+def new_const(c):
+    return rtval.new_const(c)
+
 def new_arg(idx):
     return rtval.new_arg(idx)
 

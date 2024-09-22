@@ -142,7 +142,7 @@ cdef class ParamPack:
     def __repr__(self):
         return str(self)
 
-cpdef get_visited(ParamPack self):
+def get_visited(ParamPack self, /):
     fieldname = self.fieldname
     visited = self.visited
     cdef PyObject *resp = PyDict_GetItemWithError(visited, fieldname)
