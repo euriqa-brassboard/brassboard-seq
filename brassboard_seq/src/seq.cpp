@@ -20,9 +20,50 @@
 
 #include <vector>
 
-static PyObject *__pyx_f_14brassboard_seq_3seq_combine_cond(PyObject*, PyObject*);
-
 namespace brassboard_seq::seq {
+
+static PyTypeObject *event_time_type;
+static PyTypeObject *runtime_value_type;
+
+template<typename RuntimeValue>
+static inline std::pair<PyObject*,bool>
+_combine_cond(PyObject *cond1, PyObject *new_cond, RuntimeValue*)
+{
+    if (cond1 == Py_False)
+        return { Py_False, false };
+    if (Py_TYPE(new_cond) != runtime_value_type) {
+        if (get_value_bool(new_cond, (uintptr_t)-1)) {
+            return { cond1, false };
+        }
+        else {
+            return { Py_False, false };
+        }
+    }
+    py_object cond2((PyObject*)rtval::rt_convert_bool((PyObject*)runtime_value_type,
+                                                      (RuntimeValue*)new_cond));
+    if (cond1 == Py_True)
+        return { cond2.release(), true };
+    assert(Py_TYPE(cond1) == runtime_value_type);
+    auto o = throw_if_not(PyType_GenericAlloc(runtime_value_type, 0));
+    auto self = (RuntimeValue*)o;
+    new (&self->cache) rtval::TagVal(rtval::DataType::Bool);
+    self->type_ = rtval::And;
+    self->age = (unsigned)-1;
+    self->arg0 = (RuntimeValue*)py_newref(cond1);
+    self->arg1 = (RuntimeValue*)cond2.release();
+    self->cb_arg2 = py_newref(Py_None);
+    return { o, true };
+}
+
+template<typename RuntimeValue>
+static inline __attribute__((returns_nonnull)) PyObject*
+combine_cond(PyObject *cond1, PyObject *new_cond, RuntimeValue*)
+{
+    auto [res, needs_free] = _combine_cond(cond1, new_cond, (RuntimeValue*)nullptr);
+    if (needs_free)
+        Py_INCREF(res);
+    return res;
+}
 
 static void type_add_method(PyTypeObject *type, PyMethodDef *meth)
 {
@@ -40,8 +81,6 @@ static void raise_too_few_args(const char* func_name, bool exact,
                  (num_min == 1) ? "" : "s", num_found);
     throw 0;
 }
-
-static PyTypeObject *event_time_type;
 
 struct seq_set_params {
     PyObject *chn;
@@ -84,25 +123,17 @@ struct seq_set_params {
         }
     }
 };
+
+template<typename RuntimeValue>
 struct CondCombiner {
     PyObject *cond{nullptr};
     bool needs_free{false};
     CondCombiner(PyObject *cond1, PyObject *cond2)
     {
-        if (cond1 == Py_True) {
-            cond = cond2;
-        }
-        else if (cond1 == Py_False) {
-            cond = Py_False;
-        }
-        if (cond2 == Py_True) {
-            cond = cond1;
-        }
-        else if (cond2 == Py_False) {
-            cond = Py_False;
-        }
-        cond = throw_if_not(__pyx_f_14brassboard_seq_3seq_combine_cond(cond1, cond2));
-        needs_free = true;
+        auto [_cond, _needs_free] = _combine_cond(cond1, cond2,
+                                                  (RuntimeValue*)nullptr);
+        cond = _cond;
+        needs_free = _needs_free;
     }
     ~CondCombiner()
     {
@@ -250,7 +281,8 @@ catch (...) {
     return nullptr;
 }
 
-template<typename CondSeq, bool is_cond, bool is_step=false, bool is_pulse=false>
+template<typename CondSeq, typename RuntimeValue,
+         bool is_cond, bool is_step=false, bool is_pulse=false>
 static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
                              Py_ssize_t nargs, PyObject *kwnames) try
 {
@@ -258,7 +290,7 @@ static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
     auto self = (CondSeq*)py_self;
     auto subseq = condseq_get_subseq<is_cond>(self);
     auto cond = condseq_get_cond<is_cond>(self);
-    CondCombiner cc(cond, params.cond);
+    CondCombiner<RuntimeValue> cc(cond, params.cond);
     if constexpr (is_step)
         throw_if_not(
             __pyx_f_14brassboard_seq_3seq_timestep_set(
@@ -275,27 +307,27 @@ catch (...) {
     return nullptr;
 }
 
-template<typename TimeStep>
+template<typename TimeStep, typename RuntimeValue>
 static inline void
-update_timestep(PyTypeObject *ty_timestep, TimeStep*)
+update_timestep(PyTypeObject *ty_timestep, TimeStep*, RuntimeValue*)
 {
     static PyMethodDef timestep_set_method = {
-        "set", (PyCFunction)(void*)condseq_set<TimeStep,false,true,false>,
+        "set", (PyCFunction)(void*)condseq_set<TimeStep,RuntimeValue,false,true,false>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef timestep_pulse_method = {
-        "pulse", (PyCFunction)(void*)condseq_set<TimeStep,false,true,true>,
+        "pulse", (PyCFunction)(void*)condseq_set<TimeStep,RuntimeValue,false,true,true>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     type_add_method(ty_timestep, &timestep_set_method);
     type_add_method(ty_timestep, &timestep_pulse_method);
     PyType_Modified(ty_timestep);
 }
 
-template<typename SubSeq, typename TimeSeq>
+template<typename SubSeq, typename TimeSeq, typename RuntimeValue>
 static inline void
-update_subseq(PyTypeObject *ty_subseq, SubSeq*, TimeSeq*)
+update_subseq(PyTypeObject *ty_subseq, SubSeq*, TimeSeq*, RuntimeValue*)
 {
     static PyMethodDef subseq_set_method = {
-        "set", (PyCFunction)(void*)condseq_set<SubSeq,false>,
+        "set", (PyCFunction)(void*)condseq_set<SubSeq,RuntimeValue,false>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef subseq_add_step_method = {
         "add_step",
@@ -321,12 +353,13 @@ update_subseq(PyTypeObject *ty_subseq, SubSeq*, TimeSeq*)
     PyType_Modified(ty_subseq);
 }
 
-template<typename ConditionalWrapper, typename TimeSeq>
+template<typename ConditionalWrapper, typename TimeSeq, typename RuntimeValue>
 static inline void
-update_conditional(PyTypeObject *ty_conditional, ConditionalWrapper*, TimeSeq*)
+update_conditional(PyTypeObject *ty_conditional, ConditionalWrapper*,
+                   TimeSeq*, RuntimeValue*)
 {
     static PyMethodDef conditional_set_method = {
-        "set", (PyCFunction)(void*)condseq_set<ConditionalWrapper,true>,
+        "set", (PyCFunction)(void*)condseq_set<ConditionalWrapper,RuntimeValue,true>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef conditional_add_step_method = {
         "add_step",

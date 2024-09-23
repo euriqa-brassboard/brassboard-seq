@@ -22,7 +22,7 @@ from brassboard_seq.config cimport translate_channel
 from brassboard_seq cimport event_time
 from brassboard_seq.event_time cimport is_ordered, round_time_int, round_time_rt, \
   set_base_int, set_base_rt, new_time_manager
-from brassboard_seq.rtval cimport convert_bool, get_value_bool, ifelse, is_rtval, \
+from brassboard_seq.rtval cimport get_value_bool, ifelse, is_rtval, \
   RuntimeValue, rt_eval_tagval
 from brassboard_seq.scan cimport new_param_pack
 from brassboard_seq.utils cimport assume_not_none, _assume_not_none, \
@@ -40,29 +40,21 @@ from cpython cimport PyObject, PyDict_GetItemWithError, \
 
 cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
     PyTypeObject *event_time_type
-    void update_timestep(PyTypeObject*, TimeStep) except +
-    void update_subseq(PyTypeObject*, SubSeq, TimeSeq) except +
-    void update_conditional(PyTypeObject*, ConditionalWrapper, TimeSeq) except +
+    PyTypeObject *runtime_value_type
+    void update_timestep(PyTypeObject*, TimeStep, RuntimeValue) except +
+    void update_subseq(PyTypeObject*, SubSeq, TimeSeq, RuntimeValue) except +
+    void update_conditional(PyTypeObject*, ConditionalWrapper, TimeSeq,
+                            RuntimeValue) except +
+    object combine_cond(object cond1, object new_cond, RuntimeValue) except +
 
 cdef inline new_floating_time(TimeSeq seq, cond):
     return seq.seqinfo.time_mgr.new_time_int(None, 0, True, cond, None)
 event_time_type = <PyTypeObject*>EventTime
+runtime_value_type = <PyTypeObject*>RuntimeValue
 
-update_timestep(<PyTypeObject*>TimeStep, None)
-update_subseq(<PyTypeObject*>SubSeq, None, None)
-update_conditional(<PyTypeObject*>ConditionalWrapper, None, None)
-
-cdef combine_cond(cond1, new_cond):
-    if cond1 is False:
-        return False
-    cond2 = convert_bool(new_cond)
-    if cond1 is True:
-        return cond2
-    if cond2 is True:
-        return cond1
-    if cond2 is False:
-        return False
-    return cond1 & cond2
+update_timestep(<PyTypeObject*>TimeStep, None, None)
+update_subseq(<PyTypeObject*>SubSeq, None, None, None)
+update_conditional(<PyTypeObject*>ConditionalWrapper, None, None, None)
 
 @cython.auto_pickle(False)
 cdef class TimeSeq:
@@ -161,12 +153,12 @@ cdef class ConditionalWrapper:
     def conditional(self, cond, /):
         wrapper = <ConditionalWrapper>ConditionalWrapper.__new__(ConditionalWrapper)
         wrapper.seq = self.seq
-        wrapper.cond = combine_cond(self.cond, cond)
+        wrapper.cond = combine_cond(self.cond, cond, None)
         wrapper.C = self.C
         return wrapper
 
     def wait(self, length, /, *, cond=True):
-        wait_cond(self.seq, length, combine_cond(self.cond, cond))
+        wait_cond(self.seq, length, combine_cond(self.cond, cond, None))
 
     def wait_for(self, tp, /, offset=0):
         wait_for_cond(self.seq, tp, offset, self.cond)
@@ -211,12 +203,12 @@ cdef class SubSeq(TimeSeq):
     def conditional(self, cond, /):
         wrapper = <ConditionalWrapper>ConditionalWrapper.__new__(ConditionalWrapper)
         wrapper.seq = self
-        wrapper.cond = combine_cond(self.cond, cond)
+        wrapper.cond = combine_cond(self.cond, cond, None)
         wrapper.C = self.C
         return wrapper
 
     def wait(self, length, /, *, cond=True):
-        wait_cond(self, length, combine_cond(self.cond, cond))
+        wait_cond(self, length, combine_cond(self.cond, cond, None))
 
     def wait_for(self, tp, /, offset=0):
         wait_for_cond(self, tp, offset, self.cond)

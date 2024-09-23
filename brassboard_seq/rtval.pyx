@@ -627,7 +627,7 @@ def inv(v, /):
         return np_logical_not(v)
     return not v
 
-cpdef convert_bool(_v):
+def convert_bool(_v):
     if is_rtval(_v):
         return rt_convert_bool(RuntimeValue, <RuntimeValue>_v)
     if isinstance(_v, cnpy.ndarray):

@@ -162,7 +162,6 @@ cdef inline RuntimeValue round_int64_rt(RuntimeValue v):
         return v
     return new_expr1(ValueType.Int64, v)
 
-cpdef convert_bool(v)
 cpdef ifelse(b, v1, v2)
 
 cdef inline bint is_rtval(v) noexcept:
