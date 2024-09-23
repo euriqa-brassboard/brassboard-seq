@@ -27,6 +27,7 @@ cdef extern from "src/action.h" namespace "brassboard_seq::action":
         bint is_pulse;
         bint exact_time;
         bint cond_val;
+    Action new_action(object, object, object, bint, bint, object, int, Action) except +
 
 cdef class Action:
     cdef object value
@@ -41,17 +42,6 @@ cdef class Action:
     cdef object length
     cdef object prev_val
     cdef object end_val
-
-cdef inline Action new_action(value, cond, bint is_pulse, bint exact_time, dict kws, int aid):
-    self = <Action>Action.__new__(Action)
-    self.value = value
-    self.cond = cond
-    self.data.is_pulse = is_pulse
-    self.data.exact_time = exact_time
-    if kws is not None:
-        self.kws = kws
-    self.aid = aid
-    return self
 
 cdef class RampFunction:
     cdef object _eval

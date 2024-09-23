@@ -27,6 +27,26 @@ struct ActionData {
     bool cond_val;
 };
 
+template<typename Action>
+static inline __attribute__((returns_nonnull)) Action*
+new_action(PyObject *ActionType, PyObject *value, PyObject *cond,
+           bool is_pulse, bool exact_time, PyObject *kws, int aid, Action*)
+{
+    auto o = throw_if_not(PyType_GenericAlloc((PyTypeObject*)ActionType, 0));
+    auto p = (Action*)o;
+    p->data.is_pulse = is_pulse;
+    p->data.exact_time = exact_time;
+    p->value = py_newref(value);
+    p->cond = py_newref(cond);
+    p->kws = py_newref(kws);
+    p->aid = aid;
+
+    p->length = py_newref(Py_None);
+    p->prev_val = py_newref(Py_None);
+    p->end_val = py_newref(Py_None);
+    return p;
+}
+
 }
 
 #endif

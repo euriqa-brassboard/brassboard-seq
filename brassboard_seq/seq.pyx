@@ -126,7 +126,8 @@ cdef inline int timestep_set(TimeStep self, chn, value, cond, bint is_pulse,
                      "Multiple actions added for the same channel "
                      "at the same time on %U.", <PyObject*>name)
     self.seqinfo.bt_tracker.record(action_key(seqinfo.action_counter))
-    action = new_action(value, cond, is_pulse, exact_time, kws, seqinfo.action_counter)
+    action = new_action(Action, value, cond, is_pulse, exact_time, kws,
+                        seqinfo.action_counter, None)
     seqinfo.action_counter += 1
     Py_INCREF(action)
     self.actions[cid].reset(<PyObject*>action)

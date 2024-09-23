@@ -20,7 +20,8 @@ def new_arg(idx):
     return rtval.new_arg(idx)
 
 def new_action(value, cond, bint is_pulse, bint exact_time, dict kws, int aid):
-    return action.new_action(value, cond, is_pulse, exact_time, kws, aid)
+    return action.new_action(action.Action, value, cond, is_pulse, exact_time,
+                             kws, aid, None)
 
 def action_set_tid(action.Action action, int tid):
     action.tid = tid
