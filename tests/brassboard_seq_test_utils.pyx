@@ -8,13 +8,16 @@ def new_invalid_rtval():
     # This should only happen if something really wrong happens.
     # We'll just test that we behave reasonably enough.
     # (it's unavoidable that we'll crash in some cases)
-    rv = rtval._new_rtval(<rtval.ValueType>1000, rtval.DataType.Float64)
-    rv.arg0 = rtval.new_const(1)
-    rv.arg1 = rtval.new_const(1)
+    rv = <rtval.RuntimeValue>rtval.RuntimeValue.__new__(rtval.RuntimeValue)
+    rv.type_ = <rtval.ValueType>1000
+    rv.cache.type = rtval.DataType.Float64
+    rv.age = -1
+    rv.arg0 = new_const(1)
+    rv.arg1 = new_const(1)
     return rv
 
 def new_const(c):
-    return rtval.new_const(c)
+    return rtval.new_const(rtval.RuntimeValue, c, <rtval.RuntimeValue>None)
 
 def new_arg(idx):
     return rtval.new_arg(idx)

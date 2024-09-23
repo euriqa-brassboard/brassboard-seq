@@ -76,7 +76,7 @@ cdef class Action:
         return str(self)
 
 cdef RuntimeValue arg0 = new_arg(0)
-cdef RuntimeValue const0 = new_const(0.0)
+cdef RuntimeValue const0 = new_const(RuntimeValue, 0.0, <RuntimeValue>None)
 cdef dummy_spline_segments = []
 
 cdef class RampFunction:

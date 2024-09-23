@@ -36,6 +36,10 @@ cdef extern from "src/rtval.cpp" namespace "brassboard_seq::rtval":
     DataType unary_return_type(ValueType, DataType t1)
     DataType binary_return_type(ValueType, DataType t1, DataType t2)
     TagVal tagval_add_or_sub(TagVal, TagVal, bint)
+    RuntimeValue _new_expr2_wrap1(object RTValueType, ValueType, object, object,
+                                  RuntimeValue) except +
+    RuntimeValue _new_select(object RTValueType, RuntimeValue arg0,
+                             object, object) except +
 
     void rt_eval_cache(RuntimeValue self, unsigned age, py_object pyage) except +
 
@@ -223,7 +227,8 @@ cdef void show(io, write, RuntimeValue v):
 cdef _new_addsub(TagVal c, RuntimeValue v, bint s):
     if c.is_zero() and not s:
         return v
-    return new_expr2(ValueType.Sub if s else ValueType.Add, new_const_tagval(c), v)
+    return new_expr2(ValueType.Sub if s else ValueType.Add,
+                     new_const(RuntimeValue, c, <RuntimeValue>None), v)
 
 cdef _build_addsub(v0, v1, bint issub):
     cdef bint ns0 = False
@@ -283,7 +288,7 @@ cdef _build_addsub(v0, v1, bint issub):
         ns1 = not ns1
     if nv0 is None:
         if nv1 is None:
-            return new_const_tagval(nc)
+            return new_const(RuntimeValue, nc, <RuntimeValue>None)
         return _new_addsub(nc, nv1, ns1)
     if nv1 is None:
         return _new_addsub(nc, nv0, ns0)
@@ -299,13 +304,6 @@ cdef _build_addsub(v0, v1, bint issub):
     else:
         nv = new_expr2(ValueType.Add, nv0, nv1)
     return _new_addsub(nc, nv, ns)
-
-cdef rt_convert_bool(RuntimeValue v):
-    if v.type_ == ValueType.Int64:
-        v = v.arg0
-    if v.type_ == ValueType.Bool or v.type_ == ValueType.Not:
-        return v
-    return new_expr1(ValueType.Bool, v)
 
 cdef np_add = np.add
 cdef np_subtract = np.subtract
@@ -384,44 +382,8 @@ def get_value(v, age):
         pyage.set_obj(age)
     return _get_value(v, age, pyage)
 
-cdef inline RuntimeValue new_const_tagval(TagVal v):
-    self = <RuntimeValue>RuntimeValue.__new__(RuntimeValue)
-    self.type_ = ValueType.Const
-    self.cache = v
-    self.age = -1
-    return self
-
-cdef RuntimeValue new_const(v):
-    return new_const_tagval(TagVal.from_py(v))
-
-cdef RuntimeValue new_expr1(ValueType type_, RuntimeValue arg0):
-    self = _new_rtval(type_, unary_return_type(type_, arg0.cache.type))
-    self.arg0 = arg0
-    return self
-
-cdef RuntimeValue new_expr2(ValueType type_, RuntimeValue arg0, RuntimeValue arg1):
-    self = _new_rtval(type_, binary_return_type(type_, arg0.cache.type,
-                                                arg1.cache.type))
-    self.arg0 = arg0
-    self.arg1 = arg1
-    return self
-
 cdef inline RuntimeValue new_expr2_wrap1(ValueType type_, arg0, arg1):
-    self = <RuntimeValue>RuntimeValue.__new__(RuntimeValue)
-    self.type_ = type_
-    self.age = -1
-    if not is_rtval(arg0):
-        self.arg0 = new_const(arg0)
-        self.arg1 = <RuntimeValue>arg1
-    else:
-        self.arg0 = <RuntimeValue>arg0
-        if is_rtval(arg1):
-            self.arg1 = <RuntimeValue>arg1
-        else:
-            self.arg1 = new_const(arg1)
-    self.cache.type = binary_return_type(type_, self.arg0.cache.type,
-                                         self.arg1.cache.type)
-    return self
+    return _new_expr2_wrap1(RuntimeValue, type_, arg0, arg1, None)
 
 @cython.auto_pickle(False)
 @cython.c_api_binop_methods(True)
@@ -493,7 +455,7 @@ cdef class RuntimeValue:
                         typ == ValueType.CmpEQ)
             v2 = <RuntimeValue>other
         else:
-            v2 = new_const(other)
+            v2 = new_const(RuntimeValue, other, <RuntimeValue>None)
         return new_expr2(typ, self, v2)
 
     def __abs__(self):
@@ -547,7 +509,7 @@ cdef class RuntimeValue:
                                    <object>PyTuple_GET_ITEM(inputs, 1))
         if ufunc is np_logical_not:
             if self.type_ == ValueType.Not:
-                return rt_convert_bool(self.arg0)
+                return rt_convert_bool(RuntimeValue, self.arg0)
             return new_expr1(ValueType.Not, self)
         if ufunc is np_power:
             return new_expr2_wrap1(ValueType.Pow, <object>PyTuple_GET_ITEM(inputs, 0),
@@ -659,7 +621,7 @@ def inv(v, /):
     if is_rtval(v):
         _v = <RuntimeValue>v
         if _v.type_ == ValueType.Not:
-            return rt_convert_bool(_v.arg0)
+            return rt_convert_bool(RuntimeValue, _v.arg0)
         return new_expr1(ValueType.Not, _v)
     if isinstance(v, cnpy.ndarray):
         return np_logical_not(v)
@@ -667,7 +629,7 @@ def inv(v, /):
 
 cpdef convert_bool(_v):
     if is_rtval(_v):
-        return rt_convert_bool(<RuntimeValue>_v)
+        return rt_convert_bool(RuntimeValue, <RuntimeValue>_v)
     if isinstance(_v, cnpy.ndarray):
         return cnpy.PyArray_Cast(_v, cnpy.NPY_BOOL)
     return bool(_v)
@@ -692,21 +654,7 @@ cpdef ifelse(b, v1, v2):
     if same_value(v1, v2):
         return v1
     if is_rtval(b):
-        self = <RuntimeValue>RuntimeValue.__new__(RuntimeValue)
-        self.type_ = ValueType.Select
-        self.age = -1
-        self.arg0 = <RuntimeValue>b
-        if is_rtval(v1):
-            self.arg1 = <RuntimeValue>v1
-        else:
-            self.arg1 = new_const(v1)
-        if is_rtval(v2):
-            self.cb_arg2 = v2
-        else:
-            self.cb_arg2 = new_const(v2)
-        self.cache.type = promote_type(self.arg1.cache.type,
-                                       (<RuntimeValue>self.cb_arg2).cache.type)
-        return self
+        return _new_select(RuntimeValue, <RuntimeValue>b, v1, v2)
     return v1 if b else v2
 
 cpdef inline bint same_value(v1, v2) noexcept:

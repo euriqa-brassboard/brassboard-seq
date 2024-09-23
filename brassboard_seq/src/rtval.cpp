@@ -162,6 +162,69 @@ static inline TagVal tagval_add_or_sub(TagVal v1, TagVal v2, bool issub)
 }
 
 template<typename RuntimeValue>
+static inline __attribute__((returns_nonnull)) RuntimeValue*
+_new_expr2_wrap1(PyObject *RTValueType, ValueType type,
+                 PyObject *arg0, PyObject *arg1, RuntimeValue*)
+{
+    py_object rtarg0;
+    py_object rtarg1;
+    if (Py_TYPE(arg0) != (PyTypeObject*)RTValueType) {
+        rtarg0.reset((PyObject*)new_const(RTValueType, arg0, (RuntimeValue*)nullptr));
+        rtarg1.reset(py_newref(arg1));
+    }
+    else {
+        if (Py_TYPE(arg1) == (PyTypeObject*)RTValueType) {
+            rtarg1.reset(py_newref(arg1));
+        }
+        else {
+            rtarg1.reset((PyObject*)new_const(RTValueType, arg1,
+                                              (RuntimeValue*)nullptr));
+        }
+        rtarg0.reset(py_newref(arg0));
+    }
+    auto datatype = binary_return_type(type, ((RuntimeValue*)rtarg0.get())->cache.type,
+                                       ((RuntimeValue*)rtarg1.get())->cache.type);
+    auto o = throw_if_not(PyType_GenericAlloc((PyTypeObject*)RTValueType, 0));
+    auto self = (RuntimeValue*)o;
+    new (&self->cache) TagVal(datatype);
+    self->type_ = type;
+    self->age = (unsigned)-1;
+    self->arg0 = (RuntimeValue*)rtarg0.release();
+    self->arg1 = (RuntimeValue*)rtarg1.release();
+    self->cb_arg2 = py_newref(Py_None);
+    return self;
+}
+
+template<typename RuntimeValue>
+static inline __attribute__((returns_nonnull)) RuntimeValue*
+_wrap_rtval(PyObject *RTValueType, PyObject *v, RuntimeValue*)
+{
+    if (Py_TYPE(v) == (PyTypeObject*)RTValueType)
+        return (RuntimeValue*)py_newref(v);
+    return new_const(RTValueType, v, (RuntimeValue*)nullptr);
+}
+
+template<typename RuntimeValue>
+static inline __attribute__((returns_nonnull)) RuntimeValue*
+_new_select(PyObject *RTValueType, RuntimeValue *arg0,
+            PyObject *arg1, PyObject *arg2)
+{
+    py_object rtarg1((PyObject*)_wrap_rtval(RTValueType, arg1, (RuntimeValue*)nullptr));
+    py_object rtarg2((PyObject*)_wrap_rtval(RTValueType, arg2, (RuntimeValue*)nullptr));
+    auto datatype = promote_type(((RuntimeValue*)rtarg1.get())->cache.type,
+                                 ((RuntimeValue*)rtarg2.get())->cache.type);
+    auto o = throw_if_not(PyType_GenericAlloc((PyTypeObject*)RTValueType, 0));
+    auto self = (RuntimeValue*)o;
+    new (&self->cache) TagVal(datatype);
+    self->type_ = Select;
+    self->age = (unsigned)-1;
+    self->arg0 = (RuntimeValue*)py_newref((PyObject*)arg0);
+    self->arg1 = (RuntimeValue*)rtarg1.release();
+    self->cb_arg2 = rtarg2.release();
+    return self;
+}
+
+template<typename RuntimeValue>
 inline void InterpFunction::set_value(RuntimeValue *value, std::vector<DataType> &args)
 {
     int nargs = args.size();

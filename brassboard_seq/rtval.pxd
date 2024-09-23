@@ -113,6 +113,15 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
         object to_py() except +
         bint is_zero()
 
+    RuntimeValue _new_cb_arg2(object RTValueType, ValueType, object, object ty,
+                              RuntimeValue) except +
+    RuntimeValue _new_expr1(object RTValueType, ValueType, RuntimeValue) except +
+    RuntimeValue _new_expr2(object RTValueType, ValueType,
+                            RuntimeValue, RuntimeValue) except +
+    RuntimeValue new_const(object RTValueType, TagVal, RuntimeValue) except +
+    RuntimeValue new_const(object RTValueType, object, RuntimeValue) except +
+    RuntimeValue rt_convert_bool(object RTValueType, RuntimeValue) except +
+
     cppclass InterpFunction:
         void set_value(RuntimeValue, vector[DataType]&) except +
         void eval_all(unsigned, py_object&, RuntimeValue) except +
@@ -132,34 +141,21 @@ cdef int interp_function_set_value(InterpFunction &func, val,
 cdef int interp_function_eval_all(InterpFunction &func, unsigned age,
                                   py_object &pyage) except -1
 
-cdef inline RuntimeValue _new_rtval(ValueType type_, DataType dt):
-    # Avoid passing arguments to the constructor which requires the arguments
-    # to be boxed and put in a tuple. This improves the performance by about 20%.
-    self = <RuntimeValue>RuntimeValue.__new__(RuntimeValue)
-    self.type_ = type_
-    self.cache.type = dt
-    self.age = -1
-    return self
-
-cdef RuntimeValue new_const(v)
-
 cdef inline RuntimeValue new_arg(idx, ty=float):
-    self = _new_rtval(ValueType.Arg, pytype_to_datatype(ty))
-    self.cb_arg2 = idx
-    return self
+    return _new_cb_arg2(RuntimeValue, ValueType.Arg, idx, ty, None)
 
 cpdef inline RuntimeValue new_extern(cb, ty=float):
-    self = _new_rtval(ValueType.Extern, pytype_to_datatype(ty))
-    self.cb_arg2 = cb
-    return self
+    return _new_cb_arg2(RuntimeValue, ValueType.Extern, cb, ty, None)
 
 cpdef inline RuntimeValue new_extern_age(cb, ty=float):
-    self = _new_rtval(ValueType.ExternAge, pytype_to_datatype(ty))
-    self.cb_arg2 = cb
-    return self
+    return _new_cb_arg2(RuntimeValue, ValueType.ExternAge, cb, ty, None)
 
-cdef RuntimeValue new_expr1(ValueType type_, RuntimeValue arg0)
-cdef RuntimeValue new_expr2(ValueType type_, RuntimeValue arg0, RuntimeValue arg1)
+cdef inline RuntimeValue new_expr1(ValueType type_, RuntimeValue arg0):
+    return _new_expr1(RuntimeValue, type_, arg0)
+
+cdef inline RuntimeValue new_expr2(ValueType type_, RuntimeValue arg0,
+                                   RuntimeValue arg1):
+    return _new_expr2(RuntimeValue, type_, arg0, arg1)
 
 cdef inline RuntimeValue round_int64_rt(RuntimeValue v):
     if v.type_ == ValueType.Int64:

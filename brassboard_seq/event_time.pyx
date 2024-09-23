@@ -31,7 +31,8 @@ from cython.operator cimport dereference as deref, predecrement as predec
 from cpython cimport PyList_GET_SIZE, PyTypeObject
 
 cdef object py_time_scale = c_time_scale
-cdef RuntimeValue rt_time_scale = new_const(py_time_scale)
+cdef RuntimeValue rt_time_scale = new_const(RuntimeValue, py_time_scale,
+                                            <RuntimeValue>None)
 
 def time_scale():
     return py_time_scale

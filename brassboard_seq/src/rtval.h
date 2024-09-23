@@ -21,4 +21,91 @@
 
 #include "utils.h"
 
+namespace brassboard_seq::rtval {
+
+template<typename RuntimeValue>
+static inline __attribute__((returns_nonnull)) RuntimeValue*
+_new_cb_arg2(PyObject *RTValueType, ValueType type, PyObject *cb_arg2,
+             PyObject *ty, RuntimeValue*)
+{
+    auto datatype = pytype_to_datatype(ty);
+    auto o = throw_if_not(PyType_GenericAlloc((PyTypeObject*)RTValueType, 0));
+    auto self = (RuntimeValue*)o;
+    new (&self->cache) TagVal(datatype);
+    self->type_ = type;
+    self->age = (unsigned)-1;
+    self->arg0 = (RuntimeValue*)py_newref(Py_None);
+    self->arg1 = (RuntimeValue*)py_newref(Py_None);
+    self->cb_arg2 = py_newref(cb_arg2);
+    return self;
+}
+
+template<typename RuntimeValue>
+static inline __attribute__((returns_nonnull)) RuntimeValue*
+_new_expr1(PyObject *RTValueType, ValueType type, RuntimeValue *arg0)
+{
+    auto o = throw_if_not(PyType_GenericAlloc((PyTypeObject*)RTValueType, 0));
+    auto datatype = unary_return_type(type, arg0->cache.type);
+    auto self = (RuntimeValue*)o;
+    new (&self->cache) TagVal(datatype);
+    self->type_ = type;
+    self->age = (unsigned)-1;
+    self->arg0 = (RuntimeValue*)py_newref((RuntimeValue*)arg0);
+    self->arg1 = (RuntimeValue*)py_newref(Py_None);
+    self->cb_arg2 = py_newref(Py_None);
+    return self;
+}
+
+template<typename RuntimeValue>
+static inline __attribute__((returns_nonnull)) RuntimeValue*
+_new_expr2(PyObject *RTValueType, ValueType type, RuntimeValue *arg0,
+           RuntimeValue *arg1)
+{
+    auto o = throw_if_not(PyType_GenericAlloc((PyTypeObject*)RTValueType, 0));
+    auto datatype = binary_return_type(type, arg0->cache.type, arg1->cache.type);
+    auto self = (RuntimeValue*)o;
+    new (&self->cache) TagVal(datatype);
+    self->type_ = type;
+    self->age = (unsigned)-1;
+    self->arg0 = (RuntimeValue*)py_newref((PyObject*)arg0);
+    self->arg1 = (RuntimeValue*)py_newref((PyObject*)arg1);
+    self->cb_arg2 = py_newref(Py_None);
+    return self;
+}
+
+template<typename RuntimeValue>
+static inline __attribute__((returns_nonnull)) RuntimeValue*
+new_const(PyObject *RTValueType, TagVal v, RuntimeValue*)
+{
+    auto o = throw_if_not(PyType_GenericAlloc((PyTypeObject*)RTValueType, 0));
+    auto self = (RuntimeValue*)o;
+    new (&self->cache) TagVal(v);
+    self->type_ = Const;
+    self->age = (unsigned)-1;
+    self->arg0 = (RuntimeValue*)py_newref(Py_None);
+    self->arg1 = (RuntimeValue*)py_newref(Py_None);
+    self->cb_arg2 = py_newref(Py_None);
+    return self;
+}
+
+template<typename RuntimeValue>
+static inline __attribute__((returns_nonnull)) RuntimeValue*
+new_const(PyObject *RTValueType, PyObject *v, RuntimeValue*)
+{
+    return new_const(RTValueType, TagVal::from_py(v), (RuntimeValue*)nullptr);
+}
+
+template<typename RuntimeValue>
+static inline __attribute__((returns_nonnull)) RuntimeValue*
+rt_convert_bool(PyObject *RTValueType, RuntimeValue *v)
+{
+    if (v->type_ == Int64)
+        v = v->arg0;
+    if (v->cache.type == DataType::Bool)
+        return (RuntimeValue*)py_newref((PyObject*)v);
+    return _new_expr1(RTValueType, Bool, v);
+}
+
+}
+
 #endif
