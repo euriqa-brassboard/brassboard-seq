@@ -191,6 +191,32 @@ _new_time_rt(TimeManager *self, PyObject *EventTimeType, EventTime *prev,
     return tp;
 }
 
+static inline long long round_time_f64(double v)
+{
+    return (long long)(v * double(time_scale) + 0.5);
+}
+
+static inline long long round_time_int(PyObject *v)
+{
+    if (Py_TYPE(v) == &PyLong_Type) {
+        auto vi = PyLong_AsLongLong(v);
+        throw_if(vi == -1 && PyErr_Occurred());
+        return vi * time_scale;
+    }
+    auto vf = PyFloat_AsDouble(v);
+    throw_if(vf == -1 && PyErr_Occurred());
+    return round_time_f64(vf);
+}
+
+template<typename RuntimeValue>
+static inline __attribute__((returns_nonnull)) RuntimeValue*
+round_time_rt(PyObject *RTValueType, RuntimeValue *v, RuntimeValue *rt_time_scale)
+{
+    py_object scaled_t((PyObject*)rtval::_new_expr2(RTValueType, rtval::Mul, v,
+                                                    rt_time_scale));
+    return rtval::rt_round_int64(RTValueType, (RuntimeValue*)scaled_t.get());
+}
+
 }
 
 #endif

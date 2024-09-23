@@ -121,6 +121,7 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
     RuntimeValue new_const(object RTValueType, TagVal, RuntimeValue) except +
     RuntimeValue new_const(object RTValueType, object, RuntimeValue) except +
     RuntimeValue rt_convert_bool(object RTValueType, RuntimeValue) except +
+    RuntimeValue rt_round_int64(object RTValueType, RuntimeValue) except +
 
     cppclass InterpFunction:
         void set_value(RuntimeValue, vector[DataType]&) except +
@@ -149,18 +150,6 @@ cpdef inline RuntimeValue new_extern(cb, ty=float):
 
 cpdef inline RuntimeValue new_extern_age(cb, ty=float):
     return _new_cb_arg2(RuntimeValue, ValueType.ExternAge, cb, ty, None)
-
-cdef inline RuntimeValue new_expr1(ValueType type_, RuntimeValue arg0):
-    return _new_expr1(RuntimeValue, type_, arg0)
-
-cdef inline RuntimeValue new_expr2(ValueType type_, RuntimeValue arg0,
-                                   RuntimeValue arg1):
-    return _new_expr2(RuntimeValue, type_, arg0, arg1)
-
-cdef inline RuntimeValue round_int64_rt(RuntimeValue v):
-    if v.type_ == ValueType.Int64:
-        return v
-    return new_expr1(ValueType.Int64, v)
 
 cpdef ifelse(b, v1, v2)
 

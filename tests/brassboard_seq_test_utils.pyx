@@ -79,7 +79,8 @@ def ramp_get_spline_segments(action.RampFunction self, length, oldval):
 
 def round_time(v):
     if rtval.is_rtval(v):
-        return event_time.round_time_rt(v)
+        return event_time.round_time_rt(rtval.RuntimeValue, <rtval.RuntimeValue>v,
+                                        event_time.rt_time_scale)
     else:
         return event_time.round_time_int(v)
 

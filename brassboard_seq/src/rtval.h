@@ -106,6 +106,15 @@ rt_convert_bool(PyObject *RTValueType, RuntimeValue *v)
     return _new_expr1(RTValueType, Bool, v);
 }
 
+template<typename RuntimeValue>
+static inline __attribute__((returns_nonnull)) RuntimeValue*
+rt_round_int64(PyObject *RTValueType, RuntimeValue *v)
+{
+    if (v->type_ == Int64)
+        return (RuntimeValue*)py_newref((PyObject*)v);
+    return _new_expr1(RTValueType, Int64, v);
+}
+
 }
 
 #endif

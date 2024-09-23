@@ -21,7 +21,7 @@ from brassboard_seq.action cimport new_action, Action, RampFunction
 from brassboard_seq.config cimport translate_channel
 from brassboard_seq cimport event_time
 from brassboard_seq.event_time cimport is_ordered, round_time_int, round_time_rt, \
-  set_base_int, set_base_rt, new_time_manager
+  set_base_int, set_base_rt, rt_time_scale, new_time_manager
 from brassboard_seq.rtval cimport get_value_bool, ifelse, is_rtval, \
   RuntimeValue, rt_eval_tagval
 from brassboard_seq.scan cimport new_param_pack
@@ -64,7 +64,9 @@ cdef class TimeSeq:
 
     def set_time(self, EventTime time, /, offset=0): # offset in seconds
         if is_rtval(offset):
-            set_base_rt(self.start_time, time, round_time_rt(<RuntimeValue>offset))
+            set_base_rt(self.start_time, time,
+                        round_time_rt(RuntimeValue, <RuntimeValue>offset,
+                                      rt_time_scale))
         else:
             set_base_int(self.start_time, time, round_time_int(offset))
         self.seqinfo.bt_tracker.record(event_time_key(<void*>self.start_time))

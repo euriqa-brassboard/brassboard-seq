@@ -22,8 +22,7 @@ from libcpp.vector cimport vector
 from libc.stdint cimport *
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.rtval cimport is_rtval, new_expr2, round_int64_rt, \
-  RuntimeValue, ValueType
+from brassboard_seq.rtval cimport is_rtval, RuntimeValue
 from brassboard_seq.utils cimport PyErr_Format, PyExc_ValueError, py_object
 
 from cpython cimport PyObject
@@ -54,21 +53,12 @@ cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
     EventTime _new_time_rt(TimeManager self, object EventTimeType, EventTime prev,
                            object offset, object cond, EventTime wait_for) except +
 
+    long long round_time_f64(double v)
+    long long round_time_int(v) except +
+    RuntimeValue round_time_rt(object, RuntimeValue, RuntimeValue) except +
+
 cdef object py_time_scale
 cdef RuntimeValue rt_time_scale
-
-cdef inline long long round_time_f64(double v) noexcept:
-    vf = v * <double>c_time_scale
-    return <long long>(vf + 0.5)
-
-cdef inline long long round_time_int(v):
-    if type(v) is int:
-        return (<long long>v) * c_time_scale
-    else:
-        return round_time_f64(v)
-
-cdef inline RuntimeValue round_time_rt(RuntimeValue v):
-    return round_int64_rt(new_expr2(ValueType.Mul, v, rt_time_scale))
 
 cdef class TimeManager:
     cdef shared_ptr[TimeManagerStatus] status
@@ -87,7 +77,8 @@ cdef class TimeManager:
                                          cond, EventTime wait_for):
         if is_rtval(offset):
             return _new_time_rt(self, EventTime, prev,
-                                round_time_rt(<RuntimeValue>offset), cond, wait_for)
+                                round_time_rt(RuntimeValue, <RuntimeValue>offset,
+                                              rt_time_scale), cond, wait_for)
         else:
             return _new_time_int(self, EventTime, prev, round_time_int(offset),
                                  False, cond, wait_for)

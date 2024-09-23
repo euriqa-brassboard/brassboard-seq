@@ -382,6 +382,13 @@ def get_value(v, age):
         pyage.set_obj(age)
     return _get_value(v, age, pyage)
 
+cdef inline RuntimeValue new_expr1(ValueType type_, RuntimeValue arg0):
+    return _new_expr1(RuntimeValue, type_, arg0)
+
+cdef inline RuntimeValue new_expr2(ValueType type_, RuntimeValue arg0,
+                                   RuntimeValue arg1):
+    return _new_expr2(RuntimeValue, type_, arg0, arg1)
+
 cdef inline RuntimeValue new_expr2_wrap1(ValueType type_, arg0, arg1):
     return _new_expr2_wrap1(RuntimeValue, type_, arg0, arg1, None)
 
@@ -474,7 +481,7 @@ cdef class RuntimeValue:
         return new_expr1(ValueType.Floor, self)
 
     def __round__(self):
-        return round_int64_rt(self)
+        return rt_round_int64(RuntimeValue, self)
 
     # Artifically limit the supported ufunc
     # in case we need to do any processing later
@@ -637,7 +644,7 @@ def convert_bool(_v):
 def round_int64(_v, /):
     cdef RuntimeValue v
     if is_rtval(_v):
-        return round_int64_rt(<RuntimeValue>_v)
+        return rt_round_int64(RuntimeValue, <RuntimeValue>_v)
     if isinstance(_v, cnpy.ndarray):
         ary = <cnpy.ndarray>_v
         if cnpy.PyArray_TYPE(ary) == cnpy.NPY_INT64:
