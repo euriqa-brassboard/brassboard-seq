@@ -18,6 +18,8 @@
 
 #include "Python.h"
 
+#include "event_time.h"
+
 #include <vector>
 
 namespace brassboard_seq::seq {
@@ -204,10 +206,11 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
         start_time.reset(py_newref((PyObject*)subseq->__pyx_base.end_time));
     }
     else if (type == AddStepType::Floating) {
-        start_time.reset(
-            throw_if_not(
-                __pyx_f_14brassboard_seq_3seq_new_floating_time(&subseq->__pyx_base,
-                                                                cond)));
+        auto time_mgr = subseq->__pyx_base.seqinfo->time_mgr;
+        auto new_time = event_time::_new_time_int(time_mgr, (PyObject*)event_time_type,
+                                                  (EventTime*)Py_None, 0, true, cond,
+                                                  (EventTime*)Py_None);
+        start_time.reset((PyObject*)new_time);
     }
     else if (type == AddStepType::At) {
         if (args[0] != Py_None && Py_TYPE(args[0]) != event_time_type)

@@ -47,8 +47,6 @@ cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
                             RuntimeValue) except +
     object combine_cond(object cond1, object new_cond, RuntimeValue) except +
 
-cdef inline new_floating_time(TimeSeq seq, cond):
-    return seq.seqinfo.time_mgr.new_time_int(None, 0, True, cond, None)
 event_time_type = <PyTypeObject*>EventTime
 runtime_value_type = <PyTypeObject*>RuntimeValue
 
