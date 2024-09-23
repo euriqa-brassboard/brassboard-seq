@@ -70,6 +70,8 @@ class ToneData:
     output_enable: bool = True
     feedback_enable: bool = False
     bypass_lookup_tables: bool = True
+    frame_rotate_at_end: bool = False
+    reset_frame: bool = False
 
     def __post_init__(self):
         raise RuntimeError("Do not use!!")

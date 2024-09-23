@@ -77,6 +77,8 @@ def get_output():
             is_first = False
             assert not tonedata.output_enable
             assert not tonedata.bypass_lookup_tables
+            assert not tonedata.frame_rotate_at_end
+            assert not tonedata.reset_frame
 
             stripped_tonedatas.append(Tone(tonedata.duration_cycles,
                                            Spline(*tonedata.frequency_hz),
