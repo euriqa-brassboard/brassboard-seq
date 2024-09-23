@@ -416,9 +416,11 @@ static inline PyObject *pynum_add_or_sub(PyObject *a, PyObject *b, bool issub)
     }
 }
 
+__attribute__((returns_nonnull))
 PyObject *pytuple_append1(PyObject *tuple, PyObject *obj);
+__attribute__((returns_nonnull))
 PyObject *pytuple_prepend1(PyObject *tuple, PyObject *obj);
-PyObject *pydict_deepcopy(PyObject *d);
+__attribute__((returns_nonnull)) PyObject *pydict_deepcopy(PyObject *d);
 
 // Copied from cython
 static inline PyObject* pyobject_call(PyObject *func, PyObject *arg,
