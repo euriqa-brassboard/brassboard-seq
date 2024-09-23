@@ -45,6 +45,12 @@ def test_seq():
         s.rt_assert(0, "Some message")
     s.rt_assert(1)
 
+    with pytest.raises(TypeError, match="conditional\\(\\) takes exactly 1 positional argument \\(0 given\\)"):
+        s.conditional()
+
+    with pytest.raises(TypeError, match="conditional\\(\\) takes exactly 1 positional argument \\(2 given\\)"):
+        s.conditional(True, 1)
+
     c1 = s.conditional(True)
     assert test_utils.seq_get_cond(c1) is True
     assert str(s) == """Seq - T[0]

@@ -27,7 +27,7 @@ from brassboard_seq.rtval cimport get_value_bool, ifelse, is_rtval, \
 from brassboard_seq.scan cimport new_param_pack
 from brassboard_seq.utils cimport assume_not_none, _assume_not_none, \
   action_key, assert_key, bb_err_format, bb_raise, event_time_key, \
-  new_list_of_list, set_global_tracker, pyobject_call, pytuple_prepend1, \
+  new_list_of_list, set_global_tracker, \
   PyErr_Format, PyExc_TypeError, PyExc_ValueError
 
 cdef StringIO # hide import
@@ -41,18 +41,32 @@ from cpython cimport PyObject, PyDict_GetItemWithError, \
 cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
     PyTypeObject *event_time_type
     PyTypeObject *runtime_value_type
-    void update_timestep(PyTypeObject*, TimeStep, RuntimeValue) except +
-    void update_subseq(PyTypeObject*, SubSeq, TimeSeq, RuntimeValue) except +
-    void update_conditional(PyTypeObject*, ConditionalWrapper, TimeSeq,
+    PyTypeObject *timestep_type
+    PyTypeObject *subseq_type
+    PyTypeObject *condwrapper_type
+    PyObject *_rt_time_scale "brassboard_seq::seq::rt_time_scale"
+    void update_timestep(TimeStep, RuntimeValue) except +
+    void update_subseq(SubSeq, ConditionalWrapper, TimeSeq, TimeStep,
+                       RuntimeValue) except +
+    void update_conditional(ConditionalWrapper, TimeSeq, TimeStep,
                             RuntimeValue) except +
     object combine_cond(object cond1, object new_cond, RuntimeValue) except +
+    TimeStep add_time_step(SubSeq, object cond, EventTime, object,
+                           TimeStep, RuntimeValue) except +
+    SubSeq add_custom_step(SubSeq, object cond, EventTime, object,
+                           RuntimeValue) except +
+
 
 event_time_type = <PyTypeObject*>EventTime
 runtime_value_type = <PyTypeObject*>RuntimeValue
+timestep_type = <PyTypeObject*>TimeStep
+subseq_type = <PyTypeObject*>SubSeq
+condwrapper_type = <PyTypeObject*>ConditionalWrapper
+_rt_time_scale = <PyObject*>rt_time_scale
 
-update_timestep(<PyTypeObject*>TimeStep, None, None)
-update_subseq(<PyTypeObject*>SubSeq, None, None, None)
-update_conditional(<PyTypeObject*>ConditionalWrapper, None, None, None)
+update_timestep(None, None)
+update_subseq(None, None, None, None, None)
+update_conditional(None, None, None, None)
 
 @cython.auto_pickle(False)
 cdef class TimeSeq:
@@ -150,13 +164,6 @@ cdef class ConditionalWrapper:
     def __init__(self):
         PyErr_Format(PyExc_TypeError, "ConditionalWrapper cannot be created directly")
 
-    def conditional(self, cond, /):
-        wrapper = <ConditionalWrapper>ConditionalWrapper.__new__(ConditionalWrapper)
-        wrapper.seq = self.seq
-        wrapper.cond = combine_cond(self.cond, cond, None)
-        wrapper.C = self.C
-        return wrapper
-
     def wait(self, length, /, *, cond=True):
         wait_cond(self.seq, length, combine_cond(self.cond, cond, None))
 
@@ -164,6 +171,7 @@ cdef class ConditionalWrapper:
         wait_for_cond(self.seq, tp, offset, self.cond)
 
     # Methods defined in c++
+    # def conditional(self, cond, /)
     # def add_step(self, first_arg, /, *args, **kwargs)
     # def add_background(self, first_arg, /, *args, **kwargs)
     # def add_floating(self, first_arg, /, *args, **kwargs)
@@ -172,7 +180,7 @@ cdef class ConditionalWrapper:
 
     # Shorthand for add_step of custom step. Meant to be used as decorator
     def __call__(self, cb, /):
-        step = add_custom_step(self.seq, self.cond, self.seq.end_time, cb, None, None)
+        step = add_custom_step(self.seq, self.cond, self.seq.end_time, cb, None)
         self.seq.end_time = step.end_time
         return step
 
@@ -200,13 +208,6 @@ cdef class SubSeq(TimeSeq):
     def current_time(self):
         return self.end_time
 
-    def conditional(self, cond, /):
-        wrapper = <ConditionalWrapper>ConditionalWrapper.__new__(ConditionalWrapper)
-        wrapper.seq = self
-        wrapper.cond = combine_cond(self.cond, cond, None)
-        wrapper.C = self.C
-        return wrapper
-
     def wait(self, length, /, *, cond=True):
         wait_cond(self, length, combine_cond(self.cond, cond, None))
 
@@ -214,6 +215,7 @@ cdef class SubSeq(TimeSeq):
         wait_for_cond(self, tp, offset, self.cond)
 
     # Methods defined in c++
+    # def conditional(self, cond, /)
     # def add_step(self, first_arg, /, *args, **kwargs)
     # def add_background(self, first_arg, /, *args, **kwargs)
     # def add_floating(self, first_arg, /, *args, **kwargs)
@@ -234,33 +236,6 @@ cdef int wait_cond(SubSeq self, length, cond) except -1:
     self.seqinfo.bt_tracker.record(event_time_key(<void*>self.end_time))
     return 0
 
-cdef inline SubSeq add_custom_step(SubSeq self, cond, EventTime start_time, cb,
-                                   tuple args, dict kwargs):
-    subseq = <SubSeq>SubSeq.__new__(SubSeq)
-    init_subseq(subseq, self, start_time, cond)
-    subseq.C = self.C
-    if kwargs is not None:
-        pyobject_call(cb, pytuple_prepend1(args, subseq), kwargs)
-    elif args is not None:
-        pyobject_call(cb, pytuple_prepend1(args, subseq))
-    else:
-        cb(subseq)
-    _assume_not_none(<void*>self.sub_seqs)
-    self.sub_seqs.append(subseq)
-    return subseq
-
-cdef inline TimeStep add_time_step(SubSeq self, cond, EventTime start_time, length):
-    step = <TimeStep>TimeStep.__new__(TimeStep)
-    init_timeseq(step, self, start_time, cond)
-    step.C = self.C
-    step.length = length
-    step.end_time = self.seqinfo.time_mgr.new_round_time(start_time, length,
-                                                         cond, None)
-    self.seqinfo.bt_tracker.record(event_time_key(<void*>step.end_time))
-    _assume_not_none(<void*>self.sub_seqs)
-    self.sub_seqs.append(step)
-    return step
-
 cdef int wait_for_cond(SubSeq self, _tp0, offset, cond) except -1:
     cdef EventTime tp0
     if type(_tp0) is EventTime:
@@ -277,7 +252,7 @@ cdef inline int subseq_set(SubSeq self, chn, value, cond,
     step = self.dummy_step
     start_time = self.end_time
     if step is None or step.end_time is not start_time:
-        step = add_time_step(self, self.cond, start_time, 0)
+        step = add_time_step(self, self.cond, start_time, 0, None, None)
         self.dummy_step = step
         # Update the current time so that a normal step added later
         # this is treated as ordered after this set event
@@ -362,7 +337,8 @@ cdef int _get_channel_id(SeqInfo self, str name) except -1:
 @cython.final
 cdef class Seq(SubSeq):
     def __init__(self, Config config, /, int max_frame=0):
-        init_subseq(self, None, None, True)
+        self.cond = True
+        self.sub_seqs = []
         self.C = new_param_pack({}, {}, 'root')
         seqinfo = <SeqInfo>SeqInfo.__new__(SeqInfo)
         seqinfo.config = config
@@ -529,15 +505,3 @@ cdef int seq_show(Seq self, write, int indent) except -1:
         write('\n')
         i += 1
     return subseq_show_subseqs(self, write, indent + 2)
-
-cdef inline void init_timeseq(TimeSeq self, SubSeq parent,
-                              EventTime start_time, cond) noexcept:
-    if parent is not None:
-        self.seqinfo = parent.seqinfo
-    self.start_time = start_time
-    self.cond = cond
-
-cdef inline void init_subseq(SubSeq self, SubSeq parent, EventTime start_time, cond) noexcept:
-    init_timeseq(self, parent, start_time, cond)
-    self.end_time = start_time
-    self.sub_seqs = []

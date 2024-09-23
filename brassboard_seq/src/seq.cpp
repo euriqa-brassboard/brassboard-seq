@@ -26,6 +26,10 @@ namespace brassboard_seq::seq {
 
 static PyTypeObject *event_time_type;
 static PyTypeObject *runtime_value_type;
+static PyTypeObject *timestep_type;
+static PyTypeObject *subseq_type;
+static PyTypeObject *condwrapper_type;
+static PyObject *rt_time_scale;
 
 template<typename RuntimeValue>
 static inline std::pair<PyObject*,bool>
@@ -65,6 +69,82 @@ combine_cond(PyObject *cond1, PyObject *new_cond, RuntimeValue*)
     if (needs_free)
         Py_INCREF(res);
     return res;
+}
+
+template<typename TimeManager, typename EventTime, typename RuntimeValue>
+static inline __attribute__((returns_nonnull)) EventTime*
+new_round_time(TimeManager *self, EventTime *prev, PyObject *offset, PyObject *cond,
+               EventTime *wait_for, RuntimeValue*)
+{
+    if (Py_TYPE(offset) == runtime_value_type) {
+        py_object rt_offset((PyObject*)event_time::round_time_rt(
+                                (PyObject*)runtime_value_type, (RuntimeValue*)offset,
+                                (RuntimeValue*)rt_time_scale));
+        return event_time::_new_time_rt(self, (PyObject*)event_time_type, prev,
+                                        rt_offset, cond, wait_for);
+    }
+    else {
+        auto coffset = event_time::round_time_int(offset);
+        return event_time::_new_time_int(self, (PyObject*)event_time_type, prev,
+                                         coffset, false, cond, wait_for);
+    }
+}
+
+template<typename TimeStep, typename RuntimeValue, typename SubSeq, typename EventTime>
+static inline __attribute__((returns_nonnull)) TimeStep*
+add_time_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *length,
+              TimeStep*, RuntimeValue*)
+{
+    auto seqinfo = self->__pyx_base.seqinfo;
+    py_object end_time((PyObject*)new_round_time(seqinfo->time_mgr, start_time, length,
+                                                 cond, (EventTime*)Py_None,
+                                                 (RuntimeValue*)nullptr));
+    py_object o(throw_if_not(PyType_GenericAlloc((PyTypeObject*)timestep_type, 0)));
+    auto step = (TimeStep*)o.get();
+    auto seq = &step->__pyx_base;
+    new (&step->actions) std::vector<py_object>();
+    seq->seqinfo = py_newref(seqinfo);
+    seq->start_time = py_newref(start_time);
+    seq->end_time = (EventTime*)end_time.release();
+    seq->cond = py_newref(cond);
+    seq->C = py_newref(self->__pyx_base.C);
+    step->length = py_newref(length);
+    seqinfo->bt_tracker.record(event_time_key(seq->end_time));
+    throw_if(pylist_append(self->sub_seqs, o));
+    return (TimeStep*)o.release();
+}
+
+template<typename RuntimeValue, typename SubSeq, typename EventTime>
+static inline __attribute__((returns_nonnull)) SubSeq*
+add_custom_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *cb,
+                RuntimeValue*, size_t nargs=0, PyObject *const *args=nullptr,
+                PyObject *kwargs=nullptr)
+{
+    py_object sub_seqs(throw_if_not(PyList_New(0)));
+    auto seqinfo = self->__pyx_base.seqinfo;
+    py_object o(throw_if_not(PyType_GenericAlloc((PyTypeObject*)subseq_type, 0)));
+    auto subseq = (SubSeq*)o.get();
+    auto seq = &subseq->__pyx_base;
+    seq->seqinfo = py_newref(seqinfo);
+    seq->start_time = py_newref(start_time);
+    seq->end_time = py_newref(start_time);
+    seq->cond = py_newref(cond);
+    seq->C = py_newref(self->__pyx_base.C);
+    subseq->sub_seqs = sub_seqs.release();
+    subseq->dummy_step = (decltype(subseq->dummy_step))py_newref(Py_None);
+    if (nargs || kwargs) {
+        py_object full_args(throw_if_not(PyTuple_New(nargs + 1)));
+        PyTuple_SET_ITEM(full_args.get(), 0, py_newref(o.get()));
+        for (auto i = 0; i < nargs; i++)
+            PyTuple_SET_ITEM(full_args.get(), i + 1, py_newref(args[i]));
+        py_object res(throw_if_not(pyobject_call(cb, full_args, kwargs)));
+    }
+    else {
+        PyObject *callargs[] = { o };
+        py_object res(throw_if_not(_PyObject_Vectorcall(cb, callargs, 1, nullptr)));
+    }
+    throw_if(pylist_append(self->sub_seqs, o));
+    return (SubSeq*)o.release();
 }
 
 static void type_add_method(PyTypeObject *type, PyMethodDef *meth)
@@ -137,6 +217,14 @@ struct CondCombiner {
         cond = _cond;
         needs_free = _needs_free;
     }
+    PyObject *take_cond()
+    {
+        if (needs_free) {
+            needs_free = false;
+            return cond;
+        }
+        return py_newref(cond);
+    }
     ~CondCombiner()
     {
         if (needs_free) {
@@ -167,6 +255,17 @@ static inline auto condseq_get_cond(CondSeq *self)
     }
 }
 
+template<bool is_cond, typename CondSeq>
+static inline auto condseq_get_C(CondSeq *self)
+{
+    if constexpr (is_cond) {
+        return self->C;
+    }
+    else {
+        return self->__pyx_base.C;
+    }
+}
+
 enum class AddStepType {
     Step,
     Background,
@@ -188,7 +287,8 @@ const char *add_step_name(AddStepType type)
 
 static auto empty_tuple = PyTuple_New(0);
 
-template<typename CondSeq, typename TimeSeq, bool is_cond, AddStepType type>
+template<typename CondSeq, typename TimeSeq, typename TimeStep, typename RuntimeValue,
+         bool is_cond, AddStepType type>
 static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
                                Py_ssize_t nargs, PyObject *kwnames) try
 {
@@ -248,12 +348,9 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
 
     PyObject *res;
     if (Py_TYPE(first_arg)->tp_call) {
-        py_object arg_tuple(get_args_tuple());
-        res = (PyObject*)throw_if_not(
-            __pyx_f_14brassboard_seq_3seq_add_custom_step(
-                subseq, cond, (EventTime*)start_time.get(),
-                first_arg, arg_tuple,
-                kws ? kws.get() : Py_None));
+        res = (PyObject*)add_custom_step(subseq, cond, (EventTime*)start_time.get(),
+                                         first_arg, (RuntimeValue*)nullptr,
+                                         tuple_nargs, args + nargs_min, kws.get());
     }
     else if (kws) {
         py_object arg_tuple(get_args_tuple());
@@ -262,9 +359,9 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
                             arg_tuple.get(), kws.get());
     }
     else if (tuple_nargs == 0) {
-        res = (PyObject*)throw_if_not(
-            __pyx_f_14brassboard_seq_3seq_add_time_step(
-                subseq, cond, (EventTime*)start_time.get(), first_arg));
+        res = (PyObject*)add_time_step(subseq, cond, (EventTime*)start_time.get(),
+                                       first_arg, (TimeStep*)nullptr,
+                                       (RuntimeValue*)nullptr);
     }
     else {
         py_object arg_tuple(get_args_tuple());
@@ -310,9 +407,31 @@ catch (...) {
     return nullptr;
 }
 
+template<typename CondSeq, typename ConditionalWrapper,
+         typename RuntimeValue, bool is_cond>
+static PyObject *condseq_conditional(PyObject *py_self, PyObject *const *args,
+                                     Py_ssize_t nargs) try
+{
+    if (nargs != 1)
+        raise_too_few_args("conditional", true, 1, nargs);
+    auto self = (CondSeq*)py_self;
+    auto subseq = condseq_get_subseq<is_cond>(self);
+    auto cond = condseq_get_cond<is_cond>(self);
+    CondCombiner<RuntimeValue> cc(cond, args[0]);
+    auto o = throw_if_not(PyType_GenericAlloc(condwrapper_type, 0));
+    auto wrapper = (ConditionalWrapper*)o;
+    wrapper->seq = py_newref(subseq);
+    wrapper->cond = cc.take_cond();
+    wrapper->C = py_newref(condseq_get_C<is_cond>(self));
+    return o;
+}
+catch (...) {
+    return nullptr;
+}
+
 template<typename TimeStep, typename RuntimeValue>
 static inline void
-update_timestep(PyTypeObject *ty_timestep, TimeStep*, RuntimeValue*)
+update_timestep(TimeStep*, RuntimeValue*)
 {
     static PyMethodDef timestep_set_method = {
         "set", (PyCFunction)(void*)condseq_set<TimeStep,RuntimeValue,false,true,false>,
@@ -320,72 +439,81 @@ update_timestep(PyTypeObject *ty_timestep, TimeStep*, RuntimeValue*)
     static PyMethodDef timestep_pulse_method = {
         "pulse", (PyCFunction)(void*)condseq_set<TimeStep,RuntimeValue,false,true,true>,
         METH_FASTCALL|METH_KEYWORDS, 0};
-    type_add_method(ty_timestep, &timestep_set_method);
-    type_add_method(ty_timestep, &timestep_pulse_method);
-    PyType_Modified(ty_timestep);
+    type_add_method(timestep_type, &timestep_set_method);
+    type_add_method(timestep_type, &timestep_pulse_method);
+    PyType_Modified(timestep_type);
 }
 
-template<typename SubSeq, typename TimeSeq, typename RuntimeValue>
-static inline void
-update_subseq(PyTypeObject *ty_subseq, SubSeq*, TimeSeq*, RuntimeValue*)
+template<typename SubSeq, typename ConditionalWrapper, typename TimeSeq,
+         typename TimeStep, typename RuntimeValue>
+static inline void update_subseq(SubSeq*, ConditionalWrapper*, TimeSeq*, TimeStep*,
+                                 RuntimeValue*)
 {
+    static PyMethodDef subseq_conditional_method = {
+        "conditional", (PyCFunction)(void*)condseq_conditional<SubSeq,ConditionalWrapper,RuntimeValue,false>,
+        METH_FASTCALL, 0};
     static PyMethodDef subseq_set_method = {
         "set", (PyCFunction)(void*)condseq_set<SubSeq,RuntimeValue,false>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef subseq_add_step_method = {
         "add_step",
-        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,false,AddStepType::Step>,
+        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,TimeStep,RuntimeValue,false,AddStepType::Step>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef subseq_add_background_method = {
         "add_background",
-        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,false,AddStepType::Background>,
+        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,TimeStep,RuntimeValue,false,AddStepType::Background>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef subseq_add_floating_method = {
         "add_floating",
-        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,false,AddStepType::Floating>,
+        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,TimeStep,RuntimeValue,false,AddStepType::Floating>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef subseq_add_at_method = {
         "add_at",
-        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,false,AddStepType::At>,
+        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,TimeStep,RuntimeValue,false,AddStepType::At>,
         METH_FASTCALL|METH_KEYWORDS, 0};
-    type_add_method(ty_subseq, &subseq_set_method);
-    type_add_method(ty_subseq, &subseq_add_step_method);
-    type_add_method(ty_subseq, &subseq_add_background_method);
-    type_add_method(ty_subseq, &subseq_add_floating_method);
-    type_add_method(ty_subseq, &subseq_add_at_method);
-    PyType_Modified(ty_subseq);
+    type_add_method(subseq_type, &subseq_conditional_method);
+    type_add_method(subseq_type, &subseq_set_method);
+    type_add_method(subseq_type, &subseq_add_step_method);
+    type_add_method(subseq_type, &subseq_add_background_method);
+    type_add_method(subseq_type, &subseq_add_floating_method);
+    type_add_method(subseq_type, &subseq_add_at_method);
+    PyType_Modified(subseq_type);
 }
 
-template<typename ConditionalWrapper, typename TimeSeq, typename RuntimeValue>
+template<typename ConditionalWrapper, typename TimeSeq, typename TimeStep,
+         typename RuntimeValue>
 static inline void
-update_conditional(PyTypeObject *ty_conditional, ConditionalWrapper*,
-                   TimeSeq*, RuntimeValue*)
+update_conditional(ConditionalWrapper*, TimeSeq*, TimeStep*, RuntimeValue*)
 {
+    static PyMethodDef conditional_conditional_method = {
+        "conditional", (PyCFunction)(void*)condseq_conditional<ConditionalWrapper,ConditionalWrapper,RuntimeValue,true>,
+        METH_FASTCALL, 0};
     static PyMethodDef conditional_set_method = {
         "set", (PyCFunction)(void*)condseq_set<ConditionalWrapper,RuntimeValue,true>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef conditional_add_step_method = {
         "add_step",
-        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,true,AddStepType::Step>,
+        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,TimeStep,RuntimeValue,true,AddStepType::Step>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef conditional_add_background_method = {
         "add_background",
-        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,true,AddStepType::Background>,
+        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,TimeStep,RuntimeValue,true,AddStepType::Background>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef conditional_add_floating_method = {
         "add_floating",
-        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,true,AddStepType::Floating>,
+        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,TimeStep,RuntimeValue,true,AddStepType::Floating>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef conditional_add_at_method = {
         "add_at",
-        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,true,AddStepType::At>,
+        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,TimeStep,RuntimeValue,true,AddStepType::At>,
         METH_FASTCALL|METH_KEYWORDS, 0};
-    type_add_method(ty_conditional, &conditional_set_method);
-    type_add_method(ty_conditional, &conditional_add_step_method);
-    type_add_method(ty_conditional, &conditional_add_background_method);
-    type_add_method(ty_conditional, &conditional_add_floating_method);
-    type_add_method(ty_conditional, &conditional_add_at_method);
-    PyType_Modified(ty_conditional);
+    type_add_method(condwrapper_type, &conditional_conditional_method);
+    type_add_method(condwrapper_type, &conditional_set_method);
+    type_add_method(condwrapper_type, &conditional_add_step_method);
+    type_add_method(condwrapper_type, &conditional_add_background_method);
+    type_add_method(condwrapper_type, &conditional_add_floating_method);
+    type_add_method(condwrapper_type, &conditional_add_at_method);
+    PyType_Modified(condwrapper_type);
 }
 
 }
