@@ -22,6 +22,11 @@
 #include <stdlib.h>
 #include <strings.h>
 
+#include <array>
+#include <mutex>
+
+#include "numpy/arrayobject.h"
+
 namespace brassboard_seq {
 
 BBLogLevel bb_logging_level = [] {
@@ -238,6 +243,187 @@ PyObject *pydict_deepcopy(PyObject *d)
     if (!PyDict_Check(d))
         return py_newref(d);
     return _pydict_deepcopy(d);
+}
+
+static std::once_flag init_numpy;
+
+void init_library()
+{
+    std::call_once(init_numpy, [] { _import_array(); });
+}
+
+namespace rtval {
+
+static inline bool is_numpy_int(PyObject *value)
+{
+    if (PyArray_IsScalar(value, Integer))
+        return true;
+    return PyArray_IsZeroDim(value) && PyArray_ISINTEGER((PyArrayObject*)value);
+}
+
+TagVal TagVal::from_py(PyObject *value)
+{
+    if (value == Py_True)
+        return true;
+    if (value == Py_False)
+        return false;
+    if (PyLong_Check(value) || is_numpy_int(value)) {
+        auto val = PyLong_AsLongLong(value);
+        throw_if(val == -1 && PyErr_Occurred());
+        return TagVal(val);
+    }
+    auto val = PyFloat_AsDouble(value);
+    throw_if(val == -1 && PyErr_Occurred());
+    return TagVal(val);
+}
+
+__attribute__((flatten, noinline, visibility("protected")))
+std::pair<EvalError,GenVal> interpret_func(const int *code, GenVal *data,
+                                           EvalError *errors)
+{
+#define GEN_UNI_OP(f, t1)                                       \
+    int((char*)&&f##_op_##t1##_label - (char*)&&return_label),
+#define GEN_BIN_OP(f, t1, t2)                                           \
+    int((char*)&&f##_op_##t1##_##t2##_label - (char*)&&return_label),
+#define GEN_SELECT_OP(t2, t3)                                           \
+    int((char*)&&Select_op_##t2##_##t3##_label - (char*)&&return_label),
+    static int const label_offsets[]
+        asm(".L_ZN14brassboard_seq5rtval13label_offsetsE")
+        __attribute__((used)) = {
+#include "rtval_interp.h"
+    };
+#undef GEN_UNI_OP
+#undef GEN_BIN_OP
+#undef GEN_SELECT_OP
+
+    // Making this variable `const` messes up clang's codegen for lambda
+    // Ref https://github.com/llvm/llvm-project/issues/103309
+    char *base_addr = (char*)&&return_label;
+
+    auto pop_operand = [&] {
+        auto res = *code;
+        code += 1;
+        return std::make_pair(&errors[res], &data[res]);
+    };
+    auto pop_label = [&] {
+        auto res = *code;
+        code += 1;
+        return (void*)(base_addr + res);
+    };
+
+    goto *pop_label();
+
+return_label: {
+        auto [eo, out] = pop_operand();
+        return {*eo, *out};
+    }
+
+#define GEN_UNI_OP(f, t1)                                               \
+    f##_op_##t1##_label: {                                              \
+        auto [eo, out] = pop_operand();                                 \
+        auto [e1, in1] = pop_operand();                                 \
+        constexpr auto out_dt = f##_op::return_type(DataType::t1);      \
+        using T1 = data_type_t<DataType::t1>;                           \
+        using Tout = data_type_t<out_dt>;                               \
+        auto v = in1->get<T1>();                                        \
+        auto res = f##_op::template eval_err<Tout,T1>(v);               \
+        *eo = combine_error(*e1, res.err);                              \
+        *out = res.val;                                                 \
+    }                                                                   \
+    goto *pop_label();
+#define GEN_BIN_OP(f, t1, t2)                                           \
+    f##_op_##t1##_##t2##_label: {                                       \
+        auto [eo, out] = pop_operand();                                 \
+        auto [e1, in1] = pop_operand();                                 \
+        auto [e2, in2] = pop_operand();                                 \
+        constexpr auto out_dt = f##_op::return_type(DataType::t1, DataType::t2); \
+        using T1 = data_type_t<DataType::t1>;                           \
+        using T2 = data_type_t<DataType::t2>;                           \
+        using Tout = data_type_t<out_dt>;                               \
+        auto v1 = in1->get<T1>();                                       \
+        auto v2 = in2->get<T2>();                                       \
+        auto res = f##_op::template eval_err<Tout,T1,T2>(v1, v2);       \
+        *eo = combine_error(*e1, *e2, res.err);                         \
+        *out = res.val;                                                 \
+    }                                                                   \
+    goto *pop_label();
+#define GEN_SELECT_OP(t1, t2)                                           \
+    Select_op_##t1##_##t2##_label: {                                    \
+        auto [eo, out] = pop_operand();                                 \
+        auto [e0, in0] = pop_operand();                                 \
+        auto [e1, in1] = pop_operand();                                 \
+        auto [e2, in2] = pop_operand();                                 \
+        bool b = bool(in0->i64_val);                                    \
+        constexpr auto out_dt = promote_type(DataType::t1, DataType::t2); \
+        using T1 = data_type_t<DataType::t1>;                           \
+        using T2 = data_type_t<DataType::t2>;                           \
+        using Tout = data_type_t<out_dt>;                               \
+        auto v1 = Tout(in1->get<T1>());                                 \
+        auto v2 = Tout(in2->get<T2>());                                 \
+        out->get<Tout>() = b ? v1 : v2;                                 \
+        *eo = combine_error(*e0, b ? *e1 : *e2);                        \
+    }                                                                   \
+    goto *pop_label();
+#include "rtval_interp.h"
+#undef GEN_UNI_OP
+#undef GEN_BIN_OP
+#undef GEN_SELECT_OP
+}
+
+static inline constexpr
+int get_label_id(ValueType f, DataType t1, DataType t2=DataType(0))
+{
+    return f * 9 + int(t1) * 3 + int(t2);
+}
+
+static const auto interp_label_offsets = [] {
+    auto get_size = [] {
+        int res = 0;
+#define GEN_UNI_OP(f, t1)                                       \
+        res = std::max(res, get_label_id(f, DataType::t1));
+#define GEN_BIN_OP(f, t1, t2)                                           \
+        res = std::max(res, get_label_id(f, DataType::t1, DataType::t2));
+#define GEN_SELECT_OP(t2, t3)                                           \
+        res = std::max(res, get_label_id(Select, DataType::t2, DataType::t3));
+#include "rtval_interp.h"
+#undef GEN_UNI_OP
+#undef GEN_BIN_OP
+#undef GEN_SELECT_OP
+        return res + 1;
+    };
+    // Call the function once to guarantee that the static variable is initialized
+    {
+        const int code[] = {0, 0};
+        GenVal vals[] = {{}};
+        EvalError errors[] = {{}};
+        interpret_func(code, vals, errors);
+    }
+    extern const int __attribute__((visibility("internal"))) label_offsets[]
+        asm(".L_ZN14brassboard_seq5rtval13label_offsetsE");
+    std::array<int,get_size()> res{};
+    uint16_t idx = 0;
+#define GEN_UNI_OP(f, t1)                                        \
+    res[get_label_id(f, DataType::t1)] = label_offsets[idx];     \
+    idx++;
+#define GEN_BIN_OP(f, t1, t2)                                           \
+    res[get_label_id(f, DataType::t1, DataType::t2)] = label_offsets[idx]; \
+    idx++;
+#define GEN_SELECT_OP(t2, t3)                                           \
+    res[get_label_id(Select, DataType::t2, DataType::t3)] = label_offsets[idx]; \
+    idx++;
+#include "rtval_interp.h"
+#undef GEN_UNI_OP
+#undef GEN_BIN_OP
+#undef GEN_SELECT_OP
+    return res;
+} ();
+
+// For ifelse/select, the t1 t2 below is actually t2, t3 since the actual t1 isn't used.
+int get_label_offset(ValueType op, DataType t1, DataType t2)
+{
+    return interp_label_offsets[get_label_id(op, t1, t2)];
+}
+
 }
 
 }

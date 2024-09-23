@@ -56,6 +56,8 @@ cdef extern from "src/utils.h" namespace "brassboard_seq":
     object pyobject_call(object, tuple)
     object pyobject_call(object, tuple, dict)
 
+    void init_library()
+
 # Cython does not declare these in cpython cimport
 cdef extern from *:
     PyObject *Py_None

@@ -131,7 +131,6 @@ cdef int interp_function_set_value(InterpFunction &func, val,
                                    vector[DataType] &args) except -1
 cdef int interp_function_eval_all(InterpFunction &func, unsigned age,
                                   py_object &pyage) except -1
-cdef TagVal interp_function_call(InterpFunction &func) noexcept
 
 cdef inline RuntimeValue _new_rtval(ValueType type_, DataType dt):
     # Avoid passing arguments to the constructor which requires the arguments

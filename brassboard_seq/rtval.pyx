@@ -18,13 +18,15 @@
 
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.utils cimport PyErr_Format, Py_NotImplemented, \
-  PyExc_TypeError, PyExc_ValueError
+  PyExc_TypeError, PyExc_ValueError, init_library
 
 cdef StringIO, np # hide import
 from io import StringIO
 import numpy as np
 cimport numpy as cnpy
 cnpy._import_array()
+
+init_library()
 
 cimport cython
 from cpython cimport PyFloat_AS_DOUBLE, PyTuple_GET_ITEM
@@ -358,9 +360,6 @@ cdef int interp_function_set_value(InterpFunction &func, val,
 cdef int interp_function_eval_all(InterpFunction &func, unsigned age,
                                   py_object &pyage) except -1:
     func.eval_all(age, pyage, None)
-
-cdef TagVal interp_function_call(InterpFunction &func) noexcept:
-    return func.call()
 
 cdef inline _round_int64(v):
     if type(v) is int:
