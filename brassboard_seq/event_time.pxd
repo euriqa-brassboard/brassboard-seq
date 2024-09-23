@@ -24,8 +24,7 @@ from libc.stdint cimport *
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.rtval cimport is_rtval, new_expr2, round_int64_rt, \
   RuntimeValue, ValueType
-from brassboard_seq.utils cimport assume_not_none, PyErr_Format, \
-  PyExc_RuntimeError, PyExc_ValueError, py_object
+from brassboard_seq.utils cimport PyErr_Format, PyExc_ValueError, py_object
 
 from cpython cimport PyObject
 
@@ -45,6 +44,16 @@ cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
         PyObject *get_rt_offset()
         void set_rt_offset(object)
 
+    cppclass TimeManagerStatus:
+        int ntimes
+        bint finalized
+
+    EventTime _new_time_int(TimeManager self, object EventTimeType,
+                            EventTime prev, long long offset,
+                            bint floating, object cond, EventTime wait_for) except +
+    EventTime _new_time_rt(TimeManager self, object EventTimeType, EventTime prev,
+                           object offset, object cond, EventTime wait_for) except +
+
 cdef object py_time_scale
 cdef RuntimeValue rt_time_scale
 
@@ -61,10 +70,6 @@ cdef inline long long round_time_int(v):
 cdef inline RuntimeValue round_time_rt(RuntimeValue v):
     return round_int64_rt(new_expr2(ValueType.Mul, v, rt_time_scale))
 
-cdef cppclass TimeManagerStatus:
-    int ntimes
-    bint finalized
-
 cdef class TimeManager:
     cdef shared_ptr[TimeManagerStatus] status
     cdef list event_times
@@ -72,54 +77,20 @@ cdef class TimeManager:
 
     cdef inline EventTime new_time_int(self, EventTime prev, long long offset,
                                        bint floating, cond, EventTime wait_for):
-        status = self.status.get()
-        if status.finalized:
-            PyErr_Format(PyExc_RuntimeError, "Cannot allocate more time: already finalized")
-        tp = <EventTime>EventTime.__new__(EventTime)
-        tp.manager_status = self.status
-        tp.prev = prev
-        tp.wait_for = wait_for
-        if offset < 0:
-            PyErr_Format(PyExc_ValueError, "Time delay cannot be negative")
-        tp.data.set_c_offset(offset)
-        tp.data.floating = floating
-        tp.cond = cond
-        event_times = self.event_times
-        cdef int ntimes = status.ntimes
-        tp.data.id = ntimes
-        assume_not_none(event_times)
-        event_times.append(tp)
-        status.ntimes = ntimes + 1
-        return tp
+        return _new_time_int(self, EventTime, prev, offset, floating, cond, wait_for)
 
     cdef inline EventTime new_time_rt(self, EventTime prev, RuntimeValue offset,
                                       cond, EventTime wait_for):
-        status = self.status.get()
-        if status.finalized:
-            PyErr_Format(PyExc_RuntimeError, "Cannot allocate more time: already finalized")
-        tp = <EventTime>EventTime.__new__(EventTime)
-        tp.manager_status = self.status
-        tp.prev = prev
-        tp.wait_for = wait_for
-        tp.data.set_rt_offset(offset)
-        tp.data.floating = False
-        tp.cond = cond
-        event_times = self.event_times
-        cdef int ntimes = status.ntimes
-        tp.data.id = ntimes
-        assume_not_none(event_times)
-        event_times.append(tp)
-        status.ntimes = ntimes + 1
-        return tp
+        return _new_time_rt(self, EventTime, prev, offset, cond, wait_for)
 
     cdef inline EventTime new_round_time(self, EventTime prev, offset,
                                          cond, EventTime wait_for):
         if is_rtval(offset):
-            return self.new_time_rt(prev, round_time_rt(<RuntimeValue>offset),
-                                    cond, wait_for)
+            return _new_time_rt(self, EventTime, prev,
+                                round_time_rt(<RuntimeValue>offset), cond, wait_for)
         else:
-            return self.new_time_int(prev, round_time_int(offset),
-                                     False, cond, wait_for)
+            return _new_time_int(self, EventTime, prev, round_time_int(offset),
+                                 False, cond, wait_for)
 
     cdef int finalize(self) except -1
     cdef long long compute_all_times(self, unsigned age, py_object &pyage) except -1

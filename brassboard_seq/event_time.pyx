@@ -19,8 +19,8 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.rtval cimport get_value_bool, \
   new_const, new_extern_age, rt_eval_tagval, ExternCallback
-from brassboard_seq.utils cimport _assume_not_none, \
-  event_time_key, bb_err_format, bb_raise, PyExc_TypeError
+from brassboard_seq.utils cimport _assume_not_none, assume_not_none, \
+  event_time_key, bb_err_format, bb_raise, PyExc_RuntimeError, PyExc_TypeError
 
 from libcpp.map cimport map as cppmap
 from libcpp.algorithm cimport fill as cppfill

@@ -125,6 +125,72 @@ public:
 
 static_assert(sizeof(EventTimeData) == 16);
 
+struct TimeManagerStatus {
+    int ntimes;
+    bool finalized;
+};
+
+template<typename TimeManager, typename EventTime>
+static inline __attribute__((returns_nonnull)) EventTime*
+_new_time_int(TimeManager *self, PyObject *EventTimeType, EventTime *prev,
+              long long offset, bool floating, PyObject *cond, EventTime *wait_for)
+{
+    auto status = self->status.get();
+    if (status->finalized) {
+        PyErr_Format(PyExc_RuntimeError,
+                     "Cannot allocate more time: already finalized");
+        throw 0;
+    }
+    if (offset < 0) {
+        PyErr_Format(PyExc_ValueError, "Time delay cannot be negative");
+        throw 0;
+    }
+    py_object o(throw_if_not(PyType_GenericAlloc((PyTypeObject*)EventTimeType, 0)));
+    auto tp = (EventTime*)o.get();
+    new (&tp->manager_status) std::shared_ptr<TimeManagerStatus>(self->status);
+    auto ntimes = status->ntimes;
+    new (&tp->data) EventTimeData();
+    tp->data.set_c_offset(offset);
+    tp->data.floating = floating;
+    tp->data.id = ntimes;
+    new (&tp->chain_pos) std::vector<int> ();
+    tp->prev = (EventTime*)py_newref((PyObject*)prev);
+    tp->wait_for = (EventTime*)py_newref((PyObject*)wait_for);
+    tp->cond = py_newref(cond);
+    throw_if(pylist_append(self->event_times, o.get()));
+    status->ntimes = ntimes + 1;
+    o.release();
+    return tp;
+}
+
+template<typename TimeManager, typename EventTime>
+static inline __attribute__((returns_nonnull)) EventTime*
+_new_time_rt(TimeManager *self, PyObject *EventTimeType, EventTime *prev,
+             PyObject *offset, PyObject *cond, EventTime *wait_for)
+{
+    auto status = self->status.get();
+    if (status->finalized) {
+        PyErr_Format(PyExc_RuntimeError, "Cannot allocate more time: already finalized");
+        throw 0;
+    }
+    py_object o(throw_if_not(PyType_GenericAlloc((PyTypeObject*)EventTimeType, 0)));
+    auto tp = (EventTime*)o.get();
+    new (&tp->manager_status) std::shared_ptr<TimeManagerStatus>(self->status);
+    auto ntimes = status->ntimes;
+    new (&tp->data) EventTimeData();
+    tp->data.set_rt_offset(offset);
+    tp->data.floating = false;
+    tp->data.id = ntimes;
+    new (&tp->chain_pos) std::vector<int> ();
+    tp->prev = (EventTime*)py_newref((PyObject*)prev);
+    tp->wait_for = (EventTime*)py_newref((PyObject*)wait_for);
+    tp->cond = py_newref(cond);
+    throw_if(pylist_append(self->event_times, o.get()));
+    status->ntimes = ntimes + 1;
+    o.release();
+    return tp;
+}
+
 }
 
 #endif

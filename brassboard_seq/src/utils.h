@@ -423,6 +423,23 @@ __attribute__((returns_nonnull))
 PyObject *pytuple_prepend1(PyObject *tuple, PyObject *obj);
 __attribute__((returns_nonnull)) PyObject *pydict_deepcopy(PyObject *d);
 
+static inline int pylist_append(PyObject* list, PyObject* x)
+{
+    PyListObject *L = (PyListObject*)list;
+    Py_ssize_t len = Py_SIZE(list);
+    if (likely(L->allocated > len) && likely(len > (L->allocated >> 1))) {
+        Py_INCREF(x);
+        PyList_SET_ITEM(list, len, x);
+#if PY_VERSION_HEX >= 0x030900A4
+        Py_SET_SIZE(list, len + 1);
+#else
+        Py_SIZE(list) = len + 1;
+#endif
+        return 0;
+    }
+    return PyList_Append(list, x);
+}
+
 // Copied from cython
 static inline PyObject* pyobject_call(PyObject *func, PyObject *arg,
                                       PyObject *kw=nullptr)
