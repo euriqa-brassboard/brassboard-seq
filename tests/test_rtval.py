@@ -241,7 +241,7 @@ def run_check_binary(f):
                     try:
                         rv = rtval.get_value(rv, 1)
                     except:
-                        if v2 == 0 and f is operator.mod:
+                        if v2 == 0 and (f is operator.mod or f is np.remainder):
                             # Numpy doesn't raise an error in this case for some reason
                             continue
                         assert not np.isfinite(cv) or not np.isreal(cv)
@@ -271,18 +271,16 @@ def test_ops():
               math.ceil, np.ceil, np.exp, np.expm1, math.floor, np.floor, np.log,
               np.log1p, np.log2, np.log10, np.sqrt, np.arcsin, np.arccos, np.arctan,
               np.arcsinh, np.arccosh, np.arctanh, np.sin, np.cos, np.tan, np.sinh,
-              np.cosh, np.tanh, np.rint, rtval.round_int64, rtval.convert_bool]:
+              np.cosh, np.tanh, np.rint, rtval.round_int64, round, rtval.convert_bool]:
         run_check_unary(f)
     # Omit np.add from the list since it behaves differently for booleans
-    # Omit np.divide, np.remainder, np.power since they handles 0 differently
-    # (and throw off the error detection)
     for f in [operator.add, operator.sub, np.subtract, operator.mul, np.multiply,
-              operator.truediv, operator.lt, np.less, operator.gt, np.greater,
-              operator.le, np.less_equal, operator.ge, np.greater_equal,
+              operator.truediv, np.divide, operator.lt, np.less, operator.gt,
+              np.greater, operator.le, np.less_equal, operator.ge, np.greater_equal,
               operator.ne, np.not_equal, operator.eq, np.equal,
               operator.and_, np.bitwise_and, operator.or_, np.bitwise_or,
-              operator.xor, np.bitwise_xor, operator.pow, np.arctan2, np.hypot,
-              np.fmin, np.fmax, operator.mod]:
+              operator.xor, np.bitwise_xor, operator.pow, np.power, np.arctan2,
+              np.hypot, np.fmin, np.fmax, operator.mod, np.remainder]:
         run_check_binary(f)
     for f in [sum3, rtval.ifelse]:
         run_check_ternary(f)
