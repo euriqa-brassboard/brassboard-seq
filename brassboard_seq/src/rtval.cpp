@@ -950,7 +950,7 @@ inline TagVal TagVal::from_py(PyObject *value)
     if (value == Py_False)
         return false;
     if (PyLong_Check(value) || is_numpy_int(value)) {
-        auto val = PyLong_AsLong(value);
+        auto val = PyLong_AsLongLong(value);
         throw_if(val == -1 && PyErr_Occurred());
         return TagVal(val);
     }
@@ -966,7 +966,7 @@ inline PyObject *TagVal::to_py() const
     case DataType::Bool:
         return py_newref(val.b_val ? Py_True : Py_False);
     case DataType::Int64:
-        return PyLong_FromLong(val.i64_val);
+        return PyLong_FromLongLong(val.i64_val);
     default:
     case DataType::Float64:
         return pyfloat_from_double(val.f64_val);
