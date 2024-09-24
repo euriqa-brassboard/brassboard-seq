@@ -523,9 +523,8 @@ struct Acosh_op : float_uni_op<Acosh_op> {
     template<typename Tout, typename T1>
     static inline TagVal eval_err(T1 v1)
     {
-        if constexpr (data_type_v<T1> != DataType::Bool)
-            if (v1 > -1 && v1 < 1)
-                return { data_type_v<Tout>, EvalError::TrigDomain };
+        if (v1 < 1)
+            return { data_type_v<Tout>, EvalError::TrigDomain };
         return TagVal(std::acosh(Tout(v1)));
     }
 };
