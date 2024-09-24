@@ -481,6 +481,7 @@ def test_error_propagate():
 
     res = op1 + op2
     sel = rtval.ifelse(rb, op1, op2)
+    res2 = abs(op2)
 
     with pytest.raises(ZeroDivisionError, match="division by zero"):
         res.eval(0)
@@ -490,6 +491,8 @@ def test_error_propagate():
     b = False
     with pytest.raises(ValueError, match="math domain error"):
         sel.eval(1)
+    with pytest.raises(ValueError, match="math domain error"):
+        res2.eval(1)
 
     v3 = 0.1
     with pytest.raises(ZeroDivisionError, match="division by zero"):
@@ -499,6 +502,7 @@ def test_error_propagate():
         sel.eval(2)
     b = False
     assert sel.eval(3) == pytest.approx(np.arcsin(v3))
+    assert res2.eval(3) == pytest.approx(np.arcsin(v3))
 
     v2 = 0.2
     assert res.eval(4) == pytest.approx(v1 / v2 + np.arcsin(v3))
@@ -506,6 +510,7 @@ def test_error_propagate():
     assert sel.eval(4) == pytest.approx(v1 / v2)
     b = False
     assert sel.eval(5) == pytest.approx(np.arcsin(v3))
+    assert res2.eval(5) == pytest.approx(np.arcsin(v3))
 
     v3 = 3
     with pytest.raises(ValueError, match="math domain error"):
@@ -515,6 +520,8 @@ def test_error_propagate():
     b = False
     with pytest.raises(ValueError, match="math domain error"):
         sel.eval(7)
+    with pytest.raises(ValueError, match="math domain error"):
+        res2.eval(7)
 
 def test_type():
     for v in [True, 1, 1.0]:
