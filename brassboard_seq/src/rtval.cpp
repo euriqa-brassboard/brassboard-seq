@@ -250,7 +250,10 @@ struct Pow_op : float_bin_op<Pow_op> {
         if constexpr (data_type_v<T2> == DataType::Bool)
             return TagVal(v2 ? Tout(v1) : Tout(1));
         Tout res = std::pow(Tout(v1), Tout(v2));
-        if (unlikely(std::isnan(res))) {
+        if (unlikely(!std::isfinite(res))) {
+            if constexpr (data_type_v<T2> != DataType::Bool)
+                if (v1 == 0 && v2 < 0)
+                    return { data_type_v<Tout>, EvalError::ZeroDivide };
             if (!std::isnan(v1) && !std::isnan(v2)) {
                 return { data_type_v<Tout>, EvalError::PowComplex };
             }

@@ -452,6 +452,11 @@ def test_pow():
     v2 = math.nan
     assert math.isnan(rpow.eval(2))
 
+    v1 = 0
+    v2 = -1
+    with pytest.raises(ZeroDivisionError, match="division by zero"):
+        rpow.eval(3)
+
 def test_round():
     for v in [-3.0, -2.5, -2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]:
         vi = round(v)
