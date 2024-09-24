@@ -150,6 +150,16 @@ class ErrorSegment(RampFunction):
     def spline_segments(self, length, oldval):
         raise ValueError("JJJLLL---DFFDAFD")
 
+class CustomSegment(RampFunction):
+    def __init__(self, seg):
+        self.seg = seg
+
+    def eval(self, t, length, oldval):
+        return t
+
+    def spline_segments(self, length, oldval):
+        return self.seg
+
 class ErrorEval(RampFunction):
     def __init__(self):
         super().__init__()
@@ -1131,6 +1141,64 @@ def test_rampfunc_error(max_bt):
     with pytest.raises(ValueError, match="XXXJJFSJkdfFDSDF") as exc:
         comp.finalize()
     check_bt(exc, max_bt, 'j98asdf')
+
+    s, comp = new_seq_compiler(max_bt)
+    rb = add_rfsoc_backend(comp)
+    st = s.add_step(0.01)
+    def j89asdf():
+        st.pulse('rfsoc/dds0/1/freq', CustomSegment((-0.1,)))
+    j89asdf()
+    comp.finalize()
+    with pytest.raises(ValueError, match="Segment time cannot be negative") as exc:
+        comp.runtime_finalize(1)
+    check_bt(exc, max_bt, 'j89asdf')
+
+    s, comp = new_seq_compiler(max_bt)
+    rb = add_rfsoc_backend(comp)
+    st = s.add_step(0.01)
+    def ajs89dfjasvsrsdsfa():
+        st.pulse('rfsoc/dds0/1/freq', CustomSegment((0,)))
+    ajs89dfjasvsrsdsfa()
+    comp.finalize()
+    with pytest.raises(ValueError,
+                       match="Segment time point must monotonically increase") as exc:
+        comp.runtime_finalize(1)
+    check_bt(exc, max_bt, 'ajs89dfjasvsrsdsfa')
+
+    s, comp = new_seq_compiler(max_bt)
+    rb = add_rfsoc_backend(comp)
+    st = s.add_step(0.01)
+    def ajs89dfjasvsrsdsf2():
+        st.pulse('rfsoc/dds0/1/freq', CustomSegment((0.005, 0.002)))
+    ajs89dfjasvsrsdsf2()
+    comp.finalize()
+    with pytest.raises(ValueError,
+                       match="Segment time point must monotonically increase") as exc:
+        comp.runtime_finalize(1)
+    check_bt(exc, max_bt, 'ajs89dfjasvsrsdsf2')
+
+    s, comp = new_seq_compiler(max_bt)
+    rb = add_rfsoc_backend(comp)
+    st = s.add_step(0.01)
+    def jas8faslj34ajsdfa8s9():
+        st.pulse('rfsoc/dds0/1/freq', CustomSegment((0.005, 0.01)))
+    jas8faslj34ajsdfa8s9()
+    comp.finalize()
+    with pytest.raises(ValueError,
+                       match="Segment time point must not exceed action length") as exc:
+        comp.runtime_finalize(1)
+    check_bt(exc, max_bt, 'jas8faslj34ajsdfa8s9')
+
+    s, comp = new_seq_compiler(max_bt)
+    rb = add_rfsoc_backend(comp)
+    st = s.add_step(0.01)
+    def jaksdjf8a9sdfjas():
+        st.pulse('rfsoc/dds0/1/freq', CustomSegment(([],)))
+    jaksdjf8a9sdfjas()
+    comp.finalize()
+    with pytest.raises(TypeError) as exc:
+        comp.runtime_finalize(1)
+    check_bt(exc, max_bt, 'jaksdjf8a9sdfjas')
 
 @with_rfsoc_params
 def test_val_error(max_bt):
