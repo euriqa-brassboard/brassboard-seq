@@ -28,6 +28,7 @@ cnpy._import_array()
 
 cimport cython
 from cpython cimport PyFloat_AS_DOUBLE, PyTuple_GET_ITEM
+from libc cimport math as cmath
 
 cdef extern from "src/rtval.cpp" namespace "brassboard_seq::rtval":
     DataType unary_return_type(ValueType, DataType t1)
@@ -353,11 +354,8 @@ cdef np_rint = np.rint
 cdef inline _round_int64(v):
     if type(v) is int:
         return v
-    cdef long long vi
     if type(v) is float:
-        vf = PyFloat_AS_DOUBLE(v)
-        vi = <long long>(vf + 0.5 if vf >= 0 else vf - 0.5)
-        return vi
+        return cmath.llrint(PyFloat_AS_DOUBLE(v))
     return int(round(v))
 
 cdef int rt_eval_tagval(RuntimeValue self, unsigned age, py_object &pyage) except -1:

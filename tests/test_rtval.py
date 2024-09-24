@@ -454,6 +454,14 @@ def test_pow():
     v2 = math.nan
     assert math.isnan(rpow.eval(2))
 
+def test_round():
+    for v in [-3.0, -2.5, -2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]:
+        vi = round(v)
+        assert rtval.round_int64(v) == vi
+        rv = rtval.new_extern(lambda: v)
+        rvi = round(rv)
+        assert rvi.eval(0) == vi
+
 def test_error_propagate():
     v1 = 1
     v2 = 0

@@ -381,7 +381,7 @@ struct Int64_op : uni_op<Int64_op>, no_error_op<Int64_op> {
     static inline Tout eval(T1 v1)
     {
         if constexpr (data_type_v<T1> == DataType::Float64) {
-            return Tout(v1 >= 0 ? v1 + 0.5 : v1 - 0.5);
+            return Tout(std::llrint(v1));
         }
         else {
             return Tout(v1);
