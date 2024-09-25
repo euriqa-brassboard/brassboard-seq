@@ -121,7 +121,7 @@ cdef class RampFunction:
         if is_rtval(fvalue):
             interp_func.reset(new InterpFunction())
             args.push_back(DataType.Float64)
-            if (<RuntimeValue>fvalue).cache.type != DataType.Float64:
+            if (<RuntimeValue>fvalue).datatype != DataType.Float64:
                 fvalue = _new_expr2(RuntimeValue, ValueType.Add, fvalue, const0)
             interp_function_set_value(deref(interp_func), <RuntimeValue>fvalue, args)
             self.interp_func = move(interp_func)

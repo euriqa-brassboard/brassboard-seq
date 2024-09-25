@@ -461,7 +461,7 @@ void init_library();
 
 namespace rtval {
 
-enum ValueType {
+enum ValueType: int8_t {
     Arg = -3,
     ExternAge = -2,
     Const = -1,

@@ -249,7 +249,7 @@ cdef long long get_time_value(EventTime self, int base_id, unsigned age,
                 rt_eval_tagval(<RuntimeValue>p_rt_offset, age, pyage)
             except Exception as ex:
                 bb_raise(ex, event_time_key(<void*>self))
-            offset = (<RuntimeValue>p_rt_offset).cache.get[int64_t]()
+            offset = (<RuntimeValue>p_rt_offset).cache_val.i64_val
             if offset < 0:
                 bb_err_format(ValueError, event_time_key(<void*>self),
                               "Time delay cannot be negative")

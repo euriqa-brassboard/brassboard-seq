@@ -128,7 +128,7 @@ cdef void show(io, write, RuntimeValue v):
     elif type_ == ValueType.Arg:
         write(f'arg({v.cb_arg2})')
     elif type_ == ValueType.Const:
-        print(v.cache.to_py(), end='', file=io)
+        print(rtval_cache(v).to_py(), end='', file=io)
     elif type_ == ValueType.Add:
         show_binary(io, write, v, ' + ', type_)
     elif type_ == ValueType.Sub:
@@ -245,20 +245,20 @@ cdef _build_addsub(v0, v1, bint issub):
         nv0 = <RuntimeValue>v0
         type_ = nv0.type_
         if type_ == ValueType.Const:
-            nc = nv0.cache
+            nc = rtval_cache(nv0)
             nv0 = None
         elif type_ == ValueType.Add:
             arg0 = nv0.arg0
             # Add/Sub should only have the first argument as constant
             if arg0.type_ == ValueType.Const:
-                nc = arg0.cache
+                nc = rtval_cache(arg0)
                 nv0 = nv0.arg1
         elif type_ == ValueType.Sub:
             arg0 = nv0.arg0
             # Add/Sub should only have the first argument as constant
             if arg0.type_ == ValueType.Const:
                 ns0 = True
-                nc = arg0.cache
+                nc = rtval_cache(arg0)
                 nv0 = nv0.arg1
     if not is_rtval(v1):
         nc = tagval_add_or_sub(nc, TagVal.from_py(v1), issub)
@@ -267,20 +267,20 @@ cdef _build_addsub(v0, v1, bint issub):
         nv1 = <RuntimeValue>v1
         type_ = nv1.type_
         if type_ == ValueType.Const:
-            nc = tagval_add_or_sub(nc, nv1.cache, issub)
+            nc = tagval_add_or_sub(nc, rtval_cache(nv1), issub)
             nv1 = None
         elif type_ == ValueType.Add:
             arg0 = nv1.arg0
             # Add/Sub should only have the first argument as constant
             if arg0.type_ == ValueType.Const:
-                nc = tagval_add_or_sub(nc, arg0.cache, issub)
+                nc = tagval_add_or_sub(nc, rtval_cache(arg0), issub)
                 nv1 = nv1.arg1
         elif type_ == ValueType.Sub:
             arg0 = nv1.arg0
             # Add/Sub should only have the first argument as constant
             if arg0.type_ == ValueType.Const:
                 ns1 = True
-                nc = tagval_add_or_sub(nc, arg0.cache, issub)
+                nc = tagval_add_or_sub(nc, rtval_cache(arg0), issub)
                 nv1 = nv1.arg1
     if nv0 is v0 and v1 is nv1:
         return new_expr2(ValueType.Sub if issub else ValueType.Add, v0, v1)
@@ -368,12 +368,12 @@ cdef inline _round_int64(v):
 
 cdef int rt_eval_tagval(RuntimeValue self, unsigned age, py_object &pyage) except -1:
     rt_eval_cache(self, age, pyage)
-    throw_py_error(self.cache.err)
+    throw_py_error(self.cache_err)
 
 cdef _get_value(v, unsigned age, py_object &pyage):
     if is_rtval(v):
         rt_eval_cache(<RuntimeValue>v, age, pyage)
-        return (<RuntimeValue>v).cache.to_py()
+        return rtval_cache(<RuntimeValue>v).to_py()
     return v
 
 def get_value(v, age):
@@ -406,7 +406,7 @@ cdef class RuntimeValue:
         if isinstance(age, int):
             pyage.set_obj(age)
         rt_eval_cache(self, <unsigned>age, pyage)
-        return self.cache.to_py()
+        return rtval_cache(self).to_py()
 
     def __str__(self):
         io = StringIO()
@@ -702,7 +702,7 @@ cdef class rtprop_callback(ExternCallback):
         cdef py_object pyage
         pyage.set_obj(age)
         rt_eval_cache(v, <unsigned>age, pyage)
-        return v.cache.to_py()
+        return rtval_cache(v).to_py()
 
 cdef rtprop_callback new_rtprop_callback(obj, str fieldname):
     self = <rtprop_callback>rtprop_callback.__new__(rtprop_callback)

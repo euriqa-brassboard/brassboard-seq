@@ -149,7 +149,7 @@ def test_event_time1_rt():
     assert test_utils.event_time_id(t0) == 0
     assert test_utils.event_time_get_static(t0) == -1
 
-    v1 = rtval.new_extern(lambda: 1000)
+    v1 = rtval.new_extern(lambda: 1000, int)
     t1 = test_utils.time_manager_new_time(mgr, t0, v1, False, True, None)
     with pytest.raises(ValueError, match="Cannot modify non-floating time"):
         test_utils.event_time_set_base(t1, t0, 3400)

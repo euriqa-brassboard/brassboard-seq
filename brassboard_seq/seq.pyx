@@ -23,7 +23,7 @@ from brassboard_seq cimport event_time
 from brassboard_seq.event_time cimport is_ordered, round_time_int, round_time_rt, \
   set_base_int, set_base_rt, rt_time_scale, new_time_manager
 from brassboard_seq.rtval cimport get_value_bool, ifelse, is_rtval, \
-  RuntimeValue, rt_eval_tagval
+  RuntimeValue, rtval_cache, rt_eval_tagval
 from brassboard_seq.scan cimport new_param_pack
 from brassboard_seq.utils cimport assume_not_none, _assume_not_none, \
   action_key, assert_key, bb_err_format, bb_raise, event_time_key, \
@@ -458,7 +458,7 @@ cdef class Seq(SubSeq):
                 rt_eval_tagval(c, age, pyage)
             except Exception as ex:
                 bb_raise(ex, assert_key(assert_id))
-            if c.cache.is_zero():
+            if rtval_cache(c).is_zero():
                 bb_raise(AssertionError(<object>PyTuple_GET_ITEM(a, 1)),
                          assert_key(assert_id))
             assert_id += 1

@@ -29,14 +29,14 @@ void rt_eval_cache(RuntimeValue *self, unsigned age, py_object &pyage)
 
     // Take the reference from the argument
     auto set_cache = [&] (TagVal v) {
-        assert(v.type == self->cache.type);
-        assume(v.type == self->cache.type);
-        self->cache = v;
+        assert(v.type == self->datatype);
+        self->cache_val = v.val;
+        self->cache_err = v.err;
         self->age = age;
     };
     auto set_cache_py = [&] (PyObject *obj) {
         throw_if_not(obj);
-        set_cache(TagVal::from_py(obj).convert(self->cache.type));
+        set_cache(TagVal::from_py(obj).convert(self->datatype));
         Py_DECREF(obj);
     };
 
@@ -63,10 +63,10 @@ void rt_eval_cache(RuntimeValue *self, unsigned age, py_object &pyage)
 
     auto rtarg0 = self->arg0;
     rt_eval_cache(rtarg0, age, pyage);
-    auto arg0 = rtarg0->cache;
+    auto arg0 = rtval_cache(rtarg0);
     auto eval1 = [&] (auto op_cls) {
         if (arg0.err != EvalError::NoError) {
-            set_cache({ self->cache.type, arg0.err });
+            set_cache({ self->datatype, arg0.err });
         }
         else {
             set_cache(op_cls.generic_eval(arg0));
@@ -111,15 +111,15 @@ void rt_eval_cache(RuntimeValue *self, unsigned age, py_object &pyage)
         auto rtarg2 = (RuntimeValue*)self->cb_arg2;
         auto rtres = arg0.template get<bool>() ? rtarg1 : rtarg2;
         rt_eval_cache(rtres, age, pyage);
-        set_cache(rtres->cache.convert(self->cache.type));
+        set_cache(rtval_cache(rtres).convert(self->datatype));
         return;
     }
     rt_eval_cache(rtarg1, age, pyage);
-    auto arg1 = rtarg1->cache;
+    auto arg1 = rtval_cache(rtarg1);
 
     auto eval2 = [&] (auto op_cls) {
         if (auto err = combine_error(arg0.err, arg1.err); err != EvalError::NoError) {
-            set_cache({ self->cache.type, err });
+            set_cache({ self->datatype, err });
         }
         else {
             set_cache(op_cls.generic_eval(arg0, arg1));
@@ -182,11 +182,13 @@ _new_expr2_wrap1(PyObject *RTValueType, ValueType type,
         }
         rtarg0.reset(py_newref(arg0));
     }
-    auto datatype = binary_return_type(type, ((RuntimeValue*)rtarg0.get())->cache.type,
-                                       ((RuntimeValue*)rtarg1.get())->cache.type);
+    auto datatype = binary_return_type(type, ((RuntimeValue*)rtarg0.get())->datatype,
+                                       ((RuntimeValue*)rtarg1.get())->datatype);
     auto o = throw_if_not(PyType_GenericAlloc((PyTypeObject*)RTValueType, 0));
     auto self = (RuntimeValue*)o;
-    new (&self->cache) TagVal(datatype);
+    self->datatype = datatype;
+    // self->cache_err = EvalError::NoError;
+    // self->cache_val = { .i64_val = 0 };
     self->type_ = type;
     self->age = (unsigned)-1;
     self->arg0 = (RuntimeValue*)rtarg0.release();
@@ -211,11 +213,13 @@ _new_select(PyObject *RTValueType, RuntimeValue *arg0,
 {
     py_object rtarg1((PyObject*)_wrap_rtval(RTValueType, arg1, (RuntimeValue*)nullptr));
     py_object rtarg2((PyObject*)_wrap_rtval(RTValueType, arg2, (RuntimeValue*)nullptr));
-    auto datatype = promote_type(((RuntimeValue*)rtarg1.get())->cache.type,
-                                 ((RuntimeValue*)rtarg2.get())->cache.type);
+    auto datatype = promote_type(((RuntimeValue*)rtarg1.get())->datatype,
+                                 ((RuntimeValue*)rtarg2.get())->datatype);
     auto o = throw_if_not(PyType_GenericAlloc((PyTypeObject*)RTValueType, 0));
     auto self = (RuntimeValue*)o;
-    new (&self->cache) TagVal(datatype);
+    self->datatype = datatype;
+    // self->cache_err = EvalError::NoError;
+    // self->cache_val = { .i64_val = 0 };
     self->type_ = Select;
     self->age = (unsigned)-1;
     self->arg0 = (RuntimeValue*)py_newref((PyObject*)arg0);
@@ -264,7 +268,7 @@ InterpFunction::visit_value(RuntimeValue *value, Builder &builder)
     case Const: {
         info.is_const = true;
         info.inited = true;
-        info.val = value->cache;
+        info.val = rtval_cache(value);
         return info;
     }
     case Arg: {
@@ -423,8 +427,8 @@ inline void InterpFunction::eval_all(unsigned age, py_object &pyage,
             continue;
         }
         rt_eval_cache(rt_val, age, pyage);
-        data[i] = rt_val->cache.val;
-        errors[i] = rt_val->cache.err;
+        data[i] = rt_val->cache_val;
+        errors[i] = rt_val->cache_err;
     }
 }
 

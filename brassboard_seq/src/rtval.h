@@ -24,6 +24,16 @@
 namespace brassboard_seq::rtval {
 
 template<typename RuntimeValue>
+static inline __attribute__((always_inline)) TagVal rtval_cache(RuntimeValue *rtval)
+{
+    TagVal cache;
+    cache.type = rtval->datatype;
+    cache.err = rtval->cache_err;
+    cache.val = rtval->cache_val;
+    return cache;
+}
+
+template<typename RuntimeValue>
 static inline __attribute__((returns_nonnull)) RuntimeValue*
 _new_cb_arg2(PyObject *RTValueType, ValueType type, PyObject *cb_arg2,
              PyObject *ty, RuntimeValue*)
@@ -31,7 +41,9 @@ _new_cb_arg2(PyObject *RTValueType, ValueType type, PyObject *cb_arg2,
     auto datatype = pytype_to_datatype(ty);
     auto o = throw_if_not(PyType_GenericAlloc((PyTypeObject*)RTValueType, 0));
     auto self = (RuntimeValue*)o;
-    new (&self->cache) TagVal(datatype);
+    self->datatype = datatype;
+    // self->cache_err = EvalError::NoError;
+    // self->cache_val = { .i64_val = 0 };
     self->type_ = type;
     self->age = (unsigned)-1;
     self->arg0 = (RuntimeValue*)py_newref(Py_None);
@@ -45,9 +57,11 @@ static inline __attribute__((returns_nonnull)) RuntimeValue*
 _new_expr1(PyObject *RTValueType, ValueType type, RuntimeValue *arg0)
 {
     auto o = throw_if_not(PyType_GenericAlloc((PyTypeObject*)RTValueType, 0));
-    auto datatype = unary_return_type(type, arg0->cache.type);
+    auto datatype = unary_return_type(type, arg0->datatype);
     auto self = (RuntimeValue*)o;
-    new (&self->cache) TagVal(datatype);
+    self->datatype = datatype;
+    // self->cache_err = EvalError::NoError;
+    // self->cache_val = { .i64_val = 0 };
     self->type_ = type;
     self->age = (unsigned)-1;
     self->arg0 = (RuntimeValue*)py_newref((RuntimeValue*)arg0);
@@ -62,9 +76,11 @@ _new_expr2(PyObject *RTValueType, ValueType type, RuntimeValue *arg0,
            RuntimeValue *arg1)
 {
     auto o = throw_if_not(PyType_GenericAlloc((PyTypeObject*)RTValueType, 0));
-    auto datatype = binary_return_type(type, arg0->cache.type, arg1->cache.type);
+    auto datatype = binary_return_type(type, arg0->datatype, arg1->datatype);
     auto self = (RuntimeValue*)o;
-    new (&self->cache) TagVal(datatype);
+    self->datatype = datatype;
+    // self->cache_err = EvalError::NoError;
+    // self->cache_val = { .i64_val = 0 };
     self->type_ = type;
     self->age = (unsigned)-1;
     self->arg0 = (RuntimeValue*)py_newref((PyObject*)arg0);
@@ -79,7 +95,9 @@ new_const(PyObject *RTValueType, TagVal v, RuntimeValue*)
 {
     auto o = throw_if_not(PyType_GenericAlloc((PyTypeObject*)RTValueType, 0));
     auto self = (RuntimeValue*)o;
-    new (&self->cache) TagVal(v);
+    self->datatype = v.type;
+    // self->cache_err = EvalError::NoError;
+    self->cache_val = v.val;
     self->type_ = Const;
     self->age = (unsigned)-1;
     self->arg0 = (RuntimeValue*)py_newref(Py_None);
@@ -101,7 +119,7 @@ rt_convert_bool(PyObject *RTValueType, RuntimeValue *v)
 {
     if (v->type_ == Int64)
         v = v->arg0;
-    if (v->cache.type == DataType::Bool)
+    if (v->datatype == DataType::Bool)
         return (RuntimeValue*)py_newref((PyObject*)v);
     return _new_expr1(RTValueType, Bool, v);
 }

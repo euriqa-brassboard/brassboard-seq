@@ -10,7 +10,7 @@ def new_invalid_rtval():
     # (it's unavoidable that we'll crash in some cases)
     rv = <rtval.RuntimeValue>rtval.RuntimeValue.__new__(rtval.RuntimeValue)
     rv.type_ = <rtval.ValueType>1000
-    rv.cache.type = rtval.DataType.Float64
+    rv.datatype = rtval.DataType.Float64
     rv.age = -1
     rv.arg0 = new_const(1)
     rv.arg1 = new_const(1)

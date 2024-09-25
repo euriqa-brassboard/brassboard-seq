@@ -52,7 +52,9 @@ _combine_cond(PyObject *cond1, PyObject *new_cond, RuntimeValue*)
     assert(Py_TYPE(cond1) == runtime_value_type);
     auto o = throw_if_not(PyType_GenericAlloc(runtime_value_type, 0));
     auto self = (RuntimeValue*)o;
-    new (&self->cache) rtval::TagVal(rtval::DataType::Bool);
+    self->datatype = rtval::DataType::Bool;
+    // self->cache_err = rtval::EvalError::NoError;
+    // self->cache_val = { .i64_val = 0 };
     self->type_ = rtval::And;
     self->age = (unsigned)-1;
     self->arg0 = (RuntimeValue*)py_newref(cond1);
@@ -81,7 +83,7 @@ new_round_time(TimeManager *self, EventTime *prev, PyObject *offset, PyObject *c
                                 (PyObject*)runtime_value_type, (RuntimeValue*)offset,
                                 (RuntimeValue*)rt_time_scale));
         return event_time::_new_time_rt(self, (PyObject*)event_time_type, prev,
-                                        rt_offset, cond, wait_for);
+                                        (RuntimeValue*)rt_offset.get(), cond, wait_for);
     }
     else {
         auto coffset = event_time::round_time_int(offset);

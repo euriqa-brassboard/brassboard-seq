@@ -315,13 +315,13 @@ void generate_rtios(ArtiqBackend *ab, unsigned age, const RuntimeVTable vtable,
         auto &[rtval, val] = ab->bool_values[i];
         if (vtable.rt_eval_tagval((PyObject*)rtval, age, pyage) < 0)
             reraise_reloc_error(ab, i, true);
-        val = !((RuntimeValue*)rtval)->cache.is_zero();
+        val = !rtval::rtval_cache((RuntimeValue*)rtval).is_zero();
     }
     for (size_t i = 0, nreloc = ab->float_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = ab->float_values[i];
         if (vtable.rt_eval_tagval((PyObject*)rtval, age, pyage) < 0)
             reraise_reloc_error(ab, i, false);
-        val = ((RuntimeValue*)rtval)->cache.template get<double>();
+        val = rtval::rtval_cache((RuntimeValue*)rtval).template get<double>();
     }
     int64_t max_delay = 0;
     auto relocate_delay = [&] (int64_t &delay, PyObject *rt_delay) {
@@ -329,7 +329,7 @@ void generate_rtios(ArtiqBackend *ab, unsigned age, const RuntimeVTable vtable,
             return;
         if (vtable.rt_eval_tagval((PyObject*)rt_delay, age, pyage) < 0)
             throw 0;
-        auto fdelay = ((RuntimeValue*)rt_delay)->cache.template get<double>();
+        auto fdelay = rtval::rtval_cache((RuntimeValue*)rt_delay).template get<double>();
         if (fdelay < 0) {
             py_object pyval(pyfloat_from_double(fdelay));
             PyErr_Format(PyExc_ValueError,

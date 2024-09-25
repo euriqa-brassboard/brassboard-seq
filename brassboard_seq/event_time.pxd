@@ -41,7 +41,7 @@ cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
         long long get_c_offset()
         void set_c_offset(long long value)
         PyObject *get_rt_offset()
-        void set_rt_offset(object)
+        void set_rt_offset(RuntimeValue)
 
     cppclass TimeManagerStatus:
         int ntimes
@@ -51,7 +51,7 @@ cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
                             EventTime prev, long long offset,
                             bint floating, object cond, EventTime wait_for) except +
     EventTime _new_time_rt(TimeManager self, object EventTimeType, EventTime prev,
-                           object offset, object cond, EventTime wait_for) except +
+                           RuntimeValue offset, object cond, EventTime wait_for) except +
 
     long long round_time_f64(double v)
     long long round_time_int(v) except +

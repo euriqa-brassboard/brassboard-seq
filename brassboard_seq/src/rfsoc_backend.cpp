@@ -667,13 +667,13 @@ void generate_tonedata(RFSOCBackend *rb, unsigned age, py_object &pyage,
         auto &[rtval, val] = rb->bool_values[i];
         if (vtable.rt_eval_tagval((PyObject*)rtval, age, pyage) < 0)
             reraise_reloc_error(rb, i, true);
-        val = !((RuntimeValue*)rtval)->cache.is_zero();
+        val = !rtval::rtval_cache((RuntimeValue*)rtval).is_zero();
     }
     for (size_t i = 0, nreloc = rb->float_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = rb->float_values[i];
         if (vtable.rt_eval_tagval((PyObject*)rtval, age, pyage) < 0)
             reraise_reloc_error(rb, i, false);
-        val = ((RuntimeValue*)rtval)->cache.template get<double>();
+        val = rtval::rtval_cache((RuntimeValue*)rtval).template get<double>();
     }
     auto &time_values = seq->__pyx_base.__pyx_base.seqinfo->time_mgr->time_values;
     auto reloc_action = [rb, &time_values] (const RFSOCAction &action,

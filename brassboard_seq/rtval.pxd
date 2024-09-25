@@ -113,6 +113,8 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
         object to_py() except +
         bint is_zero()
 
+    TagVal rtval_cache(RuntimeValue)
+
     RuntimeValue _new_cb_arg2(object RTValueType, ValueType, object, object ty,
                               RuntimeValue) except +
     RuntimeValue _new_expr1(object RTValueType, ValueType, RuntimeValue) except +
@@ -130,11 +132,13 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
 
 cdef class RuntimeValue:
     cdef ValueType type_
+    cdef DataType datatype
+    cdef EvalError cache_err
     cdef unsigned age
+    cdef GenVal cache_val
     cdef RuntimeValue arg0
     cdef RuntimeValue arg1
     cdef object cb_arg2 # Also used as argument index
-    cdef TagVal cache
 
 cdef int rt_eval_tagval(RuntimeValue self, unsigned age, py_object &pyage) except -1
 cdef int interp_function_set_value(InterpFunction &func, val,
@@ -161,14 +165,14 @@ cdef _get_value(v, unsigned age, py_object &pyage)
 cdef inline bint get_value_bool(v, unsigned age, py_object &pyage) except -1:
     if is_rtval(v):
         rt_eval_tagval(<RuntimeValue>v, age, pyage)
-        return not (<RuntimeValue>v).cache.is_zero()
+        return not rtval_cache(<RuntimeValue>v).is_zero()
     else:
         return bool(v)
 
 cdef inline double get_value_f64(v, unsigned age, py_object &pyage) except? -1:
     if is_rtval(v):
         rt_eval_tagval(<RuntimeValue>v, age, pyage)
-        return (<RuntimeValue>v).cache.get[double]()
+        return rtval_cache(<RuntimeValue>v).get[double]()
     else:
         return <double>v
 
