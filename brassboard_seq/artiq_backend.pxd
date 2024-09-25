@@ -17,7 +17,6 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.seq cimport Seq
 from brassboard_seq.backend cimport Backend
 
 from libcpp.map cimport map as cppmap

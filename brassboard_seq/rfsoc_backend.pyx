@@ -19,12 +19,10 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.action cimport Action, RampFunction, SeqCubicSpline
 from brassboard_seq.event_time cimport EventTime, round_time_f64
-from brassboard_seq.rtval cimport is_rtval, rt_eval_tagval, RuntimeValue, TagVal
+from brassboard_seq.rtval cimport is_rtval, rt_eval_tagval, RuntimeValue
 from brassboard_seq.utils cimport pyfloat_from_double, set_global_tracker, \
   PyErr_Format, PyExc_ValueError, assume_not_none, _assume_not_none, py_object, \
   _PyObject_Vectorcall, Py_True, Py_False
-
-from libcpp.map cimport map as cppmap
 
 cimport cython
 from cython.operator cimport dereference as deref

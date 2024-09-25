@@ -18,7 +18,7 @@
 
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.utils cimport PyErr_Format, PyExc_AttributeError, \
-  PyExc_IndexError, PyExc_KeyError, PyExc_SyntaxError, PyExc_TypeError, \
+  PyExc_IndexError, PyExc_SyntaxError, PyExc_TypeError, \
   PyExc_ValueError, assume_not_none, _assume_not_none, pytuple_append1, \
   pydict_deepcopy, PyDict_GET_SIZE
 from brassboard_seq.yaml cimport sprint as yaml_print

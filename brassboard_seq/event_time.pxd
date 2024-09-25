@@ -17,7 +17,6 @@
 # see <http://www.gnu.org/licenses/>.
 
 from libcpp.memory cimport shared_ptr
-from libcpp.unordered_set cimport unordered_set
 from libcpp.vector cimport vector
 
 from libc.stdint cimport *
@@ -28,7 +27,7 @@ from brassboard_seq.rtval cimport is_rtval, new_expr2, round_int64_rt, \
 from brassboard_seq.utils cimport assume_not_none, PyErr_Format, \
   PyExc_RuntimeError, PyExc_ValueError, py_object
 
-from cpython cimport PyFloat_AS_DOUBLE, PyList_GET_SIZE, PyObject
+from cpython cimport PyObject
 
 # 1ps for internal time unit
 cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":

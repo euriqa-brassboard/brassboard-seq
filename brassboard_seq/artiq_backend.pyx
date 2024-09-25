@@ -21,6 +21,7 @@ from brassboard_seq.action cimport Action, RampFunction
 from brassboard_seq.event_time cimport EventTime, round_time_int
 from brassboard_seq.rtval cimport ExternCallback, is_rtval, new_extern, \
   RuntimeValue, rt_eval_tagval
+from brassboard_seq.seq cimport Seq
 from brassboard_seq.utils cimport set_global_tracker, PyErr_Format, \
   PyExc_RuntimeError, PyExc_TypeError, PyExc_ValueError, pyobject_call, py_object
 

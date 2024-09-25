@@ -24,8 +24,6 @@ import numpy as np
 
 from cpython cimport PyList_GET_SIZE, PyList_GET_ITEM, PyTuple_GET_SIZE
 
-from libcpp.vector cimport vector
-
 cdef np_bool = np.bool_
 cdef tuple np_num_types = (np.int8, np.int16, np.int32, np.int64,
                            np.uint8, np.uint16, np.uint32, np.uint64,

@@ -17,17 +17,18 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.rtval cimport ifelse, get_value_bool, \
-  new_const, new_extern_age, rt_eval_tagval, ExternCallback, throw_py_error
+from brassboard_seq.rtval cimport get_value_bool, \
+  new_const, new_extern_age, rt_eval_tagval, ExternCallback
 from brassboard_seq.utils cimport _assume_not_none, \
   event_time_key, bb_err_format, bb_raise, PyExc_TypeError
 
 from libcpp.map cimport map as cppmap
 from libcpp.algorithm cimport fill as cppfill
+from libcpp.unordered_set cimport unordered_set
 
 cimport cython
 from cython.operator cimport dereference as deref, predecrement as predec
-from cpython cimport PyTypeObject
+from cpython cimport PyList_GET_SIZE, PyTypeObject
 
 cdef object py_time_scale = c_time_scale
 cdef RuntimeValue rt_time_scale = new_const(py_time_scale)

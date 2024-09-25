@@ -21,9 +21,9 @@ from brassboard_seq.action cimport new_action, Action, RampFunction
 from brassboard_seq.config cimport translate_channel
 from brassboard_seq cimport event_time
 from brassboard_seq.event_time cimport is_ordered, round_time_int, round_time_rt, \
-  set_base_int, set_base_rt
+  set_base_int, set_base_rt, new_time_manager
 from brassboard_seq.rtval cimport convert_bool, get_value_bool, ifelse, is_rtval, \
-  RuntimeValue, rt_eval_tagval, throw_py_error
+  RuntimeValue, rt_eval_tagval
 from brassboard_seq.scan cimport new_param_pack
 from brassboard_seq.utils cimport assume_not_none, _assume_not_none, \
   action_key, assert_key, bb_err_format, bb_raise, event_time_key, \

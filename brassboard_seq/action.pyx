@@ -17,11 +17,11 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.rtval cimport _get_value, get_value_f64, ifelse, is_rtval, \
+from brassboard_seq.rtval cimport get_value_f64, ifelse, is_rtval, \
   new_arg, new_const, new_expr2, ValueType, DataType, rt_eval_tagval, RuntimeValue, \
   interp_function_set_value, interp_function_eval_all, interp_function_call
 from brassboard_seq.utils cimport PyErr_Format, Py_NotImplemented, \
-  PyExc_TypeError, PyExc_ValueError, _PyObject_Vectorcall, pyfloat_from_double
+  PyExc_TypeError, _PyObject_Vectorcall, pyfloat_from_double
 
 cimport cython
 from cython.operator cimport dereference as deref
