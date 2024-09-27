@@ -59,19 +59,6 @@ cdef inline RuntimeVTable get_runtime_vtable() noexcept nogil:
     vt.rt_eval_tagval = <rt_eval_tagval_t>rt_eval_tagval
     return vt
 
-@cython.auto_pickle(False)
-cdef class RFSOCOutputGenerator:
-    cdef int start(self) except -1:
-        pass
-
-    cdef int add_tone_data(self, int channel, int tone, int64_t duration_cycles,
-                           cubic_spline_t frequency_hz, cubic_spline_t amplitude,
-                           cubic_spline_t phase_rad, output_flags_t flags) except -1:
-        pass
-
-    cdef int finish(self) except -1:
-        pass
-
 cdef dummy_post_init
 def dummy_post_init(self, /):
     pass
@@ -156,9 +143,7 @@ cdef int init_pulse_compiler_info() except -1:
 
 @cython.auto_pickle(False)
 @cython.final
-cdef class PulseCompilerGenerator(RFSOCOutputGenerator):
-    cdef readonly dict output
-
+cdef class PulseCompilerGenerator:
     def __init__(self):
         init_pulse_compiler_info()
         self.output = {}
@@ -211,7 +196,7 @@ cdef inline set_dds_delay(RFSOCBackend self, int dds, double delay):
 @cython.auto_pickle(False)
 @cython.final
 cdef class RFSOCBackend:
-    def __init__(self, RFSOCOutputGenerator generator, /):
+    def __init__(self, PulseCompilerGenerator generator, /):
         self.eval_status = False
         self.generator = generator
         self.rt_dds_delay = {}

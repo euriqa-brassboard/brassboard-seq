@@ -296,18 +296,6 @@ def get_channel_info(rb, s):
 with_rfsoc_params = with_params((0,), (5,), (500,))
 
 @with_rfsoc_params
-def test_generator_error(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    gen = rfsoc_utils.ErrorGenerator()
-    rb = rfsoc_backend.RFSOCBackend(gen)
-    comp.add_backend('rfsoc', rb)
-    assert s.get_channel_id('rfsoc/dds1/0/amp') == 0
-    comp.finalize()
-
-    with pytest.raises(RuntimeError, match="AAABBBCCCC Error Generator DDDEEEFFF"):
-        comp.runtime_finalize(1)
-
-@with_rfsoc_params
 def test_channels(max_bt):
     s, comp = new_seq_compiler(max_bt)
     rb = add_rfsoc_backend(comp)

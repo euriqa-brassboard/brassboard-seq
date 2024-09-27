@@ -78,7 +78,9 @@ cdef extern from "src/rfsoc_backend.h" namespace "brassboard_seq::rfsoc_backend"
     cppclass ToneBuffer:
         pass
 
-cdef class RFSOCOutputGenerator:
+cdef class PulseCompilerGenerator:
+    cdef readonly dict output
+
     cdef int start(self) except -1
     cdef int add_tone_data(self, int channel, int tone, int64_t duration_cycles,
                            cubic_spline_t frequency_hz, cubic_spline_t amplitude,
@@ -86,7 +88,7 @@ cdef class RFSOCOutputGenerator:
     cdef int finish(self) except -1
 
 cdef class RFSOCBackend(Backend):
-    cdef RFSOCOutputGenerator generator
+    cdef PulseCompilerGenerator generator
     cdef ChannelInfo channels
     cdef vector[pair[void*,bint]] bool_values
     cdef vector[pair[void*,double]] float_values
