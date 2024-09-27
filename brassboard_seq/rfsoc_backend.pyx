@@ -21,11 +21,15 @@ from brassboard_seq.action cimport RampFunction, SeqCubicSpline
 from brassboard_seq.event_time cimport EventTime, round_time_f64
 from brassboard_seq.rtval cimport is_rtval, rtval_cache, rt_eval_throw, RuntimeValue
 from brassboard_seq.utils cimport set_global_tracker, \
-  PyErr_Format, PyExc_ValueError, assume_not_none, _assume_not_none, py_object
+  PyErr_Format, PyExc_ValueError, PyExc_TypeError, \
+  assume_not_none, _assume_not_none, py_object
 
 cimport cython
 from cython.operator cimport dereference as deref
-from cpython cimport PyDict_GetItemWithError, PyTypeObject
+from cpython cimport PyDict_GetItemWithError, PyTypeObject, \
+  PyBytes_GET_SIZE, PyBytes_AS_STRING
+
+from libc.string cimport memcpy
 
 cdef re # hide import
 import re
@@ -39,6 +43,45 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
     Generator *new_pulse_compiler_generator() except +
     cppclass PulseCompilerGen(Generator):
         PyObject *output
+
+    cppclass JaqalInst:
+        bytes to_pybytes() except +
+        object to_pylong() except +
+        int64_t &operator[](unsigned)
+        bint operator==(JaqalInst)
+
+    cppclass _Jaqal_v1 "brassboard_seq::rfsoc_backend::Jaqal_v1":
+        enum class SeqMode "brassboard_seq::rfsoc_backend::Jaqal_v1::SeqMode":
+            GATE
+            WAIT_ANC
+            CONT_ANC
+            STREAM
+
+        @staticmethod
+        JaqalInst freq_pulse(int, int, cubic_spline_t sp, int64_t cycles,
+                             bint waittrig, bint sync, bint fb_enable)
+        @staticmethod
+        JaqalInst amp_pulse(int, int, cubic_spline_t sp, int64_t cycles,
+                            bint waittrig, bint sync, bint fb_enable)
+        @staticmethod
+        JaqalInst phase_pulse(int, int, cubic_spline_t sp, int64_t cycles,
+                              bint waittrig, bint sync, bint fb_enable)
+        @staticmethod
+        JaqalInst frame_pulse(int channel, int tone, cubic_spline_t sp, int64_t cycles,
+                              bint waittrig, bint apply_at_end, bint rst_frame,
+                              int fwd_frame_mask, int inv_frame_mask)
+        @staticmethod
+        JaqalInst stream(JaqalInst pulse)
+        @staticmethod
+        JaqalInst program_PLUT(JaqalInst pulse, uint16_t addr)
+        @staticmethod
+        JaqalInst program_SLUT(uint8_t chn, const uint16_t *saddrs,
+                               const uint16_t *paddrs, int n)
+        @staticmethod
+        JaqalInst program_GLUT(uint8_t chn, const uint16_t *gaddrs,
+                               const uint16_t *starts, const uint16_t *ends, int n)
+        @staticmethod
+        JaqalInst sequence(uint8_t chn, SeqMode m, uint16_t *gaddrs, int n)
 
 rampfunction_type = <PyTypeObject*>RampFunction
 seqcubicspline_type = <PyTypeObject*>SeqCubicSpline
@@ -148,3 +191,141 @@ cdef class RFSOCBackend:
             gen_rfsoc_data(self, None, None)
         finally:
             self.generator.gen.get().end()
+
+cdef cubic_spline_t _to_spline(spline):
+    if isinstance(spline, tuple):
+        tu = <tuple>spline
+        return cubic_spline_t(tu[0], tu[1], tu[2], tu[3])
+    ty = type(spline)
+    PyErr_Format(PyExc_TypeError, "Invalid spline type '%S'", <PyObject*>ty)
+
+cdef inline int _check_chn(int chn) except -1:
+    if chn < 0 or chn > 7:
+        PyErr_Format(PyExc_ValueError, "Invalid channel number '%d'", chn)
+
+cdef inline int _check_chn_tone(int chn, int tone) except -1:
+    _check_chn(chn)
+    if tone < 0 or tone > 1:
+        PyErr_Format(PyExc_ValueError, "Invalid tone number '%d'", tone)
+
+# Debugging/testing tool
+@cython.final
+cdef class JaqalInst_v1:
+    cdef JaqalInst inst
+    def __init__(self, data=None):
+        if data is None:
+            return
+        cdef int l
+        if isinstance(data, bytes):
+            l = PyBytes_GET_SIZE(data)
+            memcpy(&self.inst[0], PyBytes_AS_STRING(data), min(l, 32))
+        else:
+            ty = type(data)
+            PyErr_Format(PyExc_TypeError, "Invalid type '%S'", <PyObject*>ty)
+
+    def to_bytes(self):
+        return self.inst.to_pybytes()
+
+    def __index__(self):
+        return self.inst.to_pylong()
+
+    def __eq__(self, other):
+        if not isinstance(other, JaqalInst_v1):
+            return NotImplemented
+        return self.inst == (<JaqalInst_v1>other).inst
+
+@staticmethod
+cdef JaqalInst_v1 new_inst_v1(JaqalInst inst):
+    self = <JaqalInst_v1>JaqalInst_v1.__new__(JaqalInst_v1)
+    self.inst = inst
+    return self
+
+@cython.final
+cdef class Jaqal_v1:
+    @staticmethod
+    def freq_pulse(int chn, int tone, spline, int64_t cycles, bint waittrig,
+                   bint sync, bint fb_enable):
+        _check_chn_tone(chn, tone)
+        return new_inst_v1(_Jaqal_v1.freq_pulse(chn, tone, _to_spline(spline), cycles,
+                                                waittrig, sync, fb_enable))
+
+    @staticmethod
+    def amp_pulse(int chn, int tone, spline, int64_t cycles, bint waittrig,
+                  bint sync, bint fb_enable):
+        _check_chn_tone(chn, tone)
+        return new_inst_v1(_Jaqal_v1.amp_pulse(chn, tone, _to_spline(spline), cycles,
+                                               waittrig, sync, fb_enable))
+
+    @staticmethod
+    def phase_pulse(int chn, int tone, spline, int64_t cycles, bint waittrig,
+                    bint sync, bint fb_enable):
+        _check_chn_tone(chn, tone)
+        return new_inst_v1(_Jaqal_v1.phase_pulse(chn, tone, _to_spline(spline), cycles,
+                                                 waittrig, sync, fb_enable))
+
+    @staticmethod
+    def frame_pulse(int chn, int tone, spline, int64_t cycles,
+                    bint waittrig, bint apply_at_end, bint rst_frame,
+                    int fwd_frame_mask, int inv_frame_mask):
+        _check_chn_tone(chn, tone)
+        return new_inst_v1(_Jaqal_v1.frame_pulse(chn, tone, _to_spline(spline),
+                                                 cycles, waittrig, apply_at_end,
+                                                 rst_frame, fwd_frame_mask,
+                                                 inv_frame_mask))
+
+    @staticmethod
+    def stream(JaqalInst_v1 pulse, /):
+        return new_inst_v1(_Jaqal_v1.stream(pulse.inst))
+
+    @staticmethod
+    def program_PLUT(JaqalInst_v1 pulse, int addr, /):
+        if addr < 0 or addr >= 4096:
+            PyErr_Format(PyExc_ValueError, "Invalid address '%d'", addr)
+        return new_inst_v1(_Jaqal_v1.program_PLUT(pulse.inst, addr))
+
+    @staticmethod
+    def program_SLUT(int chn, _saddrs, _paddrs, /):
+        _check_chn(chn)
+        cdef uint16_t saddrs[9]
+        cdef uint16_t paddrs[9]
+        cdef int n = len(_saddrs)
+        if len(_paddrs) != n:
+            PyErr_Format(PyExc_ValueError, "Mismatch address length")
+        if n > 9:
+            PyErr_Format(PyExc_ValueError, "Too many SLUT addresses to program")
+        for i in range(n):
+            saddrs[i] = _saddrs[i]
+            paddrs[i] = _paddrs[i]
+        return new_inst_v1(_Jaqal_v1.program_SLUT(chn, saddrs, paddrs, n))
+
+    @staticmethod
+    def program_GLUT(int chn, _gaddrs, _starts, _ends, /):
+        _check_chn(chn)
+        cdef uint16_t gaddrs[6]
+        cdef uint16_t starts[6]
+        cdef uint16_t ends[6]
+        cdef int n = len(_gaddrs)
+        if len(_starts) != n or len(_ends) != n:
+            PyErr_Format(PyExc_ValueError, "Mismatch address length")
+        if n > 6:
+            PyErr_Format(PyExc_ValueError, "Too many GLUT addresses to program")
+        for i in range(n):
+            gaddrs[i] = _gaddrs[i]
+            starts[i] = _starts[i]
+            ends[i] = _ends[i]
+        return new_inst_v1(_Jaqal_v1.program_GLUT(chn, gaddrs, starts, ends, n))
+
+    @staticmethod
+    def sequence(int chn, int mode, _gaddrs, /):
+        _check_chn(chn)
+        cdef uint16_t gaddrs[24]
+        cdef int n = len(_gaddrs)
+        if n > 24:
+            PyErr_Format(PyExc_ValueError, "Too many GLUT addresses to sequence")
+        for i in range(n):
+            gaddrs[i] = _gaddrs[i]
+        if (mode != int(_Jaqal_v1.SeqMode.GATE) and
+            mode != int(_Jaqal_v1.SeqMode.WAIT_ANC) and
+            mode != int(_Jaqal_v1.SeqMode.CONT_ANC)):
+            PyErr_Format(PyExc_ValueError, "Invalid sequencing mode %d.", mode)
+        return new_inst_v1(_Jaqal_v1.sequence(chn, <_Jaqal_v1.SeqMode>mode, gaddrs, n))

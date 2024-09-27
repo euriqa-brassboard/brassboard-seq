@@ -32,6 +32,472 @@ namespace brassboard_seq::rfsoc_backend {
 static PyTypeObject *rampfunction_type;
 static PyTypeObject *seqcubicspline_type;
 
+// order of the coefficient is order0, order1, order2, order3
+template<int nbits> static constexpr inline std::pair<std::array<int64_t,4>,int>
+convert_pdq_spline(std::array<double,4> sp, int64_t cycles, double scale)
+{
+    static_assert(nbits < 64);
+    double tstep = 1 / double(cycles);
+    std::array<int64_t,4> isp;
+    double tstep2 = tstep * tstep;
+    double tstep3 = tstep2 * tstep;
+    sp[1] = tstep * (sp[1] + sp[2] * tstep + sp[3] * tstep2);
+    sp[2] = 2 * tstep2 * (sp[2] + 3 * sp[3] * tstep);
+    sp[3] = 6 * tstep3 * sp[3];
+
+    constexpr uint64_t mask = (uint64_t(1) << nbits) - 1;
+    constexpr double bitscale = double(uint64_t(1) << nbits);
+    // See below, a threshold of `1 - 2^(-nbits)` should already be sufficient
+    // to make sure the value doesn't round up.
+    // Here we use `1 - 2 * 2^(-nbits)` just to be safe in case
+    // we got the rounding mode wrong or sth...
+    // FIXME: constexpr in C++23
+    double round_thresh = 1 - 2 * std::ldexp(1, -nbits);
+
+    // Now we'll map floating point values [-0.5, 0.5] to [-2^(nbits-1), 2^(nbits-1)]
+
+    // For the 0-th order, we can just round the number
+    isp[0] = std::llrint(sp[0] * (scale * bitscale)) & mask;
+
+    int shift_len = 31;
+
+    int _exp[3];
+    // For each higher order coefficients,
+    // we need to figure out how much we can shift the coefficient left by
+    // without overflow. For overflow values, we'll take the modulo
+    // just like the 0-th order.
+    for (int i = 1 ; i < 4; i++) {
+        auto v = sp[i];
+        if (v == 0) {
+            _exp[i - 1] = 0;
+            continue;
+        }
+        sp[i] = std::frexp(v * scale, &_exp[i - 1]);
+        // Although frexp guarantees that `|fr| < 1`,
+        // i.e. mathematically, `|fr| * 2^(nbits-1) < 2^(nbits-1)`,
+        // or that it's smaller than the overflow threshold.
+        // However, what we actually care about is to find the decomposition
+        // so that `round(|fr| * 2^(nbits - 1)) < 2^(nbits - 1)`
+        // to make sure it doesn't overflow during the conversion.
+
+        // Here we catch the unlikely cases where `|fr| < 1`
+        // will overflow during rounding.
+        if (std::abs(sp[i]) > round_thresh) [[unlikely]] {
+            // See above for not about the threshold.
+            // This is about 2x the actual threshold
+            // but the change of sub-optimal shift is still quite small.
+            sp[i] /= 2;
+            _exp[i - 1] += 1;
+        }
+        // Now we can shift this number up by at most `-_exp - 1` bits
+        shift_len = std::min(shift_len, (-_exp[i - 1] - 1) / i);
+    }
+
+    if (shift_len < 0) [[unlikely]]
+        shift_len = 0;
+
+    isp[1] = std::llrint(std::ldexp(sp[1], _exp[0] + nbits + shift_len)) & mask;
+    isp[2] = std::llrint(std::ldexp(sp[2], _exp[1] + nbits + shift_len * 2)) & mask;
+    isp[3] = std::llrint(std::ldexp(sp[3], _exp[2] + nbits + shift_len * 3)) & mask;
+    return { isp, shift_len };
+}
+
+constexpr static double output_clock = 819.2e6;
+
+static constexpr inline std::pair<std::array<int64_t,4>,int>
+convert_pdq_spline_freq(std::array<double,4> sp, int64_t cycles)
+{
+    return convert_pdq_spline<40>(sp, cycles, 1 / output_clock);
+}
+
+static constexpr inline std::pair<std::array<int64_t,4>,int>
+convert_pdq_spline_amp(std::array<double,4> sp, int64_t cycles)
+{
+    auto [isp, shift_len] = convert_pdq_spline<17>(sp, cycles,
+                                                   0.5 - std::ldexp(1, -17));
+    for (auto &v: isp)
+        v <<= 23;
+    return { isp, shift_len };
+}
+
+static constexpr inline std::pair<std::array<int64_t,4>,int>
+convert_pdq_spline_phase(std::array<double,4> sp, int64_t cycles)
+{
+    return convert_pdq_spline<40>(sp, cycles, 1);
+}
+
+using JaqalInst = Bits<int64_t,4>;
+
+struct Jaqal_v1 {
+    // All the instructions are 256 bits (32 bytes) and there are 7 types of
+    // instructions roughly divided into 2 groups, programming and sequence output.
+    // The two groups are determined by the GSEQ_ENABLE (247) bit,
+    // where bit value 0 means programming mode and bit value 1 means
+    // sequence output mode.
+    // For either mode, the next two bits (PROG_MODE / SEQ_MODE) indicates
+    // the exact type of the instruction and the meaning of the values is defined
+    // in ProgMode and SeqMode respectively.
+    enum class ProgMode: uint8_t {
+        // 0 not used
+        GLUT = 1, // Gate LUT
+        SLUT = 2, // Sequence LUT
+        PLUT = 3, // Pulse LUT
+    };
+    enum class SeqMode: uint8_t {
+        // Sequence gate IDs
+        GATE = 0,
+        // Wait for Ancilla trigger, and sequence gate IDs based on readout
+        WAIT_ANC = 1,
+        // Continue sequencing based on previous ancilla data
+        CONT_ANC = 2,
+        // Bypass LUT/streaming mode
+        STREAM = 3,
+    };
+    // Other than these bits, the only other bits thats shared by all types
+    // of instructions appears to be the channel number bits [DMA_MUX+2, DMA_MUX].
+    // The programming, sequencing as well as the lookup table storage appears to be
+    // completely and statically segregated for each channels.
+
+    // Both the STREAM instruction and the Pulse LUT instruction are used to
+    // set the low level pulse/spline parameters and therefore shares very similar
+    // format, i.e. the raw data format. The instruction consists of 6 parts,
+    // |255       200|199       160|159 120|119  80|79   40|39    0|
+    // |Metadata (56)|duration (40)|U3 (40)|U2 (40)|U1 (40)|U0 (40)|
+    // where the duration and the U0-U3 fields specify the output parameters,
+    // for a output parameter. The metadata part (bits [255, 200])
+    // includes the shared bits mentioned above as well as other bits that
+    // are meant for the spline engine/DDS.
+    // The metadata format also depends on the type of parameters,
+    // which is determined by the MODTYPE field (bits [255, 253]) and the values
+    // are defined in ModType.
+    enum class ModType: uint8_t {
+        FRQMOD0 = 0,
+        AMPMOD0 = 1,
+        PHSMOD0 = 2,
+        FRQMOD1 = 3,
+        AMPMOD1 = 4,
+        PHSMOD1 = 5,
+        FRMROT0 = 6,
+        FRMROT1 = 7,
+    };
+    // For the frequency/amplitude/phase parameters, the metadata format was
+    // |255 253|252  248|247              245|244 241|240   229|
+    // |MODTYPE|SPLSHIFT|GSEQ_ENABLE+SEQ_MODE|   0   |PLUT_ADDR|
+    // |   228   |   227   |   226   |   225   |   224   |223|222 220|219 200|
+    // |AMP_FB_EN|FRQ_FB_EN|OUTPUT_EN|SYNC_FLAG|WAIT_TRIG| 0 |DMA_MUX|   0   |
+
+    // For the frame rotation parameter, the metadata format was
+    // |255 253|252  248|247              245|244 241|240   229|
+    // |MODTYPE|SPLSHIFT|GSEQ_ENABLE+SEQ_MODE|   0   |PLUT_ADDR|
+    // |   228   |   227   |    226   |    225   |   224   |223|222 220|
+    // |APPLY_EOF|CLR_FRAME|FWD_FRM_T1|FWD_FRM_T0|WAIT_TRIG| 0 |DMA_MUX|
+    // |    219   |    218   |217 200|
+    // |INV_FRM_T1|INV_FRM_T0|   0   |
+
+    // The AMP_FB_EN, FRQ_FB_EN, OUTPUT_FB_EN, SYNC_FLAG, APPLY_EOF, CLR_FRAME,
+    // FWD_FRM_T1, FWD_FRM_T0, INV_FRM_T1, INV_FRM_T0 are flags that affects
+    // the behavior of the specific spline engines/DDS and are documented below.
+
+    // SPLSHIFT is the shift that should be applied on the higher order terms
+    // in the spline coefficient.
+    // PLUT_ADDR is only used for the PLUT programming instruction and is the
+    // 12 bit address to locate the pulse in the PLUT.
+    // WAIT_TRIG is a flag to decide whether this command should wait for the trigger
+    // to happen before being consumed by the spline engine.
+
+    // The format for the SLUT programming instruction is,
+    // |255 248|247               245|244 240|239  236|
+    // |   0   |GSEQ_ENABLE+PROG_MODE|   0   |SLUT_CNT|
+    // |228 223|222 220|219 216|215  204|203  192|
+    // |   0   |DMA_MUX|   0   | SADDR8 | PADDR8 |
+    // |191  180|179  168|167  156|155  144|143  132|131  120|119  108|107   96|
+    // | SADDR7 | PADDR7 | SADDR6 | PADDR6 | SADDR5 | PADDR5 | SADDR4 | PADDR4 |
+    // |95    84|83    72|71    60|59    48|47    36|35    24|23    12|11     0|
+    // | SADDR3 | PADDR3 | SADDR2 | PADDR2 | SADDR1 | PADDR1 | SADDR0 | PADDR0 |
+
+    // The format for the GLUT programming instruction is,
+    // |255 248|247               245|244 239|238  236|228 223|222 220|219 216|
+    // |   0   |GSEQ_ENABLE+PROG_MODE|   0   |GLUT_CNT|   0   |DMA_MUX|   0   |
+    // |215  204|203  192|191 180|179  168|167  156|155 144|143  132|131  120|119 108|
+    // | GADDR5 | START5 |  END5 | GADDR4 | START4 |  END4 | GADDR3 | START3 |  END3 |
+    // |107   96|95    84|83  72|71    60|59    48|47  36|35    24|23    12|11   0|
+    // | GADDR2 | START2 | END2 | GADDR1 | START1 | END1 | GADDR0 | START0 | END0 |
+
+    // The format for the gate sequence instruction is,
+    // |255 248|247              245|244  239|238 223|222 220|219 216|
+    // |   0   |GSEQ_ENABLE+SEQ_MODE|GSEQ_CNT|   0   |DMA_MUX|   0   |
+    // |215   207|206   198|197   189|188   180|179   171|170   162|161   153|152   144|
+    // | GADDR23 | GADDR22 | GADDR21 | GADDR20 | GADDR19 | GADDR18 | GADDR17 | GADDR16 |
+    // |143   135|134   126|125   117|116   108|107    99|98     90|89    81|80    72|
+    // | GADDR15 | GADDR14 | GADDR13 | GADDR12 | GADDR11 | GADDR10 | GADDR9 | GADDR8 |
+    // |71    63|62    54|53    45|44    36|35    27|26    18|17     9|8      0|
+    // | GADDR7 | GADDR6 | GADDR5 | GADDR4 | GADDR3 | GADDR2 | GADDR1 | GADDR0 |
+
+    // For all three formats, bit 0 to bit 219 (really, bit 215 due to the size of
+    // the element) are packed with multiple elements of programming/sequence word
+    // (12 + 12 bytes for SLUT programming, 12 + 12 * 2 bytes for GLUT programming
+    // and 9 bytes for gate sequence). The number of elements packed
+    // in the instruction is recorded in a count field (LSB at bit 236 for programming
+    // and LSB at bit 239 for sequence instruction).
+
+    struct Bits {
+        // Modulation type (freq/phase/amp/framerot)
+        static constexpr int MODTYPE = 253;
+
+        // Fixed point shift for spline coefficients
+        static constexpr int SPLSHIFT = 248;
+
+        static constexpr int GSEQ_ENABLE = 247;
+        static constexpr int PROG_MODE = 245;
+        static constexpr int SEQ_MODE = 245;
+
+        // Number of packed GLUT programming words
+        static constexpr int GLUT_CNT = 236;
+        // Number of packed SLUT programming words
+        static constexpr int SLUT_CNT = 236;
+        // Number of packed gate sequence identifiers
+        static constexpr int GSEQ_CNT = 239;
+
+        static constexpr int PLUT_ADDR = 229;
+
+        //// For normal parameters
+        // Amplitude feedback enable (placeholder)
+        static constexpr int AMP_FB_EN = 228;
+        // Frequency feedback enable
+        static constexpr int FRQ_FB_EN = 227;
+        // Toggle output enable
+        static constexpr int OUTPUT_EN = 226;
+        // Apply global synchronization
+        static constexpr int SYNC_FLAG = 225;
+
+        //// For frame rotation parameters
+        // Apply frame rotation at end of pulse
+        static constexpr int APPLY_EOF = 228;
+        // Clear frame accumulator
+        static constexpr int CLR_FRAME = 227;
+        // Forward frame to tone 1/0
+        static constexpr int FWD_FRM = 225;
+
+        // Wait for external trigger
+        static constexpr int WAIT_TRIG = 224;
+
+        static constexpr int DMA_MUX = 220;
+        static constexpr int PACKING_LIMIT = 220;
+
+        //// Additional bits for frame rotation parameters
+        // Invert sign on frame for tone 1/0
+        static constexpr int INV_FRM = 218;
+
+        // Start of metadata for raw data instruction
+        static constexpr int METADATA = 200;
+    };
+
+    static constexpr inline auto
+    pulse(uint64_t metadata, const std::array<int64_t,4> &isp, int64_t cycles)
+    {
+        JaqalInst pulse;
+        pulse |= JaqalInst(metadata) << Bits::METADATA;
+        assert((isp[0] >> 40) == 0);
+        assert((isp[1] >> 40) == 0);
+        assert((isp[2] >> 40) == 0);
+        assert((isp[3] >> 40) == 0);
+        assert((cycles >> 40) == 0);
+        assume((isp[0] >> 40) == 0);
+        assume((isp[1] >> 40) == 0);
+        assume((isp[2] >> 40) == 0);
+        assume((isp[3] >> 40) == 0);
+        assume((cycles >> 40) == 0);
+        pulse |= JaqalInst(isp[0]) << 40 * 0;
+        pulse |= JaqalInst(isp[1]) << 40 * 1;
+        pulse |= JaqalInst(isp[2]) << 40 * 2;
+        pulse |= JaqalInst(isp[3]) << 40 * 3;
+        pulse |= JaqalInst(cycles) << 40 * 4;
+        return pulse;
+    }
+
+    // certain metadata bits should only be applied
+    // with the first pulse such as waittrig and sync
+    static constexpr inline uint64_t raw_param_metadata(
+        ModType modtype, int channel, int shift_len, bool waittrig, bool sync,
+        bool enable, bool fb_enable)
+    {
+        assert(shift_len >= 0 && shift_len < 32);
+        assert(modtype != ModType::FRMROT0 && modtype != ModType::FRMROT1);
+        uint64_t metadata = uint64_t(modtype) << (Bits::MODTYPE - Bits::METADATA);
+        metadata |= uint64_t(shift_len) << (Bits::SPLSHIFT - Bits::METADATA);
+        metadata |= uint64_t(channel) << (Bits::DMA_MUX - Bits::METADATA);
+        metadata |= uint64_t(waittrig) << (Bits::WAIT_TRIG - Bits::METADATA);
+        metadata |= uint64_t(enable) << (Bits::OUTPUT_EN - Bits::METADATA);
+        metadata |= uint64_t(fb_enable) << (Bits::FRQ_FB_EN - Bits::METADATA);
+        metadata |= uint64_t(sync) << (Bits::SYNC_FLAG - Bits::METADATA);
+        return metadata;
+    }
+    static constexpr inline auto
+    freq_pulse(int channel, int tone, cubic_spline_t sp, int64_t cycles, bool waittrig,
+               bool sync, bool fb_enable)
+    {
+        assert(cycles >= 4);
+        assert((cycles >> 40) == 0);
+        auto [isp, shift_len] = convert_pdq_spline_freq(sp.to_array(), cycles);
+        auto metadata = raw_param_metadata(tone ? ModType::FRQMOD1 : ModType::FRQMOD0,
+                                           channel, shift_len, waittrig,
+                                           sync, false, fb_enable);
+        return pulse(metadata, isp, cycles);
+    }
+    static constexpr inline auto
+    amp_pulse(int channel, int tone, cubic_spline_t sp, int64_t cycles, bool waittrig,
+              bool sync=false, bool fb_enable=false)
+    {
+        assert(cycles >= 4);
+        assert((cycles >> 40) == 0);
+        auto [isp, shift_len] = convert_pdq_spline_amp(sp.to_array(), cycles);
+        auto metadata = raw_param_metadata(tone ? ModType::AMPMOD1 : ModType::AMPMOD0,
+                                           channel, shift_len, waittrig,
+                                           sync, false, fb_enable);
+        return pulse(metadata, isp, cycles);
+    }
+    static constexpr inline auto
+    phase_pulse(int channel, int tone, cubic_spline_t sp, int64_t cycles, bool waittrig,
+                bool sync=false, bool fb_enable=false)
+    {
+        assert(cycles >= 4);
+        assert((cycles >> 40) == 0);
+        auto [isp, shift_len] = convert_pdq_spline_phase(sp.to_array(), cycles);
+        auto metadata = raw_param_metadata(tone ? ModType::PHSMOD1 : ModType::PHSMOD0,
+                                           channel, shift_len, waittrig,
+                                           sync, false, fb_enable);
+        return pulse(metadata, isp, cycles);
+    }
+
+    // certain metadata bits should only be applied
+    // with the first pulse such as waittrig and rst_frame
+    static constexpr inline uint64_t raw_frame_metadata(
+        ModType modtype, int channel, int shift_len, bool waittrig,
+        bool apply_at_end, bool rst_frame, int fwd_frame_mask, int inv_frame_mask)
+    {
+        assert(shift_len >= 0 && shift_len < 32);
+        assert(modtype == ModType::FRMROT0 || modtype == ModType::FRMROT1);
+        uint64_t metadata = uint64_t(modtype) << (Bits::MODTYPE - Bits::METADATA);
+        metadata |= uint64_t(shift_len) << (Bits::SPLSHIFT - Bits::METADATA);
+        metadata |= uint64_t(channel) << (Bits::DMA_MUX - Bits::METADATA);
+        metadata |= uint64_t(waittrig) << (Bits::WAIT_TRIG - Bits::METADATA);
+        metadata |= uint64_t(apply_at_end) << (Bits::APPLY_EOF - Bits::METADATA);
+        metadata |= uint64_t(rst_frame) << (Bits::CLR_FRAME - Bits::METADATA);
+        metadata |= uint64_t(fwd_frame_mask) << (Bits::FWD_FRM - Bits::METADATA);
+        metadata |= uint64_t(inv_frame_mask) << (Bits::INV_FRM - Bits::METADATA);
+        return metadata;
+    }
+    static constexpr inline auto
+    frame_pulse(int channel, int tone, cubic_spline_t sp, int64_t cycles,
+                bool waittrig, bool apply_at_end, bool rst_frame,
+                int fwd_frame_mask, int inv_frame_mask)
+    {
+        assert(cycles >= 4);
+        assert((cycles >> 40) == 0);
+        auto [isp, shift_len] = convert_pdq_spline_phase(sp.to_array(), cycles);
+        auto metadata = raw_frame_metadata(tone ? ModType::FRMROT1 : ModType::FRMROT0,
+                                           channel, shift_len, waittrig, apply_at_end,
+                                           rst_frame, fwd_frame_mask, inv_frame_mask);
+        return pulse(metadata, isp, cycles);
+    }
+
+    // LUT Address Widths
+    // These values contain the number of bits used for an address for a
+    // particular LUT. The address width is the same for reading and writing
+    // data for the Pulse LUT (PLUT) and the Sequence LUT (SLUT), but the
+    // address width is asymmetric for the Gate LUT (GLUT). This is because
+    // the read address is partly completed by external hardware inputs and
+    // the read address size (GLUTW) is thus smaller than the write address
+    // size (GPRGW) used to program the GLUT
+    static constexpr int GPRGW = 12;  // Gate LUT write address width
+    static constexpr int GLUTW = 9;  // Gate LUT read address width
+    static constexpr int SLUTW = 12;  // Sequence LUT address width
+    static constexpr int PLUTW = 12;  // Pulse LUT address width
+
+    static constexpr int SLUT_ELSZ = SLUTW + PLUTW;
+    static constexpr int GLUT_ELSZ = GPRGW + 2 * SLUTW;
+    static constexpr int GSEQ_ELSZ = GLUTW;
+    // Number of programming or gate sequence words that can be packed into a single
+    // transfer. PLUT programming data is always one word per transfer.
+    static constexpr int SLUT_MAXCNT = Bits::PACKING_LIMIT / SLUT_ELSZ;
+    static constexpr int GLUT_MAXCNT = Bits::PACKING_LIMIT / GLUT_ELSZ;
+    static constexpr int GSEQ_MAXCNT = Bits::PACKING_LIMIT / GSEQ_ELSZ;
+
+    static constexpr inline JaqalInst stream(JaqalInst pulse)
+    {
+        pulse |= JaqalInst(uint8_t(SeqMode::STREAM)) << Bits::SEQ_MODE;
+        pulse |= JaqalInst(1) << Bits::GSEQ_ENABLE;
+        return pulse;
+    }
+
+    static constexpr inline JaqalInst program_PLUT(JaqalInst pulse, uint16_t addr)
+    {
+        assert((addr >> PLUTW) == 0);
+        pulse |= JaqalInst(uint8_t(ProgMode::PLUT)) << Bits::PROG_MODE;
+        pulse |= JaqalInst(addr) << Bits::PLUT_ADDR;
+        return pulse;
+    }
+
+    static constexpr inline auto
+    program_SLUT(uint8_t chn, const uint16_t *saddrs, const uint16_t *paddrs, int n)
+    {
+        JaqalInst inst;
+        assert(n <= SLUT_MAXCNT);
+        for (int i = 0; i < n; i++) {
+            assert((paddrs[i] >> PLUTW) == 0);
+            inst |= JaqalInst(paddrs[i]) << SLUT_ELSZ * i;
+            assert((saddrs[i] >> SLUTW) == 0);
+            inst |= JaqalInst(saddrs[i]) << (SLUT_ELSZ * i + PLUTW);
+        }
+        inst |= JaqalInst(uint8_t(ProgMode::SLUT)) << Bits::PROG_MODE;
+        inst |= JaqalInst(uint8_t(n)) << Bits::SLUT_CNT;
+        inst |= JaqalInst(chn) << Bits::DMA_MUX;
+        return inst;
+    }
+
+    static constexpr inline auto
+    program_GLUT(uint8_t chn, const uint16_t *gaddrs, const uint16_t *starts,
+                 const uint16_t *ends, int n)
+    {
+        JaqalInst inst;
+        assert(n <= GLUT_MAXCNT);
+        for (int i = 0; i < n; i++) {
+            assert((gaddrs[i] >> GPRGW) == 0);
+            inst |= JaqalInst(gaddrs[i]) << (GLUT_ELSZ * i + SLUTW * 2);
+            assert((ends[i] >> SLUTW) == 0);
+            inst |= JaqalInst(ends[i]) << (GLUT_ELSZ * i + SLUTW);
+            assert((starts[i] >> SLUTW) == 0);
+            inst |= JaqalInst(starts[i]) << (GLUT_ELSZ * i);
+        }
+        inst |= JaqalInst(uint8_t(ProgMode::GLUT)) << Bits::PROG_MODE;
+        inst |= JaqalInst(uint8_t(n)) << Bits::GLUT_CNT;
+        inst |= JaqalInst(chn) << Bits::DMA_MUX;
+        return inst;
+    }
+
+    static constexpr inline auto
+    sequence(uint8_t chn, SeqMode m, uint16_t *gaddrs, int n)
+    {
+        JaqalInst inst;
+        assert(n <= GSEQ_MAXCNT);
+        assert(m != SeqMode::STREAM);
+        for (int i = 0; i < n; i++) {
+            assert((gaddrs[i] >> GLUTW) == 0);
+            inst |= JaqalInst(gaddrs[i]) << (GSEQ_ELSZ * i);
+        }
+        inst |= JaqalInst(uint8_t(m)) << Bits::SEQ_MODE;
+        inst |= JaqalInst(1) << Bits::GSEQ_ENABLE;
+        inst |= JaqalInst(n) << Bits::GSEQ_CNT;
+        inst |= JaqalInst(chn) << Bits::DMA_MUX;
+        return inst;
+    }
+
+    // Set the minimum clock cycles for a pulse to help avoid underflows. This time
+    // is determined by state machine transitions for loading another gate, but does
+    // not account for serialization of pulse words.
+    static constexpr int MINIMUM_PULSE_CLOCK_CYCLES = 4;
+};
+
 struct SyncChannelGen: Generator {
     virtual void add_tone_data(int chn, int64_t duration_cycles, cubic_spline_t freq,
                                cubic_spline_t amp, cubic_spline_t phase,
