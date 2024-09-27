@@ -20,6 +20,7 @@
 #define BRASSBOARD_SEQ_SRC_RFSOC_BACKEND_H
 
 #include <algorithm>
+#include <array>
 #include <map>
 #include <vector>
 #include <utility>
@@ -39,6 +40,10 @@ struct cubic_spline_t {
     {
         return (order0 == other.order0) && (order1 == other.order1) &&
             (order2 == other.order2) && (order3 == other.order3);
+    }
+    std::array<double,4> to_array() const
+    {
+        return { order0, order1, order2, order3 };
     }
 };
 
