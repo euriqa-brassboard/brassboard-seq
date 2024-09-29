@@ -152,22 +152,6 @@ static inline bool parse_action_kws(PyObject *kws, int aid)
     return sync;
 }
 
-static inline
-const char *param_name(int param)
-{
-    switch (param) {
-    case ToneFreq:
-        return "freq";
-    case ToneAmp:
-        return "amp";
-    case TonePhase:
-        return "phase";
-    case ToneFF:
-    default:
-        return "ff";
-    }
-}
-
 template<typename Action, typename EventTime, typename RFSOCBackend>
 static __attribute__((always_inline)) inline
 void collect_actions(RFSOCBackend *rb, Action*, EventTime*)
@@ -421,22 +405,11 @@ void generate_channel_tonedata(RFSOCBackend *rb, ToneChannel &channel,
     int64_t ff_end_cycle = ff_cycle + ff_action.cycle_len;
 
     while (true) {
-        bool sync = false;
-
         // First figure out if we are starting a new action
         // and how long the current/new action last.
-        if (freq_cycle == cur_cycle)
-            sync |= freq_action.sync;
-        int64_t action_end_cycle = freq_end_cycle;
-        if (phase_cycle == cur_cycle)
-            sync |= phase_action.sync;
-        action_end_cycle = std::min(action_end_cycle, phase_end_cycle);
-        if (amp_cycle == cur_cycle)
-            sync |= amp_action.sync;
-        action_end_cycle = std::min(action_end_cycle, amp_end_cycle);
-        if (ff_cycle == cur_cycle)
-            sync |= ff_action.sync;
-        action_end_cycle = std::min(action_end_cycle, ff_end_cycle);
+        bool sync = freq_cycle == cur_cycle && freq_action.sync;
+        int64_t action_end_cycle = std::min({ freq_end_cycle, phase_end_cycle,
+                amp_end_cycle, ff_end_cycle });
         bb_debug("find continuous range [%" PRId64 ", %" PRId64 "] on channel %d\n",
                  cur_cycle, action_end_cycle, channel.chn);
 
@@ -513,10 +486,7 @@ void generate_channel_tonedata(RFSOCBackend *rb, ToneChannel &channel,
             // We need to record this exactly.
             // It's even more important than the frequency we left the channel at
             // since getting this wrong could mean a huge phase shift.
-            int sync_cycle = 0;
-            double sync_freq = 0;
-            if (sync)
-                sync_freq = eval_param(freq_action, cur_cycle, freq_cycle);
+            double sync_freq = freq_action.spline.order0;
             double freqs[5];
             while (true) {
                 auto min_cycle = (int)std::max(freq_cycle - cur_cycle, int64_t(0));
@@ -529,7 +499,6 @@ void generate_channel_tonedata(RFSOCBackend *rb, ToneChannel &channel,
                 forward_freq();
                 if (freq_action.sync) {
                     sync = true;
-                    sync_cycle = int(freq_cycle - cur_cycle);
                     sync_freq = freq_action.spline.order0;
                 }
             }
@@ -544,11 +513,6 @@ void generate_channel_tonedata(RFSOCBackend *rb, ToneChannel &channel,
                 if (phase_end_cycle >= cur_cycle + 4)
                     break;
                 forward_phase();
-                if (phase_action.sync && phase_cycle > cur_cycle + sync_cycle) {
-                    sync = true;
-                    sync_cycle = int(phase_cycle - cur_cycle);
-                    sync_freq = freqs[sync_cycle];
-                }
             }
             action_end_cycle = std::min(action_end_cycle, phase_end_cycle);
             double amps[5];
@@ -561,22 +525,12 @@ void generate_channel_tonedata(RFSOCBackend *rb, ToneChannel &channel,
                 if (amp_end_cycle >= cur_cycle + 4)
                     break;
                 forward_amp();
-                if (amp_action.sync && amp_cycle > cur_cycle + sync_cycle) {
-                    sync = true;
-                    sync_cycle = int(amp_cycle - cur_cycle);
-                    sync_freq = freqs[sync_cycle];
-                }
             }
             action_end_cycle = std::min(action_end_cycle, amp_end_cycle);
             while (true) {
                 if (ff_end_cycle >= cur_cycle + 4)
                     break;
                 forward_ff();
-                if (ff_action.sync && ff_cycle > cur_cycle + sync_cycle) {
-                    sync = true;
-                    sync_cycle = int(ff_cycle - cur_cycle);
-                    sync_freq = freqs[sync_cycle];
-                }
             }
             action_end_cycle = std::min(action_end_cycle, ff_end_cycle);
 
@@ -622,6 +576,142 @@ void generate_channel_tonedata(RFSOCBackend *rb, ToneChannel &channel,
             forward_phase();
         if (action_end_cycle == ff_end_cycle)
             forward_ff();
+    }
+}
+
+static inline cubic_spline_t
+spline_resample_cycle(cubic_spline_t sp, int64_t start, int64_t end,
+                      int64_t cycle1, int64_t cycle2)
+{
+    if (cycle1 == start && cycle2 == end)
+        return sp;
+    return spline_resample(sp, double(cycle1 - start) / double(end - start),
+                           double(cycle2 - start) / double(end - start));
+}
+
+inline void
+SyncTimeMgr::add_action(std::vector<DDSParamAction> &actions, int64_t start_cycle,
+                        int64_t end_cycle, cubic_spline_t sp,
+                        int64_t end_seq_time, int tid, ToneParam param)
+{
+    assert(start_cycle <= end_cycle);
+    bb_debug("adding %s spline: [%" PRId64 ", %" PRId64 "], "
+             "cycle_len=%" PRId64 ", val=spline(%f, %f, %f, %f)\n",
+             param_name(param), start_cycle, end_cycle, end_cycle - start_cycle,
+             sp.order0, sp.order1, sp.order2, sp.order3);
+    auto has_sync = [&] {
+        return next_it != times.end() && next_it->second.seq_time <= end_seq_time;
+    };
+    if (param != ToneFreq || !has_sync()) {
+        if (param == ToneFreq)
+            bb_debug("  No sync to handle: last_sync: %d, time: %" PRId64
+                     ", sync_time: %" PRId64 "\n",
+                     next_it == times.end(), end_seq_time,
+                     next_it == times.end() ? -1 : next_it->second.seq_time);
+        if (end_cycle != start_cycle)
+            actions.push_back({ end_cycle - start_cycle, false, sp });
+        return;
+    }
+    auto sync_cycle = next_it->first;
+    auto sync_info = next_it->second;
+    // First check if we need to update the sync frequency,
+    // If there are multiple frequency values at exactly the same sequence time
+    // we pick the last one that we see unless there's a frequency action
+    // at exactly the same time point (same tid) as the sync action.
+    assert(sync_freq_seq_time <= sync_info.seq_time);
+    bb_debug("  sync_time: %" PRId64 ", sync_tid: %d, "
+             "sync_freq_time: %" PRId64 ", sync_freq_match_tid: %d\n",
+             sync_info.seq_time, sync_info.tid, sync_freq_seq_time,
+             sync_freq_match_tid);
+    if (sync_freq_seq_time < sync_info.seq_time || !sync_freq_match_tid) {
+        sync_freq_seq_time = sync_info.seq_time;
+        sync_freq_match_tid = sync_info.tid == tid;
+
+        if (sync_cycle == start_cycle) {
+            sync_freq = sp.order0;
+        }
+        else if (sync_cycle == end_cycle) {
+            sync_freq = sp.order0 + sp.order1 + sp.order2 + sp.order3;
+        }
+        else {
+            auto t = double(sync_cycle - start_cycle) / double(end_cycle - start_cycle);
+            sync_freq = spline_eval(sp, t);
+        }
+        bb_debug("  updated sync frequency: %f @%" PRId64 ", sync_freq_match_tid: %d\n",
+                 sync_freq, sync_freq_seq_time, sync_freq_match_tid);
+    }
+    assert(sync_cycle <= end_cycle);
+    assert(sync_cycle >= start_cycle);
+
+    if (sync_cycle == end_cycle) {
+        // Sync at the end of the spline, worry about it next time.
+        bb_debug("  sync at end, skip until next one @%" PRId64 "\n", end_cycle);
+        if (end_cycle != start_cycle)
+            actions.push_back({ end_cycle - start_cycle, false, sp });
+        return;
+    }
+
+    assert(end_cycle > start_cycle);
+    bool need_sync = true;
+    if (sync_cycle > start_cycle) {
+        bb_debug("  Output until @%" PRId64 "\n", sync_cycle);
+        actions.push_back({ sync_cycle - start_cycle, false,
+                spline_resample_cycle(sp, start_cycle, end_cycle,
+                                      start_cycle, sync_cycle) });
+    } else if (sync_freq != sp.order0) {
+        // We have a sync at frequency action boundary.
+        // This is the only case we may need to sync at a different frequency
+        // compared to the frequency of the output immediately follows this.
+        bb_debug("  0-length sync @%" PRId64 "\n", start_cycle);
+        actions.push_back({ 0, true, spline_from_static(sync_freq) });
+        need_sync = false;
+    }
+    while (true) {
+        // Status:
+        // * output is at `sync_cycle`
+        // * `next_it` points to a sync event at `sync_cycle`
+        // * `need_sync` records whether the next action needs sync'ing
+        // * `sync_cycle < end_cycle`
+
+        assert(end_cycle > sync_cycle);
+
+        // First figure out what's the end of the current time segment.
+        ++next_it;
+        if (!has_sync()) {
+            bb_debug("  Reached end of spline: sync=%d\n", need_sync);
+            actions.push_back({ end_cycle - sync_cycle, need_sync,
+                    spline_resample_cycle(sp, start_cycle, end_cycle,
+                                          sync_cycle, end_cycle) });
+            return;
+        }
+        // If we have another sync to handle, do the output
+        // and compute the new sync frequency
+        auto prev_cycle = sync_cycle;
+        sync_cycle = next_it->first;
+        assert(sync_cycle > prev_cycle);
+        assert(sync_cycle <= end_cycle);
+        bb_debug("  Output until @%" PRId64 ", sync=%d\n", sync_cycle, need_sync);
+        actions.push_back({ sync_cycle - prev_cycle, need_sync,
+                spline_resample_cycle(sp, start_cycle, end_cycle,
+                                      prev_cycle, sync_cycle) });
+        need_sync = true;
+        sync_info = next_it->second;
+        sync_freq_seq_time = sync_info.seq_time;
+        assert(sync_info.tid != tid);
+        sync_freq_match_tid = false;
+        if (sync_cycle == end_cycle) {
+            sync_freq = sp.order0 + sp.order1 + sp.order2 + sp.order3;
+            bb_debug("  updated sync frequency: %f @%" PRId64 ", sync_freq_match_tid: %d\n"
+                     "  sync at end, skip until next one @%" PRId64 "\n",
+                     sync_freq, sync_freq_seq_time, sync_freq_match_tid, end_cycle);
+            return;
+        }
+        else {
+            auto t = double(sync_cycle - start_cycle) / double(end_cycle - start_cycle);
+            sync_freq = spline_eval(sp, t);
+        }
+        bb_debug("  updated sync frequency: %f @%" PRId64 ", sync_freq_match_tid: %d\n",
+                 sync_freq, sync_freq_seq_time, sync_freq_match_tid);
     }
 }
 
@@ -674,6 +764,50 @@ void generate_tonedata(RFSOCBackend *rb, RuntimeValue*, RampFunction*, SeqCubicS
     for (auto [dds, delay]: rb->channels.dds_delay)
         max_delay = std::max(max_delay, delay);
 
+    auto reloc_and_cmp_action = [&] (const auto &a1, const auto &a2, auto param) {
+        if (a1.reloc_id >= 0 && a1.eval_status != eval_status) {
+            a1.eval_status = eval_status;
+            reloc_action(a1, (ToneParam)param);
+        }
+        if (a2.reloc_id >= 0 && a2.eval_status != eval_status) {
+            a2.eval_status = eval_status;
+            reloc_action(a2, (ToneParam)param);
+        }
+        // Move disabled actions to the end
+        if (a1.cond != a2.cond)
+            return int(a1.cond) > int(a2.cond);
+        // Sort by time
+        if (a1.seq_time != a2.seq_time)
+            return a1.seq_time < a2.seq_time;
+        // Sometimes time points with different tid needs
+        // to be sorted by tid to get the output correct.
+        if (a1.tid != a2.tid)
+            return a1.tid < a2.tid;
+        // End action technically happens
+        // just before the time point and must be sorted
+        // to be before the start action.
+        return int(a1.is_end) > int(a2.is_end);
+        // The frontend/shared finalization code only allow
+        // a single action on the same channel at the same time
+        // so there shouldn't be any ambiguity.
+    };
+
+    auto reloc_sort_actions = [&] (auto &actions, auto param) {
+        if (actions.size() == 1) {
+            auto &a = actions[0];
+            if (a.reloc_id >= 0) {
+                a.eval_status = eval_status;
+                reloc_action(a, (ToneParam)param);
+            }
+        }
+        else {
+            std::sort(actions.begin(), actions.end(),
+                      [&] (const auto &a1, const auto &a2) {
+                          return reloc_and_cmp_action(a1, a2, param);
+                      });
+        }
+    };
+
     // Add extra cycles to be able to handle the requirement of minimum 4 cycles.
     auto total_cycle = seq_time_to_cycle(rb->__pyx_base.seq->total_time + max_delay) + 8;
     for (auto &channel: rb->channels.channels) {
@@ -684,93 +818,59 @@ void generate_tonedata(RFSOCBackend *rb, RuntimeValue*, RampFunction*, SeqCubicS
         if (auto it = rb->channels.dds_delay.find(channel.chn >> 1);
             it != rb->channels.dds_delay.end())
             dds_delay = it->second;
-        for (int param = 0; param < _NumToneParam; param++) {
+        auto sync_mgr = rb->tone_buffer.syncs;
+        {
+            auto &actions = channel.actions[ToneFF];
+            bb_debug("processing tone channel: %d, ff, nactions=%zd\n",
+                     channel.chn, actions.size());
+            reloc_sort_actions(actions, ToneFF);
+            int64_t cur_cycle = 0;
+            bool ff = false;
+            auto &ff_action = rb->tone_buffer.ff;
+            assert(ff_action.empty());
+            for (auto &action: actions) {
+                if (!action.cond) {
+                    bb_debug("found disabled ff action, finishing\n");
+                    break;
+                }
+                auto action_seq_time = action.seq_time + dds_delay;
+                auto new_cycle = seq_time_to_cycle(action_seq_time);
+                if (action.sync)
+                    sync_mgr.add(action_seq_time, new_cycle, action.tid, ToneFF);
+                // Nothing changed.
+                if (ff == action.bool_value) {
+                    bb_debug("skipping ff action: @%" PRId64 ", ff=%d\n",
+                             new_cycle, ff);
+                    continue;
+                }
+                if (new_cycle != cur_cycle) {
+                    bb_debug("adding ff action: [%" PRId64 ", %" PRId64 "], "
+                             "cycle_len=%" PRId64 ", ff=%d\n",
+                             cur_cycle, new_cycle, new_cycle - cur_cycle, ff);
+                    assert(new_cycle > cur_cycle);
+                    ff_action.push_back({ new_cycle - cur_cycle, ff });
+                    cur_cycle = new_cycle;
+                }
+                ff = action.bool_value;
+                bb_debug("ff status: @%" PRId64 ", ff=%d\n", cur_cycle, ff);
+            }
+            bb_debug("adding last ff action: [%" PRId64 ", %" PRId64 "], "
+                     "cycle_len=%" PRId64 ", ff=%d\n", cur_cycle,
+                     total_cycle, total_cycle - cur_cycle, ff);
+            assert(total_cycle > cur_cycle);
+            ff_action.push_back({ total_cycle - cur_cycle, ff });
+        }
+        for (auto param: { ToneAmp, TonePhase, ToneFreq }) {
             auto &actions = channel.actions[param];
+            sync_mgr.init_output(param);
             bb_debug("processing tone channel: %d, %s, nactions=%zd\n",
                      channel.chn, param_name(param), actions.size());
-            if (actions.size() == 1) {
-                auto &a = actions[0];
-                if (a.reloc_id >= 0) {
-                    a.eval_status = eval_status;
-                    reloc_action(a, (ToneParam)param);
-                }
-            }
-            else {
-                std::sort(actions.begin(), actions.end(),
-                          [&] (const auto &a1, const auto &a2) {
-                              if (a1.reloc_id >= 0 && a1.eval_status != eval_status) {
-                                  a1.eval_status = eval_status;
-                                  reloc_action(a1, (ToneParam)param);
-                              }
-                              if (a2.reloc_id >= 0 && a2.eval_status != eval_status) {
-                                  a2.eval_status = eval_status;
-                                  reloc_action(a2, (ToneParam)param);
-                              }
-                              // Move disabled actions to the end
-                              if (a1.cond != a2.cond)
-                                  return int(a1.cond) > int(a2.cond);
-                              // Sort by time
-                              if (a1.seq_time != a2.seq_time)
-                                  return a1.seq_time < a2.seq_time;
-                              // Sometimes time points with different tid needs
-                              // to be sorted by tid to get the output correct.
-                              if (a1.tid != a2.tid)
-                                  return a1.tid < a2.tid;
-                              // End action technically happens
-                              // just before the time point and must be sorted
-                              // to be before the start action.
-                              return int(a1.is_end) > int(a2.is_end);
-                              // The frontend/shared finalization code only allow
-                              // a single action on the same channel at the same time
-                              // so there shouldn't be any ambiguity.
-                          });
-            }
+            reloc_sort_actions(actions, param);
             int64_t cur_cycle = 0;
-            bool sync = false;
-            if (param == ToneFF) {
-                bool ff = false;
-                auto &ff_action = rb->tone_buffer.ff;
-                assert(ff_action.empty());
-                for (auto &action: actions) {
-                    if (!action.cond) {
-                        bb_debug("found disabled %s action, finishing\n",
-                                 param_name(param));
-                        break;
-                    }
-                    auto action_seq_time = action.seq_time + dds_delay;
-                    // Nothing changed.
-                    if (ff == action.bool_value && (sync || !action.sync)) {
-                        bb_debug("skipping %s action: @%" PRId64 ", ff=%d\n",
-                                 param_name(param),
-                                 seq_time_to_cycle(action_seq_time), ff);
-                        continue;
-                    }
-                    auto new_cycle = seq_time_to_cycle(action_seq_time);
-                    if (new_cycle != cur_cycle) {
-                        bb_debug("adding %s action: [%" PRId64 ", %" PRId64 "], "
-                                 "cycle_len=%" PRId64 ", sync=%d, ff=%d\n",
-                                 param_name(param), cur_cycle, new_cycle,
-                                 new_cycle - cur_cycle, sync, ff);
-                        assert(new_cycle > cur_cycle);
-                        ff_action.push_back({ new_cycle - cur_cycle, sync, ff });
-                        sync = false;
-                        cur_cycle = new_cycle;
-                    }
-                    ff = action.bool_value;
-                    sync |= action.sync;
-                    bb_debug("%s status: @%" PRId64 ", sync=%d, ff=%d\n",
-                             param_name(param), cur_cycle, sync, ff);
-                }
-                bb_debug("adding last %s action: [%" PRId64 ", %" PRId64 "], "
-                         "cycle_len=%" PRId64 ", sync=%d, ff=%d\n", param_name(param),
-                         cur_cycle, total_cycle, total_cycle - cur_cycle, sync, ff);
-                assert(total_cycle > cur_cycle);
-                ff_action.push_back({ total_cycle - cur_cycle, sync, ff });
-                continue;
-            }
             auto &param_action = rb->tone_buffer.params[param];
             assert(param_action.empty());
             double val = 0;
+            int prev_tid = -1;
             for (auto &action: actions) {
                 if (!action.cond) {
                     bb_debug("found disabled %s action, finishing\n",
@@ -778,45 +878,29 @@ void generate_tonedata(RFSOCBackend *rb, RuntimeValue*, RampFunction*, SeqCubicS
                     break;
                 }
                 auto action_seq_time = action.seq_time + dds_delay;
-                if (!action.isramp && val == action.float_value &&
-                    (sync || !action.sync)) {
+                auto new_cycle = seq_time_to_cycle(action_seq_time);
+                if (action.sync)
+                    sync_mgr.add(action_seq_time, new_cycle, action.tid, param);
+                if (!action.isramp && val == action.float_value) {
                     bb_debug("skipping %s action: @%" PRId64 ", val=%f\n",
-                             param_name(param),
-                             seq_time_to_cycle(action_seq_time), val);
+                             param_name(param), new_cycle, val);
                     continue;
                 }
-                auto new_cycle = seq_time_to_cycle(action_seq_time);
-                if (new_cycle != cur_cycle) {
-                    assert(new_cycle > cur_cycle);
-                    bb_debug("adding %s action: [%" PRId64 ", %" PRId64 "], "
-                             "cycle_len=%" PRId64 ", sync=%d, val=%f\n",
-                             param_name(param), cur_cycle, new_cycle,
-                             new_cycle - cur_cycle, sync, val);
-                    param_action.push_back({ new_cycle - cur_cycle, sync,
-                            spline_from_static(val) });
-                    sync = false;
-                    cur_cycle = new_cycle;
-                }
-                else if (sync && !action.sync && param == ToneFreq) {
-                    // we must not change the sync frequency.
-                    // insert a zero length pulse
-                    bb_debug("adding 0-length freq sync action: @%" PRId64 ", val=%f\n",
-                             cur_cycle, val);
-                    param_action.push_back({ 0, true, spline_from_static(val) });
-                    sync = false;
-                }
-                sync |= action.sync;
+                sync_mgr.add_action(param_action, cur_cycle, new_cycle,
+                                    spline_from_static(val), action_seq_time,
+                                    prev_tid, param);
+                cur_cycle = new_cycle;
+                prev_tid = action.tid;
                 if (!action.isramp) {
                     val = action.float_value;
-                    bb_debug("%s status: @%" PRId64 ", sync=%d, val=%f\n",
-                             param_name(param), cur_cycle, sync, val);
+                    bb_debug("%s status: @%" PRId64 ", val=%f\n",
+                             param_name(param), cur_cycle, val);
                     continue;
                 }
                 auto len = action.float_value;
                 auto ramp_func = (RampFunction*)action.ramp;
-                bb_debug("processing ramp on %s: @%" PRId64 ", "
-                         "sync=%d, len=%f, func=%p\n",
-                         param_name(param), cur_cycle, sync, len, ramp_func);
+                bb_debug("processing ramp on %s: @%" PRId64 ", len=%f, func=%p\n",
+                         param_name(param), cur_cycle, len, ramp_func);
                 double sp_time;
                 int64_t sp_seq_time;
                 int64_t sp_cycle;
@@ -832,17 +916,12 @@ void generate_tonedata(RFSOCBackend *rb, RuntimeValue*, RampFunction*, SeqCubicS
                     auto cycle1 = sp_cycle;
                     update_sp_time(t2);
                     auto cycle2 = sp_cycle;
-                    bb_debug("adding %s spline: [%" PRId64 ", %" PRId64 "], "
-                             "cycle_len=%" PRId64 ", sync=%d, "
-                             "val=spline(%f, %f, %f, %f)\n",
-                             param_name(param), cycle1, cycle2, cycle2 - cycle1, sync,
-                             sp.order0, sp.order1, sp.order2, sp.order3);
                     // The spline may not actually start on the cycle.
                     // However, attempting to resample the spline results in
                     // more unique splines being created which seems to be overflowing
                     // the buffer on the hardware.
-                    param_action.push_back({ cycle2 - cycle1, sync, sp });
-                    sync = false;
+                    sync_mgr.add_action(param_action, cycle1, cycle2,
+                                        sp, sp_seq_time, prev_tid, param);
                 };
                 if (Py_TYPE(ramp_func) == seqcubicspline_type) {
                     bb_debug("found SeqCubicSpline on %s spline: "
@@ -934,8 +1013,9 @@ void generate_tonedata(RFSOCBackend *rb, RuntimeValue*, RampFunction*, SeqCubicS
                 bb_debug("Use ramp function provided segments on %s spline: "
                          "new cycle:%" PRId64 "\n", param_name(param), cur_cycle);
             }
-            param_action.push_back({ total_cycle - cur_cycle, sync,
-                    spline_from_static(val) });
+            sync_mgr.add_action(param_action, cur_cycle, total_cycle,
+                                spline_from_static(val), cycle_to_seq_time(total_cycle),
+                                prev_tid, param);
         }
         generate_channel_tonedata(rb, channel, total_cycle);
     }

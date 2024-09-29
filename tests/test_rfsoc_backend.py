@@ -1838,3 +1838,116 @@ def test_cond_ramp_error(max_bt):
       .pulse('rfsoc/dds1/1/amp', BlackmanSquare(1))
     comp.finalize()
     comp.runtime_finalize(1)
+
+@with_rfsoc_params
+def test_cross_channel_sync1(max_bt):
+    s, comp = new_seq_compiler(max_bt)
+    rb = add_rfsoc_backend(comp)
+    @s.add_background
+    def other_step(s):
+        s.wait(2.5e-3)
+        s.set('rfsoc/dds0/1/amp', 0.0)
+        s.wait(2.5e-3)
+        s.set('rfsoc/dds0/1/phase', 0.0)
+        s.wait(2.5e-3)
+        s.set('rfsoc/dds0/1/ff', False)
+    s.add_step(10e-3) \
+      .set('rfsoc/dds0/1/freq', LinearRamp(100e6, 120e6))
+    comp.finalize()
+
+    comp.runtime_finalize(1)
+    assert get_output() == {
+        0: [Tone(4096008, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
+        1: [Tone(4096000, pytest.approx(Spline(100e6, 20e6), abs=1e-6), Spline(0.0),
+                 Spline(0.0), False, False),
+            Tone(8, Spline(120e6), Spline(0.0), Spline(0.0), False, False)],
+    }
+
+    s, comp = new_seq_compiler(max_bt)
+    rb = add_rfsoc_backend(comp)
+    @s.add_background
+    def other_step(s):
+        s.wait(2.5e-3)
+        s.set('rfsoc/dds0/1/amp', 0.0, sync=True)
+        s.wait(2.5e-3)
+        s.set('rfsoc/dds0/1/phase', 0.0, sync=True)
+        s.wait(2.5e-3)
+        s.set('rfsoc/dds0/1/ff', False, sync=True)
+    s.add_step(10e-3) \
+      .set('rfsoc/dds0/1/freq', LinearRamp(100e6, 120e6))
+    comp.finalize()
+
+    comp.runtime_finalize(1)
+    assert get_output() == {
+        0: [Tone(4096008, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
+        1: [Tone(1024000, pytest.approx(Spline(100e6, 5e6), abs=1e-6), Spline(0.0),
+                 Spline(0.0), False, False),
+            Tone(1024000, pytest.approx(Spline(105e6, 5e6), abs=1e-6), Spline(0.0),
+                 Spline(0.0), True, False),
+            Tone(1024000, pytest.approx(Spline(110e6, 5e6), abs=1e-6), Spline(0.0),
+                 Spline(0.0), True, False),
+            Tone(1024000, pytest.approx(Spline(115e6, 5e6), abs=1e-6), Spline(0.0),
+                 Spline(0.0), True, False),
+            Tone(8, Spline(120e6), Spline(0.0), Spline(0.0), False, False)],
+    }
+
+@with_rfsoc_params
+def test_cross_channel_sync2(max_bt):
+    s, comp = new_seq_compiler(max_bt)
+    rb = add_rfsoc_backend(comp)
+    @s.add_background
+    def amp_step(s):
+        s.wait(5e-6)
+        s.set('rfsoc/dds0/1/amp', 0.0, sync=True)
+    @s.add_background
+    def freq_step(s):
+        s.wait(5e-6)
+        s.set('rfsoc/dds0/1/freq', 100e6)
+        s.add_step(5e-6) \
+          .set('rfsoc/dds0/1/freq', 110e6)
+    comp.finalize()
+
+    comp.runtime_finalize(1)
+    assert get_output() == {
+        0: [Tone(4104, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
+        1: [Tone(2048, Spline(0.0), Spline(0.0), Spline(0.0), False, False),
+            Tone(2056, Spline(110e6), Spline(0.0), Spline(0.0), True, False)],
+    }
+
+    s, comp = new_seq_compiler(max_bt)
+    rb = add_rfsoc_backend(comp)
+    @s.add_step
+    def freq_step(s):
+        s.wait(5e-6)
+        s.set('rfsoc/dds0/1/freq', 100e6)
+        s.add_step(5e-6) \
+          .set('rfsoc/dds0/1/phase', 0.0, sync=True) \
+          .set('rfsoc/dds0/1/freq', 110e6)
+    comp.finalize()
+
+    comp.runtime_finalize(1)
+    assert get_output() == {
+        0: [Tone(4104, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
+        1: [Tone(2048, Spline(0.0), Spline(0.0), Spline(0.0), False, False),
+            Tone(2056, Spline(110e6), Spline(0.0), Spline(0.0), True, False)],
+    }
+
+    s, comp = new_seq_compiler(max_bt)
+    rb = add_rfsoc_backend(comp)
+    @s.add_step
+    def freq_step(s):
+        s.wait(5e-6)
+        s.set('rfsoc/dds0/1/freq', 100e6)
+        s.set('rfsoc/dds0/1/ff', False, sync=True)
+        s.add_step(5e-6) \
+          .set('rfsoc/dds0/1/freq', 110e6)
+    comp.finalize()
+
+    comp.runtime_finalize(1)
+    assert get_output() == {
+        0: [Tone(4104, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
+        1: [Tone(2048, Spline(0.0), Spline(0.0), Spline(0.0), False, False),
+            Tone(4, pytest.approx(Spline(100e6, 55e6, -90e6, 45e6)),
+                 Spline(0.0), Spline(0.0), True, False),
+            Tone(2052, Spline(110e6), Spline(0.0), Spline(0.0), False, False)],
+    }

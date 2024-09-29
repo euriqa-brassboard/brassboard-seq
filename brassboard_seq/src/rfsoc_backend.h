@@ -111,19 +111,84 @@ struct DDSParamAction {
     cubic_spline_t spline;
 };
 struct DDSFFAction {
-    int64_t cycle_len: 62;
-    bool sync: 1;
+    int64_t cycle_len: 63;
     bool ff: 1;
+};
+
+static inline const char *param_name(ToneParam param)
+{
+    switch (param) {
+    case ToneFreq:
+        return "freq";
+    case ToneAmp:
+        return "amp";
+    case TonePhase:
+        return "phase";
+    case ToneFF:
+    default:
+        return "ff";
+    }
+}
+
+struct SyncTimeMgr {
+    struct SyncInfo {
+        int64_t seq_time{};
+        int tid{};
+    };
+    std::map<int64_t,SyncInfo> times;
+    std::map<int64_t,SyncInfo>::iterator next_it;
+    // invariant: if next_it.first < cur_seq_time then sync_freq is valid.
+    double sync_freq;
+    int64_t sync_freq_seq_time;
+    bool sync_freq_match_tid;
+
+    void clear()
+    {
+        times.clear();
+        next_it = times.end();
+    }
+
+    void init_output(ToneParam param)
+    {
+        if (param == ToneFreq) {
+            next_it = times.begin();
+            sync_freq = 0;
+            sync_freq_seq_time = -1;
+            sync_freq_match_tid = false;
+        }
+    }
+
+    void add(int64_t seq_time, int64_t cycle, int tid, ToneParam param)
+    {
+        bb_debug("Collected sync action from %s @%" PRId64 ", tid=%d\n",
+                 param_name(param), cycle, tid);
+        auto [it, inserted] = times.emplace(cycle, SyncInfo{ seq_time, tid });
+        if (!inserted && (it->second.seq_time < seq_time ||
+                          (it->second.seq_time == seq_time && it->second.tid < tid)))
+            it->second = { seq_time, tid };
+        if (param == ToneFreq) {
+            if (next_it == times.end() || next_it->first > cycle) {
+                assert(seq_time >= sync_freq_seq_time);
+                next_it = it;
+            }
+        }
+    }
+
+    void add_action(std::vector<DDSParamAction> &actions, int64_t start_cycle,
+                    int64_t end_cycle, cubic_spline_t sp,
+                    int64_t end_seq_time, int tid, ToneParam param);
 };
 
 struct ToneBuffer {
     std::vector<DDSParamAction> params[3];
     std::vector<DDSFFAction> ff;
+    SyncTimeMgr syncs;
     void clear()
     {
         for (auto &param: params)
             param.clear();
         ff.clear();
+        syncs.clear();
     }
 };
 
