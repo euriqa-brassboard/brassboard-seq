@@ -56,10 +56,10 @@ cdef inline bint is_ramp(obj) noexcept:
 cdef inline bint ramp_get_cubic_spline(_ramp, cubic_spline_t *sp) noexcept:
     if type(_ramp) is not SeqCubicSpline:
         return False
-    sp[0] = cubic_spline_t((<SeqCubicSpline>_ramp).order0,
-                           (<SeqCubicSpline>_ramp).order1,
-                           (<SeqCubicSpline>_ramp).order2,
-                           (<SeqCubicSpline>_ramp).order3)
+    sp[0] = cubic_spline_t((<SeqCubicSpline>_ramp).f_order0,
+                           (<SeqCubicSpline>_ramp).f_order1,
+                           (<SeqCubicSpline>_ramp).f_order2,
+                           (<SeqCubicSpline>_ramp).f_order3)
     return True
 
 cdef inline CompileVTable get_compile_vtable() noexcept nogil:
