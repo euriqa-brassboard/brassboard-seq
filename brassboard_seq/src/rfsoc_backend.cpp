@@ -84,7 +84,10 @@ new_tone_data(PulseCompilerInfo *info, int channel, int tone, int64_t duration_c
         throw_if(PyDict_SetItem(td_dict, info->amplitude_str, py_amp.get()));
     }
     {
-        py_object py_phase(new_cubic_spline(info, phase));
+        // tone data wants rad as phase unit.
+        py_object py_phase(new_cubic_spline(info, {
+                    phase.order0 * (2 * M_PI), phase.order1 * (2 * M_PI),
+                    phase.order2 * (2 * M_PI), phase.order3 * (2 * M_PI) }));
         throw_if(PyDict_SetItem(td_dict, info->phase_rad_str, py_phase.get()));
     }
     throw_if(PyDict_SetItem(td_dict, info->frame_rotation_rad_str, info->cubic_0));
@@ -806,9 +809,6 @@ void generate_tonedata(RFSOCBackend *rb, unsigned age, py_object &pyage,
             auto &param_action = rb->tone_buffer.params[param];
             assert(param_action.empty());
             double val = 0;
-            double value_scale = 1;
-            if (param == TonePhase)
-                value_scale = 2 * M_PI; // tone data wants rad as phase unit.
             for (auto &action: actions) {
                 if (!action.cond) {
                     bb_debug("found disabled %s action, finishing\n",
@@ -831,7 +831,7 @@ void generate_tonedata(RFSOCBackend *rb, unsigned age, py_object &pyage,
                              param_name(param), cur_cycle, new_cycle,
                              new_cycle - cur_cycle, sync, val);
                     param_action.push_back({ new_cycle - cur_cycle, sync,
-                            spline_from_static(val * value_scale) });
+                            spline_from_static(val) });
                     sync = false;
                     cur_cycle = new_cycle;
                 }
@@ -840,8 +840,7 @@ void generate_tonedata(RFSOCBackend *rb, unsigned age, py_object &pyage,
                     // insert a zero length pulse
                     bb_debug("adding 0-length freq sync action: @%" PRId64 ", val=%f\n",
                              cur_cycle, val);
-                    param_action.push_back({ 0, true,
-                            spline_from_static(val * value_scale) });
+                    param_action.push_back({ 0, true, spline_from_static(val) });
                     sync = false;
                 }
                 sync |= action.sync;
@@ -890,12 +889,6 @@ void generate_tonedata(RFSOCBackend *rb, unsigned age, py_object &pyage,
                     cubic_spline_t sp{py_spline->f_order0, py_spline->f_order1,
                         py_spline->f_order2, py_spline->f_order3};
                     val = sp.order0 + sp.order1 + sp.order2 + sp.order3;
-                    if (value_scale != 1) {
-                        sp.order0 *= value_scale;
-                        sp.order1 *= value_scale;
-                        sp.order2 *= value_scale;
-                        sp.order3 *= value_scale;
-                    }
                     add_spline(len, sp);
                     cur_cycle = sp_cycle;
                     bb_debug("found SeqCubicSpline on %s spline: "
@@ -904,9 +897,7 @@ void generate_tonedata(RFSOCBackend *rb, unsigned age, py_object &pyage,
                 }
                 auto add_sample = [&] (double t2, double v0, double v1,
                                        double v2, double v3) {
-                    auto sp = spline_from_values(v0 * value_scale, v1 * value_scale,
-                                                 v2 * value_scale, v3 * value_scale);
-                    add_spline(t2, sp);
+                    add_spline(t2, spline_from_values(v0, v1, v2, v3));
                     val = v3;
                 };
                 auto _runtime_eval = ramp_func->__pyx_vtab->runtime_eval;
@@ -982,7 +973,7 @@ void generate_tonedata(RFSOCBackend *rb, unsigned age, py_object &pyage,
                          "new cycle:%" PRId64 "\n", param_name(param), cur_cycle);
             }
             param_action.push_back({ total_cycle - cur_cycle, sync,
-                    spline_from_static(val * value_scale) });
+                    spline_from_static(val) });
         }
         generate_channel_tonedata(rb, channel, total_cycle);
     }
