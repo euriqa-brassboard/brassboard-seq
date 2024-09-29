@@ -42,6 +42,9 @@ struct ArtiqConsts {
 
 static ArtiqConsts artiq_consts;
 
+static PyTypeObject *rtval_type;
+static PyTypeObject *rampfunction_type;
+
 inline int ChannelsInfo::add_bus_channel(int bus_channel, uint32_t io_update_target,
                                          uint8_t ref_period_mu)
 {
@@ -95,14 +98,9 @@ inline void ChannelsInfo::add_dds_param_channel(int seqchn, uint32_t bus_id,
                                                     delay, rt_delay), param};
 }
 
-struct CompileVTable {
-    int (*is_rtval)(PyObject*);
-    int (*is_ramp)(PyObject*);
-};
-
 template<typename Action, typename EventTime, typename ArtiqBackend>
 static __attribute__((always_inline)) inline
-void collect_actions(ArtiqBackend *ab, const CompileVTable vtable, Action*, EventTime*)
+void collect_actions(ArtiqBackend *ab, Action*, EventTime*)
 {
     auto seq = ab->__pyx_base.seq;
     auto all_actions = seq->all_actions;
@@ -160,7 +158,7 @@ void collect_actions(ArtiqBackend *ab, const CompileVTable vtable, Action*, Even
             needs_reloc = true;
             reloc.time_idx = tid;
         }
-        if (vtable.is_rtval(value)) {
+        if (Py_TYPE(value) == rtval_type) {
             needs_reloc = true;
             if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
                 reloc.val_idx = float_values.get_id(value);
@@ -206,7 +204,7 @@ void collect_actions(ArtiqBackend *ab, const CompileVTable vtable, Action*, Even
     auto add_action = [&] (Action *action, ChannelType type, int chn_idx) {
         auto cond = action->cond;
         int cond_reloc = -1;
-        if (vtable.is_rtval(cond)) {
+        if (Py_TYPE(cond) == rtval_type) {
             cond_reloc = bool_values.get_id(cond);
             assume(cond_reloc >= 0);
         }
@@ -234,7 +232,7 @@ void collect_actions(ArtiqBackend *ab, const CompileVTable vtable, Action*, Even
                 throw 0;
             }
             auto value = action->value;
-            if (vtable.is_ramp(value)) {
+            if (py_issubtype_nontrivial(Py_TYPE(value), rampfunction_type)) {
                 bb_err_format(PyExc_ValueError, action_key(action->aid),
                               "TTL Channel cannot be ramped");
                 throw 0;
@@ -257,7 +255,7 @@ void collect_actions(ArtiqBackend *ab, const CompileVTable vtable, Action*, Even
                 throw 0;
             }
             auto value = action->value;
-            if (vtable.is_ramp(value)) {
+            if (py_issubtype_nontrivial(Py_TYPE(value), rampfunction_type)) {
                 bb_err_format(PyExc_ValueError, action_key(action->aid),
                               "DDS Channel cannot be ramped");
                 throw 0;

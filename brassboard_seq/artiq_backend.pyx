@@ -25,7 +25,8 @@ from brassboard_seq.seq cimport Seq
 from brassboard_seq.utils cimport set_global_tracker, PyErr_Format, \
   PyExc_RuntimeError, PyExc_TypeError, PyExc_ValueError, pyobject_call, py_object
 
-from cpython cimport PyMethod_Check, PyMethod_GET_FUNCTION, PyMethod_GET_SELF
+from cpython cimport PyMethod_Check, PyMethod_GET_FUNCTION, PyMethod_GET_SELF, \
+  PyTypeObject
 
 cimport cython
 cimport numpy as cnpy
@@ -66,28 +67,16 @@ cdef extern from "src/artiq_backend.cpp" namespace "brassboard_seq::artiq_backen
         int SPI_DATA_ADDR
 
     ArtiqConsts artiq_consts
+    PyTypeObject *rtval_type
+    PyTypeObject *rampfunction_type
 
-    struct CompileVTable:
-        bint (*is_rtval)(object) noexcept
-        bint (*is_ramp)(object) noexcept
-
-    void collect_actions(ArtiqBackend ab,
-                         CompileVTable vtable, Action, EventTime) except +
+    void collect_actions(ArtiqBackend ab, Action, EventTime) except +
 
     struct RuntimeVTable:
         int (*rt_eval_tagval)(object, unsigned, py_object&) except -1
 
     void generate_rtios(ArtiqBackend ab, unsigned age, RuntimeVTable vtable,
                         RuntimeValue) except +
-
-cdef inline bint is_ramp(obj) noexcept:
-    return isinstance(obj, RampFunction)
-
-cdef inline CompileVTable get_compile_vtable() noexcept nogil:
-    cdef CompileVTable vt
-    vt.is_rtval = is_rtval
-    vt.is_ramp = is_ramp
-    return vt
 
 ctypedef int (*rt_eval_tagval_t)(object, unsigned, py_object&) except -1
 
@@ -104,6 +93,8 @@ artiq_consts.URUKUL_CONFIG_END = <int?>urukul.SPI_CONFIG | <int?>spi2.SPI_END
 artiq_consts.URUKUL_SPIT_DDS_WR = <int?>urukul.SPIT_DDS_WR
 artiq_consts.SPI_DATA_ADDR = <int?>spi2.SPI_DATA_ADDR
 artiq_consts.SPI_CONFIG_ADDR = <int?>spi2.SPI_CONFIG_ADDR
+rtval_type = <PyTypeObject*>RuntimeValue
+rampfunction_type = <PyTypeObject*>RampFunction
 
 cdef PyObject *raise_invalid_channel(tuple path) except NULL:
     name = '/'.join(path)
@@ -248,7 +239,7 @@ cdef class ArtiqBackend:
         bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)
         collect_channels(&self.channels, self.prefix, self.sys, self.seq,
                          self.device_delay)
-        collect_actions(self, get_compile_vtable(), None, None)
+        collect_actions(self, None, None)
 
     cdef int runtime_finalize(self, unsigned age, py_object &pyage) except -1:
         bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)

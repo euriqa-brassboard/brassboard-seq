@@ -30,6 +30,10 @@
 
 namespace brassboard_seq::rfsoc_backend {
 
+static PyTypeObject *rtval_type;
+static PyTypeObject *rampfunction_type;
+static PyTypeObject *seqcubicspline_type;
+
 template<typename PulseCompilerInfo>
 static __attribute__((returns_nonnull)) PyObject*
 new_cubic_spline(PulseCompilerInfo *info, cubic_spline_t sp)
@@ -126,11 +130,6 @@ inline void ChannelInfo::ensure_both_tones()
     }
 }
 
-struct CompileVTable {
-    int (*is_rtval)(PyObject*);
-    int (*is_ramp)(PyObject*);
-};
-
 static inline bool parse_action_kws(PyObject *kws, int aid)
 {
     if (kws == Py_None)
@@ -168,7 +167,7 @@ const char *param_name(int param)
 
 template<typename Action, typename EventTime, typename RFSOCBackend>
 static __attribute__((always_inline)) inline
-void collect_actions(RFSOCBackend *rb, const CompileVTable vtable, Action*, EventTime*)
+void collect_actions(RFSOCBackend *rb, Action*, EventTime*)
 {
     auto seq = rb->__pyx_base.seq;
     auto all_actions = seq->all_actions;
@@ -191,7 +190,7 @@ void collect_actions(RFSOCBackend *rb, const CompileVTable vtable, Action*, Even
             auto action = (Action*)PyList_GET_ITEM(actions, idx);
             auto sync = parse_action_kws(action->kws, action->aid);
             auto value = action->value;
-            auto is_ramp = vtable.is_ramp(value);
+            auto is_ramp = py_issubtype_nontrivial(Py_TYPE(value), rampfunction_type);
             if (is_ff && is_ramp) {
                 bb_err_format(PyExc_ValueError, action_key(action->aid),
                               "Feed forward control cannot be ramped");
@@ -200,7 +199,7 @@ void collect_actions(RFSOCBackend *rb, const CompileVTable vtable, Action*, Even
             auto cond = action->cond;
             if (cond == Py_False)
                 continue;
-            bool cond_need_reloc = vtable.is_rtval(cond);
+            bool cond_need_reloc = Py_TYPE(cond) == rtval_type;
             assert(cond_need_reloc || cond == Py_True);
             int cond_idx = cond_need_reloc ? bool_values.get_id(cond) : -1;
             auto add_action = [&] (auto value, int tid, bool sync, bool is_ramp,
@@ -228,7 +227,7 @@ void collect_actions(RFSOCBackend *rb, const CompileVTable vtable, Action*, Even
                 if (is_ramp) {
                     rfsoc_action.ramp = value;
                     auto len = action->length;
-                    if (vtable.is_rtval(len)) {
+                    if (Py_TYPE(len) == rtval_type) {
                         needs_reloc = true;
                         reloc.val_idx = float_values.get_id(len);
                     }
@@ -237,7 +236,7 @@ void collect_actions(RFSOCBackend *rb, const CompileVTable vtable, Action*, Even
                             get_value_f64(len, action_key(action->aid));
                     }
                 }
-                else if (vtable.is_rtval(value)) {
+                else if (Py_TYPE(value) == rtval_type) {
                     needs_reloc = true;
                     if (is_ff) {
                         reloc.val_idx = bool_values.get_id(value);
@@ -276,7 +275,6 @@ void collect_actions(RFSOCBackend *rb, const CompileVTable vtable, Action*, Even
 
 struct RuntimeVTable {
     int (*rt_eval_tagval)(PyObject*, unsigned age, py_object &pyage);
-    int (*ramp_get_cubic_spline)(PyObject*, cubic_spline_t *sp);
 };
 
 template<typename RFSOCBackend>
@@ -656,10 +654,12 @@ void generate_channel_tonedata(RFSOCBackend *rb, ToneChannel &channel,
     }
 }
 
-template<typename RFSOCBackend, typename RuntimeValue, typename RampFunction>
+template<typename RFSOCBackend, typename RuntimeValue, typename RampFunction,
+         typename SeqCubicSpline>
 static __attribute__((always_inline)) inline
 void generate_tonedata(RFSOCBackend *rb, unsigned age, py_object &pyage,
-                       const RuntimeVTable vtable, RuntimeValue*, RampFunction*)
+                       const RuntimeVTable vtable, RuntimeValue*, RampFunction*,
+                       SeqCubicSpline*)
 {
     bb_debug("generate_tonedata: start\n");
     auto seq = rb->__pyx_base.seq;
@@ -883,10 +883,12 @@ void generate_tonedata(RFSOCBackend *rb, unsigned age, py_object &pyage,
                     param_action.push_back({ cycle2 - cycle1, sync, sp });
                     sync = false;
                 };
-                if (cubic_spline_t sp;
-                    vtable.ramp_get_cubic_spline((PyObject*)ramp_func, &sp)) {
+                if (Py_TYPE(ramp_func) == seqcubicspline_type) {
                     bb_debug("found SeqCubicSpline on %s spline: "
                              "old cycle:%" PRId64 "\n", param_name(param), cur_cycle);
+                    auto py_spline = (SeqCubicSpline*)ramp_func;
+                    cubic_spline_t sp{py_spline->f_order0, py_spline->f_order1,
+                        py_spline->f_order2, py_spline->f_order3};
                     val = sp.order0 + sp.order1 + sp.order2 + sp.order3;
                     if (value_scale != 1) {
                         sp.order0 *= value_scale;

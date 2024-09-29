@@ -25,55 +25,38 @@ from brassboard_seq.utils cimport pyfloat_from_double, set_global_tracker, \
 
 cimport cython
 from cython.operator cimport dereference as deref
-from cpython cimport PyDict_GetItemWithError
+from cpython cimport PyDict_GetItemWithError, PyTypeObject
 
 cdef re # hide import
 import re
 
 cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backend":
-    struct CompileVTable:
-        bint (*is_rtval)(object) noexcept
-        bint (*is_ramp)(object) noexcept
-    void collect_actions(RFSOCBackend ab,
-                         CompileVTable vtable, Action, EventTime) except+
+    PyTypeObject *rtval_type
+    PyTypeObject *rampfunction_type
+    PyTypeObject *seqcubicspline_type
+    void collect_actions(RFSOCBackend ab, Action, EventTime) except+
 
     struct RuntimeVTable:
         int (*rt_eval_tagval)(object, unsigned, py_object&) except -1
-        bint (*ramp_get_cubic_spline)(object, cubic_spline_t *sp) noexcept
 
     void generate_tonedata(RFSOCBackend ab, unsigned age, py_object&,
-                           RuntimeVTable vtable, RuntimeValue, RampFunction) except +
+                           RuntimeVTable vtable, RuntimeValue, RampFunction,
+                           SeqCubicSpline) except +
 
     object new_tone_data(PulseCompilerInfo info, int channel, int tone,
                          int64_t duration_cycles, cubic_spline_t freq,
                          cubic_spline_t amp, cubic_spline_t phase,
                          output_flags_t flags) except +
 
-
-cdef inline bint is_ramp(obj) noexcept:
-    return isinstance(obj, RampFunction)
-
-cdef inline bint ramp_get_cubic_spline(_ramp, cubic_spline_t *sp) noexcept:
-    if type(_ramp) is not SeqCubicSpline:
-        return False
-    sp[0] = cubic_spline_t((<SeqCubicSpline>_ramp).f_order0,
-                           (<SeqCubicSpline>_ramp).f_order1,
-                           (<SeqCubicSpline>_ramp).f_order2,
-                           (<SeqCubicSpline>_ramp).f_order3)
-    return True
-
-cdef inline CompileVTable get_compile_vtable() noexcept nogil:
-    cdef CompileVTable vt
-    vt.is_rtval = is_rtval
-    vt.is_ramp = is_ramp
-    return vt
+rtval_type = <PyTypeObject*>RuntimeValue
+rampfunction_type = <PyTypeObject*>RampFunction
+seqcubicspline_type = <PyTypeObject*>SeqCubicSpline
 
 ctypedef int (*rt_eval_tagval_t)(object, unsigned, py_object&) except -1
 
 cdef inline RuntimeVTable get_runtime_vtable() noexcept nogil:
     cdef RuntimeVTable vt
     vt.rt_eval_tagval = <rt_eval_tagval_t>rt_eval_tagval
-    vt.ramp_get_cubic_spline = ramp_get_cubic_spline
     return vt
 
 @cython.auto_pickle(False)
@@ -288,7 +271,7 @@ cdef class RFSOCBackend:
                 param_enum = ToneFF
                 raise_invalid_channel(path)
             self.channels.add_seq_channel(idx, chn_idx, param_enum)
-        collect_actions(self, get_compile_vtable(), None, None)
+        collect_actions(self, None, None)
 
     cdef int runtime_finalize(self, unsigned age, py_object &pyage) except -1:
         bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)
@@ -297,6 +280,6 @@ cdef class RFSOCBackend:
             set_dds_delay(self, dds, rtval_cache(<RuntimeValue>delay).get[double]())
         self.generator.start()
         try:
-            generate_tonedata(self, age, pyage, get_runtime_vtable(), None, None)
+            generate_tonedata(self, age, pyage, get_runtime_vtable(), None, None, None)
         finally:
             self.generator.finish()
