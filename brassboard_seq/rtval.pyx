@@ -72,7 +72,7 @@ cdef bint needs_parenthesis(RuntimeValue v, ValueType parent_type) noexcept:
         return False
     return True
 
-cdef void show_arg(io, write, RuntimeValue v, ValueType parent_type):
+cdef int show_arg(io, write, RuntimeValue v, ValueType parent_type) except -1:
     cdef bint p = needs_parenthesis(v, parent_type)
     if p:
         write('(')
@@ -80,18 +80,18 @@ cdef void show_arg(io, write, RuntimeValue v, ValueType parent_type):
     if p:
         write(')')
 
-cdef void show_binary(io, write, RuntimeValue v, str op, ValueType type_):
+cdef int show_binary(io, write, RuntimeValue v, str op, ValueType type_) except -1:
     show_arg(io, write, v.arg0, type_)
     write(op)
     show_arg(io, write, v.arg1, type_)
 
-cdef void show_call1(io, write, RuntimeValue v, str f):
+cdef int show_call1(io, write, RuntimeValue v, str f) except -1:
     write(f)
     write('(')
     show(io, write, v.arg0)
     write(')')
 
-cdef void show_call2(io, write, RuntimeValue v, str f):
+cdef int show_call2(io, write, RuntimeValue v, str f) except -1:
     write(f)
     write('(')
     show(io, write, v.arg0)
@@ -99,7 +99,7 @@ cdef void show_call2(io, write, RuntimeValue v, str f):
     show(io, write, v.arg1)
     write(')')
 
-cdef void show_call3(io, write, RuntimeValue v, str f):
+cdef int show_call3(io, write, RuntimeValue v, str f) except -1:
     write(f)
     write('(')
     show(io, write, v.arg0)
@@ -109,7 +109,7 @@ cdef void show_call3(io, write, RuntimeValue v, str f):
     show(io, write, <RuntimeValue>v.cb_arg2)
     write(')')
 
-cdef void show(io, write, RuntimeValue v):
+cdef int show(io, write, RuntimeValue v) except -1:
     cdef ValueType type_ = v.type_
     if type_ == ValueType.Extern:
         cb = v.cb_arg2
