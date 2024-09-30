@@ -36,11 +36,7 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
     PyTypeObject *seqcubicspline_type
     void collect_actions(RFSOCBackend ab, Action, EventTime) except+
 
-    struct RuntimeVTable:
-        int (*rt_eval_tagval)(object, unsigned, py_object&) except -1
-
-    void generate_tonedata(RFSOCBackend ab, unsigned age, py_object&,
-                           RuntimeVTable vtable, RuntimeValue, RampFunction,
+    void generate_tonedata(RFSOCBackend ab, RuntimeValue, RampFunction,
                            SeqCubicSpline) except +
 
     object new_tone_data(PulseCompilerInfo info, int channel, int tone,
@@ -51,13 +47,6 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
 rtval_type = <PyTypeObject*>RuntimeValue
 rampfunction_type = <PyTypeObject*>RampFunction
 seqcubicspline_type = <PyTypeObject*>SeqCubicSpline
-
-ctypedef int (*rt_eval_tagval_t)(object, unsigned, py_object&) except -1
-
-cdef inline RuntimeVTable get_runtime_vtable() noexcept nogil:
-    cdef RuntimeVTable vt
-    vt.rt_eval_tagval = <rt_eval_tagval_t>rt_eval_tagval
-    return vt
 
 cdef dummy_post_init
 def dummy_post_init(self, /):
@@ -182,7 +171,7 @@ cdef PyObject *raise_invalid_channel(tuple path) except NULL:
 
 cdef match_rfsoc_dds = re.compile('^dds(\\d+)$').match
 
-cdef inline set_dds_delay(RFSOCBackend self, int dds, double delay):
+cdef inline int set_dds_delay(RFSOCBackend self, int dds, double delay) except -1:
     if delay < 0:
         py_delay = <object>delay
         PyErr_Format(PyExc_ValueError, "DDS time offset %S cannot be negative.",
@@ -265,6 +254,6 @@ cdef class RFSOCBackend:
             set_dds_delay(self, dds, rtval_cache(<RuntimeValue>delay).get[double]())
         self.generator.start()
         try:
-            generate_tonedata(self, age, pyage, get_runtime_vtable(), None, None, None)
+            generate_tonedata(self, None, None, None)
         finally:
             self.generator.finish()

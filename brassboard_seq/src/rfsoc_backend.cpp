@@ -276,38 +276,6 @@ void collect_actions(RFSOCBackend *rb, Action*, EventTime*)
     rb->float_values = std::move(float_values.values);
 }
 
-struct RuntimeVTable {
-    int (*rt_eval_tagval)(PyObject*, unsigned age, py_object &pyage);
-};
-
-template<typename RFSOCBackend>
-static __attribute__((noreturn))
-void reraise_reloc_error(RFSOCBackend *rb, size_t reloc_idx, bool isbool)
-{
-    // This is inefficient when we actually hit an error but saves memory
-    // when we didn't have an error
-    for (auto &channel: rb->channels.channels) {
-        for (int param = 0; param < _NumToneParam; param++) {
-            auto action_isbool = param == ToneFF;
-            if (action_isbool != isbool)
-                continue;
-            for (auto &rfsoc_action: channel.actions[param]) {
-                if (rfsoc_action.reloc_id == -1)
-                    continue;
-                auto reloc = rb->relocations[rfsoc_action.reloc_id];
-                // We only need to check for the value index since the time relocation
-                // does not use our relocation table as the input and the conditional
-                // values are checked by the sequence common code
-                // (and their value is cached so there shouldn't be an error
-                // when we try to evaluate it.)
-                bb_reraise_and_throw_if(reloc.val_idx == reloc_idx,
-                                        action_key(rfsoc_action.aid));
-            }
-        }
-    }
-    throw 0;
-}
-
 static constexpr double min_spline_time = 150e-9;
 
 struct SplineBuffer {
@@ -660,22 +628,16 @@ void generate_channel_tonedata(RFSOCBackend *rb, ToneChannel &channel,
 template<typename RFSOCBackend, typename RuntimeValue, typename RampFunction,
          typename SeqCubicSpline>
 static __attribute__((always_inline)) inline
-void generate_tonedata(RFSOCBackend *rb, unsigned age, py_object &pyage,
-                       const RuntimeVTable vtable, RuntimeValue*, RampFunction*,
-                       SeqCubicSpline*)
+void generate_tonedata(RFSOCBackend *rb, RuntimeValue*, RampFunction*, SeqCubicSpline*)
 {
     bb_debug("generate_tonedata: start\n");
     auto seq = rb->__pyx_base.seq;
     for (size_t i = 0, nreloc = rb->bool_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = rb->bool_values[i];
-        if (vtable.rt_eval_tagval((PyObject*)rtval, age, pyage) < 0)
-            reraise_reloc_error(rb, i, true);
         val = !rtval::rtval_cache((RuntimeValue*)rtval).is_zero();
     }
     for (size_t i = 0, nreloc = rb->float_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = rb->float_values[i];
-        if (vtable.rt_eval_tagval((PyObject*)rtval, age, pyage) < 0)
-            reraise_reloc_error(rb, i, false);
         val = rtval::rtval_cache((RuntimeValue*)rtval).template get<double>();
     }
     auto &time_values = seq->__pyx_base.__pyx_base.seqinfo->time_mgr->time_values;

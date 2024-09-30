@@ -274,51 +274,19 @@ struct RuntimeVTable {
     int (*rt_eval_tagval)(PyObject*, unsigned age, py_object &pyage);
 };
 
-template<typename ArtiqBackend>
-static __attribute__((noreturn))
-void reraise_reloc_error(ArtiqBackend *ab, size_t reloc_idx, bool isbool)
-{
-    // This is inefficient when we actually hit an error but saves memory
-    // when we didn't have an error
-    for (auto &artiq_action: ab->all_actions) {
-        if (artiq_action.reloc_id == -1)
-            continue;
-        auto reloc = ab->relocations[artiq_action.reloc_id];
-        // We only need to check for the value index since the time relocation
-        // does not use our relocation table as the input and the conditional
-        // values are checked by the sequence common code
-        // (and their value is cached so there shouldn't be an error
-        // when we try to evaluate it.)
-        if (reloc.val_idx != reloc_idx)
-            continue;
-        auto type = artiq_action.type;
-        auto action_isbool = type == TTLOut || type == CounterEnable;
-        if (action_isbool == isbool) {
-            bb_reraise(action_key(artiq_action.aid));
-            break;
-        }
-    }
-    throw 0;
-}
-
 template<typename ArtiqBackend, typename RuntimeValue>
 static __attribute__((always_inline)) inline
-void generate_rtios(ArtiqBackend *ab, unsigned age, const RuntimeVTable vtable,
-                    RuntimeValue*)
+void generate_rtios(ArtiqBackend *ab, unsigned age, py_object &pyage,
+                    const RuntimeVTable vtable, RuntimeValue*)
 {
-    py_object pyage;
     bb_debug("generate_rtios: start\n");
     auto seq = ab->__pyx_base.seq;
     for (size_t i = 0, nreloc = ab->bool_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = ab->bool_values[i];
-        if (vtable.rt_eval_tagval((PyObject*)rtval, age, pyage) < 0)
-            reraise_reloc_error(ab, i, true);
         val = !rtval::rtval_cache((RuntimeValue*)rtval).is_zero();
     }
     for (size_t i = 0, nreloc = ab->float_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = ab->float_values[i];
-        if (vtable.rt_eval_tagval((PyObject*)rtval, age, pyage) < 0)
-            reraise_reloc_error(ab, i, false);
         val = rtval::rtval_cache((RuntimeValue*)rtval).template get<double>();
     }
     int64_t max_delay = 0;

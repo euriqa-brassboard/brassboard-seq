@@ -483,6 +483,19 @@ cdef class Seq(SubSeq):
                 is_ramp = isinstance(action_value, RampFunction)
                 if is_ramp:
                     (<RampFunction>action_value).set_runtime_params(age, pyage)
+                elif is_rtval(action_value):
+                    try:
+                        rt_eval_tagval(<RuntimeValue>action_value, age, pyage)
+                    except Exception as ex:
+                        bb_raise(ex, action_key(action.aid))
+                action_end_val = action.end_val
+                if action_end_val is not action_value and is_rtval(action_end_val):
+                    try:
+                        rt_eval_tagval(<RuntimeValue>action_end_val, age, pyage)
+                    except Exception as ex:
+                        bb_raise(ex, action_key(action.aid))
+                # No need to evaluate action.length since the `compute_all_times`
+                # above should've done it already.
                 start_time = time_mgr.time_values[action.tid]
                 end_time = time_mgr.time_values[action.end_tid]
                 if prev_time > start_time or start_time > end_time:

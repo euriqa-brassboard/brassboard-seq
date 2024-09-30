@@ -75,8 +75,8 @@ cdef extern from "src/artiq_backend.cpp" namespace "brassboard_seq::artiq_backen
     struct RuntimeVTable:
         int (*rt_eval_tagval)(object, unsigned, py_object&) except -1
 
-    void generate_rtios(ArtiqBackend ab, unsigned age, RuntimeVTable vtable,
-                        RuntimeValue) except +
+    void generate_rtios(ArtiqBackend ab, unsigned age, py_object&,
+                        RuntimeVTable vtable, RuntimeValue) except +
 
 ctypedef int (*rt_eval_tagval_t)(object, unsigned, py_object&) except -1
 
@@ -243,7 +243,7 @@ cdef class ArtiqBackend:
 
     cdef int runtime_finalize(self, unsigned age, py_object &pyage) except -1:
         bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)
-        generate_rtios(self, age, get_runtime_vtable(), None)
+        generate_rtios(self, age, pyage, get_runtime_vtable(), None)
 
 @cython.internal
 @cython.auto_pickle(False)
