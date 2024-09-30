@@ -18,8 +18,7 @@
 
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.rtval cimport get_value_f64, ifelse, is_rtval, \
-  new_arg, new_const, _new_expr2, ValueType, DataType, RuntimeValue, \
-  interp_function_set_value, interp_function_eval_all
+  new_arg, new_const, _new_expr2, ValueType, DataType, RuntimeValue
 from brassboard_seq.utils cimport PyErr_Format, Py_NotImplemented, \
   PyExc_TypeError, _PyObject_Vectorcall, pyfloat_from_double
 
@@ -123,7 +122,7 @@ cdef class RampFunction:
             args.push_back(DataType.Float64)
             if (<RuntimeValue>fvalue).datatype != DataType.Float64:
                 fvalue = _new_expr2(RuntimeValue, ValueType.Add, fvalue, const0)
-            interp_function_set_value(deref(interp_func), <RuntimeValue>fvalue, args)
+            deref(interp_func).set_value(<RuntimeValue>fvalue, args)
             self.interp_func = move(interp_func)
         else:
             fvalue = <double>fvalue
@@ -131,7 +130,7 @@ cdef class RampFunction:
 
     cdef int set_runtime_params(self, unsigned age, py_object &pyage) except -1:
         if self.interp_func:
-            interp_function_eval_all(deref(self.interp_func), age, pyage)
+            deref(self.interp_func).eval_all(age, pyage, None)
 
     cdef TagVal runtime_eval(self, double t) noexcept:
         cdef void *fvalue

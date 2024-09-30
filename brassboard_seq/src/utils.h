@@ -1491,7 +1491,11 @@ struct InterpFunction {
     }
 
     template<typename RuntimeValue>
-    void set_value(RuntimeValue *value, std::vector<DataType> &args);
+    void set_value(RuntimeValue *value, std::vector<DataType> &args)
+    {
+        assert_compatible_rtvalue<RuntimeValue>();
+        _set_value((_RuntimeValue*)value, args);
+    }
 
     template<typename RuntimeValue>
     void set_value(RuntimeValue *value, std::vector<DataType> &&args)
@@ -1499,11 +1503,17 @@ struct InterpFunction {
         set_value(value, args);
     }
 
-    template<typename RuntimeValue>
-    Builder::ValueInfo &visit_value(RuntimeValue *value, Builder &builder);
+    void _set_value(_RuntimeValue *value, std::vector<DataType> &args);
+    Builder::ValueInfo &visit_value(_RuntimeValue *value, Builder &builder);
+
+    void _eval_all(unsigned age, py_object &pyage);
 
     template<typename RuntimeValue>
-    void eval_all(unsigned age, py_object &pyage, RuntimeValue*);
+    inline void eval_all(unsigned age, py_object &pyage, RuntimeValue*)
+    {
+        assert_compatible_rtvalue<RuntimeValue>();
+        _eval_all(age, pyage);
+    }
 
     TagVal call()
     {

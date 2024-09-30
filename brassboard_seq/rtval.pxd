@@ -145,11 +145,6 @@ cdef class RuntimeValue:
     cdef RuntimeValue arg1
     cdef object cb_arg2 # Also used as argument index
 
-cdef int interp_function_set_value(InterpFunction &func, val,
-                                   vector[DataType] &args) except -1
-cdef int interp_function_eval_all(InterpFunction &func, unsigned age,
-                                  py_object &pyage) except -1
-
 cdef inline RuntimeValue new_arg(idx, ty=float):
     return _new_cb_arg2(RuntimeValue, ValueType.Arg, idx, ty, None)
 
