@@ -84,7 +84,7 @@ BacktraceTracker::FrameInfo::FrameInfo(PyFrameObject *frame)
 {
 }
 
-PyObject *BacktraceTracker::FrameInfo::get_traceback(PyObject *next) try
+PyObject *BacktraceTracker::FrameInfo::get_traceback(PyObject *next)
 {
     PyThreadState *tstate = PyThreadState_Get();
     py_object globals(throw_if_not(PyDict_New()));
@@ -95,10 +95,7 @@ PyObject *BacktraceTracker::FrameInfo::get_traceback(PyObject *next) try
                          PyFrame_New(tstate, code, globals, nullptr)));
     PyTuple_SET_ITEM(args.get(), 2, throw_if_not(PyLong_FromLong(lasti)));
     PyTuple_SET_ITEM(args.get(), 3, throw_if_not(PyLong_FromLong(lineno)));
-    return traceback_new(&PyTraceBack_Type, args, nullptr);
-}
-catch (...) {
-    return nullptr;
+    return throw_if_not(traceback_new(&PyTraceBack_Type, args, nullptr));
 }
 
 void BacktraceTracker::_record(uintptr_t key)
@@ -134,14 +131,15 @@ PyObject *BacktraceTracker::get_backtrace(uintptr_t key)
     auto &trace = it->second;
     PyObject *py_trace = nullptr;
     for (auto &info: trace) {
-        auto new_trace = info.get_traceback(py_trace ? py_trace : Py_None);
-        if (!new_trace) {
+        try {
+            auto new_trace = info.get_traceback(py_trace ? py_trace : Py_None);
+            Py_XDECREF(py_trace);
+            py_trace = new_trace;
+        }
+        catch (...) {
             // Skip a frame if we couldn't construct it.
             PyErr_Clear();
-            continue;
         }
-        Py_XDECREF(py_trace);
-        py_trace = new_trace;
     }
     return py_trace;
 }

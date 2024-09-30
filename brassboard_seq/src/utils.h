@@ -158,7 +158,7 @@ struct BacktraceTracker {
         int lasti;
         int lineno;
         FrameInfo(PyFrameObject *frame);
-        PyObject *get_traceback(PyObject *next);
+        __attribute__((returns_nonnull)) PyObject *get_traceback(PyObject *next);
     };
 
     void _record(uintptr_t key);
