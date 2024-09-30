@@ -68,7 +68,7 @@ static inline __attribute__((returns_nonnull)) PyObject*
 combine_cond(PyObject *cond1, PyObject *new_cond, RuntimeValue*)
 {
     auto [res, needs_free] = _combine_cond(cond1, new_cond, (RuntimeValue*)nullptr);
-    if (needs_free)
+    if (!needs_free)
         Py_INCREF(res);
     return res;
 }
