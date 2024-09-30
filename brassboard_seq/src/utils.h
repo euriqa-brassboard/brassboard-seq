@@ -49,8 +49,12 @@ static inline __attribute__((always_inline)) T assume(T v)
 template<typename T>
 static inline __attribute__((always_inline)) T assume(T v)
 {
+#  if __GNUC__ >= 13
+    __attribute__((assume(bool(v))));
+#  else
     if (!bool(v))
         __builtin_unreachable();
+#  endif
     return v;
 }
 #else
