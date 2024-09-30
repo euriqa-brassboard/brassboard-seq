@@ -403,7 +403,8 @@ private:
 template<typename CB>
 ScopeExit(CB) -> ScopeExit<CB>;
 
-static inline PyObject *new_list_of_list(int n)
+static inline __attribute__((returns_nonnull))
+PyObject *new_list_of_list(int n)
 {
     py_object list(throw_if_not(PyList_New(n)));
     for (int i = 0; i < n; i++)
