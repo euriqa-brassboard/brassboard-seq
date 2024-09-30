@@ -51,7 +51,6 @@ cdef extern from "src/utils.h" namespace "brassboard_seq":
     list new_list_of_list(int n) except +
     object pynum_add_or_sub(object a, object b, bint issub)
     tuple pytuple_append1(tuple, object) except +
-    tuple pytuple_prepend1(tuple, object) except +
     object pydict_deepcopy(object) except +
     object pyobject_call(object, tuple)
     object pyobject_call(object, tuple, dict)

@@ -210,16 +210,6 @@ PyObject *pytuple_append1(PyObject *tuple, PyObject *obj)
     return res.release();
 }
 
-PyObject *pytuple_prepend1(PyObject *tuple, PyObject *obj)
-{
-    Py_ssize_t nele = PyTuple_GET_SIZE(tuple);
-    py_object res(throw_if_not(PyTuple_New(nele + 1)));
-    PyTuple_SET_ITEM(res.get(), 0, py_newref(obj));
-    for (Py_ssize_t i = 0; i < nele; i++)
-        PyTuple_SET_ITEM(res.get(), i + 1, py_newref(PyTuple_GET_ITEM(tuple, i)));
-    return res.release();
-}
-
 static PyObject *_pydict_deepcopy(PyObject *d)
 {
     py_object res(throw_if_not(PyDict_New()));
