@@ -41,8 +41,6 @@ cdef extern from "src/rtval.cpp" namespace "brassboard_seq::rtval":
     RuntimeValue _new_select(object RTValueType, RuntimeValue arg0,
                              object, object) except +
 
-    void rt_eval_cache(RuntimeValue self, unsigned age, py_object pyage) except +
-
 cdef int operator_precedence(ValueType type_) noexcept:
     if type_ == ValueType.Add or type_ == ValueType.Sub:
         return 3
@@ -365,10 +363,6 @@ cdef inline _round_int64(v):
     if type(v) is float:
         return cmath.llrint(PyFloat_AS_DOUBLE(v))
     return int(round(v))
-
-cdef int rt_eval_tagval(RuntimeValue self, unsigned age, py_object &pyage) except -1:
-    rt_eval_cache(self, age, pyage)
-    throw_py_error(self.cache_err)
 
 cdef _get_value(v, unsigned age, py_object &pyage):
     if is_rtval(v):

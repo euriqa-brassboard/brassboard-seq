@@ -23,7 +23,7 @@ from brassboard_seq cimport event_time
 from brassboard_seq.event_time cimport is_ordered, round_time_int, round_time_rt, \
   set_base_int, set_base_rt, rt_time_scale, new_time_manager
 from brassboard_seq.rtval cimport get_value_bool, ifelse, is_rtval, \
-  RuntimeValue, rtval_cache, rt_eval_tagval
+  RuntimeValue, rtval_cache, rt_eval_throw
 from brassboard_seq.scan cimport new_param_pack
 from brassboard_seq.utils cimport assume_not_none, _assume_not_none, \
   action_key, assert_key, bb_err_format, bb_raise, event_time_key, \
@@ -454,10 +454,7 @@ cdef class Seq(SubSeq):
         for _a in self.seqinfo.assertions:
             a = <tuple>_a
             c = <RuntimeValue>PyTuple_GET_ITEM(a, 0)
-            try:
-                rt_eval_tagval(c, age, pyage)
-            except Exception as ex:
-                bb_raise(ex, assert_key(assert_id))
+            rt_eval_throw(c, age, pyage, assert_key(assert_id))
             if rtval_cache(c).is_zero():
                 bb_raise(AssertionError(<object>PyTuple_GET_ITEM(a, 1)),
                          assert_key(assert_id))
@@ -484,16 +481,12 @@ cdef class Seq(SubSeq):
                 if is_ramp:
                     (<RampFunction>action_value).set_runtime_params(age, pyage)
                 elif is_rtval(action_value):
-                    try:
-                        rt_eval_tagval(<RuntimeValue>action_value, age, pyage)
-                    except Exception as ex:
-                        bb_raise(ex, action_key(action.aid))
+                    rt_eval_throw(<RuntimeValue>action_value, age, pyage,
+                                  action_key(action.aid))
                 action_end_val = action.end_val
                 if action_end_val is not action_value and is_rtval(action_end_val):
-                    try:
-                        rt_eval_tagval(<RuntimeValue>action_end_val, age, pyage)
-                    except Exception as ex:
-                        bb_raise(ex, action_key(action.aid))
+                    rt_eval_throw(<RuntimeValue>action_end_val, age, pyage,
+                                  action_key(action.aid))
                 # No need to evaluate action.length since the `compute_all_times`
                 # above should've done it already.
                 start_time = time_mgr.time_values[action.tid]

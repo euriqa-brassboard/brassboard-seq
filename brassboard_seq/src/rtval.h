@@ -24,16 +24,6 @@
 namespace brassboard_seq::rtval {
 
 template<typename RuntimeValue>
-static inline __attribute__((always_inline)) TagVal rtval_cache(RuntimeValue *rtval)
-{
-    TagVal cache;
-    cache.type = rtval->datatype;
-    cache.err = rtval->cache_err;
-    cache.val = rtval->cache_val;
-    return cache;
-}
-
-template<typename RuntimeValue>
 static inline __attribute__((returns_nonnull)) RuntimeValue*
 _new_cb_arg2(PyObject *RTValueType, ValueType type, PyObject *cb_arg2,
              PyObject *ty, RuntimeValue*)

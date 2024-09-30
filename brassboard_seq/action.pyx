@@ -18,7 +18,7 @@
 
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.rtval cimport get_value_f64, ifelse, is_rtval, \
-  new_arg, new_const, _new_expr2, ValueType, DataType, rt_eval_tagval, RuntimeValue, \
+  new_arg, new_const, _new_expr2, ValueType, DataType, RuntimeValue, \
   interp_function_set_value, interp_function_eval_all
 from brassboard_seq.utils cimport PyErr_Format, Py_NotImplemented, \
   PyExc_TypeError, _PyObject_Vectorcall, pyfloat_from_double

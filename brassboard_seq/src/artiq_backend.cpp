@@ -270,14 +270,9 @@ void collect_actions(ArtiqBackend *ab, Action*, EventTime*)
     ab->float_values = std::move(float_values.values);
 }
 
-struct RuntimeVTable {
-    int (*rt_eval_tagval)(PyObject*, unsigned age, py_object &pyage);
-};
-
 template<typename ArtiqBackend, typename RuntimeValue>
 static __attribute__((always_inline)) inline
-void generate_rtios(ArtiqBackend *ab, unsigned age, py_object &pyage,
-                    const RuntimeVTable vtable, RuntimeValue*)
+void generate_rtios(ArtiqBackend *ab, unsigned age, py_object &pyage, RuntimeValue*)
 {
     bb_debug("generate_rtios: start\n");
     auto seq = ab->__pyx_base.seq;
@@ -290,12 +285,11 @@ void generate_rtios(ArtiqBackend *ab, unsigned age, py_object &pyage,
         val = rtval::rtval_cache((RuntimeValue*)rtval).template get<double>();
     }
     int64_t max_delay = 0;
-    auto relocate_delay = [&] (int64_t &delay, PyObject *rt_delay) {
+    auto relocate_delay = [&] (int64_t &delay, RuntimeValue *rt_delay) {
         if (!rt_delay)
             return;
-        if (vtable.rt_eval_tagval((PyObject*)rt_delay, age, pyage) < 0)
-            throw 0;
-        auto fdelay = rtval::rtval_cache((RuntimeValue*)rt_delay).template get<double>();
+        rtval::rt_eval_throw(rt_delay, age, pyage);
+        auto fdelay = rtval::rtval_cache(rt_delay).template get<double>();
         if (fdelay < 0) {
             py_object pyval(pyfloat_from_double(fdelay));
             PyErr_Format(PyExc_ValueError,
@@ -312,11 +306,11 @@ void generate_rtios(ArtiqBackend *ab, unsigned age, py_object &pyage,
         delay = int64_t(fdelay * event_time::time_scale + 0.5);
     };
     for (auto &ttlchn: ab->channels.ttlchns) {
-        relocate_delay(ttlchn.delay, ttlchn.rt_delay);
+        relocate_delay(ttlchn.delay, (RuntimeValue*)ttlchn.rt_delay);
         max_delay = std::max(max_delay, ttlchn.delay);
     }
     for (auto &ddschn: ab->channels.ddschns) {
-        relocate_delay(ddschn.delay, ddschn.rt_delay);
+        relocate_delay(ddschn.delay, (RuntimeValue*)ddschn.rt_delay);
         max_delay = std::max(max_delay, ddschn.delay);
     }
     auto &time_values = seq->__pyx_base.__pyx_base.seqinfo->time_mgr->time_values;

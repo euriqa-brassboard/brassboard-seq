@@ -125,6 +125,11 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
     RuntimeValue rt_convert_bool(object RTValueType, RuntimeValue) except +
     RuntimeValue rt_round_int64(object RTValueType, RuntimeValue) except +
 
+    void rt_eval_cache(RuntimeValue self, unsigned age, py_object &pyage) except +
+    void rt_eval_throw(RuntimeValue self, unsigned age, py_object &pyage) except +
+    void rt_eval_throw(RuntimeValue self, unsigned age, py_object &pyage,
+                       uintptr_t) except +
+
     cppclass InterpFunction:
         void set_value(RuntimeValue, vector[DataType]&) except +
         void eval_all(unsigned, py_object&, RuntimeValue) except +
@@ -140,7 +145,6 @@ cdef class RuntimeValue:
     cdef RuntimeValue arg1
     cdef object cb_arg2 # Also used as argument index
 
-cdef int rt_eval_tagval(RuntimeValue self, unsigned age, py_object &pyage) except -1
 cdef int interp_function_set_value(InterpFunction &func, val,
                                    vector[DataType] &args) except -1
 cdef int interp_function_eval_all(InterpFunction &func, unsigned age,
@@ -164,14 +168,14 @@ cdef _get_value(v, unsigned age, py_object &pyage)
 
 cdef inline bint get_value_bool(v, unsigned age, py_object &pyage) except -1:
     if is_rtval(v):
-        rt_eval_tagval(<RuntimeValue>v, age, pyage)
+        rt_eval_throw(<RuntimeValue>v, age, pyage)
         return not rtval_cache(<RuntimeValue>v).is_zero()
     else:
         return bool(v)
 
 cdef inline double get_value_f64(v, unsigned age, py_object &pyage) except? -1:
     if is_rtval(v):
-        rt_eval_tagval(<RuntimeValue>v, age, pyage)
+        rt_eval_throw(<RuntimeValue>v, age, pyage)
         return rtval_cache(<RuntimeValue>v).get[double]()
     else:
         return <double>v

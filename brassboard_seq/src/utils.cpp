@@ -254,6 +254,139 @@ void init_library()
 
 namespace rtval {
 
+__attribute__((flatten))
+void _rt_eval_cache(_RuntimeValue *self, unsigned age, py_object &pyage)
+{
+    if (self->age == age)
+        return;
+
+    // Take the reference from the argument
+    auto set_cache = [&] (TagVal v) {
+        assert(v.type == self->datatype);
+        self->cache_val = v.val;
+        self->cache_err = v.err;
+        self->age = age;
+    };
+    auto set_cache_py = [&] (PyObject *obj) {
+        throw_if_not(obj);
+        set_cache(TagVal::from_py(obj).convert(self->datatype));
+        Py_DECREF(obj);
+    };
+
+    auto type = self->type_;
+    switch (type) {
+    case Arg:
+        PyErr_Format(PyExc_ValueError, "Cannot evaluate unknown argument");
+        throw 0;
+    case Const:
+        return;
+    case Extern:
+        set_cache_py(_PyObject_Vectorcall(self->cb_arg2, nullptr, 0, nullptr));
+        return;
+    case ExternAge: {
+        if (!pyage)
+            pyage.reset(throw_if_not(PyLong_FromLong(age)));
+        PyObject *args[] = { pyage.get() };
+        set_cache_py(_PyObject_Vectorcall(self->cb_arg2, args, 1, nullptr));
+        return;
+    }
+    default:
+        break;
+    }
+
+    auto rtarg0 = self->arg0;
+    _rt_eval_cache(rtarg0, age, pyage);
+    auto arg0 = rtval_cache(rtarg0);
+    auto eval1 = [&] (auto op_cls) {
+        if (arg0.err != EvalError::NoError) {
+            set_cache({ self->datatype, arg0.err });
+        }
+        else {
+            set_cache(op_cls.generic_eval(arg0));
+        }
+    };
+
+    switch (type) {
+#define HANDLE_UNARY(op) case op: eval1(op##_op()); return
+        HANDLE_UNARY(Not);
+        HANDLE_UNARY(Bool);
+        HANDLE_UNARY(Abs);
+        HANDLE_UNARY(Ceil);
+        HANDLE_UNARY(Floor);
+        HANDLE_UNARY(Exp);
+        HANDLE_UNARY(Expm1);
+        HANDLE_UNARY(Log);
+        HANDLE_UNARY(Log1p);
+        HANDLE_UNARY(Log2);
+        HANDLE_UNARY(Log10);
+        HANDLE_UNARY(Sqrt);
+        HANDLE_UNARY(Asin);
+        HANDLE_UNARY(Acos);
+        HANDLE_UNARY(Atan);
+        HANDLE_UNARY(Asinh);
+        HANDLE_UNARY(Acosh);
+        HANDLE_UNARY(Atanh);
+        HANDLE_UNARY(Sin);
+        HANDLE_UNARY(Cos);
+        HANDLE_UNARY(Tan);
+        HANDLE_UNARY(Sinh);
+        HANDLE_UNARY(Cosh);
+        HANDLE_UNARY(Tanh);
+        HANDLE_UNARY(Rint);
+        HANDLE_UNARY(Int64);
+#undef HANDLE_UNARY
+    default:
+        break;
+    }
+
+    auto rtarg1 = self->arg1;
+    if (type == Select) {
+        auto rtarg2 = (_RuntimeValue*)self->cb_arg2;
+        auto rtres = arg0.template get<bool>() ? rtarg1 : rtarg2;
+        _rt_eval_cache(rtres, age, pyage);
+        set_cache(rtval_cache(rtres).convert(self->datatype));
+        return;
+    }
+    _rt_eval_cache(rtarg1, age, pyage);
+    auto arg1 = rtval_cache(rtarg1);
+
+    auto eval2 = [&] (auto op_cls) {
+        if (auto err = combine_error(arg0.err, arg1.err); err != EvalError::NoError) {
+            set_cache({ self->datatype, err });
+        }
+        else {
+            set_cache(op_cls.generic_eval(arg0, arg1));
+        }
+    };
+
+    switch (type) {
+#define HANDLE_BINARY(op) case op: eval2(op##_op()); return
+        HANDLE_BINARY(Add);
+        HANDLE_BINARY(Sub);
+        HANDLE_BINARY(Mul);
+        HANDLE_BINARY(Div);
+        HANDLE_BINARY(Pow);
+        HANDLE_BINARY(Mod);
+        HANDLE_BINARY(And);
+        HANDLE_BINARY(Or);
+        HANDLE_BINARY(Xor);
+        HANDLE_BINARY(CmpLT);
+        HANDLE_BINARY(CmpGT);
+        HANDLE_BINARY(CmpLE);
+        HANDLE_BINARY(CmpGE);
+        HANDLE_BINARY(CmpNE);
+        HANDLE_BINARY(CmpEQ);
+        HANDLE_BINARY(Hypot);
+        HANDLE_BINARY(Atan2);
+        HANDLE_BINARY(Max);
+        HANDLE_BINARY(Min);
+#undef HANDLE_BINARY
+    default:
+        PyErr_Format(PyExc_ValueError, "Unknown value type");
+        throw 0;
+    }
+}
+
 static inline bool is_numpy_int(PyObject *value)
 {
     if (PyArray_IsScalar(value, Integer))

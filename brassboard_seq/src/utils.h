@@ -1391,6 +1391,69 @@ static inline DataType binary_return_type(ValueType type, DataType t1, DataType 
     }
 }
 
+struct _RuntimeValue {
+    PyObject_HEAD
+    ValueType type_;
+    DataType datatype;
+    EvalError cache_err;
+    unsigned int age;
+    GenVal cache_val;
+    _RuntimeValue *arg0;
+    _RuntimeValue *arg1;
+    PyObject *cb_arg2;
+};
+template<typename RuntimeValue>
+static inline void assert_compatible_rtvalue()
+{
+    static_assert(sizeof(_RuntimeValue) == sizeof(RuntimeValue));
+#define ASSERT_FIELD_OFFSET(name) \
+    static_assert(offsetof(_RuntimeValue, name) == offsetof(RuntimeValue, name))
+    ASSERT_FIELD_OFFSET(type_);
+    ASSERT_FIELD_OFFSET(datatype);
+    ASSERT_FIELD_OFFSET(cache_err);
+    ASSERT_FIELD_OFFSET(age);
+    ASSERT_FIELD_OFFSET(cache_val);
+    ASSERT_FIELD_OFFSET(arg0);
+    ASSERT_FIELD_OFFSET(arg1);
+    ASSERT_FIELD_OFFSET(cb_arg2);
+}
+
+template<typename RuntimeValue>
+static inline __attribute__((always_inline)) TagVal rtval_cache(RuntimeValue *rtval)
+{
+    TagVal cache;
+    cache.type = rtval->datatype;
+    cache.err = rtval->cache_err;
+    cache.val = rtval->cache_val;
+    return cache;
+}
+
+void _rt_eval_cache(_RuntimeValue *self, unsigned age, py_object &pyage);
+
+template<typename RuntimeValue>
+static inline __attribute__((always_inline))
+void rt_eval_cache(RuntimeValue *self, unsigned age, py_object &pyage)
+{
+    assert_compatible_rtvalue<RuntimeValue>();
+    _rt_eval_cache((_RuntimeValue*)self, age, pyage);
+}
+
+template<typename RuntimeValue>
+static inline __attribute__((always_inline))
+void rt_eval_throw(RuntimeValue *self, unsigned age, py_object &pyage,
+                   uintptr_t key=uintptr_t(-1))
+{
+    try {
+        rt_eval_cache(self, age, pyage);
+    }
+    catch (...) {
+        if (key != uintptr_t(-1) && PyErr_Occurred())
+            bb_reraise(key);
+        throw;
+    }
+    throw_py_error(self->cache_err, key);
+}
+
 std::pair<EvalError,GenVal> interpret_func(const int *code, GenVal *data,
                                            EvalError *errors);
 int get_label_offset(ValueType op, DataType t1, DataType t2);

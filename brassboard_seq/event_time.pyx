@@ -18,7 +18,7 @@
 
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.rtval cimport get_value_bool, \
-  new_const, new_extern_age, rt_eval_tagval, ExternCallback
+  new_const, new_extern_age, rt_eval_throw, ExternCallback
 from brassboard_seq.utils cimport _assume_not_none, assume_not_none, \
   event_time_key, bb_err_format, bb_raise, PyExc_RuntimeError, PyExc_TypeError
 
@@ -245,10 +245,8 @@ cdef long long get_time_value(EventTime self, int base_id, unsigned age,
     if cond:
         p_rt_offset = self.data.get_rt_offset()
         if p_rt_offset != NULL:
-            try:
-                rt_eval_tagval(<RuntimeValue>p_rt_offset, age, pyage)
-            except Exception as ex:
-                bb_raise(ex, event_time_key(<void*>self))
+            rt_eval_throw(<RuntimeValue>p_rt_offset, age, pyage,
+                          event_time_key(<void*>self))
             offset = (<RuntimeValue>p_rt_offset).cache_val.i64_val
             if offset < 0:
                 bb_err_format(ValueError, event_time_key(<void*>self),
