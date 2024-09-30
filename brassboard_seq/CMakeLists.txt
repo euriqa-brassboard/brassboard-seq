@@ -12,6 +12,7 @@ install(FILES
   src/action.h
   src/artiq_backend.h
   src/event_time.h
+  src/scan.h
   src/rfsoc_backend.h
   src/rtval.h
   src/utils.h

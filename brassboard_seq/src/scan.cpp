@@ -16,9 +16,7 @@
  *   see <http://www.gnu.org/licenses/>.                                 *
  *************************************************************************/
 
-#include "Python.h"
-
-#include "utils.h"
+#include "scan.h"
 
 namespace brassboard_seq::scan {
 

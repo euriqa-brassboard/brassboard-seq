@@ -95,7 +95,8 @@ cdef class ParamPack:
         assume_not_none(name)
         if name.startswith('_'):
             return PyObject_GenericGetAttr(self, name)
-        return new_param_pack(ensure_dict(self), ensure_visited(self), name)
+        return new_param_pack(ParamPack, ensure_dict(self), ensure_visited(self),
+                              name, None)
 
     def __setattr__(self, str name, value):
         assume_not_none(name)
@@ -158,17 +159,10 @@ def get_visited(ParamPack self, /):
         return PyDictProxy_New(res)
     return False
 
-cdef ParamPack new_param_pack(dict value, dict visited, str fieldname):
-    self = <ParamPack>ParamPack.__new__(ParamPack)
-    self.values = value
-    self.visited = visited
-    self.fieldname = fieldname
-    return self
-
 # Helper function for functions that takes an optional parameter pack
 def get_param(param, /):
     if param is None:
-        return new_param_pack({}, {}, 'root')
+        return new_param_pack(ParamPack, {}, {}, 'root', None)
     return param
 
 # Check if the struct field reference path is overwritten in `obj`.

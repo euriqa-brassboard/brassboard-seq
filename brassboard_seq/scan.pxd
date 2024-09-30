@@ -16,9 +16,11 @@
 # License along with this library. If not,
 # see <http://www.gnu.org/licenses/>.
 
+cdef extern from "src/scan.h" namespace "brassboard_seq::scan":
+    ParamPack new_param_pack(object, dict value, dict visited,
+                             str fieldname, ParamPack) except +
+
 cdef class ParamPack:
     cdef dict values
     cdef dict visited
     cdef str fieldname
-
-cdef ParamPack new_param_pack(dict value, dict visited, str fieldname)

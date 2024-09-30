@@ -339,7 +339,7 @@ cdef class Seq(SubSeq):
     def __init__(self, Config config, /, int max_frame=0):
         self.cond = True
         self.sub_seqs = []
-        self.C = new_param_pack({}, {}, 'root')
+        self.C = new_param_pack(ParamPack, {}, {}, 'root', None)
         seqinfo = <SeqInfo>SeqInfo.__new__(SeqInfo)
         seqinfo.config = config
         seqinfo.time_mgr = new_time_manager()
