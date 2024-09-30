@@ -356,17 +356,14 @@ cdef inline _round_int64(v):
         return cmath.llrint(PyFloat_AS_DOUBLE(v))
     return int(round(v))
 
-cdef _get_value(v, unsigned age, py_object &pyage):
-    if is_rtval(v):
-        rt_eval_cache(<RuntimeValue>v, age, pyage)
-        return rtval_cache(<RuntimeValue>v).to_py()
-    return v
-
 def get_value(v, age):
     cdef py_object pyage
     if isinstance(age, int):
         pyage.set_obj(age)
-    return _get_value(v, age, pyage)
+    if is_rtval(v):
+        rt_eval_cache(<RuntimeValue>v, age, pyage)
+        return rtval_cache(<RuntimeValue>v).to_py()
+    return v
 
 cdef inline RuntimeValue new_expr1(ValueType type_, RuntimeValue arg0):
     return _new_expr1(RuntimeValue, type_, arg0)

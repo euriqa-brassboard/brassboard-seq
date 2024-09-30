@@ -159,8 +159,6 @@ cpdef ifelse(b, v1, v2)
 cdef inline bint is_rtval(v) noexcept:
     return type(v) is RuntimeValue
 
-cdef _get_value(v, unsigned age, py_object &pyage)
-
 cdef inline bint get_value_bool(v, unsigned age, py_object &pyage) except -1:
     if is_rtval(v):
         rt_eval_throw(<RuntimeValue>v, age, pyage)
