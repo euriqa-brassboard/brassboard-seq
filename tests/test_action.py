@@ -152,6 +152,9 @@ def test_ramp_eval():
     wtfunc.res = test_utils.new_arg([])
     with pytest.raises(TypeError):
         test_utils.RampTest(wtfunc, rlen, rold)
+    wtfunc.res = test_utils.new_invalid_rtval()
+    with pytest.raises(ValueError, match="Unknown value type"):
+        test_utils.RampTest(wtfunc, rlen, rold)
 
     efunc = ErrorFunction(ValueError("AAAAA"))
     with pytest.raises(ValueError, match="^AAAAA$"):
