@@ -27,7 +27,7 @@
 
 namespace brassboard_seq::event_time {
 
-PyObject *_str_time(long long t)
+static PyObject *str_time(long long t)
 {
     assert(time_scale == 1e12);
     assert(t >= 0);

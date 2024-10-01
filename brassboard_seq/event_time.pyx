@@ -38,7 +38,7 @@ def time_scale():
     return py_time_scale
 
 cdef extern from "src/event_time.cpp" namespace "brassboard_seq::event_time":
-    str _str_time(long long) except +
+    str str_time(long long) except +
     void update_event_time_gc_callback(PyTypeObject *type, EventTime)
 
 update_event_time_gc_callback(<PyTypeObject*>EventTime, None)
@@ -294,11 +294,11 @@ cdef class EventTime:
         if self.data.floating:
             return '<floating>'
         if self.data.is_static():
-            return _str_time(self.data._get_static())
+            return str_time(self.data._get_static())
         prev = self.prev
         p_rt_offset = self.data.get_rt_offset()
         if p_rt_offset == NULL:
-            offset = _str_time(<long long>self.data.get_c_offset())
+            offset = str_time(<long long>self.data.get_c_offset())
         else:
             offset = str(<RuntimeValue>p_rt_offset)
         cond = self.cond
