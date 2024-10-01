@@ -38,7 +38,7 @@ def time_scale():
     return py_time_scale
 
 cdef extern from "src/event_time.cpp" namespace "brassboard_seq::event_time":
-    str _str_time(long long)
+    str _str_time(long long) except +
     void update_event_time_gc_callback(PyTypeObject *type, EventTime)
 
 update_event_time_gc_callback(<PyTypeObject*>EventTime, None)
