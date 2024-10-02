@@ -34,13 +34,10 @@ static PyTypeObject *rtval_type;
 static PyTypeObject *rampfunction_type;
 static PyTypeObject *seqcubicspline_type;
 
-template<typename PulseCompilerInfo>
-static __attribute__((returns_nonnull)) PyObject*
-new_cubic_spline(PulseCompilerInfo *info, cubic_spline_t sp)
+static inline __attribute__((returns_nonnull,always_inline))
+PyObject *_new_cubic_spline(PyObject *CubicSpline, cubic_spline_t sp)
 {
-    if (sp == cubic_spline_t{0, 0, 0, 0})
-        return py_newref(info->cubic_0);
-    PyTypeObject *ty = (PyTypeObject*)info->CubicSpline;
+    PyTypeObject *ty = (PyTypeObject*)CubicSpline;
     py_object o0(throw_if_not(pyfloat_from_double(sp.order0)));
     py_object o1(throw_if_not(pyfloat_from_double(sp.order1)));
     py_object o2(throw_if_not(pyfloat_from_double(sp.order2)));
@@ -51,6 +48,15 @@ new_cubic_spline(PulseCompilerInfo *info, cubic_spline_t sp)
     PyTuple_SET_ITEM(newobj, 2, o2.release());
     PyTuple_SET_ITEM(newobj, 3, o3.release());
     return newobj;
+}
+
+template<typename PulseCompilerInfo>
+static __attribute__((returns_nonnull)) PyObject*
+new_cubic_spline(PulseCompilerInfo *info, cubic_spline_t sp)
+{
+    if (sp == cubic_spline_t{0, 0, 0, 0})
+        return py_newref(info->cubic_0);
+    return _new_cubic_spline(info->CubicSpline, sp);
 }
 
 template<typename PulseCompilerInfo>

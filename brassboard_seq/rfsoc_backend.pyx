@@ -39,6 +39,7 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
     void generate_tonedata(RFSOCBackend ab, RuntimeValue, RampFunction,
                            SeqCubicSpline) except +
 
+    object _new_cubic_spline(object CubicSpline, cubic_spline_t sp)
     object new_tone_data(PulseCompilerInfo info, int channel, int tone,
                          int64_t duration_cycles, cubic_spline_t freq,
                          cubic_spline_t amp, cubic_spline_t phase,
@@ -58,7 +59,6 @@ def dummy_post_init(self, /):
 @cython.no_gc
 cdef class PulseCompilerInfo:
     cdef list channel_list
-    cdef object orig_post_init
     cdef object CubicSpline
     cdef object ToneData
     cdef object cubic_0
@@ -90,12 +90,12 @@ cdef int init_pulse_compiler_info() except -1:
     from pulsecompiler.rfsoc.structures.splines import CubicSpline
     from qiskit.pulse import ControlChannel, DriveChannel
     assert issubclass(CubicSpline, tuple)
-    self.orig_post_init = ToneData.__post_init__
+    orig_post_init = ToneData.__post_init__
     self.CubicSpline = CubicSpline
     self.ToneData = ToneData
     ToneData.__post_init__ = dummy_post_init
     dummy_tonedata = ToneData(0, 0, 4, 0, 0, 0)
-    ToneData.__post_init__ = self.orig_post_init
+    ToneData.__post_init__ = orig_post_init
     self.tonedata_field_names = []
     self.tonedata_field_values = []
     for k, v in dummy_tonedata.__dict__.items():
@@ -109,8 +109,7 @@ cdef int init_pulse_compiler_info() except -1:
     for i in range(62):
         channel_list.append(DriveChannel(i))
     self.channel_list = channel_list
-    self.cubic_0 = CubicSpline(pyfloat_from_double(0), pyfloat_from_double(0),
-                               pyfloat_from_double(0), pyfloat_from_double(0))
+    self.cubic_0 = _new_cubic_spline(CubicSpline, cubic_spline_t(0, 0, 0, 0))
     self.py_tone0_num = 0
     self.py_tone1_num = 1
     self.py_channel_nums = list(range(31))
@@ -138,7 +137,6 @@ cdef class PulseCompilerGenerator:
         self.output = {}
 
     cdef int start(self) except -1:
-        pulse_compiler_info.ToneData.__post_init__ = dummy_post_init
         _assume_not_none(<void*>self.output)
         self.output.clear()
 
@@ -163,7 +161,7 @@ cdef class PulseCompilerGenerator:
         tonedatas.append(tonedata)
 
     cdef int finish(self) except -1:
-        pulse_compiler_info.ToneData.__post_init__ = pulse_compiler_info.orig_post_init
+        pass
 
 cdef PyObject *raise_invalid_channel(tuple path) except NULL:
     name = '/'.join(path)
