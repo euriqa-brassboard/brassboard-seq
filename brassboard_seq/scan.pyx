@@ -231,6 +231,7 @@ cdef int _foreach_nondict(foreach_nondict_cb cb, void *data, dict obj,
             cb(v, path, data)
 
 
+@cython.internal
 @cython.final
 cdef class Scan1D:
     cdef int size
@@ -275,6 +276,7 @@ cdef Scan1D load_scan1d(dict data):
     return self
 
 
+@cython.internal
 @cython.final
 cdef class ScanND:
     cdef int baseidx
