@@ -35,22 +35,32 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
     PyTypeObject *rampfunction_type
     PyTypeObject *seqcubicspline_type
     void collect_actions(RFSOCBackend ab, Action, EventTime) except+
+    void generate_channel_tonedata(PulseCompilerGenerator, RFSOCBackend,
+                                   int chn, int64_t total_cycle) except +
 
-    void generate_tonedata(RFSOCBackend ab, RuntimeValue, RampFunction,
-                           SeqCubicSpline) except +
-
-    void add_tone_data(PulseCompilerGenerator, int channel, int tone,
-                       int64_t duration_cycles, cubic_spline_t freq, cubic_spline_t amp,
-                       cubic_spline_t phase, output_flags_t flags) except +
+    void gen_rfsoc_data(RFSOCBackend ab, RuntimeValue, RampFunction,
+                        SeqCubicSpline) except +
 
 rtval_type = <PyTypeObject*>RuntimeValue
 rampfunction_type = <PyTypeObject*>RampFunction
 seqcubicspline_type = <PyTypeObject*>SeqCubicSpline
 
+cdef class RFSOCGenerator:
+    cdef int start(self) except -1:
+        pass
+
+    cdef int process_channel(self, RFSOCBackend rb, int chn,
+                             int64_t total_cycle) except -1:
+        pass
+
+    cdef int finish(self) except -1:
+        pass
 
 @cython.auto_pickle(False)
 @cython.final
-cdef class PulseCompilerGenerator:
+cdef class PulseCompilerGenerator(RFSOCGenerator):
+    cdef readonly dict output
+
     def __init__(self):
         self.output = {}
 
@@ -58,11 +68,9 @@ cdef class PulseCompilerGenerator:
         _assume_not_none(<void*>self.output)
         self.output.clear()
 
-    cdef int add_tone_data(self, int channel, int tone, int64_t duration_cycles,
-                           cubic_spline_t frequency_hz, cubic_spline_t amplitude,
-                           cubic_spline_t phase_rad, output_flags_t flags) except -1:
-        add_tone_data(self, channel, tone, duration_cycles, frequency_hz,
-                      amplitude, phase_rad, flags)
+    cdef int process_channel(self, RFSOCBackend rb, int chn,
+                             int64_t total_cycle) except -1:
+        generate_channel_tonedata(self, rb, chn, total_cycle)
 
     cdef int finish(self) except -1:
         pass
@@ -156,6 +164,6 @@ cdef class RFSOCBackend:
             set_dds_delay(self, dds, rtval_cache(<RuntimeValue>delay).get[double]())
         self.generator.start()
         try:
-            generate_tonedata(self, None, None, None)
+            gen_rfsoc_data(self, None, None, None)
         finally:
             self.generator.finish()

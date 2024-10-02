@@ -202,15 +202,17 @@ new_tone_data(int channel, int tone, int64_t duration_cycles,
 }
 
 template<typename PulseCompilerGenerator>
-static void add_tone_data(PulseCompilerGenerator *self, int channel, int tone,
+static void add_tone_data(PulseCompilerGenerator *self, int chn,
                           int64_t duration_cycles, cubic_spline_t freq,
                           cubic_spline_t amp, cubic_spline_t phase,
                           output_flags_t flags)
 {
+    bb_debug("outputting tone data: chn=%d, cycles=%" PRId64 ", sync=%d, ff=%d\n",
+             chn, duration_cycles, flags.sync, flags.feedback_enable);
     auto info = get_pulse_compiler_info();
-    auto tonedata = new_tone_data(channel, tone, duration_cycles, freq,
+    auto tonedata = new_tone_data(chn >> 1, chn & 1, duration_cycles, freq,
                                   amp, phase, flags);
-    auto key = info->channel_list[(channel << 1) | tone];
+    auto key = info->channel_list[chn];
     auto tonedatas = PyDict_GetItemWithError(self->output, key);
     if (!tonedatas) {
         throw_if(PyErr_Occurred());
@@ -480,29 +482,24 @@ static inline cubic_spline_t appoximate_spline(double v[5])
     return spline_from_values(v0, v1, v2, v3);
 }
 
-template<typename RFSOCBackend>
+template<typename RFSOCBackend, typename PulseCompilerGenerator>
 static __attribute__((always_inline)) inline
-void generate_channel_tonedata(RFSOCBackend *rb, ToneChannel &channel,
-                               int64_t total_cycle)
+void generate_channel_tonedata(PulseCompilerGenerator *generator,
+                               RFSOCBackend *rb, int chn, int64_t total_cycle)
 {
     auto &tone_buffer = rb->tone_buffer;
-    auto _add_tone_data = rb->generator->__pyx_vtab->add_tone_data;
 
     bool first_output = true;
-    auto add_tone_data = [&] (int64_t cycles, cubic_spline_t freq, cubic_spline_t amp,
-                              cubic_spline_t phase, bool sync, bool ff) {
-        bb_debug("outputting tone data: chn=%d, cycles=%" PRId64 ", sync=%d, ff=%d\n",
-                 channel.chn, cycles, sync, ff);
-        throw_if_not(_add_tone_data(rb->generator, channel.chn >> 1, channel.chn & 1,
-                                    cycles, freq, amp, phase,
-                                    { first_output, sync, ff }) >= 0);
+    auto get_trigger = [&] {
+        auto v = first_output;
         first_output = false;
+        return v;
     };
     assert(!tone_buffer.params[0].empty());
     assert(!tone_buffer.params[1].empty());
     assert(!tone_buffer.params[2].empty());
 
-    bb_debug("Start outputting tone data for channel %d\n", channel.chn);
+    bb_debug("Start outputting tone data for channel %d\n", chn);
 
     int64_t cur_cycle = 0;
 
@@ -533,7 +530,7 @@ void generate_channel_tonedata(RFSOCBackend *rb, ToneChannel &channel,
         int64_t action_end_cycle = std::min({ freq_end_cycle, phase_end_cycle,
                 amp_end_cycle, ff_end_cycle });
         bb_debug("find continuous range [%" PRId64 ", %" PRId64 "] on channel %d\n",
-                 cur_cycle, action_end_cycle, channel.chn);
+                 cur_cycle, action_end_cycle, chn);
 
         auto forward_freq = [&] {
             assert(freq_idx + 1 < tone_buffer.params[(int)ToneFreq].size());
@@ -573,12 +570,12 @@ void generate_channel_tonedata(RFSOCBackend *rb, ToneChannel &channel,
             };
 
             bb_debug("continuous range long enough for normal output (channel %d)\n",
-                     channel.chn);
-            add_tone_data(action_end_cycle - cur_cycle,
+                     chn);
+            add_tone_data(generator, chn, action_end_cycle - cur_cycle,
                           resample_action_spline(freq_action, freq_cycle),
                           resample_action_spline(amp_action, amp_cycle),
                           resample_action_spline(phase_action, phase_cycle),
-                          sync, ff_action.ff);
+                          { get_trigger(), sync, ff_action.ff });
             cur_cycle = action_end_cycle;
         }
         else {
@@ -587,7 +584,7 @@ void generate_channel_tonedata(RFSOCBackend *rb, ToneChannel &channel,
             // 4 cycles if we are hitting the end.
             assert(action_end_cycle != total_cycle);
             assert(cur_cycle + 4 <= total_cycle);
-            bb_debug("continuous range too short (channel %d)\n", channel.chn);
+            bb_debug("continuous range too short (channel %d)\n", chn);
 
             auto eval_param = [&] (auto &param, int64_t cycle, int64_t cycle_start) {
                 auto dt = cycle - cycle_start;
@@ -674,8 +671,9 @@ void generate_channel_tonedata(RFSOCBackend *rb, ToneChannel &channel,
             else {
                 bb_debug("no sync\n");
             }
-            add_tone_data(4, appoximate_spline(freqs), appoximate_spline(amps),
-                          appoximate_spline(phases), sync, ff_action.ff);
+            add_tone_data(generator, chn, 4, appoximate_spline(freqs),
+                          appoximate_spline(amps), appoximate_spline(phases),
+                          { get_trigger(), sync, ff_action.ff });
             cur_cycle += 4;
             if (cur_cycle != action_end_cycle) {
                 // We've only outputted 4 cycles (instead of outputting
@@ -840,9 +838,9 @@ SyncTimeMgr::add_action(std::vector<DDSParamAction> &actions, int64_t start_cycl
 template<typename RFSOCBackend, typename RuntimeValue, typename RampFunction,
          typename SeqCubicSpline>
 static __attribute__((always_inline)) inline
-void generate_tonedata(RFSOCBackend *rb, RuntimeValue*, RampFunction*, SeqCubicSpline*)
+void gen_rfsoc_data(RFSOCBackend *rb, RuntimeValue*, RampFunction*, SeqCubicSpline*)
 {
-    bb_debug("generate_tonedata: start\n");
+    bb_debug("gen_rfsoc_data: start\n");
     auto seq = rb->__pyx_base.seq;
     for (size_t i = 0, nreloc = rb->bool_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = rb->bool_values[i];
@@ -929,6 +927,8 @@ void generate_tonedata(RFSOCBackend *rb, RuntimeValue*, RampFunction*, SeqCubicS
                       });
         }
     };
+
+    auto gen_process_channel = rb->generator->__pyx_vtab->process_channel;
 
     // Add extra cycles to be able to handle the requirement of minimum 4 cycles.
     auto total_cycle = seq_time_to_cycle(rb->__pyx_base.seq->total_time + max_delay) + 8;
@@ -1139,9 +1139,9 @@ void generate_tonedata(RFSOCBackend *rb, RuntimeValue*, RampFunction*, SeqCubicS
                                 spline_from_static(val), cycle_to_seq_time(total_cycle),
                                 prev_tid, param);
         }
-        generate_channel_tonedata(rb, channel, total_cycle);
+        throw_if(gen_process_channel(rb->generator, rb, channel.chn, total_cycle));
     }
-    bb_debug("generate_tonedata: finish\n");
+    bb_debug("gen_rfsoc_data: finish\n");
 }
 
 }
