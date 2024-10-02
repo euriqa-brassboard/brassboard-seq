@@ -39,101 +39,19 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
     void generate_tonedata(RFSOCBackend ab, RuntimeValue, RampFunction,
                            SeqCubicSpline) except +
 
-    object _new_cubic_spline(object CubicSpline, cubic_spline_t sp)
-    object new_tone_data(PulseCompilerInfo info, int channel, int tone,
-                         int64_t duration_cycles, cubic_spline_t freq,
-                         cubic_spline_t amp, cubic_spline_t phase,
-                         output_flags_t flags) except +
+    void add_tone_data(PulseCompilerGenerator, int channel, int tone,
+                       int64_t duration_cycles, cubic_spline_t freq, cubic_spline_t amp,
+                       cubic_spline_t phase, output_flags_t flags) except +
 
 rtval_type = <PyTypeObject*>RuntimeValue
 rampfunction_type = <PyTypeObject*>RampFunction
 seqcubicspline_type = <PyTypeObject*>SeqCubicSpline
-
-cdef dummy_post_init
-def dummy_post_init(self, /):
-    pass
-
-@cython.internal
-@cython.auto_pickle(False)
-@cython.final
-@cython.no_gc
-cdef class PulseCompilerInfo:
-    cdef list channel_list
-    cdef object CubicSpline
-    cdef object ToneData
-    cdef object cubic_0
-    cdef list tonedata_field_names
-    cdef list tonedata_field_values
-    cdef object py_tone0_num
-    cdef object py_tone1_num
-    cdef list py_channel_nums
-    cdef str channel_str
-    cdef str tone_str
-    cdef str duration_cycles_str
-    cdef str frequency_hz_str
-    cdef str amplitude_str
-    cdef str phase_rad_str
-    cdef str frame_rotation_rad_str
-    cdef str wait_trigger_str
-    cdef str sync_str
-    cdef str output_enable_str
-    cdef str feedback_enable_str
-    cdef str bypass_lookup_tables_str
-
-cdef PulseCompilerInfo pulse_compiler_info
-cdef int init_pulse_compiler_info() except -1:
-    global pulse_compiler_info
-    if pulse_compiler_info is not None:
-        return 0
-    self = <PulseCompilerInfo>PulseCompilerInfo.__new__(PulseCompilerInfo)
-    from pulsecompiler.rfsoc.tones.tonedata import ToneData
-    from pulsecompiler.rfsoc.structures.splines import CubicSpline
-    from qiskit.pulse import ControlChannel, DriveChannel
-    assert issubclass(CubicSpline, tuple)
-    orig_post_init = ToneData.__post_init__
-    self.CubicSpline = CubicSpline
-    self.ToneData = ToneData
-    ToneData.__post_init__ = dummy_post_init
-    dummy_tonedata = ToneData(0, 0, 4, 0, 0, 0)
-    ToneData.__post_init__ = orig_post_init
-    self.tonedata_field_names = []
-    self.tonedata_field_values = []
-    for k, v in dummy_tonedata.__dict__.items():
-        if k in ('channel', 'tone', 'duration_cycles', 'frequency_hz', 'amplitude',
-                 'phase_rad', 'frame_rotation_rad', 'wait_trigger', 'sync',
-                 'output_enable', 'feedback_enable', 'bypass_lookup_tables'):
-            continue
-        self.tonedata_field_names.append(k)
-        self.tonedata_field_values.append(v)
-    channel_list = [ControlChannel(0), ControlChannel(1)]
-    for i in range(62):
-        channel_list.append(DriveChannel(i))
-    self.channel_list = channel_list
-    self.cubic_0 = _new_cubic_spline(CubicSpline, cubic_spline_t(0, 0, 0, 0))
-    self.py_tone0_num = 0
-    self.py_tone1_num = 1
-    self.py_channel_nums = list(range(31))
-    self.channel_str = 'channel'
-    self.tone_str = 'tone'
-    self.duration_cycles_str = 'duration_cycles'
-    self.frequency_hz_str = 'frequency_hz'
-    self.amplitude_str = 'amplitude'
-    self.phase_rad_str = 'phase_rad'
-    self.frame_rotation_rad_str = 'frame_rotation_rad'
-    self.wait_trigger_str = 'wait_trigger'
-    self.sync_str = 'sync'
-    self.output_enable_str = 'output_enable'
-    self.feedback_enable_str = 'feedback_enable'
-    self.bypass_lookup_tables_str = 'bypass_lookup_tables'
-
-    pulse_compiler_info = self
 
 
 @cython.auto_pickle(False)
 @cython.final
 cdef class PulseCompilerGenerator:
     def __init__(self):
-        init_pulse_compiler_info()
         self.output = {}
 
     cdef int start(self) except -1:
@@ -143,22 +61,8 @@ cdef class PulseCompilerGenerator:
     cdef int add_tone_data(self, int channel, int tone, int64_t duration_cycles,
                            cubic_spline_t frequency_hz, cubic_spline_t amplitude,
                            cubic_spline_t phase_rad, output_flags_t flags) except -1:
-        tonedata = new_tone_data(pulse_compiler_info, channel, tone,
-                                 duration_cycles, frequency_hz, amplitude,
-                                 phase_rad, flags)
-        _assume_not_none(<void*>pulse_compiler_info.channel_list)
-        key = pulse_compiler_info.channel_list[(channel << 1) | tone]
-        output = <void*>self.output
-        ptonedatas = PyDict_GetItemWithError(<dict>output, key)
-        cdef list tonedatas
-        if ptonedatas != NULL:
-            tonedatas = <list>ptonedatas
-        else:
-            tonedatas = []
-            _assume_not_none(output)
-            (<dict>output)[key] = tonedatas
-        assume_not_none(tonedatas)
-        tonedatas.append(tonedata)
+        add_tone_data(self, channel, tone, duration_cycles, frequency_hz,
+                      amplitude, phase_rad, flags)
 
     cdef int finish(self) except -1:
         pass

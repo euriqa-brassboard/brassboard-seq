@@ -34,6 +34,35 @@ static PyTypeObject *rtval_type;
 static PyTypeObject *rampfunction_type;
 static PyTypeObject *seqcubicspline_type;
 
+struct PulseCompilerInfo {
+    PyObject *py_nums[64];
+    PyObject *channel_list[64];
+    PyObject *CubicSpline;
+    PyObject *ToneData;
+    PyObject *cubic_0;
+    std::vector<std::pair<PyObject*,PyObject*>> tonedata_fields;
+    PyObject *channel_str;
+    PyObject *tone_str;
+    PyObject *duration_cycles_str;
+    PyObject *frequency_hz_str;
+    PyObject *amplitude_str;
+    PyObject *phase_rad_str;
+    PyObject *frame_rotation_rad_str;
+    PyObject *wait_trigger_str;
+    PyObject *sync_str;
+    PyObject *output_enable_str;
+    PyObject *feedback_enable_str;
+    PyObject *bypass_lookup_tables_str;
+
+    PulseCompilerInfo();
+};
+
+static inline PulseCompilerInfo *get_pulse_compiler_info()
+{
+    static PulseCompilerInfo info;
+    return &info;
+}
+
 static inline __attribute__((returns_nonnull,always_inline))
 PyObject *_new_cubic_spline(PyObject *CubicSpline, cubic_spline_t sp)
 {
@@ -50,51 +79,116 @@ PyObject *_new_cubic_spline(PyObject *CubicSpline, cubic_spline_t sp)
     return newobj;
 }
 
-template<typename PulseCompilerInfo>
-static __attribute__((returns_nonnull)) PyObject*
-new_cubic_spline(PulseCompilerInfo *info, cubic_spline_t sp)
+PulseCompilerInfo::PulseCompilerInfo()
 {
+    for (int i = 0; i < 64; i++)
+        py_nums[i] = throw_if_not(PyLong_FromLong(i));
+    channel_str = throw_if_not(PyUnicode_FromString("channel"));
+    tone_str = throw_if_not(PyUnicode_FromString("tone"));
+    duration_cycles_str = throw_if_not(PyUnicode_FromString("duration_cycles"));
+    frequency_hz_str = throw_if_not(PyUnicode_FromString("frequency_hz"));
+    amplitude_str = throw_if_not(PyUnicode_FromString("amplitude"));
+    phase_rad_str = throw_if_not(PyUnicode_FromString("phase_rad"));
+    frame_rotation_rad_str = throw_if_not(PyUnicode_FromString("frame_rotation_rad"));
+    wait_trigger_str = throw_if_not(PyUnicode_FromString("wait_trigger"));
+    sync_str = throw_if_not(PyUnicode_FromString("sync"));
+    output_enable_str = throw_if_not(PyUnicode_FromString("output_enable"));
+    feedback_enable_str = throw_if_not(PyUnicode_FromString("feedback_enable"));
+    bypass_lookup_tables_str =
+        throw_if_not(PyUnicode_FromString("bypass_lookup_tables"));
+
+    py_object tonedata_mod(
+        throw_if_not(PyImport_ImportModule("pulsecompiler.rfsoc.tones.tonedata")));
+    ToneData = throw_if_not(PyObject_GetAttrString(tonedata_mod, "ToneData"));
+    py_object splines_mod(
+        throw_if_not(PyImport_ImportModule("pulsecompiler.rfsoc.structures.splines")));
+    CubicSpline = throw_if_not(PyObject_GetAttrString(splines_mod, "CubicSpline"));
+    cubic_0 = _new_cubic_spline(CubicSpline, {0, 0, 0, 0});
+    py_object pulse_mod(throw_if_not(PyImport_ImportModule("qiskit.pulse")));
+    py_object ControlChannel(throw_if_not(PyObject_GetAttrString(pulse_mod,
+                                                                 "ControlChannel")));
+    py_object DriveChannel(throw_if_not(PyObject_GetAttrString(pulse_mod,
+                                                               "DriveChannel")));
+
+    channel_list[0] = throw_if_not(
+        _PyObject_Vectorcall(ControlChannel, &py_nums[0], 1, nullptr));
+    channel_list[1] = throw_if_not(
+        _PyObject_Vectorcall(ControlChannel, &py_nums[1], 1, nullptr));
+    for (int i = 0; i < 62; i++)
+        channel_list[i + 2] = throw_if_not(
+            _PyObject_Vectorcall(DriveChannel, &py_nums[i], 1, nullptr));
+
+    py_object orig_post_init(
+        throw_if_not(PyObject_GetAttrString(ToneData, "__post_init__")));
+    auto dummy_post_init_cb = [] (PyObject*, PyObject *const*, Py_ssize_t) {
+        return py_newref(Py_None);
+    };
+    static PyMethodDef dummy_post_init_method = {
+        "__post_init__", (PyCFunction)(void*)(_PyCFunctionFast)dummy_post_init_cb,
+        METH_FASTCALL, 0};
+    py_object dummy_post_init(PyCFunction_New(&dummy_post_init_method, nullptr));
+    throw_if(PyObject_SetAttrString(ToneData, "__post_init__", dummy_post_init));
+    py_object dummy_tonedata(
+        throw_if_not(_PyObject_Vectorcall(ToneData, py_nums, 6, nullptr)));
+    throw_if(PyObject_SetAttrString(ToneData, "__post_init__", orig_post_init));
+    py_object td_dict(throw_if_not(PyObject_GenericGetDict(dummy_tonedata, nullptr)));
+
+    PyObject *key, *value;
+    Py_ssize_t pos = 0;
+    while (PyDict_Next(td_dict, &pos, &key, &value)) {
+        for (auto name: {"channel", "tone", "duration_cycles", "frequency_hz",
+                "amplitude", "phase_rad", "frame_rotation_rad", "wait_trigger",
+                "sync", "output_enable", "feedback_enable",
+                "bypass_lookup_tables"}) {
+            if (PyUnicode_CompareWithASCIIString(key, name) == 0) {
+                goto skip_field;
+            }
+        }
+        tonedata_fields.push_back({ py_newref(key), py_newref(value) });
+    skip_field:
+        ;
+    }
+}
+
+static inline __attribute__((returns_nonnull))
+PyObject *new_cubic_spline(cubic_spline_t sp)
+{
+    auto info = get_pulse_compiler_info();
     if (sp == cubic_spline_t{0, 0, 0, 0})
         return py_newref(info->cubic_0);
     return _new_cubic_spline(info->CubicSpline, sp);
 }
 
-template<typename PulseCompilerInfo>
-static __attribute__((returns_nonnull)) PyObject*
-new_tone_data(PulseCompilerInfo *info, int channel, int tone, int64_t duration_cycles,
+static py_object
+new_tone_data(int channel, int tone, int64_t duration_cycles,
               cubic_spline_t freq, cubic_spline_t amp, cubic_spline_t phase,
               output_flags_t flags)
 {
+    auto info = get_pulse_compiler_info();
     py_object td(throw_if_not(PyType_GenericAlloc((PyTypeObject*)info->ToneData, 0)));
     py_object td_dict(throw_if_not(PyObject_GenericGetDict(td, nullptr)));
-    auto names = info->tonedata_field_names;
-    auto values = info->tonedata_field_values;
-    int nfields = PyList_GET_SIZE(names);
-    for (int i = 0; i < nfields; i++)
-        throw_if(PyDict_SetItem(td_dict.get(), PyList_GET_ITEM(names, i),
-                                PyList_GET_ITEM(values, i)));
-    throw_if(PyDict_SetItem(td_dict, info->channel_str,
-                            PyList_GET_ITEM(info->py_channel_nums, channel)));
-    throw_if(PyDict_SetItem(td_dict, info->tone_str,
-                            tone ? info->py_tone1_num : info->py_tone0_num));
+    for (auto [name, value]: info->tonedata_fields)
+        throw_if(PyDict_SetItem(td_dict, name, value));
+    throw_if(PyDict_SetItem(td_dict, info->channel_str, info->py_nums[channel]));
+    throw_if(PyDict_SetItem(td_dict, info->tone_str, info->py_nums[tone]));
     {
         py_object py_cycles(throw_if_not(PyLong_FromLongLong(duration_cycles)));
-        throw_if(PyDict_SetItem(td_dict, info->duration_cycles_str, py_cycles.get()));
+        throw_if(PyDict_SetItem(td_dict, info->duration_cycles_str, py_cycles));
     }
     {
-        py_object py_freq(new_cubic_spline(info, freq));
-        throw_if(PyDict_SetItem(td_dict, info->frequency_hz_str, py_freq.get()));
+        py_object py_freq(new_cubic_spline(freq));
+        throw_if(PyDict_SetItem(td_dict, info->frequency_hz_str, py_freq));
     }
     {
-        py_object py_amp(new_cubic_spline(info, amp));
-        throw_if(PyDict_SetItem(td_dict, info->amplitude_str, py_amp.get()));
+        py_object py_amp(new_cubic_spline(amp));
+        throw_if(PyDict_SetItem(td_dict, info->amplitude_str, py_amp));
     }
     {
         // tone data wants rad as phase unit.
-        py_object py_phase(new_cubic_spline(info, {
+        py_object py_phase(new_cubic_spline({
                     phase.order0 * (2 * M_PI), phase.order1 * (2 * M_PI),
                     phase.order2 * (2 * M_PI), phase.order3 * (2 * M_PI) }));
-        throw_if(PyDict_SetItem(td_dict, info->phase_rad_str, py_phase.get()));
+        throw_if(PyDict_SetItem(td_dict, info->phase_rad_str, py_phase));
     }
     throw_if(PyDict_SetItem(td_dict, info->frame_rotation_rad_str, info->cubic_0));
     throw_if(PyDict_SetItem(td_dict, info->wait_trigger_str,
@@ -104,7 +198,29 @@ new_tone_data(PulseCompilerInfo *info, int channel, int tone, int64_t duration_c
     throw_if(PyDict_SetItem(td_dict, info->feedback_enable_str,
                             flags.feedback_enable ? Py_True : Py_False));
     throw_if(PyDict_SetItem(td_dict, info->bypass_lookup_tables_str, Py_False));
-    return td.release();
+    return td;
+}
+
+template<typename PulseCompilerGenerator>
+static void add_tone_data(PulseCompilerGenerator *self, int channel, int tone,
+                          int64_t duration_cycles, cubic_spline_t freq,
+                          cubic_spline_t amp, cubic_spline_t phase,
+                          output_flags_t flags)
+{
+    auto info = get_pulse_compiler_info();
+    auto tonedata = new_tone_data(channel, tone, duration_cycles, freq,
+                                  amp, phase, flags);
+    auto key = info->channel_list[(channel << 1) | tone];
+    auto tonedatas = PyDict_GetItemWithError(self->output, key);
+    if (!tonedatas) {
+        throw_if(PyErr_Occurred());
+        py_object tonedatas(throw_if_not(PyList_New(1)));
+        PyList_SET_ITEM(tonedatas.get(), 0, tonedata.release());
+        throw_if(PyDict_SetItem(self->output, key, tonedatas));
+    }
+    else {
+        throw_if(pylist_append(tonedatas, tonedata));
+    }
 }
 
 inline int ChannelInfo::add_tone_channel(int chn)
