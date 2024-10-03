@@ -192,6 +192,19 @@ struct ToneBuffer {
     }
 };
 
+struct Generator {
+    virtual void start()
+    {
+    }
+    virtual void process_channel(ToneBuffer &tone_buffer, int chn,
+                                 int64_t total_cycle) = 0;
+    virtual void end()
+    {
+    }
+    virtual ~Generator()
+    {}
+};
+
 static inline int64_t seq_time_to_cycle(long long time)
 {
     // Each cycle is 1 / 1ps / 409.6MHz sequence time unit
@@ -262,6 +275,24 @@ cubic_spline_t spline_resample(cubic_spline_t spline, double t1, double t2)
         dt2 * (spline.order2 + o3_3 * t1),
         dt3 * spline.order3,
     };
+}
+
+static inline cubic_spline_t approximate_spline(double v[5])
+{
+    double v0 = v[0];
+    double v1 = v[1] * (2.0 / 3) + v[2] * (1.0 / 3);
+    double v2 = v[3] * (2.0 / 3) + v[2] * (1.0 / 3);
+    double v3 = v[4];
+    // clamp v1 and v2 so that the numbers won't go too crazy
+    if (v3 >= v0) {
+        v1 = std::max(v0, std::min(v1, v3));
+        v2 = std::max(v0, std::min(v2, v3));
+    }
+    else {
+        v1 = std::max(v3, std::min(v1, v0));
+        v2 = std::max(v3, std::min(v2, v0));
+    }
+    return spline_from_values(v0, v1, v2, v3);
 }
 
 }

@@ -35,45 +35,29 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
     PyTypeObject *rampfunction_type
     PyTypeObject *seqcubicspline_type
     void collect_actions(RFSOCBackend ab, Action, EventTime) except+
-    void generate_channel_tonedata(PulseCompilerGenerator, RFSOCBackend,
-                                   int chn, int64_t total_cycle) except +
-
     void gen_rfsoc_data(RFSOCBackend ab, RuntimeValue, RampFunction,
                         SeqCubicSpline) except +
+
+    Generator *new_pulse_compiler_generator() except +
+    cppclass PulseCompilerGen(Generator):
+        PyObject *output
 
 rtval_type = <PyTypeObject*>RuntimeValue
 rampfunction_type = <PyTypeObject*>RampFunction
 seqcubicspline_type = <PyTypeObject*>SeqCubicSpline
 
 cdef class RFSOCGenerator:
-    cdef int start(self) except -1:
-        pass
-
-    cdef int process_channel(self, RFSOCBackend rb, int chn,
-                             int64_t total_cycle) except -1:
-        pass
-
-    cdef int finish(self) except -1:
-        pass
+    pass
 
 @cython.auto_pickle(False)
 @cython.final
 cdef class PulseCompilerGenerator(RFSOCGenerator):
-    cdef readonly dict output
+    def __cinit__(self):
+        self.gen.reset(new_pulse_compiler_generator())
 
-    def __init__(self):
-        self.output = {}
-
-    cdef int start(self) except -1:
-        _assume_not_none(<void*>self.output)
-        self.output.clear()
-
-    cdef int process_channel(self, RFSOCBackend rb, int chn,
-                             int64_t total_cycle) except -1:
-        generate_channel_tonedata(self, rb, chn, total_cycle)
-
-    cdef int finish(self) except -1:
-        pass
+    @property
+    def output(self):
+        return <dict>(<PulseCompilerGen*>self.gen.get()).output
 
 cdef PyObject *raise_invalid_channel(tuple path) except NULL:
     name = '/'.join(path)
@@ -95,7 +79,7 @@ cdef inline int set_dds_delay(RFSOCBackend self, int dds, double delay) except -
 @cython.auto_pickle(False)
 @cython.final
 cdef class RFSOCBackend:
-    def __init__(self, PulseCompilerGenerator generator, /):
+    def __init__(self, RFSOCGenerator generator, /):
         self.eval_status = False
         self.generator = generator
         self.rt_dds_delay = {}
@@ -162,8 +146,8 @@ cdef class RFSOCBackend:
         for dds, delay in self.rt_dds_delay.items():
             rt_eval_throw(<RuntimeValue>delay, age, pyage)
             set_dds_delay(self, dds, rtval_cache(<RuntimeValue>delay).get[double]())
-        self.generator.start()
+        self.generator.gen.get().start()
         try:
             gen_rfsoc_data(self, None, None, None)
         finally:
-            self.generator.finish()
+            self.generator.gen.get().end()

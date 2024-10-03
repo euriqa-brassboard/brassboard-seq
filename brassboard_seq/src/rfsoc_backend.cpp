@@ -34,52 +34,145 @@ static PyTypeObject *rtval_type;
 static PyTypeObject *rampfunction_type;
 static PyTypeObject *seqcubicspline_type;
 
-struct PulseCompilerInfo {
-    PyObject *py_nums[64];
-    PyObject *channel_list[64];
-    PyObject *CubicSpline;
-    PyObject *ToneData;
-    PyObject *cubic_0;
-    std::vector<std::pair<PyObject*,PyObject*>> tonedata_fields;
-    PyObject *channel_str;
-    PyObject *tone_str;
-    PyObject *duration_cycles_str;
-    PyObject *frequency_hz_str;
-    PyObject *amplitude_str;
-    PyObject *phase_rad_str;
-    PyObject *frame_rotation_rad_str;
-    PyObject *wait_trigger_str;
-    PyObject *sync_str;
-    PyObject *output_enable_str;
-    PyObject *feedback_enable_str;
-    PyObject *bypass_lookup_tables_str;
+struct PulseCompilerGen: Generator {
+    struct Info {
+        PyObject *py_nums[64];
+        PyObject *channel_list[64];
+        PyObject *CubicSpline;
+        PyObject *ToneData;
+        PyObject *cubic_0;
+        std::vector<std::pair<PyObject*,PyObject*>> tonedata_fields;
+        PyObject *channel_str;
+        PyObject *tone_str;
+        PyObject *duration_cycles_str;
+        PyObject *frequency_hz_str;
+        PyObject *amplitude_str;
+        PyObject *phase_rad_str;
+        PyObject *frame_rotation_rad_str;
+        PyObject *wait_trigger_str;
+        PyObject *sync_str;
+        PyObject *output_enable_str;
+        PyObject *feedback_enable_str;
+        PyObject *bypass_lookup_tables_str;
 
-    PulseCompilerInfo();
+        __attribute__((returns_nonnull,always_inline))
+        PyObject *_new_cubic_spline(cubic_spline_t sp)
+        {
+            PyTypeObject *ty = (PyTypeObject*)CubicSpline;
+            py_object o0(throw_if_not(pyfloat_from_double(sp.order0)));
+            py_object o1(throw_if_not(pyfloat_from_double(sp.order1)));
+            py_object o2(throw_if_not(pyfloat_from_double(sp.order2)));
+            py_object o3(throw_if_not(pyfloat_from_double(sp.order3)));
+            auto newobj = throw_if_not(PyType_GenericAlloc(ty, 4));
+            PyTuple_SET_ITEM(newobj, 0, o0.release());
+            PyTuple_SET_ITEM(newobj, 1, o1.release());
+            PyTuple_SET_ITEM(newobj, 2, o2.release());
+            PyTuple_SET_ITEM(newobj, 3, o3.release());
+            return newobj;
+        }
+
+        inline __attribute__((returns_nonnull))
+        PyObject *new_cubic_spline(cubic_spline_t sp)
+        {
+            if (sp == cubic_spline_t{0, 0, 0, 0})
+                return py_newref(cubic_0);
+            return _new_cubic_spline(sp);
+        }
+
+        py_object new_tone_data(int channel, int tone, int64_t duration_cycles,
+                                cubic_spline_t freq, cubic_spline_t amp,
+                                cubic_spline_t phase, output_flags_t flags)
+        {
+            py_object td(throw_if_not(PyType_GenericAlloc((PyTypeObject*)ToneData, 0)));
+            py_object td_dict(throw_if_not(PyObject_GenericGetDict(td, nullptr)));
+            for (auto [name, value]: tonedata_fields)
+                throw_if(PyDict_SetItem(td_dict, name, value));
+            throw_if(PyDict_SetItem(td_dict, channel_str, py_nums[channel]));
+            throw_if(PyDict_SetItem(td_dict, tone_str, py_nums[tone]));
+            {
+                py_object py_cycles(throw_if_not(PyLong_FromLongLong(duration_cycles)));
+                throw_if(PyDict_SetItem(td_dict, duration_cycles_str, py_cycles));
+            }
+            {
+                py_object py_freq(new_cubic_spline(freq));
+                throw_if(PyDict_SetItem(td_dict, frequency_hz_str, py_freq));
+            }
+            {
+                py_object py_amp(new_cubic_spline(amp));
+                throw_if(PyDict_SetItem(td_dict, amplitude_str, py_amp));
+            }
+            {
+                // tone data wants rad as phase unit.
+                py_object py_phase(new_cubic_spline({
+                            phase.order0 * (2 * M_PI), phase.order1 * (2 * M_PI),
+                            phase.order2 * (2 * M_PI), phase.order3 * (2 * M_PI) }));
+                throw_if(PyDict_SetItem(td_dict, phase_rad_str, py_phase));
+            }
+            throw_if(PyDict_SetItem(td_dict, frame_rotation_rad_str, cubic_0));
+            throw_if(PyDict_SetItem(td_dict, wait_trigger_str,
+                                    flags.wait_trigger ? Py_True : Py_False));
+            throw_if(PyDict_SetItem(td_dict, sync_str, flags.sync ? Py_True : Py_False));
+            throw_if(PyDict_SetItem(td_dict, output_enable_str, Py_False));
+            throw_if(PyDict_SetItem(td_dict, feedback_enable_str,
+                                    flags.feedback_enable ? Py_True : Py_False));
+            throw_if(PyDict_SetItem(td_dict, bypass_lookup_tables_str, Py_False));
+            return td;
+        }
+
+        Info();
+    };
+    static inline Info *get_info()
+    {
+        static Info info;
+        return &info;
+    }
+
+    void add_tone_data(int chn, int64_t duration_cycles, cubic_spline_t freq,
+                       cubic_spline_t amp, cubic_spline_t phase, output_flags_t flags)
+    {
+        bb_debug("outputting tone data: chn=%d, cycles=%" PRId64 ", sync=%d, ff=%d\n",
+                 chn, duration_cycles, flags.sync, flags.feedback_enable);
+        auto info = get_info();
+        auto tonedata = info->new_tone_data(chn >> 1, chn & 1, duration_cycles, freq,
+                                            amp, phase, flags);
+        auto key = info->channel_list[chn];
+        auto tonedatas = PyDict_GetItemWithError(output, key);
+        if (!tonedatas) {
+            throw_if(PyErr_Occurred());
+            py_object tonedatas(throw_if_not(PyList_New(1)));
+            PyList_SET_ITEM(tonedatas.get(), 0, tonedata.release());
+            throw_if(PyDict_SetItem(output, key, tonedatas));
+        }
+        else {
+            throw_if(pylist_append(tonedatas, tonedata));
+        }
+    }
+
+    PulseCompilerGen()
+        : output(throw_if_not(PyDict_New()))
+    {
+    }
+    void start() override
+    {
+        PyDict_Clear(output);
+    }
+    void process_channel(ToneBuffer &tone_buffer, int chn,
+                         int64_t total_cycle) override;
+    void end() override
+    {
+    }
+    ~PulseCompilerGen() override
+    {}
+
+    py_object output;
 };
 
-static inline PulseCompilerInfo *get_pulse_compiler_info()
+Generator *new_pulse_compiler_generator()
 {
-    static PulseCompilerInfo info;
-    return &info;
+    return new PulseCompilerGen;
 }
 
-static inline __attribute__((returns_nonnull,always_inline))
-PyObject *_new_cubic_spline(PyObject *CubicSpline, cubic_spline_t sp)
-{
-    PyTypeObject *ty = (PyTypeObject*)CubicSpline;
-    py_object o0(throw_if_not(pyfloat_from_double(sp.order0)));
-    py_object o1(throw_if_not(pyfloat_from_double(sp.order1)));
-    py_object o2(throw_if_not(pyfloat_from_double(sp.order2)));
-    py_object o3(throw_if_not(pyfloat_from_double(sp.order3)));
-    auto newobj = throw_if_not(PyType_GenericAlloc(ty, 4));
-    PyTuple_SET_ITEM(newobj, 0, o0.release());
-    PyTuple_SET_ITEM(newobj, 1, o1.release());
-    PyTuple_SET_ITEM(newobj, 2, o2.release());
-    PyTuple_SET_ITEM(newobj, 3, o3.release());
-    return newobj;
-}
-
-PulseCompilerInfo::PulseCompilerInfo()
+PulseCompilerGen::Info::Info()
 {
     for (int i = 0; i < 64; i++)
         py_nums[i] = throw_if_not(PyLong_FromLong(i));
@@ -103,7 +196,7 @@ PulseCompilerInfo::PulseCompilerInfo()
     py_object splines_mod(
         throw_if_not(PyImport_ImportModule("pulsecompiler.rfsoc.structures.splines")));
     CubicSpline = throw_if_not(PyObject_GetAttrString(splines_mod, "CubicSpline"));
-    cubic_0 = _new_cubic_spline(CubicSpline, {0, 0, 0, 0});
+    cubic_0 = _new_cubic_spline({0, 0, 0, 0});
     py_object pulse_mod(throw_if_not(PyImport_ImportModule("qiskit.pulse")));
     py_object ControlChannel(throw_if_not(PyObject_GetAttrString(pulse_mod,
                                                                  "ControlChannel")));
@@ -150,78 +243,216 @@ PulseCompilerInfo::PulseCompilerInfo()
     }
 }
 
-static inline __attribute__((returns_nonnull))
-PyObject *new_cubic_spline(cubic_spline_t sp)
+void PulseCompilerGen::process_channel(ToneBuffer &tone_buffer, int chn,
+                                       int64_t total_cycle)
 {
-    auto info = get_pulse_compiler_info();
-    if (sp == cubic_spline_t{0, 0, 0, 0})
-        return py_newref(info->cubic_0);
-    return _new_cubic_spline(info->CubicSpline, sp);
-}
+    bool first_output = true;
+    auto get_trigger = [&] {
+        auto v = first_output;
+        first_output = false;
+        return v;
+    };
+    assert(!tone_buffer.params[0].empty());
+    assert(!tone_buffer.params[1].empty());
+    assert(!tone_buffer.params[2].empty());
 
-static py_object
-new_tone_data(int channel, int tone, int64_t duration_cycles,
-              cubic_spline_t freq, cubic_spline_t amp, cubic_spline_t phase,
-              output_flags_t flags)
-{
-    auto info = get_pulse_compiler_info();
-    py_object td(throw_if_not(PyType_GenericAlloc((PyTypeObject*)info->ToneData, 0)));
-    py_object td_dict(throw_if_not(PyObject_GenericGetDict(td, nullptr)));
-    for (auto [name, value]: info->tonedata_fields)
-        throw_if(PyDict_SetItem(td_dict, name, value));
-    throw_if(PyDict_SetItem(td_dict, info->channel_str, info->py_nums[channel]));
-    throw_if(PyDict_SetItem(td_dict, info->tone_str, info->py_nums[tone]));
-    {
-        py_object py_cycles(throw_if_not(PyLong_FromLongLong(duration_cycles)));
-        throw_if(PyDict_SetItem(td_dict, info->duration_cycles_str, py_cycles));
-    }
-    {
-        py_object py_freq(new_cubic_spline(freq));
-        throw_if(PyDict_SetItem(td_dict, info->frequency_hz_str, py_freq));
-    }
-    {
-        py_object py_amp(new_cubic_spline(amp));
-        throw_if(PyDict_SetItem(td_dict, info->amplitude_str, py_amp));
-    }
-    {
-        // tone data wants rad as phase unit.
-        py_object py_phase(new_cubic_spline({
-                    phase.order0 * (2 * M_PI), phase.order1 * (2 * M_PI),
-                    phase.order2 * (2 * M_PI), phase.order3 * (2 * M_PI) }));
-        throw_if(PyDict_SetItem(td_dict, info->phase_rad_str, py_phase));
-    }
-    throw_if(PyDict_SetItem(td_dict, info->frame_rotation_rad_str, info->cubic_0));
-    throw_if(PyDict_SetItem(td_dict, info->wait_trigger_str,
-                            flags.wait_trigger ? Py_True : Py_False));
-    throw_if(PyDict_SetItem(td_dict, info->sync_str, flags.sync ? Py_True : Py_False));
-    throw_if(PyDict_SetItem(td_dict, info->output_enable_str, Py_False));
-    throw_if(PyDict_SetItem(td_dict, info->feedback_enable_str,
-                            flags.feedback_enable ? Py_True : Py_False));
-    throw_if(PyDict_SetItem(td_dict, info->bypass_lookup_tables_str, Py_False));
-    return td;
-}
+    bb_debug("Start outputting tone data for channel %d\n", chn);
 
-template<typename PulseCompilerGenerator>
-static void add_tone_data(PulseCompilerGenerator *self, int chn,
-                          int64_t duration_cycles, cubic_spline_t freq,
-                          cubic_spline_t amp, cubic_spline_t phase,
-                          output_flags_t flags)
-{
-    bb_debug("outputting tone data: chn=%d, cycles=%" PRId64 ", sync=%d, ff=%d\n",
-             chn, duration_cycles, flags.sync, flags.feedback_enable);
-    auto info = get_pulse_compiler_info();
-    auto tonedata = new_tone_data(chn >> 1, chn & 1, duration_cycles, freq,
-                                  amp, phase, flags);
-    auto key = info->channel_list[chn];
-    auto tonedatas = PyDict_GetItemWithError(self->output, key);
-    if (!tonedatas) {
-        throw_if(PyErr_Occurred());
-        py_object tonedatas(throw_if_not(PyList_New(1)));
-        PyList_SET_ITEM(tonedatas.get(), 0, tonedata.release());
-        throw_if(PyDict_SetItem(self->output, key, tonedatas));
-    }
-    else {
-        throw_if(pylist_append(tonedatas, tonedata));
+    int64_t cur_cycle = 0;
+
+    int64_t freq_cycle = 0;
+    int freq_idx = 0;
+    auto freq_action = tone_buffer.params[(int)ToneFreq][freq_idx];
+    int64_t freq_end_cycle = freq_cycle + freq_action.cycle_len;
+
+    int64_t phase_cycle = 0;
+    int phase_idx = 0;
+    auto phase_action = tone_buffer.params[(int)TonePhase][phase_idx];
+    int64_t phase_end_cycle = phase_cycle + phase_action.cycle_len;
+
+    int64_t amp_cycle = 0;
+    int amp_idx = 0;
+    auto amp_action = tone_buffer.params[(int)ToneAmp][amp_idx];
+    int64_t amp_end_cycle = amp_cycle + amp_action.cycle_len;
+
+    int64_t ff_cycle = 0;
+    int ff_idx = 0;
+    auto ff_action = tone_buffer.ff[ff_idx];
+    int64_t ff_end_cycle = ff_cycle + ff_action.cycle_len;
+
+    while (true) {
+        // First figure out if we are starting a new action
+        // and how long the current/new action last.
+        bool sync = freq_cycle == cur_cycle && freq_action.sync;
+        int64_t action_end_cycle = std::min({ freq_end_cycle, phase_end_cycle,
+                amp_end_cycle, ff_end_cycle });
+        bb_debug("find continuous range [%" PRId64 ", %" PRId64 "] on channel %d\n",
+                 cur_cycle, action_end_cycle, chn);
+
+        auto forward_freq = [&] {
+            assert(freq_idx + 1 < tone_buffer.params[(int)ToneFreq].size());
+            freq_cycle = freq_end_cycle;
+            freq_idx += 1;
+            freq_action = tone_buffer.params[(int)ToneFreq][freq_idx];
+            freq_end_cycle = freq_cycle + freq_action.cycle_len;
+        };
+        auto forward_amp = [&] {
+            assert(amp_idx + 1 < tone_buffer.params[(int)ToneAmp].size());
+            amp_cycle = amp_end_cycle;
+            amp_idx += 1;
+            amp_action = tone_buffer.params[(int)ToneAmp][amp_idx];
+            amp_end_cycle = amp_cycle + amp_action.cycle_len;
+        };
+        auto forward_phase = [&] {
+            assert(phase_idx + 1 < tone_buffer.params[(int)TonePhase].size());
+            phase_cycle = phase_end_cycle;
+            phase_idx += 1;
+            phase_action = tone_buffer.params[(int)TonePhase][phase_idx];
+            phase_end_cycle = phase_cycle + phase_action.cycle_len;
+        };
+        auto forward_ff = [&] {
+            assert(ff_idx + 1 < tone_buffer.ff.size());
+            ff_cycle = ff_end_cycle;
+            ff_idx += 1;
+            ff_action = tone_buffer.ff[ff_idx];
+            ff_end_cycle = ff_cycle + ff_action.cycle_len;
+        };
+
+        if (action_end_cycle >= cur_cycle + 4) {
+            // There's enough space to output a full tone data.
+            auto resample_action_spline = [&] (auto action, int64_t action_cycle) {
+                auto t1 = double(cur_cycle - action_cycle) / action.cycle_len;
+                auto t2 = double(action_end_cycle - action_cycle) / action.cycle_len;
+                return spline_resample(action.spline, t1, t2);
+            };
+
+            bb_debug("continuous range long enough for normal output (channel %d)\n",
+                     chn);
+            add_tone_data(chn, action_end_cycle - cur_cycle,
+                          resample_action_spline(freq_action, freq_cycle),
+                          resample_action_spline(amp_action, amp_cycle),
+                          resample_action_spline(phase_action, phase_cycle),
+                          { get_trigger(), sync, ff_action.ff });
+            cur_cycle = action_end_cycle;
+        }
+        else {
+            // The last action is at least 8 cycles long and we eat up at most
+            // 4 cycles from it to handle pending sync so we should have at least
+            // 4 cycles if we are hitting the end.
+            assert(action_end_cycle != total_cycle);
+            assert(cur_cycle + 4 <= total_cycle);
+            bb_debug("continuous range too short (channel %d)\n", chn);
+
+            auto eval_param = [&] (auto &param, int64_t cycle, int64_t cycle_start) {
+                auto dt = cycle - cycle_start;
+                auto len = param.cycle_len;
+                if (len == 0) {
+                    assert(dt == 0);
+                    return param.spline.order0;
+                }
+                return spline_eval(param.spline, double(dt) / len);
+            };
+
+            // Now we don't have enough time to do a tone data
+            // based on the segmentation given to us. We'll manually iterate over
+            // the next 4 cycles and compute a 4 cycle tone data that approximate
+            // the action we need the closest.
+
+            // This is the frequency we should sync at.
+            // We need to record this exactly.
+            // It's even more important than the frequency we left the channel at
+            // since getting this wrong could mean a huge phase shift.
+            double sync_freq = freq_action.spline.order0;
+            double freqs[5];
+            while (true) {
+                auto min_cycle = (int)std::max(freq_cycle - cur_cycle, int64_t(0));
+                auto max_cycle = (int)std::min(freq_end_cycle - cur_cycle, int64_t(4));
+                for (int cycle = min_cycle; cycle <= max_cycle; cycle++)
+                    freqs[cycle] = eval_param(freq_action, cur_cycle + cycle,
+                                              freq_cycle);
+                if (freq_end_cycle >= cur_cycle + 4)
+                    break;
+                forward_freq();
+                if (freq_action.sync) {
+                    sync = true;
+                    sync_freq = freq_action.spline.order0;
+                }
+            }
+            action_end_cycle = freq_end_cycle;
+            double phases[5];
+            while (true) {
+                auto min_cycle = (int)std::max(phase_cycle - cur_cycle, int64_t(0));
+                auto max_cycle = (int)std::min(phase_end_cycle - cur_cycle, int64_t(4));
+                for (int cycle = min_cycle; cycle <= max_cycle; cycle++)
+                    phases[cycle] = eval_param(phase_action, cur_cycle + cycle,
+                                               phase_cycle);
+                if (phase_end_cycle >= cur_cycle + 4)
+                    break;
+                forward_phase();
+            }
+            action_end_cycle = std::min(action_end_cycle, phase_end_cycle);
+            double amps[5];
+            while (true) {
+                auto min_cycle = (int)std::max(amp_cycle - cur_cycle, int64_t(0));
+                auto max_cycle = (int)std::min(amp_end_cycle - cur_cycle, int64_t(4));
+                for (int cycle = min_cycle; cycle <= max_cycle; cycle++)
+                    amps[cycle] = eval_param(amp_action, cur_cycle + cycle,
+                                             amp_cycle);
+                if (amp_end_cycle >= cur_cycle + 4)
+                    break;
+                forward_amp();
+            }
+            action_end_cycle = std::min(action_end_cycle, amp_end_cycle);
+            while (true) {
+                if (ff_end_cycle >= cur_cycle + 4)
+                    break;
+                forward_ff();
+            }
+            action_end_cycle = std::min(action_end_cycle, ff_end_cycle);
+
+            bb_debug("freq: {%f, %f, %f, %f, %f}\n",
+                     freqs[0], freqs[1], freqs[2], freqs[3], freqs[4]);
+            bb_debug("amp: {%f, %f, %f, %f, %f}\n",
+                     amps[0], amps[1], amps[2], amps[3], amps[4]);
+            bb_debug("phase: {%f, %f, %f, %f, %f}\n",
+                     phases[0], phases[1], phases[2], phases[3], phases[4]);
+            bb_debug("cur_cycle=%" PRId64 ", end_cycle=%" PRId64 "\n",
+                     cur_cycle, action_end_cycle);
+
+            // We can only sync at the start of the tone data so the start frequency
+            // must be the sync frequency.
+            if (sync) {
+                freqs[0] = sync_freq;
+                bb_debug("sync at %f\n", freqs[0]);
+            }
+            else {
+                bb_debug("no sync\n");
+            }
+            add_tone_data(chn, 4, approximate_spline(freqs),
+                          approximate_spline(amps), approximate_spline(phases),
+                          { get_trigger(), sync, ff_action.ff });
+            cur_cycle += 4;
+            if (cur_cycle != action_end_cycle) {
+                // We've only outputted 4 cycles (instead of outputting
+                // to the end of an action) so in general there may not be anything
+                // to post-process. However, if we happen to be hitting the end
+                // of an action on the 4 cycle mark, we need to do the post-processing
+                // to maintain the invariance that we are not at the end
+                // of the sequence.
+                assert(cur_cycle < action_end_cycle);
+                continue;
+            }
+        }
+        if (action_end_cycle == total_cycle)
+            break;
+        if (action_end_cycle == freq_end_cycle)
+            forward_freq();
+        if (action_end_cycle == amp_end_cycle)
+            forward_amp();
+        if (action_end_cycle == phase_end_cycle)
+            forward_phase();
+        if (action_end_cycle == ff_end_cycle)
+            forward_ff();
     }
 }
 
@@ -464,241 +695,6 @@ void generate_splines(EvalCB &eval_cb, AddSample &add_sample, double len,
     _generate_splines(eval_cb, add_sample, buff, threshold);
 }
 
-static inline cubic_spline_t appoximate_spline(double v[5])
-{
-    double v0 = v[0];
-    double v1 = v[1] * (2.0 / 3) + v[2] * (1.0 / 3);
-    double v2 = v[3] * (2.0 / 3) + v[2] * (1.0 / 3);
-    double v3 = v[4];
-    // clamp v1 and v2 so that the numbers won't go too crazy
-    if (v3 >= v0) {
-        v1 = std::max(v0, std::min(v1, v3));
-        v2 = std::max(v0, std::min(v2, v3));
-    }
-    else {
-        v1 = std::max(v3, std::min(v1, v0));
-        v2 = std::max(v3, std::min(v2, v0));
-    }
-    return spline_from_values(v0, v1, v2, v3);
-}
-
-template<typename RFSOCBackend, typename PulseCompilerGenerator>
-static __attribute__((always_inline)) inline
-void generate_channel_tonedata(PulseCompilerGenerator *generator,
-                               RFSOCBackend *rb, int chn, int64_t total_cycle)
-{
-    auto &tone_buffer = rb->tone_buffer;
-
-    bool first_output = true;
-    auto get_trigger = [&] {
-        auto v = first_output;
-        first_output = false;
-        return v;
-    };
-    assert(!tone_buffer.params[0].empty());
-    assert(!tone_buffer.params[1].empty());
-    assert(!tone_buffer.params[2].empty());
-
-    bb_debug("Start outputting tone data for channel %d\n", chn);
-
-    int64_t cur_cycle = 0;
-
-    int64_t freq_cycle = 0;
-    int freq_idx = 0;
-    auto freq_action = tone_buffer.params[(int)ToneFreq][freq_idx];
-    int64_t freq_end_cycle = freq_cycle + freq_action.cycle_len;
-
-    int64_t phase_cycle = 0;
-    int phase_idx = 0;
-    auto phase_action = tone_buffer.params[(int)TonePhase][phase_idx];
-    int64_t phase_end_cycle = phase_cycle + phase_action.cycle_len;
-
-    int64_t amp_cycle = 0;
-    int amp_idx = 0;
-    auto amp_action = tone_buffer.params[(int)ToneAmp][amp_idx];
-    int64_t amp_end_cycle = amp_cycle + amp_action.cycle_len;
-
-    int64_t ff_cycle = 0;
-    int ff_idx = 0;
-    auto ff_action = tone_buffer.ff[ff_idx];
-    int64_t ff_end_cycle = ff_cycle + ff_action.cycle_len;
-
-    while (true) {
-        // First figure out if we are starting a new action
-        // and how long the current/new action last.
-        bool sync = freq_cycle == cur_cycle && freq_action.sync;
-        int64_t action_end_cycle = std::min({ freq_end_cycle, phase_end_cycle,
-                amp_end_cycle, ff_end_cycle });
-        bb_debug("find continuous range [%" PRId64 ", %" PRId64 "] on channel %d\n",
-                 cur_cycle, action_end_cycle, chn);
-
-        auto forward_freq = [&] {
-            assert(freq_idx + 1 < tone_buffer.params[(int)ToneFreq].size());
-            freq_cycle = freq_end_cycle;
-            freq_idx += 1;
-            freq_action = tone_buffer.params[(int)ToneFreq][freq_idx];
-            freq_end_cycle = freq_cycle + freq_action.cycle_len;
-        };
-        auto forward_amp = [&] {
-            assert(amp_idx + 1 < tone_buffer.params[(int)ToneAmp].size());
-            amp_cycle = amp_end_cycle;
-            amp_idx += 1;
-            amp_action = tone_buffer.params[(int)ToneAmp][amp_idx];
-            amp_end_cycle = amp_cycle + amp_action.cycle_len;
-        };
-        auto forward_phase = [&] {
-            assert(phase_idx + 1 < tone_buffer.params[(int)TonePhase].size());
-            phase_cycle = phase_end_cycle;
-            phase_idx += 1;
-            phase_action = tone_buffer.params[(int)TonePhase][phase_idx];
-            phase_end_cycle = phase_cycle + phase_action.cycle_len;
-        };
-        auto forward_ff = [&] {
-            assert(ff_idx + 1 < tone_buffer.ff.size());
-            ff_cycle = ff_end_cycle;
-            ff_idx += 1;
-            ff_action = tone_buffer.ff[ff_idx];
-            ff_end_cycle = ff_cycle + ff_action.cycle_len;
-        };
-
-        if (action_end_cycle >= cur_cycle + 4) {
-            // There's enough space to output a full tone data.
-            auto resample_action_spline = [&] (auto action, int64_t action_cycle) {
-                auto t1 = double(cur_cycle - action_cycle) / action.cycle_len;
-                auto t2 = double(action_end_cycle - action_cycle) / action.cycle_len;
-                return spline_resample(action.spline, t1, t2);
-            };
-
-            bb_debug("continuous range long enough for normal output (channel %d)\n",
-                     chn);
-            add_tone_data(generator, chn, action_end_cycle - cur_cycle,
-                          resample_action_spline(freq_action, freq_cycle),
-                          resample_action_spline(amp_action, amp_cycle),
-                          resample_action_spline(phase_action, phase_cycle),
-                          { get_trigger(), sync, ff_action.ff });
-            cur_cycle = action_end_cycle;
-        }
-        else {
-            // The last action is at least 8 cycles long and we eat up at most
-            // 4 cycles from it to handle pending sync so we should have at least
-            // 4 cycles if we are hitting the end.
-            assert(action_end_cycle != total_cycle);
-            assert(cur_cycle + 4 <= total_cycle);
-            bb_debug("continuous range too short (channel %d)\n", chn);
-
-            auto eval_param = [&] (auto &param, int64_t cycle, int64_t cycle_start) {
-                auto dt = cycle - cycle_start;
-                auto len = param.cycle_len;
-                if (len == 0) {
-                    assert(dt == 0);
-                    return param.spline.order0;
-                }
-                return spline_eval(param.spline, double(dt) / len);
-            };
-
-            // Now we don't have enough time to do a tone data
-            // based on the segmentation given to us. We'll manually iterate over
-            // the next 4 cycles and compute a 4 cycle tone data that approximate
-            // the action we need the closest.
-
-            // This is the frequency we should sync at.
-            // We need to record this exactly.
-            // It's even more important than the frequency we left the channel at
-            // since getting this wrong could mean a huge phase shift.
-            double sync_freq = freq_action.spline.order0;
-            double freqs[5];
-            while (true) {
-                auto min_cycle = (int)std::max(freq_cycle - cur_cycle, int64_t(0));
-                auto max_cycle = (int)std::min(freq_end_cycle - cur_cycle, int64_t(4));
-                for (int cycle = min_cycle; cycle <= max_cycle; cycle++)
-                    freqs[cycle] = eval_param(freq_action, cur_cycle + cycle,
-                                              freq_cycle);
-                if (freq_end_cycle >= cur_cycle + 4)
-                    break;
-                forward_freq();
-                if (freq_action.sync) {
-                    sync = true;
-                    sync_freq = freq_action.spline.order0;
-                }
-            }
-            action_end_cycle = freq_end_cycle;
-            double phases[5];
-            while (true) {
-                auto min_cycle = (int)std::max(phase_cycle - cur_cycle, int64_t(0));
-                auto max_cycle = (int)std::min(phase_end_cycle - cur_cycle, int64_t(4));
-                for (int cycle = min_cycle; cycle <= max_cycle; cycle++)
-                    phases[cycle] = eval_param(phase_action, cur_cycle + cycle,
-                                               phase_cycle);
-                if (phase_end_cycle >= cur_cycle + 4)
-                    break;
-                forward_phase();
-            }
-            action_end_cycle = std::min(action_end_cycle, phase_end_cycle);
-            double amps[5];
-            while (true) {
-                auto min_cycle = (int)std::max(amp_cycle - cur_cycle, int64_t(0));
-                auto max_cycle = (int)std::min(amp_end_cycle - cur_cycle, int64_t(4));
-                for (int cycle = min_cycle; cycle <= max_cycle; cycle++)
-                    amps[cycle] = eval_param(amp_action, cur_cycle + cycle,
-                                             amp_cycle);
-                if (amp_end_cycle >= cur_cycle + 4)
-                    break;
-                forward_amp();
-            }
-            action_end_cycle = std::min(action_end_cycle, amp_end_cycle);
-            while (true) {
-                if (ff_end_cycle >= cur_cycle + 4)
-                    break;
-                forward_ff();
-            }
-            action_end_cycle = std::min(action_end_cycle, ff_end_cycle);
-
-            bb_debug("freq: {%f, %f, %f, %f, %f}\n",
-                     freqs[0], freqs[1], freqs[2], freqs[3], freqs[4]);
-            bb_debug("amp: {%f, %f, %f, %f, %f}\n",
-                     amps[0], amps[1], amps[2], amps[3], amps[4]);
-            bb_debug("phase: {%f, %f, %f, %f, %f}\n",
-                     phases[0], phases[1], phases[2], phases[3], phases[4]);
-            bb_debug("cur_cycle=%" PRId64 ", end_cycle=%" PRId64 "\n",
-                     cur_cycle, action_end_cycle);
-
-            // We can only sync at the start of the tone data so the start frequency
-            // must be the sync frequency.
-            if (sync) {
-                freqs[0] = sync_freq;
-                bb_debug("sync at %f\n", freqs[0]);
-            }
-            else {
-                bb_debug("no sync\n");
-            }
-            add_tone_data(generator, chn, 4, appoximate_spline(freqs),
-                          appoximate_spline(amps), appoximate_spline(phases),
-                          { get_trigger(), sync, ff_action.ff });
-            cur_cycle += 4;
-            if (cur_cycle != action_end_cycle) {
-                // We've only outputted 4 cycles (instead of outputting
-                // to the end of an action) so in general there may not be anything
-                // to post-process. However, if we happen to be hitting the end
-                // of an action on the 4 cycle mark, we need to do the post-processing
-                // to maintain the invariance that we are not at the end
-                // of the sequence.
-                assert(cur_cycle < action_end_cycle);
-                continue;
-            }
-        }
-        if (action_end_cycle == total_cycle)
-            break;
-        if (action_end_cycle == freq_end_cycle)
-            forward_freq();
-        if (action_end_cycle == amp_end_cycle)
-            forward_amp();
-        if (action_end_cycle == phase_end_cycle)
-            forward_phase();
-        if (action_end_cycle == ff_end_cycle)
-            forward_ff();
-    }
-}
-
 static inline cubic_spline_t
 spline_resample_cycle(cubic_spline_t sp, int64_t start, int64_t end,
                       int64_t cycle1, int64_t cycle2)
@@ -928,7 +924,7 @@ void gen_rfsoc_data(RFSOCBackend *rb, RuntimeValue*, RampFunction*, SeqCubicSpli
         }
     };
 
-    auto gen_process_channel = rb->generator->__pyx_vtab->process_channel;
+    auto gen = rb->generator->gen.get();
 
     // Add extra cycles to be able to handle the requirement of minimum 4 cycles.
     auto total_cycle = seq_time_to_cycle(rb->__pyx_base.seq->total_time + max_delay) + 8;
@@ -1139,7 +1135,7 @@ void gen_rfsoc_data(RFSOCBackend *rb, RuntimeValue*, RampFunction*, SeqCubicSpli
                                 spline_from_static(val), cycle_to_seq_time(total_cycle),
                                 prev_tid, param);
         }
-        throw_if(gen_process_channel(rb->generator, rb, channel.chn, total_cycle));
+        gen->process_channel(rb->tone_buffer, channel.chn, total_cycle);
     }
     bb_debug("gen_rfsoc_data: finish\n");
 }

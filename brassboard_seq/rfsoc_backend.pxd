@@ -22,6 +22,7 @@ from brassboard_seq.backend cimport Backend
 from libc.stdint cimport *
 from libcpp.vector cimport vector
 from libcpp.map cimport map as cppmap
+from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport pair
 
 from cpython cimport PyObject
@@ -78,11 +79,12 @@ cdef extern from "src/rfsoc_backend.h" namespace "brassboard_seq::rfsoc_backend"
     cppclass ToneBuffer:
         pass
 
+    cppclass Generator:
+        void start() except +
+        void end() except +
+
 cdef class RFSOCGenerator:
-    cdef int start(self) except -1
-    cdef int process_channel(self, RFSOCBackend rb, int chn,
-                             int64_t total_cycle) except -1
-    cdef int finish(self) except -1
+    cdef unique_ptr[Generator] gen
 
 cdef class RFSOCBackend(Backend):
     cdef RFSOCGenerator generator
