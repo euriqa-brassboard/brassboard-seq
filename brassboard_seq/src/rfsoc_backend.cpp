@@ -158,9 +158,6 @@ struct PulseCompilerGen: Generator {
     }
     void process_channel(ToneBuffer &tone_buffer, int chn,
                          int64_t total_cycle) override;
-    void end() override
-    {
-    }
     ~PulseCompilerGen() override
     {}
 
