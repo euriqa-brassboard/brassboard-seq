@@ -34,7 +34,15 @@ static PyTypeObject *rtval_type;
 static PyTypeObject *rampfunction_type;
 static PyTypeObject *seqcubicspline_type;
 
-struct PulseCompilerGen: Generator {
+struct SyncChannelGen: Generator {
+    virtual void add_tone_data(int chn, int64_t duration_cycles, cubic_spline_t freq,
+                               cubic_spline_t amp, cubic_spline_t phase,
+                               output_flags_t flags, int64_t cur_cycle) = 0;
+    void process_channel(ToneBuffer &tone_buffer, int chn,
+                         int64_t total_cycle) override;
+};
+
+struct PulseCompilerGen: SyncChannelGen {
     struct Info {
         PyObject *py_nums[64];
         PyObject *channel_list[64];
@@ -128,7 +136,8 @@ struct PulseCompilerGen: Generator {
     }
 
     void add_tone_data(int chn, int64_t duration_cycles, cubic_spline_t freq,
-                       cubic_spline_t amp, cubic_spline_t phase, output_flags_t flags)
+                       cubic_spline_t amp, cubic_spline_t phase,
+                       output_flags_t flags, int64_t) override
     {
         bb_debug("outputting tone data: chn=%d, cycles=%" PRId64 ", sync=%d, ff=%d\n",
                  chn, duration_cycles, flags.sync, flags.feedback_enable);
@@ -156,8 +165,6 @@ struct PulseCompilerGen: Generator {
     {
         PyDict_Clear(output);
     }
-    void process_channel(ToneBuffer &tone_buffer, int chn,
-                         int64_t total_cycle) override;
     ~PulseCompilerGen() override
     {}
 
@@ -240,8 +247,8 @@ PulseCompilerGen::Info::Info()
     }
 }
 
-void PulseCompilerGen::process_channel(ToneBuffer &tone_buffer, int chn,
-                                       int64_t total_cycle)
+void SyncChannelGen::process_channel(ToneBuffer &tone_buffer, int chn,
+                                     int64_t total_cycle)
 {
     bool first_output = true;
     auto get_trigger = [&] {
@@ -329,7 +336,7 @@ void PulseCompilerGen::process_channel(ToneBuffer &tone_buffer, int chn,
                           resample_action_spline(freq_action, freq_cycle),
                           resample_action_spline(amp_action, amp_cycle),
                           resample_action_spline(phase_action, phase_cycle),
-                          { get_trigger(), sync, ff_action.ff });
+                          { get_trigger(), sync, ff_action.ff }, cur_cycle);
             cur_cycle = action_end_cycle;
         }
         else {
@@ -427,7 +434,7 @@ void PulseCompilerGen::process_channel(ToneBuffer &tone_buffer, int chn,
             }
             add_tone_data(chn, 4, approximate_spline(freqs),
                           approximate_spline(amps), approximate_spline(phases),
-                          { get_trigger(), sync, ff_action.ff });
+                          { get_trigger(), sync, ff_action.ff }, cur_cycle);
             cur_cycle += 4;
             if (cur_cycle != action_end_cycle) {
                 // We've only outputted 4 cycles (instead of outputting
