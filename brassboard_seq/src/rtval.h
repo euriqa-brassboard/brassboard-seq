@@ -19,7 +19,7 @@
 #ifndef BRASSBOARD_SEQ_SRC_RTVAL_H
 #define BRASSBOARD_SEQ_SRC_RTVAL_H
 
-#include "utils.h"
+#include "lib_rtval.h"
 
 namespace brassboard_seq::rtval {
 
