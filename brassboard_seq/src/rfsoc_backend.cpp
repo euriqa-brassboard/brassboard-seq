@@ -496,6 +496,21 @@ struct Jaqal_v1 {
     static constexpr int MINIMUM_PULSE_CLOCK_CYCLES = 4;
 };
 
+struct PulseAllocator {
+    std::map<std::array<int64_t,4>,int> pulses;
+
+    void clear()
+    {
+        pulses.clear();
+    }
+
+    int get_addr(std::array<int64_t,4> pulse)
+    {
+        auto [it, inserted] = pulses.emplace(pulse, int(pulses.size()));
+        return it->second;
+    }
+};
+
 struct SyncChannelGen: Generator {
     virtual void add_tone_data(int chn, int64_t duration_cycles, cubic_spline_t freq,
                                cubic_spline_t amp, cubic_spline_t phase,
@@ -731,6 +746,122 @@ PulseCompilerGen::Info::Info()
     skip_field:
         ;
     }
+}
+
+struct JaqalPulseCompilerGen: SyncChannelGen {
+    struct ChannelGen {
+        std::vector<std::pair<int64_t,int16_t>> pulse_ids;
+        PulseAllocator pulses;
+        void clear()
+        {
+            pulse_ids.clear();
+            pulses.clear();
+        }
+        void end();
+    };
+    struct BoardGen {
+        ChannelGen channels[8];
+        std::vector<char> data;
+        void clear()
+        {
+            for (auto &channel: channels)
+                channel.clear();
+            data.clear();
+        }
+        void end();
+    };
+    BoardGen boards[4]; // 4 * 8 physical channels
+
+    void start() override
+    {
+        for (auto &board: boards) {
+            board.clear();
+        }
+    }
+    void add_tone_data(int chn, int64_t duration_cycles, cubic_spline_t freq,
+                       cubic_spline_t amp, cubic_spline_t phase,
+                       output_flags_t flags, int64_t cur_cycle) override;
+    void end() override
+    {
+        for (auto &board: boards) {
+            board.end();
+        }
+    }
+    ~JaqalPulseCompilerGen() override
+    {}
+};
+
+Generator *new_jaqal_pulse_compiler_generator()
+{
+    return new JaqalPulseCompilerGen;
+}
+
+void JaqalPulseCompilerGen::add_tone_data(int chn, int64_t duration_cycles,
+                                          cubic_spline_t freq, cubic_spline_t amp,
+                                          cubic_spline_t phase, output_flags_t flags,
+                                          int64_t cur_cycle)
+{
+    auto board_id = chn >> 4;
+    assert(board_id < 4);
+    auto &board_gen = boards[board_id];
+    auto channel = (chn >> 1) & 7;
+    auto tone = chn & 1;
+    auto &channel_gen = board_gen.channels[channel];
+
+    auto fp = Jaqal_v1::freq_pulse(channel, tone, freq, duration_cycles,
+                                   flags.wait_trigger, flags.sync,
+                                   flags.feedback_enable);
+    auto ap = Jaqal_v1::amp_pulse(channel, tone, amp, duration_cycles,
+                                  flags.wait_trigger);
+    auto pp = Jaqal_v1::phase_pulse(channel, tone, phase, duration_cycles,
+                                    flags.wait_trigger);
+    auto frp = Jaqal_v1::frame_pulse(channel, tone, {0, 0, 0, 0}, duration_cycles,
+                                     flags.wait_trigger, false, false, 0, 0);
+
+    auto fidx = channel_gen.pulses.get_addr(fp);
+    auto aidx = channel_gen.pulses.get_addr(ap);
+    auto pidx = channel_gen.pulses.get_addr(pp);
+    auto fridx = channel_gen.pulses.get_addr(frp);
+
+    if (fidx >= (1 << Jaqal_v1::PLUTW) || aidx >= (1 << Jaqal_v1::PLUTW) ||
+        pidx >= (1 << Jaqal_v1::PLUTW) || fridx >= (1 << Jaqal_v1::PLUTW)) {
+        PyErr_Format(PyExc_ValueError, "Too many pulses in sequence.");
+        throw 0;
+    }
+    auto &pulse_ids = channel_gen.pulse_ids;
+    pulse_ids.push_back({cur_cycle, int16_t(fidx)});
+    pulse_ids.push_back({cur_cycle, int16_t(aidx)});
+    pulse_ids.push_back({cur_cycle, int16_t(pidx)});
+    pulse_ids.push_back({cur_cycle, int16_t(fridx)});
+}
+
+void JaqalPulseCompilerGen::ChannelGen::end()
+{
+    // Keep the 4 pulses from the same tonedata together
+    // so that there's a higher chance we have some reusable subsequences
+    std::ranges::stable_sort(pulse_ids, [] (auto &a, auto &b) {
+        return a.first < b.first;
+    });
+    int npulse = pulse_ids.size();
+    std::vector<int> pulse_str(npulse + 1);
+    std::vector<int> pulse_sa(npulse + 1);
+    std::vector<int> pulse_rk(npulse + 1);
+    std::vector<int> pulse_height(npulse + 1);
+    for (int i = 0; i < npulse; i++)
+        pulse_str[i] = pulse_ids[i].second + 1;
+    pulse_str[npulse] = 0;
+    get_suffix_array(pulse_sa, pulse_str, pulse_rk);
+    order_to_rank(pulse_rk, pulse_sa);
+    get_height_array(pulse_height, pulse_str, pulse_sa, pulse_rk);
+
+    int max_substr_len = std::ranges::max(pulse_height);
+    max_substr_len = std::min(max_substr_len, 256);
+}
+
+void JaqalPulseCompilerGen::BoardGen::end()
+{
+    for (auto &channel_gen: channels)
+        channel_gen.end();
 }
 
 void SyncChannelGen::process_channel(ToneBuffer &tone_buffer, int chn,
