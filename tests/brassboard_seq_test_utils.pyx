@@ -18,8 +18,19 @@ cdef extern from *:
         brassboard_seq::get_suffix_array(SA, S, ws);
         return SA;
     }
+    static inline std::vector<int> _get_height_array(std::vector<int> S,
+                                                     std::vector<int> SA)
+    {
+        int N = S.size();
+        std::vector<int> RK(N);
+        std::vector<int> height(N);
+        brassboard_seq::order_to_rank(RK, SA);
+        brassboard_seq::get_height_array(height, S, SA, RK);
+        return height;
+    }
     """
     vector[int] _get_suffix_array(vector[int])
+    vector[int] _get_height_array(vector[int], vector[int])
 
 def new_invalid_rtval():
     # This should only happen if something really wrong happens.
@@ -197,3 +208,6 @@ def seq_get_all_times(seq.Seq s):
 
 def get_suffix_array(ary):
     return _get_suffix_array(ary)
+
+def get_height_array(s, sa):
+    return _get_height_array(s, sa)

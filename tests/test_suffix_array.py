@@ -9,11 +9,17 @@ import random
 def check_suffix_array(l):
     assert l[-1] == 0
     res = test_utils.get_suffix_array(l)
+    height = test_utils.get_height_array(l, res)
     assert res[0] == len(l) - 1
     prev_suffix = l[res[0]:]
     for i in range(1, len(l)):
         suffix = l[res[i]:]
         assert prev_suffix < suffix
+        h = height[i]
+        assert len(prev_suffix) >= h
+        assert len(suffix) >= h
+        assert suffix[:h] == prev_suffix[:h]
+        assert len(prev_suffix) == h or len(suffix) == h or prev_suffix[h] != suffix[h]
         prev_suffix = suffix
     assert sorted(res) == list(range(len(l)))
 

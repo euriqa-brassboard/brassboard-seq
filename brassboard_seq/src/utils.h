@@ -487,6 +487,8 @@ static inline void order_to_rank(std::span<int> out, std::span<int> in)
         out[in[i]] = i;
     }
 }
+void get_height_array(std::span<int> height, std::span<int> S,
+                      std::span<int> SA, std::span<int> RK);
 
 void init_library();
 

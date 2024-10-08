@@ -627,6 +627,27 @@ static void _get_suffix_array(std::span<int> SA, std::span<int> S,
     sort_suffix(S, SA, ws, lms_cnt);
 }
 
+void get_height_array(std::span<int> height, std::span<int> S,
+                      std::span<int> SA, std::span<int> RK)
+{
+    int N = S.size();
+    assert(height.size() == N);
+    assert(SA.size() == N);
+    assert(RK.size() == N);
+    for (int i = 0, k = 0; i < N; i++) {
+        auto rk = RK[i];
+        if (rk == 0) {
+            height[0] = 0;
+            continue;
+        }
+        if (k)
+            k -= 1;
+        for (auto prev_i = SA[rk - 1]; S[i + k] == S[prev_i + k];)
+            k++;
+        height[rk] = k;
+    }
+}
+
 static std::once_flag init_flag;
 
 namespace rtval {
