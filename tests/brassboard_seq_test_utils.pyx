@@ -4,6 +4,23 @@ from brassboard_seq cimport action, event_time, rtval, seq, utils
 
 import numpy as np
 
+from libcpp.vector cimport vector
+
+cdef extern from *:
+    """
+    #include <vector>
+
+    static inline std::vector<int> _get_suffix_array(std::vector<int> S)
+    {
+        int N = S.size();
+        std::vector<int> SA(N);
+        std::vector<int> ws(N);
+        brassboard_seq::get_suffix_array(SA, S, ws);
+        return SA;
+    }
+    """
+    vector[int] _get_suffix_array(vector[int])
+
 def new_invalid_rtval():
     # This should only happen if something really wrong happens.
     # We'll just test that we behave reasonably enough.
@@ -177,3 +194,6 @@ def seq_get_all_times(seq.Seq s):
     for i in range(ntimes):
         values.append(time_mgr.time_values[i])
     return s.total_time, values
+
+def get_suffix_array(ary):
+    return _get_suffix_array(ary)

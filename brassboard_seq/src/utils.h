@@ -25,6 +25,7 @@
 #include <cmath>
 #include <map>
 #include <memory>
+#include <span>
 #include <vector>
 
 #include <stdint.h>
@@ -471,6 +472,20 @@ static inline bool py_issubtype_nontrivial(PyTypeObject *a, PyTypeObject *b)
         }
     }
     return false;
+}
+
+// Input: S
+// Output: SA (require S.size() == SA.size())
+// Character set must be within [0, N-1] where N is the size of S,
+// Last character must be a unique 0.
+// S will be overwritten.
+void get_suffix_array(std::span<int> SA, std::span<int> S, std::span<int> ws);
+static inline void order_to_rank(std::span<int> out, std::span<int> in)
+{
+    int N = in.size();
+    for (int i = 0; i < N; i++) {
+        out[in[i]] = i;
+    }
 }
 
 void init_library();
