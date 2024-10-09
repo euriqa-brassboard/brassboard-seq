@@ -21,6 +21,7 @@
 
 #include <stdint.h>
 
+#include <cmath>
 #include <map>
 #include <unordered_map>
 #include <utility>
@@ -236,7 +237,7 @@ static inline uint32_t dds_amp_to_mu(double amp)
 
 static inline uint32_t dds_phase_to_mu(double phase)
 {
-    return uint32_t(phase * 0x10000 + 0.5) & 0xffff;
+    return uint32_t(std::lrint(phase * 0x10000) & 0xffff);
 }
 
 static inline uint32_t dds_freq_to_mu(double freq, double ftw_per_hz)

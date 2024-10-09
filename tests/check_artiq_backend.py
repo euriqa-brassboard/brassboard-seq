@@ -26,7 +26,7 @@ def dds_amp_to_mu(amp):
     return v
 
 def dds_phase_to_mu(phase):
-    return int(phase * 0x10000 + 0.5) & 0xffff
+    return round(phase * 0x10000) & 0xffff
 
 def dds_freq_to_mu(freq):
     return int(freq * 4.294967296 + 0.5)
@@ -565,7 +565,7 @@ def test_dds(max_bt):
         s.add_step(0.01) \
          .set('artiq/ttl0', True) \
          .pulse('artiq/urukul0_ch0/amp', v2) \
-         .set('artiq/urukul0_ch0/phase', v2) \
+         .set('artiq/urukul0_ch0/phase', v2 - 1) \
          .set('artiq/urukul0_ch0/freq', v, exact_time=True)
         s.wait(0.001)
         s.add_step(0.01) \
