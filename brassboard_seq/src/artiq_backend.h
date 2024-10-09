@@ -103,14 +103,10 @@ struct UrukulBus {
         last_io_update_mu = start_mu;
     }
 
-    template<typename Add>
-    void add_dds_action(Add &add_action, DDSAction &action);
-    template<typename Add>
-    void add_io_update(Add &add_action, int64_t time_mu, int aid, bool exact_time);
-    template<typename Add>
-    void flush_output(Add &add_action, int64_t time_mu, bool force);
-    template<typename Add>
-    void add_output(Add &add_action, const ArtiqAction &action, DDSChannel &ddschn);
+    void add_dds_action(auto &add_action, DDSAction &action);
+    void add_io_update(auto &add_action, int64_t time_mu, int aid, bool exact_time);
+    void flush_output(auto &add_action, int64_t time_mu, bool force);
+    void add_output(auto &add_action, const ArtiqAction &action, DDSChannel &ddschn);
 };
 
 struct TTLChannel {
@@ -144,11 +140,9 @@ struct TTLChannel {
         cur_val = uint8_t(-1);
         new_val = uint8_t(-1);
     }
-    template<typename Add>
-    void flush_output(Add &add_action, int64_t cur_time_mu,
+    void flush_output(auto &add_action, int64_t cur_time_mu,
                       bool exact_time_only, bool force);
-    template<typename Add>
-    void add_output(Add &add_action, const ArtiqAction &action);
+    void add_output(auto &add_action, const ArtiqAction &action);
 };
 
 struct StartTrigger {

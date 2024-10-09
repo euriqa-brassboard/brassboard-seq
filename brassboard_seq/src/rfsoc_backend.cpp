@@ -23,7 +23,6 @@
 #include "event_time.h"
 #include "utils.h"
 
-#include <algorithm>
 #include <bitset>
 
 #include <assert.h>
@@ -511,9 +510,9 @@ static inline bool parse_action_kws(PyObject *kws, int aid)
     return sync;
 }
 
-template<typename Action, typename EventTime, typename RFSOCBackend>
+template<typename Action, typename EventTime>
 static __attribute__((always_inline)) inline
-void collect_actions(RFSOCBackend *rb, Action*, EventTime*)
+void collect_actions(auto *rb, Action*, EventTime*)
 {
     auto seq = rb->__pyx_base.seq;
     auto all_actions = seq->all_actions;
@@ -640,10 +639,9 @@ struct SplineBuffer {
     }
 };
 
-template<typename EvalCB, typename AddSample>
 static __attribute__((flatten))
-void _generate_splines(EvalCB &eval_cb, AddSample &add_sample,
-                       SplineBuffer &buff, double threshold)
+void _generate_splines(auto &eval_cb, auto &add_sample, SplineBuffer &buff,
+                       double threshold)
 {
     bb_debug("generate_splines: {%f, %f, %f, %f, %f, %f, %f} -> "
              "{%f, %f, %f, %f, %f, %f, %f}\n",
@@ -684,10 +682,8 @@ void _generate_splines(EvalCB &eval_cb, AddSample &add_sample,
     _generate_splines(eval_cb, add_sample, buff, threshold);
 }
 
-template<typename EvalCB, typename AddSample>
 static __attribute__((always_inline)) inline
-void generate_splines(EvalCB &eval_cb, AddSample &add_sample, double len,
-                      double threshold)
+void generate_splines(auto &eval_cb, auto &add_sample, double len, double threshold)
 {
     bb_debug("generate_splines: len=%f\n", len);
     SplineBuffer buff;
@@ -835,10 +831,9 @@ SyncTimeMgr::add_action(std::vector<DDSParamAction> &actions, int64_t start_cycl
     }
 }
 
-template<typename RFSOCBackend, typename RuntimeValue, typename RampFunction,
-         typename SeqCubicSpline>
+template<typename RuntimeValue, typename RampFunction, typename SeqCubicSpline>
 static __attribute__((always_inline)) inline
-void gen_rfsoc_data(RFSOCBackend *rb, RuntimeValue*, RampFunction*, SeqCubicSpline*)
+void gen_rfsoc_data(auto *rb, RuntimeValue*, RampFunction*, SeqCubicSpline*)
 {
     bb_debug("gen_rfsoc_data: start\n");
     auto seq = rb->__pyx_base.seq;
@@ -921,10 +916,9 @@ void gen_rfsoc_data(RFSOCBackend *rb, RuntimeValue*, RampFunction*, SeqCubicSpli
             }
         }
         else {
-            std::sort(actions.begin(), actions.end(),
-                      [&] (const auto &a1, const auto &a2) {
-                          return reloc_and_cmp_action(a1, a2, param);
-                      });
+            std::ranges::sort(actions, [&] (const auto &a1, const auto &a2) {
+                return reloc_and_cmp_action(a1, a2, param);
+            });
         }
     };
 
@@ -1090,7 +1084,7 @@ void gen_rfsoc_data(RFSOCBackend *rb, RuntimeValue*, RampFunction*, SeqCubicSpli
                 while (PyObject *_item = PyIter_Next(iter.get())) {
                     py_object item(_item);
                     double t = PyFloat_AsDouble(item.get());
-                    if (!likely(t > prev_t)) {
+                    if (!(t > prev_t)) [[unlikely]] {
                         if (!PyErr_Occurred()) {
                             if (t < 0) {
                                 PyErr_Format(PyExc_ValueError,
@@ -1116,7 +1110,7 @@ void gen_rfsoc_data(RFSOCBackend *rb, RuntimeValue*, RampFunction*, SeqCubicSpli
                     prev_v = v3;
                 }
                 bb_reraise_and_throw_if(PyErr_Occurred(), action_key(action.aid));
-                if (!likely(prev_t < len)) {
+                if (!(prev_t < len)) [[unlikely]] {
                     PyErr_Format(PyExc_ValueError, "Segment time point must not "
                                  "exceed action length.");
                     bb_reraise_and_throw_if(true, action_key(action.aid));

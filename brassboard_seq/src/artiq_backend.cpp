@@ -98,9 +98,9 @@ inline void ChannelsInfo::add_dds_param_channel(int seqchn, uint32_t bus_id,
                                                     delay, rt_delay), param};
 }
 
-template<typename Action, typename EventTime, typename ArtiqBackend>
+template<typename Action, typename EventTime>
 static __attribute__((always_inline)) inline
-void collect_actions(ArtiqBackend *ab, Action*, EventTime*)
+void collect_actions(auto *ab, Action*, EventTime*)
 {
     auto seq = ab->__pyx_base.seq;
     auto all_actions = seq->all_actions;
@@ -270,9 +270,9 @@ void collect_actions(ArtiqBackend *ab, Action*, EventTime*)
     ab->float_values = std::move(float_values.values);
 }
 
-template<typename ArtiqBackend, typename RuntimeValue>
+template<typename RuntimeValue>
 static __attribute__((always_inline)) inline
-void generate_rtios(ArtiqBackend *ab, unsigned age, py_object &pyage, RuntimeValue*)
+void generate_rtios(auto *ab, unsigned age, py_object &pyage, RuntimeValue*)
 {
     bb_debug("generate_rtios: start\n");
     auto seq = ab->__pyx_base.seq;
@@ -366,34 +366,33 @@ void generate_rtios(ArtiqBackend *ab, unsigned age, py_object &pyage, RuntimeVal
         }
     }
     else {
-        std::sort(ab->all_actions.begin(), ab->all_actions.end(),
-                  [&] (const auto &a1, const auto &a2) {
-                      if (a1.reloc_id >= 0 && a1.eval_status != eval_status) {
-                          a1.eval_status = eval_status;
-                          reloc_action(a1);
-                      }
-                      if (a2.reloc_id >= 0 && a2.eval_status != eval_status) {
-                          a2.eval_status = eval_status;
-                          reloc_action(a2);
-                      }
-                      // Move disabled actions to the end
-                      if (a1.cond != a2.cond)
-                          return int(a1.cond) > int(a2.cond);
-                      // Sort by time
-                      if (a1.time_mu != a2.time_mu)
-                          return a1.time_mu < a2.time_mu;
-                      // Sometimes time points with different tid may actually happen
-                      // at the same time (especially on the same artiq mu time point)
-                      // in these cases we need to make sure we output them in order
-                      // in order to generate the right output at the end.
-                      if (a1.tid != a2.tid)
-                          return a1.tid < a2.tid;
-                      // End action technically happens just before the time point
-                      // and must be sorted to be before the start action.
-                      if (a1.is_end != a2.is_end)
-                          return int(a1.is_end) > int(a2.is_end);
-                      return a1.aid < a2.aid;
-                  });
+        std::ranges::sort(ab->all_actions, [&] (const auto &a1, const auto &a2) {
+            if (a1.reloc_id >= 0 && a1.eval_status != eval_status) {
+                a1.eval_status = eval_status;
+                reloc_action(a1);
+            }
+            if (a2.reloc_id >= 0 && a2.eval_status != eval_status) {
+                a2.eval_status = eval_status;
+                reloc_action(a2);
+            }
+            // Move disabled actions to the end
+            if (a1.cond != a2.cond)
+                return int(a1.cond) > int(a2.cond);
+            // Sort by time
+            if (a1.time_mu != a2.time_mu)
+                return a1.time_mu < a2.time_mu;
+            // Sometimes time points with different tid may actually happen
+            // at the same time (especially on the same artiq mu time point)
+            // in these cases we need to make sure we output them in order
+            // in order to generate the right output at the end.
+            if (a1.tid != a2.tid)
+                return a1.tid < a2.tid;
+            // End action technically happens just before the time point
+            // and must be sorted to be before the start action.
+            if (a1.is_end != a2.is_end)
+                return int(a1.is_end) > int(a2.is_end);
+            return a1.aid < a2.aid;
+        });
     }
 
     ScopeExit cleanup([&] {
@@ -530,8 +529,9 @@ void generate_rtios(ArtiqBackend *ab, unsigned age, py_object &pyage, RuntimeVal
         bus.flush_output(add_action, 0, true);
 
 
-    std::stable_sort(ab->rtio_actions.begin(), ab->rtio_actions.end(),
-                     [] (auto &a1, auto &a2) { return a1.time_mu < a2.time_mu; });
+    std::ranges::stable_sort(ab->rtio_actions, [] (auto &a1, auto &a2) {
+        return a1.time_mu < a2.time_mu;
+    });
 
     auto rtio_array = (PyArrayObject*)ab->rtio_array;
 
@@ -588,8 +588,7 @@ void generate_rtios(ArtiqBackend *ab, unsigned age, py_object &pyage, RuntimeVal
     return;
 }
 
-template<typename Add>
-void UrukulBus::add_dds_action(Add &add_action, DDSAction &action)
+void UrukulBus::add_dds_action(auto &add_action, DDSAction &action)
 {
     auto div = artiq_consts.URUKUL_SPIT_DDS_WR;
     auto ddschn = action.ddschn;
@@ -626,8 +625,7 @@ void UrukulBus::add_dds_action(Add &add_action, DDSAction &action)
     last_bus_mu = t3;
 }
 
-template<typename Add>
-void UrukulBus::add_io_update(Add &add_action, int64_t time_mu,
+void UrukulBus::add_io_update(auto &add_action, int64_t time_mu,
                               int aid, bool exact_time)
 {
     // Round to the nearest 8 cycles.
@@ -642,8 +640,7 @@ void UrukulBus::add_io_update(Add &add_action, int64_t time_mu,
     last_io_update_mu = t2;
 }
 
-template<typename Add>
-inline void UrukulBus::flush_output(Add &add_action, int64_t time_mu, bool force)
+inline void UrukulBus::flush_output(auto &add_action, int64_t time_mu, bool force)
 {
     if (!dds_actions.empty())
         bb_debug("flush_dds: bus@%" PRId64 ", io_upd@%" PRId64 ", "
@@ -673,8 +670,7 @@ inline void UrukulBus::flush_output(Add &add_action, int64_t time_mu, bool force
     }
 }
 
-template<typename Add>
-inline void UrukulBus::add_output(Add &add_action, const ArtiqAction &action,
+inline void UrukulBus::add_output(auto &add_action, const ArtiqAction &action,
                                   DDSChannel &ddschn)
 {
     auto update_dds_data = [&] (uint32_t &data1, uint32_t &data2) {
@@ -754,8 +750,7 @@ inline void UrukulBus::add_output(Add &add_action, const ArtiqAction &action,
             action.aid, &ddschn});
 }
 
-template<typename Add>
-inline void TTLChannel::flush_output(Add &add_action, int64_t cur_time_mu,
+inline void TTLChannel::flush_output(auto &add_action, int64_t cur_time_mu,
                                      bool exact_time_only, bool force)
 {
     if (new_val == cur_val)
@@ -773,8 +768,7 @@ inline void TTLChannel::flush_output(Add &add_action, int64_t cur_time_mu,
                               last_time_mu, exact_time) + 8;
 }
 
-template<typename Add>
-inline void TTLChannel::add_output(Add &add_action, const ArtiqAction &action)
+inline void TTLChannel::add_output(auto &add_action, const ArtiqAction &action)
 {
     uint8_t val;
     if (!iscounter) {

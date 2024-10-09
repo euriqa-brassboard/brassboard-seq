@@ -206,7 +206,9 @@ template<typename E, typename ... Es>
 struct ErrorCombiner {
     static inline E combine(E e, Es ... es)
     {
-        return unlikely(uint8_t(e)) ? e : ErrorCombiner<Es...>::combine(es...);
+        if (e != EvalError::NoError) [[unlikely]]
+            return e;
+        return ErrorCombiner<Es...>::combine(es...);
     }
 };
 template<typename E>
@@ -528,7 +530,7 @@ struct Pow_op : float_bin_op<Pow_op> {
         if constexpr (data_type_v<T2> == DataType::Bool)
             return TagVal(v2 ? Tout(v1) : Tout(1));
         Tout res = std::pow(Tout(v1), Tout(v2));
-        if (unlikely(!std::isfinite(res))) {
+        if (!std::isfinite(res)) [[unlikely]] {
             if constexpr (data_type_v<T2> != DataType::Bool)
                 if (v1 == 0 && v2 < 0)
                     return { data_type_v<Tout>, EvalError::ZeroDivide };

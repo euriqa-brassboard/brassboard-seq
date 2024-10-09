@@ -106,13 +106,12 @@ public:
             return assume(_rt_offset);
         return nullptr;
     }
-    template<typename RuntimeValue>
-    inline void set_rt_offset(RuntimeValue *v)
+    inline void set_rt_offset(auto *rv)
     {
-        assume(v && !_is_static && !_is_rt_offset);
+        assume(rv && !_is_static && !_is_rt_offset);
         _is_rt_offset = true;
-        assert(v->datatype == rtval::DataType::Int64);
-        _rt_offset = py_newref((PyObject*)v);
+        assert(rv->datatype == rtval::DataType::Int64);
+        _rt_offset = py_newref((PyObject*)rv);
         // Assume PyObject alignment
         assert(!_is_static);
     }
@@ -132,9 +131,9 @@ struct TimeManagerStatus {
     bool finalized;
 };
 
-template<typename TimeManager, typename EventTime>
+template<typename EventTime>
 static inline __attribute__((returns_nonnull)) EventTime*
-_new_time_int(TimeManager *self, PyObject *EventTimeType, EventTime *prev,
+_new_time_int(auto *self, PyObject *EventTimeType, EventTime *prev,
               long long offset, bool floating, PyObject *cond, EventTime *wait_for)
 {
     auto status = self->status.get();
@@ -165,9 +164,9 @@ _new_time_int(TimeManager *self, PyObject *EventTimeType, EventTime *prev,
     return tp;
 }
 
-template<typename TimeManager, typename EventTime, typename RuntimeValue>
+template<typename EventTime, typename RuntimeValue>
 static inline __attribute__((returns_nonnull)) EventTime*
-_new_time_rt(TimeManager *self, PyObject *EventTimeType, EventTime *prev,
+_new_time_rt(auto *self, PyObject *EventTimeType, EventTime *prev,
              RuntimeValue *offset, PyObject *cond, EventTime *wait_for)
 {
     auto status = self->status.get();

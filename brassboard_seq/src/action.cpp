@@ -20,8 +20,7 @@
 
 namespace brassboard_seq::action {
 
-template<typename RampFunction>
-static inline void rampfunc_set_time(RampFunction *self, double t)
+static inline void rampfunc_set_time(auto *self, double t)
 {
     self->interp_func->data[0].f64_val = t;
 }

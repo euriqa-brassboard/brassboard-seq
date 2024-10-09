@@ -235,7 +235,7 @@ static void _get_suffix_array(std::span<int> SA, std::span<int> S, std::span<int
 void get_suffix_array(std::span<int> SA, std::span<int> S, std::span<int> ws)
 {
     int N = S.size();
-    if (unlikely(N <= 1)) {
+    if (N <= 1) [[unlikely]] {
         if (N == 1) {
             assert(S[0] == 0);
             SA[0] = 0;

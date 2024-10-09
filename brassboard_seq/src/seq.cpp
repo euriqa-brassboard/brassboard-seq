@@ -235,8 +235,8 @@ struct CondCombiner {
     }
 };
 
-template<bool is_cond, typename CondSeq>
-static inline auto condseq_get_subseq(CondSeq *self)
+template<bool is_cond>
+static inline auto condseq_get_subseq(auto *self)
 {
     if constexpr (is_cond) {
         return self->seq;
@@ -246,8 +246,8 @@ static inline auto condseq_get_subseq(CondSeq *self)
     }
 }
 
-template<bool is_cond, typename CondSeq>
-static inline auto condseq_get_cond(CondSeq *self)
+template<bool is_cond>
+static inline auto condseq_get_cond(auto *self)
 {
     if constexpr (is_cond) {
         return self->cond;
@@ -257,8 +257,8 @@ static inline auto condseq_get_cond(CondSeq *self)
     }
 }
 
-template<bool is_cond, typename CondSeq>
-static inline auto condseq_get_C(CondSeq *self)
+template<bool is_cond>
+static inline auto condseq_get_C(auto *self)
 {
     if constexpr (is_cond) {
         return self->C;

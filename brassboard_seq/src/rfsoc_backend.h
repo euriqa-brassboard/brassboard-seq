@@ -19,6 +19,7 @@
 #ifndef BRASSBOARD_SEQ_SRC_RFSOC_BACKEND_H
 #define BRASSBOARD_SEQ_SRC_RFSOC_BACKEND_H
 
+#include <algorithm>
 #include <map>
 #include <vector>
 #include <utility>
@@ -285,12 +286,12 @@ static inline cubic_spline_t approximate_spline(double v[5])
     double v3 = v[4];
     // clamp v1 and v2 so that the numbers won't go too crazy
     if (v3 >= v0) {
-        v1 = std::max(v0, std::min(v1, v3));
-        v2 = std::max(v0, std::min(v2, v3));
+        v1 = std::clamp(v1, v0, v3);
+        v2 = std::clamp(v2, v0, v3);
     }
     else {
-        v1 = std::max(v3, std::min(v1, v0));
-        v2 = std::max(v3, std::min(v2, v0));
+        v1 = std::clamp(v1, v3, v0);
+        v2 = std::clamp(v2, v3, v0);
     }
     return spline_from_values(v0, v1, v2, v3);
 }

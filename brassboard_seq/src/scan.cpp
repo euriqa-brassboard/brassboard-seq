@@ -64,8 +64,7 @@ set_new_dict(PyObject *dict, PyObject *fieldname)
     return new_item.release();
 }
 
-template<typename ParamPack>
-static PyObject *ensure_visited(ParamPack *self)
+static PyObject *ensure_visited(auto *self)
 {
     auto fieldname = self->fieldname;
     auto self_visited = self->visited;
@@ -77,8 +76,7 @@ static PyObject *ensure_visited(ParamPack *self)
     return set_new_dict(self_visited, fieldname);
 }
 
-template<typename ParamPack>
-static PyObject *ensure_dict(ParamPack *self)
+static PyObject *ensure_dict(auto *self)
 {
     auto fieldname = self->fieldname;
     auto self_values = self->values;
@@ -95,8 +93,7 @@ static PyObject *ensure_dict(ParamPack *self)
 }
 
 // Return borrowed reference
-template<typename ParamPack>
-static PyObject *_ensure_dict_kws(ParamPack *self, PyObject *kws)
+static PyObject *_ensure_dict_kws(auto *self, PyObject *kws)
 {
     auto fieldname = self->fieldname;
     auto self_values = self->values;
@@ -113,8 +110,7 @@ static PyObject *_ensure_dict_kws(ParamPack *self, PyObject *kws)
     return kws;
 }
 
-template<typename ParamPack>
-static PyObject *get_value(ParamPack *self)
+static PyObject *get_value(auto *self)
 {
     auto fieldname = self->fieldname;
     auto self_values = self->values;
@@ -128,8 +124,7 @@ static PyObject *get_value(ParamPack *self)
     return py_newref(values);
 }
 
-template<typename ParamPack>
-static PyObject *get_value_default(ParamPack *self, PyObject *default_value)
+static PyObject *get_value_default(auto *self, PyObject *default_value)
 {
     assert(!PyDict_Check(default_value));
     auto fieldname = self->fieldname;
@@ -149,8 +144,7 @@ static PyObject *get_value_default(ParamPack *self, PyObject *default_value)
     return py_newref(values);
 }
 
-template<typename ParamPack>
-static PyObject *parampack_call(ParamPack *self, PyObject *args, PyObject *kwargs)
+static PyObject *parampack_call(auto *self, PyObject *args, PyObject *kwargs)
 {
     int nargs = PyTuple_GET_SIZE(args);
     int nkws = PyDict_GET_SIZE(kwargs);

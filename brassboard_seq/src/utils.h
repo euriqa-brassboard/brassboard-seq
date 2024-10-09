@@ -39,6 +39,7 @@
 
 namespace brassboard_seq {
 
+// Replace with C++23 [[assume()]];
 #if bb_has_builtin(__builtin_assume)
 template<typename T>
 static inline __attribute__((always_inline)) T assume(T v)
@@ -66,28 +67,9 @@ static inline __attribute__((always_inline)) T assume(T v)
 }
 #endif
 
-template<typename T>
-static inline __attribute__((always_inline)) void assume_not_none(T *obj)
+static inline __attribute__((always_inline)) void assume_not_none(auto *obj)
 {
     assume((PyObject*)obj != Py_None);
-}
-
-template<typename T1, typename T2>
-static inline __attribute__((always_inline)) T1 expect(T1 val, T2 exp)
-{
-    return __builtin_expect(val, exp);
-}
-
-template<typename T>
-static inline __attribute__((always_inline)) bool likely(T x)
-{
-    return expect(bool(x), true);
-}
-
-template<typename T>
-static inline __attribute__((always_inline)) bool unlikely(T x)
-{
-    return expect(bool(x), false);
 }
 
 template<typename T>
@@ -282,9 +264,8 @@ void bb_reraise_and_throw_if(bool cond, uintptr_t key)
     }
 }
 
-template<typename CB>
 static __attribute__((always_inline)) inline
-bool get_value_bool(PyObject *obj, CB &&cb)
+bool get_value_bool(PyObject *obj, auto &&cb)
 {
     if (obj == Py_True)
         return true;
@@ -304,9 +285,8 @@ static inline bool get_value_bool(PyObject *obj, uintptr_t key)
     });
 }
 
-template<typename CB>
 static __attribute__((always_inline)) inline
-double get_value_f64(PyObject *obj, CB &&cb)
+double get_value_f64(PyObject *obj, auto &&cb)
 {
     if (PyFloat_CheckExact(obj))
         return PyFloat_AS_DOUBLE(obj);
@@ -325,8 +305,7 @@ static inline double get_value_f64(PyObject *obj, uintptr_t key)
 }
 
 struct PyDeleter {
-    template<typename T>
-    void operator()(T *p) {
+    void operator()(auto *p) {
         if (p) {
             Py_DECREF(p);
         }
@@ -431,7 +410,7 @@ static inline int pylist_append(PyObject* list, PyObject* x)
 {
     PyListObject *L = (PyListObject*)list;
     Py_ssize_t len = Py_SIZE(list);
-    if (likely(L->allocated > len) && likely(len > (L->allocated >> 1))) {
+    if (L->allocated > len && len > (L->allocated >> 1)) [[likely]] {
         Py_INCREF(x);
         PyList_SET_ITEM(list, len, x);
 #if PY_VERSION_HEX >= 0x030900A4
