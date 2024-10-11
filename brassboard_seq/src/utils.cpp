@@ -193,12 +193,6 @@ void _bb_err_format(PyObject *exc, uintptr_t key, const char *format, ...)
     bb_reraise(key);
 }
 
-[[noreturn]] void bb_throw(PyObject *exc, uintptr_t key)
-{
-    _bb_raise(exc, key);
-    throw0();
-}
-
 [[noreturn]] void bb_rethrow(uintptr_t key)
 {
     bb_reraise(key);

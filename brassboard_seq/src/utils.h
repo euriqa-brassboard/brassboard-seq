@@ -234,7 +234,6 @@ void _bb_raise(PyObject *exc, uintptr_t key);
 void bb_reraise(uintptr_t key);
 void _bb_err_format(PyObject *exc, uintptr_t key, const char *format, ...);
 
-[[noreturn]] void bb_throw(PyObject *exc, uintptr_t key);
 [[noreturn]] void bb_rethrow(uintptr_t key);
 [[noreturn]] void bb_throw_format(PyObject *exc, uintptr_t key,
                                   const char *format, ...);
