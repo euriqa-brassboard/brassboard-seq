@@ -72,12 +72,14 @@ static inline __attribute__((always_inline)) void assume_not_none(auto *obj)
     assume((PyObject*)obj != Py_None);
 }
 
+[[noreturn]] void throw0();
+
 template<typename T>
 static inline __attribute__((always_inline))
 std::remove_reference_t<T> throw_if_not(T &&v)
 {
     if (!v)
-        throw 0;
+        throw0();
     return std::move(v);
 }
 
@@ -86,7 +88,7 @@ static inline __attribute__((always_inline))
 std::remove_reference_t<T> throw_if(T &&v)
 {
     if (v)
-        throw 0;
+        throw0();
     return std::move(v);
 }
 
@@ -232,6 +234,12 @@ void _bb_raise(PyObject *exc, uintptr_t key);
 void bb_reraise(uintptr_t key);
 void _bb_err_format(PyObject *exc, uintptr_t key, const char *format, ...);
 
+[[noreturn]] void bb_throw(PyObject *exc, uintptr_t key);
+[[noreturn]] void bb_rethrow(uintptr_t key);
+[[noreturn]] void bb_throw_format(PyObject *exc, uintptr_t key,
+                                  const char *format, ...);
+[[noreturn]] void py_throw_format(PyObject *exc, const char *format, ...);
+
 // Wrapper inline function to make it more clear to the C compiler
 // that the function returns 0
 static inline __attribute__((always_inline))
@@ -259,8 +267,7 @@ static inline __attribute__((always_inline))
 void bb_reraise_and_throw_if(bool cond, uintptr_t key)
 {
     if (cond) {
-        bb_reraise(key);
-        throw 0;
+        bb_rethrow(key);
     }
 }
 
@@ -280,15 +287,14 @@ bool get_value_bool(PyObject *obj, auto &&cb)
 static inline bool get_value_bool(PyObject *obj, uintptr_t key)
 {
     return get_value_bool(obj, [&] {
-        bb_reraise(key);
-        throw 0;
+        bb_rethrow(key);
     });
 }
 
 static __attribute__((always_inline)) inline
 double get_value_f64(PyObject *obj, auto &&cb)
 {
-    if (PyFloat_CheckExact(obj))
+    if (PyFloat_CheckExact(obj)) [[likely]]
         return PyFloat_AS_DOUBLE(obj);
     auto res = PyFloat_AsDouble(obj);
     if (res == -1 && PyErr_Occurred())
@@ -299,8 +305,7 @@ double get_value_f64(PyObject *obj, auto &&cb)
 static inline double get_value_f64(PyObject *obj, uintptr_t key)
 {
     return get_value_f64(obj, [&] {
-        bb_reraise(key);
-        throw 0;
+        bb_rethrow(key);
     });
 }
 
@@ -406,7 +411,7 @@ __attribute__((returns_nonnull))
 PyObject *pytuple_append1(PyObject *tuple, PyObject *obj);
 __attribute__((returns_nonnull)) PyObject *pydict_deepcopy(PyObject *d);
 
-static inline int pylist_append(PyObject* list, PyObject* x)
+static inline void pylist_append(PyObject* list, PyObject* x)
 {
     PyListObject *L = (PyListObject*)list;
     Py_ssize_t len = Py_SIZE(list);
@@ -418,9 +423,9 @@ static inline int pylist_append(PyObject* list, PyObject* x)
 #else
         Py_SIZE(list) = len + 1;
 #endif
-        return 0;
+        return;
     }
-    return PyList_Append(list, x);
+    throw_if(PyList_Append(list, x));
 }
 
 // Copied from cython
@@ -428,13 +433,13 @@ static inline PyObject* pyobject_call(PyObject *func, PyObject *arg,
                                       PyObject *kw=nullptr)
 {
     auto call = Py_TYPE(func)->tp_call;
-    if (!call)
+    if (!call) [[unlikely]]
         return PyObject_Call(func, arg, kw);
-    if (Py_EnterRecursiveCall(" while calling a Python object"))
+    if (Py_EnterRecursiveCall(" while calling a Python object")) [[unlikely]]
         return nullptr;
     auto result = call(func, arg, kw);
     Py_LeaveRecursiveCall();
-    if (!result && !PyErr_Occurred())
+    if (!result && !PyErr_Occurred()) [[unlikely]]
         PyErr_SetString(PyExc_SystemError,
                         "NULL result without error in PyObject_Call");
     return result;

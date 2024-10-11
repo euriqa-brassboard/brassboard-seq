@@ -163,6 +163,11 @@ static inline PyObject *get_global_backtrace(uintptr_t key)
     return nullptr;
 }
 
+[[noreturn]] void throw0()
+{
+    throw 0;
+}
+
 void _bb_raise(PyObject *exc, uintptr_t key)
 {
     auto type = (PyObject*)Py_TYPE(exc);
@@ -186,6 +191,39 @@ void _bb_err_format(PyObject *exc, uintptr_t key, const char *format, ...)
     PyErr_FormatV(exc, format, vargs);
     va_end(vargs);
     bb_reraise(key);
+}
+
+[[noreturn]] void bb_throw(PyObject *exc, uintptr_t key)
+{
+    _bb_raise(exc, key);
+    throw0();
+}
+
+[[noreturn]] void bb_rethrow(uintptr_t key)
+{
+    bb_reraise(key);
+    throw0();
+}
+
+[[noreturn]] void bb_throw_format(PyObject *exc, uintptr_t key,
+                                  const char *format, ...)
+{
+    // This is slightly less efficient but much simpler to implement.
+    va_list vargs;
+    va_start(vargs, format);
+    PyErr_FormatV(exc, format, vargs);
+    va_end(vargs);
+    bb_rethrow(key);
+}
+
+[[noreturn]] void py_throw_format(PyObject *exc, const char *format, ...)
+{
+    // This is slightly less efficient but much simpler to implement.
+    va_list vargs;
+    va_start(vargs, format);
+    PyErr_FormatV(exc, format, vargs);
+    va_end(vargs);
+    bb_rethrow(uintptr_t(-1));
 }
 
 // We will leak these objects.
@@ -215,11 +253,11 @@ static PyObject *_pydict_deepcopy(PyObject *d)
     Py_ssize_t pos = 0;
     while (PyDict_Next(d, &pos, &key, &value)) {
         if (!PyDict_Check(value)) {
-            throw_if(PyDict_SetItem(res.get(), key, value) < 0);
+            throw_if(PyDict_SetItem(res.get(), key, value));
             continue;
         }
         py_object new_value(_pydict_deepcopy(value));
-        throw_if(PyDict_SetItem(res.get(), key, new_value.get()) < 0);
+        throw_if(PyDict_SetItem(res.get(), key, new_value.get()));
     }
     return res.release();
 }

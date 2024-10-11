@@ -52,8 +52,7 @@ void _rt_eval_cache(_RuntimeValue *self, unsigned age, py_object &pyage)
     auto type = self->type_;
     switch (type) {
     case Arg:
-        PyErr_Format(PyExc_ValueError, "Cannot evaluate unknown argument");
-        throw 0;
+        py_throw_format(PyExc_ValueError, "Cannot evaluate unknown argument");
     case Const:
         return;
     case Extern:
@@ -158,8 +157,7 @@ void _rt_eval_cache(_RuntimeValue *self, unsigned age, py_object &pyage)
         HANDLE_BINARY(Min);
 #undef HANDLE_BINARY
     default:
-        PyErr_Format(PyExc_ValueError, "Unknown value type");
-        throw 0;
+        py_throw_format(PyExc_ValueError, "Unknown value type");
     }
 }
 
@@ -380,7 +378,7 @@ InterpFunction::visit_value(_RuntimeValue *value, Builder &builder)
             if (!PyErr_Occurred())
                 PyErr_Format(PyExc_IndexError,
                              "Argument index out of bound: %ld.", v);
-            throw 0;
+            throw0();
         }
         info.val.type = builder.types[v];
         info.dynamic = true;
@@ -514,8 +512,7 @@ InterpFunction::visit_value(_RuntimeValue *value, Builder &builder)
     HANDLE_BINARY(Max);
     HANDLE_BINARY(Min);
     default:
-        PyErr_Format(PyExc_ValueError, "Unknown value type");
-        throw 0;
+        py_throw_format(PyExc_ValueError, "Unknown value type");
     }
 }
 

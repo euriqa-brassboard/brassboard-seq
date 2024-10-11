@@ -112,8 +112,7 @@ static inline DataType pytype_to_datatype(PyObject *type)
         return DataType::Int64;
     if (type == (PyObject *)&PyBool_Type)
         return DataType::Bool;
-    PyErr_Format(PyExc_TypeError, "Unknown runtime value type '%S'", type);
-    throw 0;
+    py_throw_format(PyExc_TypeError, "Unknown runtime value type '%S'", type);
 }
 
 template<typename T> static constexpr DataType data_type_v = DataType::Bool;
@@ -176,25 +175,19 @@ static inline void throw_py_error(EvalError err, uintptr_t key=uintptr_t(-1))
 {
     switch (err) {
     case EvalError::ZeroDivide:
-        bb_err_format(PyExc_ZeroDivisionError, key, "division by zero");
-        throw 0;
+        bb_throw_format(PyExc_ZeroDivisionError, key, "division by zero");
     case EvalError::PowComplex:
-        bb_err_format(PyExc_ValueError, key, "power of negative number");
-        throw 0;
+        bb_throw_format(PyExc_ValueError, key, "power of negative number");
     case EvalError::LogicInexact:
-        bb_err_format(PyExc_ValueError, key,
-                      "bitwise operation on floating point numbers");
-        throw 0;
+        bb_throw_format(PyExc_ValueError, key,
+                        "bitwise operation on floating point numbers");
     case EvalError::LogNeg:
-        bb_err_format(PyExc_ValueError, key, "log of negative number");
-        throw 0;
+        bb_throw_format(PyExc_ValueError, key, "log of negative number");
     case EvalError::SqrtNeg:
-        bb_err_format(PyExc_ValueError, key, "sqrt of negative number");
-        throw 0;
+        bb_throw_format(PyExc_ValueError, key, "sqrt of negative number");
     case EvalError::TrigDomain:
         // Too lazy to think of a name...
-        bb_err_format(PyExc_ValueError, key, "math domain error");
-        throw 0;
+        bb_throw_format(PyExc_ValueError, key, "math domain error");
     default:
     case EvalError::NoError:
         return;

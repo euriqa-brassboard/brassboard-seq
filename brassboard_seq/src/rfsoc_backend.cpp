@@ -170,7 +170,7 @@ struct PulseCompilerGen: SyncChannelGen {
             last_tonedatas = tonedatas.get();
         }
         else {
-            throw_if(pylist_append(tonedatas, tonedata));
+            pylist_append(tonedatas, tonedata);
             last_tonedatas = tonedatas;
         }
         last_chn = chn;
@@ -525,9 +525,8 @@ static inline bool parse_action_kws(PyObject *kws, int aid)
             sync = get_value_bool(value, action_key(aid));
             continue;
         }
-        bb_err_format(PyExc_ValueError, action_key(aid),
-                      "Invalid output keyword argument %S", kws);
-        throw 0;
+        bb_throw_format(PyExc_ValueError, action_key(aid),
+                        "Invalid output keyword argument %S", kws);
     }
     return sync;
 }
@@ -559,9 +558,8 @@ void collect_actions(auto *rb, Action*, EventTime*)
             auto value = action->value;
             auto is_ramp = py_issubtype_nontrivial(Py_TYPE(value), rampfunction_type);
             if (is_ff && is_ramp) {
-                bb_err_format(PyExc_ValueError, action_key(action->aid),
-                              "Feed forward control cannot be ramped");
-                throw 0;
+                bb_throw_format(PyExc_ValueError, action_key(action->aid),
+                                "Feed forward control cannot be ramped");
             }
             auto cond = action->cond;
             if (cond == Py_False)
@@ -1118,7 +1116,7 @@ void gen_rfsoc_data(auto *rb, RuntimeValue*, RampFunction*, SeqCubicSpline*)
                                              "monotonically increase");
                             }
                         }
-                        bb_reraise_and_throw_if(true, action_key(action.aid));
+                        bb_rethrow(action_key(action.aid));
                     }
                     auto t1 = t * (1.0 / 3.0) + prev_t * (2.0 / 3.0);
                     auto t2 = t * (2.0 / 3.0) + prev_t * (1.0 / 3.0);
@@ -1133,9 +1131,9 @@ void gen_rfsoc_data(auto *rb, RuntimeValue*, RampFunction*, SeqCubicSpline*)
                 }
                 bb_reraise_and_throw_if(PyErr_Occurred(), action_key(action.aid));
                 if (!(prev_t < len)) [[unlikely]] {
-                    PyErr_Format(PyExc_ValueError, "Segment time point must not "
-                                 "exceed action length.");
-                    bb_reraise_and_throw_if(true, action_key(action.aid));
+                    bb_throw_format(PyExc_ValueError, action_key(action.aid),
+                                    "Segment time point must not "
+                                    "exceed action length.");
                 }
                 else {
                     auto t1 = len * (1.0 / 3.0) + prev_t * (2.0 / 3.0);

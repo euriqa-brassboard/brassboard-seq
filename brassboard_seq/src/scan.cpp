@@ -31,26 +31,24 @@ static void merge_dict_into(PyObject *tgt, PyObject *src, bool ovr)
             bool is_dict = PyDict_Check(value);
             bool was_dict = PyDict_Check(oldv);
             if (was_dict && !is_dict) {
-                PyErr_Format(PyExc_TypeError,
-                             "Cannot override parameter pack as value");
-                throw 0;
+                py_throw_format(PyExc_TypeError,
+                                "Cannot override parameter pack as value");
             }
             else if (!was_dict && is_dict) {
-                PyErr_Format(PyExc_TypeError,
-                             "Cannot override value as parameter pack");
-                throw 0;
+                py_throw_format(PyExc_TypeError,
+                                "Cannot override value as parameter pack");
             }
             else if (is_dict) {
                 merge_dict_into(oldv, value, ovr);
             }
             else if (ovr) {
-                throw_if_not(PyDict_SetItem(tgt, key, value) == 0);
+                throw_if(PyDict_SetItem(tgt, key, value));
             }
         }
         else {
             throw_if(PyErr_Occurred());
             py_object copied(pydict_deepcopy(value));
-            throw_if_not(PyDict_SetItem(tgt, key, copied.get()) == 0);
+            throw_if(PyDict_SetItem(tgt, key, copied.get()));
         }
     }
 }
@@ -101,12 +99,10 @@ static PyObject *_ensure_dict_kws(auto *self, PyObject *kws)
     if (values) {
         if (PyDict_Check(values))
             return values;
-        PyErr_Format(PyExc_TypeError,
-                     "Cannot access value as parameter pack.");
-        throw 0;
+        py_throw_format(PyExc_TypeError, "Cannot access value as parameter pack.");
     }
     throw_if(PyErr_Occurred());
-    throw_if_not(PyDict_SetItem(self_values, fieldname, kws) == 0);
+    throw_if(PyDict_SetItem(self_values, fieldname, kws));
     return kws;
 }
 

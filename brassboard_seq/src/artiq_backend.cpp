@@ -167,9 +167,8 @@ void collect_actions(auto *ab, Action*, EventTime*)
                 // We aren't really relying on this in the backend
                 // but requiring this makes it easier to infer the number of
                 // results generated from a sequence.
-                bb_err_format(PyExc_ValueError, action_key(aid),
-                              "Counter value must be static.");
-                throw 0;
+                bb_throw_format(PyExc_ValueError, action_key(aid),
+                                "Counter value must be static.");
             }
             else {
                 reloc.val_idx = bool_values.get_id(value);
@@ -226,17 +225,13 @@ void collect_actions(auto *ab, Action*, EventTime*)
         auto nactions = PyList_GET_SIZE(actions);
         for (int idx = 0; idx < nactions; idx++) {
             auto action = (Action*)PyList_GET_ITEM(actions, idx);
-            if (action->kws != Py_None) {
-                bb_err_format(PyExc_ValueError, action_key(action->aid),
-                              "Invalid output keyword argument %S", action->kws);
-                throw 0;
-            }
+            if (action->kws != Py_None)
+                bb_throw_format(PyExc_ValueError, action_key(action->aid),
+                                "Invalid output keyword argument %S", action->kws);
             auto value = action->value;
-            if (py_issubtype_nontrivial(Py_TYPE(value), rampfunction_type)) {
-                bb_err_format(PyExc_ValueError, action_key(action->aid),
-                              "TTL Channel cannot be ramped");
-                throw 0;
-            }
+            if (py_issubtype_nontrivial(Py_TYPE(value), rampfunction_type))
+                bb_throw_format(PyExc_ValueError, action_key(action->aid),
+                                "TTL Channel cannot be ramped");
             if (action->cond == Py_False)
                 continue;
             add_action(action, type, ttl_idx);
@@ -249,17 +244,13 @@ void collect_actions(auto *ab, Action*, EventTime*)
         auto nactions = PyList_GET_SIZE(actions);
         for (int idx = 0; idx < nactions; idx++) {
             auto action = (Action*)PyList_GET_ITEM(actions, idx);
-            if (action->kws != Py_None) {
-                bb_err_format(PyExc_ValueError, action_key(action->aid),
-                              "Invalid output keyword argument %S", action->kws);
-                throw 0;
-            }
+            if (action->kws != Py_None)
+                bb_throw_format(PyExc_ValueError, action_key(action->aid),
+                                "Invalid output keyword argument %S", action->kws);
             auto value = action->value;
-            if (py_issubtype_nontrivial(Py_TYPE(value), rampfunction_type)) {
-                bb_err_format(PyExc_ValueError, action_key(action->aid),
-                              "DDS Channel cannot be ramped");
-                throw 0;
-            }
+            if (py_issubtype_nontrivial(Py_TYPE(value), rampfunction_type))
+                bb_throw_format(PyExc_ValueError, action_key(action->aid),
+                                "DDS Channel cannot be ramped");
             if (action->cond == Py_False)
                 continue;
             add_action(action, type, dds_idx);
@@ -292,16 +283,14 @@ void generate_rtios(auto *ab, unsigned age, py_object &pyage, RuntimeValue*)
         auto fdelay = rtval::rtval_cache(rt_delay).template get<double>();
         if (fdelay < 0) {
             py_object pyval(pyfloat_from_double(fdelay));
-            PyErr_Format(PyExc_ValueError,
-                         "Device time offset %S cannot be negative.", pyval.get());
-            throw 0;
+            py_throw_format(PyExc_ValueError,
+                            "Device time offset %S cannot be negative.", pyval.get());
         }
         else if (fdelay > 0.1) {
             py_object pyval(pyfloat_from_double(fdelay));
-            PyErr_Format(PyExc_ValueError,
-                         "Device time offset %S cannot be more than 100ms.",
-                         pyval.get());
-            throw 0;
+            py_throw_format(PyExc_ValueError,
+                            "Device time offset %S cannot be more than 100ms.",
+                            pyval.get());
         }
         delay = int64_t(fdelay * event_time::time_scale + 0.5);
     };
@@ -407,14 +396,12 @@ void generate_rtios(auto *ab, unsigned age, py_object &pyage, RuntimeValue*)
                            bool exact_time) -> int64_t {
         if (exact_time) {
             if (request_time_mu < lb_mu) {
-                bb_err_format(PyExc_ValueError, action_key(aid),
-                              "Exact time output cannot satisfy lower time bound");
-                throw 0;
+                bb_throw_format(PyExc_ValueError, action_key(aid),
+                                "Exact time output cannot satisfy lower time bound");
             }
             else if (!ab->time_checker.check_and_add_time(request_time_mu)) {
-                bb_err_format(PyExc_ValueError, action_key(aid),
-                              "Too many outputs at the same time");
-                throw 0;
+                bb_throw_format(PyExc_ValueError, action_key(aid),
+                                "Too many outputs at the same time");
             }
             ab->rtio_actions.push_back({target, value, request_time_mu});
             return request_time_mu;
@@ -422,11 +409,9 @@ void generate_rtios(auto *ab, unsigned age, py_object &pyage, RuntimeValue*)
         // hard code a 10 us bound.
         constexpr int64_t max_offset = 10000;
         int64_t ub_mu = request_time_mu + max_offset;
-        if (ub_mu < lb_mu) {
-            bb_err_format(PyExc_ValueError, action_key(aid),
-                          "Cannot find appropriate output time within bound");
-            throw 0;
-        }
+        if (ub_mu < lb_mu)
+            bb_throw_format(PyExc_ValueError, action_key(aid),
+                            "Cannot find appropriate output time within bound");
         if (request_time_mu < lb_mu) {
             request_time_mu = lb_mu;
         }
@@ -434,11 +419,9 @@ void generate_rtios(auto *ab, unsigned age, py_object &pyage, RuntimeValue*)
             lb_mu = std::max(lb_mu, request_time_mu - max_offset);
         }
         auto time_mu = ab->time_checker.find_time(lb_mu, request_time_mu, ub_mu);
-        if (time_mu == INT64_MIN) {
-            bb_err_format(PyExc_ValueError, action_key(aid),
-                          "Too many outputs at the same time");
-            throw 0;
-        }
+        if (time_mu == INT64_MIN)
+            bb_throw_format(PyExc_ValueError, action_key(aid),
+                            "Too many outputs at the same time");
         ab->rtio_actions.push_back({target, value, time_mu});
         return time_mu;
     };
@@ -449,10 +432,9 @@ void generate_rtios(auto *ab, unsigned age, py_object &pyage, RuntimeValue*)
     for (auto start_trigger: ab->start_triggers) {
         auto time_mu = start_trigger.time_mu;
         start_mu = std::min(time_mu, start_mu);
-        if (!ab->time_checker.check_and_add_time(time_mu)) {
-            PyErr_Format(PyExc_ValueError, "Too many start triggers at the same time");
-            throw 0;
-        }
+        if (!ab->time_checker.check_and_add_time(time_mu))
+            py_throw_format(PyExc_ValueError,
+                            "Too many start triggers at the same time");
         ab->rtio_actions.push_back({start_trigger.target,
                 start_trigger.raising_edge, time_mu});
     }
@@ -463,21 +445,17 @@ void generate_rtios(auto *ab, unsigned age, py_object &pyage, RuntimeValue*)
         if (start_trigger.raising_edge) {
             auto end_mu = time_mu + start_trigger.min_time_mu;
             end_mu = ab->time_checker.find_time(end_mu, end_mu, end_mu + 1000);
-            if (end_mu == INT64_MIN) {
-                PyErr_Format(PyExc_ValueError,
-                             "Too many start triggers at the same time");
-                throw 0;
-            }
+            if (end_mu == INT64_MIN)
+                py_throw_format(PyExc_ValueError,
+                                "Too many start triggers at the same time");
             ab->rtio_actions.push_back({start_trigger.target, 0, end_mu});
         }
         else {
             auto raise_mu = time_mu - start_trigger.min_time_mu;
             raise_mu = ab->time_checker.find_time(raise_mu - 1000, raise_mu, raise_mu);
-            if (raise_mu == INT64_MIN) {
-                PyErr_Format(PyExc_ValueError,
-                             "Too many start triggers at the same time");
-                throw 0;
-            }
+            if (raise_mu == INT64_MIN)
+                py_throw_format(PyExc_ValueError,
+                                "Too many start triggers at the same time");
             ab->rtio_actions.push_back({start_trigger.target, 1, raise_mu});
             start_mu = std::min(raise_mu, start_mu);
         }

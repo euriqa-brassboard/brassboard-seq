@@ -112,7 +112,7 @@ add_time_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *len
     seq->C = py_newref(self->__pyx_base.C);
     step->length = py_newref(length);
     seqinfo->bt_tracker.record(event_time_key(seq->end_time));
-    throw_if(pylist_append(self->sub_seqs, o));
+    pylist_append(self->sub_seqs, o);
     return (TimeStep*)o.release();
 }
 
@@ -145,25 +145,24 @@ add_custom_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *c
         PyObject *callargs[] = { o };
         py_object res(throw_if_not(_PyObject_Vectorcall(cb, callargs, 1, nullptr)));
     }
-    throw_if(pylist_append(self->sub_seqs, o));
+    pylist_append(self->sub_seqs, o);
     return (SubSeq*)o.release();
 }
 
 static void type_add_method(PyTypeObject *type, PyMethodDef *meth)
 {
     py_object descr(throw_if_not(PyDescr_NewMethod(type, meth)));
-    throw_if_not(PyDict_SetItemString(type->tp_dict, meth->ml_name, descr) == 0);
+    throw_if(PyDict_SetItemString(type->tp_dict, meth->ml_name, descr));
 }
 
-static void raise_too_few_args(const char* func_name, bool exact,
-                               Py_ssize_t num_min, Py_ssize_t num_found)
+[[noreturn]] static void raise_too_few_args(const char* func_name, bool exact,
+                                            Py_ssize_t num_min, Py_ssize_t num_found)
 {
     const char *more_or_less = exact ? "exactly" : "at least";
-    PyErr_Format(PyExc_TypeError,
-                 "%.200s() takes %.8s %zd positional argument%.1s (%zd given)",
-                 func_name, more_or_less, num_min,
-                 (num_min == 1) ? "" : "s", num_found);
-    throw 0;
+    py_throw_format(PyExc_TypeError,
+                    "%.200s() takes %.8s %zd positional argument%.1s (%zd given)",
+                    func_name, more_or_less, num_min,
+                    (num_min == 1) ? "" : "s", num_found);
 }
 
 struct seq_set_params {
@@ -201,7 +200,7 @@ struct seq_set_params {
                 else {
                     if (!kws)
                         kws.reset(throw_if_not(PyDict_New()));
-                    throw_if_not(PyDict_SetItem(kws, name, value) == 0);
+                    throw_if(PyDict_SetItem(kws, name, value));
                 }
             }
         }
@@ -343,8 +342,7 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
         auto kwvalues = args + nargs;
         int nkws = (int)PyTuple_GET_SIZE(kwnames);
         for (int i = 0; i < nkws; i++) {
-            throw_if_not(PyDict_SetItem(kws, PyTuple_GET_ITEM(kwnames, i),
-                                        kwvalues[i]) == 0);
+            throw_if(PyDict_SetItem(kws, PyTuple_GET_ITEM(kwnames, i), kwvalues[i]));
         }
     }
 
@@ -394,15 +392,13 @@ static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
     auto cond = condseq_get_cond<is_cond>(self);
     CondCombiner<RuntimeValue> cc(cond, params.cond);
     if constexpr (is_step)
-        throw_if_not(
-            __pyx_f_14brassboard_seq_3seq_timestep_set(
-                subseq, params.chn, params.value, cc.cond, is_pulse, params.exact_time,
-                params.kwargs()) == 0);
+        throw_if(__pyx_f_14brassboard_seq_3seq_timestep_set(
+                     subseq, params.chn, params.value, cc.cond, is_pulse,
+                     params.exact_time, params.kwargs()));
     else
-        throw_if_not(
-            __pyx_f_14brassboard_seq_3seq_subseq_set(
-                subseq, params.chn, params.value,
-                cc.cond, params.exact_time, params.kwargs()) == 0);
+        throw_if(__pyx_f_14brassboard_seq_3seq_subseq_set(
+                     subseq, params.chn, params.value,
+                     cc.cond, params.exact_time, params.kwargs()));
     return py_newref(py_self);
 }
 catch (...) {

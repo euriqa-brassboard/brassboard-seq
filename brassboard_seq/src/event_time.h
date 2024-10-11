@@ -137,15 +137,11 @@ _new_time_int(auto *self, PyObject *EventTimeType, EventTime *prev,
               long long offset, bool floating, PyObject *cond, EventTime *wait_for)
 {
     auto status = self->status.get();
-    if (status->finalized) {
-        PyErr_Format(PyExc_RuntimeError,
-                     "Cannot allocate more time: already finalized");
-        throw 0;
-    }
-    if (offset < 0) {
-        PyErr_Format(PyExc_ValueError, "Time delay cannot be negative");
-        throw 0;
-    }
+    if (status->finalized)
+        py_throw_format(PyExc_RuntimeError,
+                        "Cannot allocate more time: already finalized");
+    if (offset < 0)
+        py_throw_format(PyExc_ValueError, "Time delay cannot be negative");
     py_object o(throw_if_not(PyType_GenericAlloc((PyTypeObject*)EventTimeType, 0)));
     auto tp = (EventTime*)o.get();
     new (&tp->manager_status) std::shared_ptr<TimeManagerStatus>(self->status);
@@ -158,7 +154,7 @@ _new_time_int(auto *self, PyObject *EventTimeType, EventTime *prev,
     tp->prev = (EventTime*)py_newref((PyObject*)prev);
     tp->wait_for = (EventTime*)py_newref((PyObject*)wait_for);
     tp->cond = py_newref(cond);
-    throw_if(pylist_append(self->event_times, o.get()));
+    pylist_append(self->event_times, o.get());
     status->ntimes = ntimes + 1;
     o.release();
     return tp;
@@ -170,10 +166,9 @@ _new_time_rt(auto *self, PyObject *EventTimeType, EventTime *prev,
              RuntimeValue *offset, PyObject *cond, EventTime *wait_for)
 {
     auto status = self->status.get();
-    if (status->finalized) {
-        PyErr_Format(PyExc_RuntimeError, "Cannot allocate more time: already finalized");
-        throw 0;
-    }
+    if (status->finalized)
+        py_throw_format(PyExc_RuntimeError,
+                        "Cannot allocate more time: already finalized");
     py_object o(throw_if_not(PyType_GenericAlloc((PyTypeObject*)EventTimeType, 0)));
     auto tp = (EventTime*)o.get();
     new (&tp->manager_status) std::shared_ptr<TimeManagerStatus>(self->status);
@@ -186,7 +181,7 @@ _new_time_rt(auto *self, PyObject *EventTimeType, EventTime *prev,
     tp->prev = (EventTime*)py_newref((PyObject*)prev);
     tp->wait_for = (EventTime*)py_newref((PyObject*)wait_for);
     tp->cond = py_newref(cond);
-    throw_if(pylist_append(self->event_times, o.get()));
+    pylist_append(self->event_times, o.get());
     status->ntimes = ntimes + 1;
     o.release();
     return tp;
