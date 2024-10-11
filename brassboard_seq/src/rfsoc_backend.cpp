@@ -144,16 +144,25 @@ struct PulseCompilerGen: SyncChannelGen {
         auto tonedata = info->new_tone_data(chn >> 1, chn & 1, duration_cycles, freq,
                                             amp, phase, flags);
         auto key = info->channel_list[chn];
-        auto tonedatas = PyDict_GetItemWithError(output, key);
+        PyObject *tonedatas;
+        if (last_chn == chn) [[likely]] {
+            tonedatas = assume(last_tonedatas);
+        }
+        else {
+            tonedatas = PyDict_GetItemWithError(output, key);
+        }
         if (!tonedatas) {
             throw_if(PyErr_Occurred());
             py_object tonedatas(throw_if_not(PyList_New(1)));
             PyList_SET_ITEM(tonedatas.get(), 0, tonedata.release());
             throw_if(PyDict_SetItem(output, key, tonedatas));
+            last_tonedatas = tonedatas.get();
         }
         else {
             throw_if(pylist_append(tonedatas, tonedata));
+            last_tonedatas = tonedatas;
         }
+        last_chn = chn;
     }
 
     PulseCompilerGen()
@@ -163,11 +172,14 @@ struct PulseCompilerGen: SyncChannelGen {
     void start() override
     {
         PyDict_Clear(output);
+        last_chn = -1;
     }
     ~PulseCompilerGen() override
     {}
 
     py_object output;
+    int last_chn;
+    PyObject *last_tonedatas;
 };
 
 Generator *new_pulse_compiler_generator()
