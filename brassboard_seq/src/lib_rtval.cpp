@@ -60,7 +60,7 @@ void _rt_eval_cache(_RuntimeValue *self, unsigned age, py_object &pyage)
         return;
     case ExternAge: {
         if (!pyage)
-            pyage.reset(throw_if_not(PyLong_FromLong(age)));
+            pyage.reset(pylong_from_long(age));
         PyObject *args[] = { pyage.get() };
         set_cache_py(_PyObject_Vectorcall(self->cb_arg2, args, 1, nullptr));
         return;

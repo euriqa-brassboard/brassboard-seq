@@ -142,7 +142,7 @@ _new_time_int(auto *self, PyObject *EventTimeType, EventTime *prev,
                         "Cannot allocate more time: already finalized");
     if (offset < 0)
         py_throw_format(PyExc_ValueError, "Time delay cannot be negative");
-    py_object o(throw_if_not(PyType_GenericAlloc((PyTypeObject*)EventTimeType, 0)));
+    py_object o(pytype_genericalloc(EventTimeType));
     auto tp = (EventTime*)o.get();
     new (&tp->manager_status) std::shared_ptr<TimeManagerStatus>(self->status);
     auto ntimes = status->ntimes;
@@ -169,7 +169,7 @@ _new_time_rt(auto *self, PyObject *EventTimeType, EventTime *prev,
     if (status->finalized)
         py_throw_format(PyExc_RuntimeError,
                         "Cannot allocate more time: already finalized");
-    py_object o(throw_if_not(PyType_GenericAlloc((PyTypeObject*)EventTimeType, 0)));
+    py_object o(pytype_genericalloc(EventTimeType));
     auto tp = (EventTime*)o.get();
     new (&tp->manager_status) std::shared_ptr<TimeManagerStatus>(self->status);
     auto ntimes = status->ntimes;

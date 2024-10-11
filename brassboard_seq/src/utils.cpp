@@ -85,14 +85,14 @@ BacktraceTracker::FrameInfo::FrameInfo(PyFrameObject *frame)
 PyObject *BacktraceTracker::FrameInfo::get_traceback(PyObject *next)
 {
     PyThreadState *tstate = PyThreadState_Get();
-    py_object globals(throw_if_not(PyDict_New()));
-    py_object args(throw_if_not(PyTuple_New(4)));
+    py_object globals(pydict_new());
+    py_object args(pytuple_new(4));
 
     PyTuple_SET_ITEM(args.get(), 0, py_newref(next));
     PyTuple_SET_ITEM(args.get(), 1, (PyObject*)throw_if_not(
                          PyFrame_New(tstate, code, globals, nullptr)));
-    PyTuple_SET_ITEM(args.get(), 2, throw_if_not(PyLong_FromLong(lasti)));
-    PyTuple_SET_ITEM(args.get(), 3, throw_if_not(PyLong_FromLong(lineno)));
+    PyTuple_SET_ITEM(args.get(), 2, pylong_from_long(lasti));
+    PyTuple_SET_ITEM(args.get(), 3, pylong_from_long(lineno));
     return throw_if_not(traceback_new(&PyTraceBack_Type, args, nullptr));
 }
 
@@ -237,7 +237,7 @@ PyObject *pyfloat_1(PyFloat_FromDouble(1));
 PyObject *pytuple_append1(PyObject *tuple, PyObject *obj)
 {
     Py_ssize_t nele = PyTuple_GET_SIZE(tuple);
-    py_object res(throw_if_not(PyTuple_New(nele + 1)));
+    py_object res(pytuple_new(nele + 1));
     for (Py_ssize_t i = 0; i < nele; i++)
         PyTuple_SET_ITEM(res.get(), i, py_newref(PyTuple_GET_ITEM(tuple, i)));
     PyTuple_SET_ITEM(res.get(), nele, py_newref(obj));
@@ -246,7 +246,7 @@ PyObject *pytuple_append1(PyObject *tuple, PyObject *obj)
 
 static PyObject *_pydict_deepcopy(PyObject *d)
 {
-    py_object res(throw_if_not(PyDict_New()));
+    py_object res(pydict_new());
 
     PyObject *key;
     PyObject *value;

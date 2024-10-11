@@ -331,7 +331,7 @@ extern PyObject *pyfloat_0;
 extern PyObject *pyfloat_0_5;
 extern PyObject *pyfloat_1;
 
-static inline PyObject*
+__attribute__((returns_nonnull)) static inline PyObject*
 pyfloat_from_double(double v)
 {
     if (v == -1) {
@@ -349,7 +349,43 @@ pyfloat_from_double(double v)
     else if (v == 1) {
         return py_newref(pyfloat_1);
     }
-    return PyFloat_FromDouble(v);
+    return throw_if_not(PyFloat_FromDouble(v));
+}
+
+__attribute__((returns_nonnull)) static inline PyObject*
+pylong_from_long(long v)
+{
+    return throw_if_not(PyLong_FromLong(v));
+}
+
+__attribute__((returns_nonnull)) static inline PyObject*
+pylong_from_longlong(long long v)
+{
+    return throw_if_not(PyLong_FromLongLong(v));
+}
+
+__attribute__((returns_nonnull)) static inline PyObject*
+pydict_new()
+{
+    return throw_if_not(PyDict_New());
+}
+
+__attribute__((returns_nonnull)) static inline PyObject*
+pylist_new(Py_ssize_t n)
+{
+    return throw_if_not(PyList_New(n));
+}
+
+__attribute__((returns_nonnull)) static inline PyObject*
+pytuple_new(Py_ssize_t n)
+{
+    return throw_if_not(PyTuple_New(n));
+}
+
+__attribute__((returns_nonnull)) static inline PyObject*
+pyunicode_from_string(const char *str)
+{
+    return throw_if_not(PyUnicode_FromString(str));
 }
 
 template<typename T>
@@ -391,9 +427,9 @@ ScopeExit(CB) -> ScopeExit<CB>;
 static inline __attribute__((returns_nonnull))
 PyObject *new_list_of_list(int n)
 {
-    py_object list(throw_if_not(PyList_New(n)));
+    py_object list(pylist_new(n));
     for (int i = 0; i < n; i++)
-        PyList_SET_ITEM(list.get(), i, throw_if_not(PyList_New(0)));
+        PyList_SET_ITEM(list.get(), i, pylist_new(0));
     return list.release();
 }
 
@@ -426,6 +462,13 @@ static inline void pylist_append(PyObject* list, PyObject* x)
         return;
     }
     throw_if(PyList_Append(list, x));
+}
+
+template<typename T>
+__attribute__((returns_nonnull)) static inline PyObject*
+pytype_genericalloc(T *ty, Py_ssize_t sz=0)
+{
+    return throw_if_not(PyType_GenericAlloc((PyTypeObject*)ty, sz));
 }
 
 // Copied from cython

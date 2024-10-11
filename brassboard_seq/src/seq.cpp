@@ -50,7 +50,7 @@ _combine_cond(PyObject *cond1, PyObject *new_cond, RuntimeValue*)
     if (cond1 == Py_True)
         return { cond2.release(), true };
     assert(Py_TYPE(cond1) == runtime_value_type);
-    auto o = throw_if_not(PyType_GenericAlloc(runtime_value_type, 0));
+    auto o = pytype_genericalloc(runtime_value_type);
     auto self = (RuntimeValue*)o;
     self->datatype = rtval::DataType::Bool;
     // self->cache_err = rtval::EvalError::NoError;
@@ -101,7 +101,7 @@ add_time_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *len
     py_object end_time((PyObject*)new_round_time(seqinfo->time_mgr, start_time, length,
                                                  cond, (EventTime*)Py_None,
                                                  (RuntimeValue*)nullptr));
-    py_object o(throw_if_not(PyType_GenericAlloc((PyTypeObject*)timestep_type, 0)));
+    py_object o(pytype_genericalloc(timestep_type));
     auto step = (TimeStep*)o.get();
     auto seq = &step->__pyx_base;
     new (&step->actions) std::vector<py_object>();
@@ -122,9 +122,9 @@ add_custom_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *c
                 RuntimeValue*, size_t nargs=0, PyObject *const *args=nullptr,
                 PyObject *kwargs=nullptr)
 {
-    py_object sub_seqs(throw_if_not(PyList_New(0)));
+    py_object sub_seqs(pylist_new(0));
     auto seqinfo = self->__pyx_base.seqinfo;
-    py_object o(throw_if_not(PyType_GenericAlloc((PyTypeObject*)subseq_type, 0)));
+    py_object o(pytype_genericalloc(subseq_type));
     auto subseq = (SubSeq*)o.get();
     auto seq = &subseq->__pyx_base;
     seq->seqinfo = py_newref(seqinfo);
@@ -135,7 +135,7 @@ add_custom_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *c
     subseq->sub_seqs = sub_seqs.release();
     subseq->dummy_step = (decltype(subseq->dummy_step))py_newref(Py_None);
     if (nargs || kwargs) {
-        py_object full_args(throw_if_not(PyTuple_New(nargs + 1)));
+        py_object full_args(pytuple_new(nargs + 1));
         PyTuple_SET_ITEM(full_args.get(), 0, py_newref(o.get()));
         for (auto i = 0; i < nargs; i++)
             PyTuple_SET_ITEM(full_args.get(), i + 1, py_newref(args[i]));
@@ -199,7 +199,7 @@ struct seq_set_params {
                 }
                 else {
                     if (!kws)
-                        kws.reset(throw_if_not(PyDict_New()));
+                        kws.reset(pydict_new());
                     throw_if(PyDict_SetItem(kws, name, value));
                 }
             }
@@ -329,7 +329,7 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
     auto get_args_tuple = [&] {
         if (tuple_nargs == 0)
             return py_newref(empty_tuple);
-        auto res = throw_if_not(PyTuple_New(tuple_nargs));
+        auto res = pytuple_new(tuple_nargs);
         auto *tuple_args = args + nargs_min;
         for (auto i = 0; i < tuple_nargs; i++)
             PyTuple_SET_ITEM(res, i, py_newref(tuple_args[i]));
@@ -338,7 +338,7 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
 
     py_object kws;
     if (kwnames) {
-        kws.reset(throw_if_not(PyDict_New()));
+        kws.reset(pydict_new());
         auto kwvalues = args + nargs;
         int nkws = (int)PyTuple_GET_SIZE(kwnames);
         for (int i = 0; i < nkws; i++) {
@@ -416,7 +416,7 @@ static PyObject *condseq_conditional(PyObject *py_self, PyObject *const *args,
     auto subseq = condseq_get_subseq<is_cond>(self);
     auto cond = condseq_get_cond<is_cond>(self);
     CondCombiner<RuntimeValue> cc(cond, args[0]);
-    auto o = throw_if_not(PyType_GenericAlloc(condwrapper_type, 0));
+    auto o = pytype_genericalloc(condwrapper_type);
     auto wrapper = (ConditionalWrapper*)o;
     wrapper->seq = py_newref(subseq);
     wrapper->cond = cc.take_cond();

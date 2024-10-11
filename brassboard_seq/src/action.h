@@ -32,7 +32,7 @@ static inline __attribute__((returns_nonnull)) Action*
 new_action(PyObject *ActionType, PyObject *value, PyObject *cond,
            bool is_pulse, bool exact_time, PyObject *kws, int aid, Action*)
 {
-    auto o = throw_if_not(PyType_GenericAlloc((PyTypeObject*)ActionType, 0));
+    auto o = pytype_genericalloc(ActionType);
     auto p = (Action*)o;
     p->data.is_pulse = is_pulse;
     p->data.exact_time = exact_time;

@@ -274,6 +274,7 @@ struct TagVal {
         }
     }
     static TagVal from_py(PyObject *obj);
+    __attribute__((returns_nonnull))
     PyObject *to_py() const
     {
         throw_py_error(err);
@@ -281,7 +282,7 @@ struct TagVal {
         case DataType::Bool:
             return py_newref(val.b_val ? Py_True : Py_False);
         case DataType::Int64:
-            return PyLong_FromLongLong(val.i64_val);
+            return pylong_from_longlong(val.i64_val);
         default:
         case DataType::Float64:
             return pyfloat_from_double(val.f64_val);

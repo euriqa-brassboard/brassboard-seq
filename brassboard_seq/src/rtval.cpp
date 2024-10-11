@@ -50,7 +50,7 @@ _new_expr2_wrap1(PyObject *RTValueType, ValueType type,
     }
     auto datatype = binary_return_type(type, ((RuntimeValue*)rtarg0.get())->datatype,
                                        ((RuntimeValue*)rtarg1.get())->datatype);
-    auto o = throw_if_not(PyType_GenericAlloc((PyTypeObject*)RTValueType, 0));
+    auto o = pytype_genericalloc(RTValueType);
     auto self = (RuntimeValue*)o;
     self->datatype = datatype;
     // self->cache_err = EvalError::NoError;
@@ -81,7 +81,7 @@ _new_select(PyObject *RTValueType, RuntimeValue *arg0,
     py_object rtarg2((PyObject*)_wrap_rtval(RTValueType, arg2, (RuntimeValue*)nullptr));
     auto datatype = promote_type(((RuntimeValue*)rtarg1.get())->datatype,
                                  ((RuntimeValue*)rtarg2.get())->datatype);
-    auto o = throw_if_not(PyType_GenericAlloc((PyTypeObject*)RTValueType, 0));
+    auto o = pytype_genericalloc(RTValueType);
     auto self = (RuntimeValue*)o;
     self->datatype = datatype;
     // self->cache_err = EvalError::NoError;

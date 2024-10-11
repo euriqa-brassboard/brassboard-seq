@@ -79,11 +79,11 @@ struct PulseCompilerGen: SyncChannelGen {
         PyObject *_new_cubic_spline(cubic_spline_t sp)
         {
             PyTypeObject *ty = (PyTypeObject*)CubicSpline;
-            py_object o0(throw_if_not(pyfloat_from_double(sp.order0)));
-            py_object o1(throw_if_not(pyfloat_from_double(sp.order1)));
-            py_object o2(throw_if_not(pyfloat_from_double(sp.order2)));
-            py_object o3(throw_if_not(pyfloat_from_double(sp.order3)));
-            auto newobj = throw_if_not(PyType_GenericAlloc(ty, 4));
+            py_object o0(pyfloat_from_double(sp.order0));
+            py_object o1(pyfloat_from_double(sp.order1));
+            py_object o2(pyfloat_from_double(sp.order2));
+            py_object o3(pyfloat_from_double(sp.order3));
+            auto newobj = pytype_genericalloc(ty, 4);
             PyTuple_SET_ITEM(newobj, 0, o0.release());
             PyTuple_SET_ITEM(newobj, 1, o1.release());
             PyTuple_SET_ITEM(newobj, 2, o2.release());
@@ -103,14 +103,14 @@ struct PulseCompilerGen: SyncChannelGen {
                                 cubic_spline_t freq, cubic_spline_t amp,
                                 cubic_spline_t phase, output_flags_t flags)
         {
-            py_object td(throw_if_not(PyType_GenericAlloc((PyTypeObject*)ToneData, 0)));
+            py_object td(pytype_genericalloc(ToneData));
             py_object td_dict(throw_if_not(PyObject_GenericGetDict(td, nullptr)));
             for (auto [key, value]: tonedata_fields)
                 dict_setitem(td_dict, key, value);
             dict_setitem(td_dict, channel_key, py_nums[channel]);
             dict_setitem(td_dict, tone_key, py_nums[tone]);
             {
-                py_object py_cycles(throw_if_not(PyLong_FromLongLong(duration_cycles)));
+                py_object py_cycles(pylong_from_longlong(duration_cycles));
                 dict_setitem(td_dict, duration_cycles_key, py_cycles);
             }
             {
@@ -164,7 +164,7 @@ struct PulseCompilerGen: SyncChannelGen {
         }
         if (!tonedatas) {
             throw_if(PyErr_Occurred());
-            py_object tonedatas(throw_if_not(PyList_New(1)));
+            py_object tonedatas(pylist_new(1));
             PyList_SET_ITEM(tonedatas.get(), 0, tonedata.release());
             throw_if(PyDict_SetItem(output, key, tonedatas));
             last_tonedatas = tonedatas.get();
@@ -177,7 +177,7 @@ struct PulseCompilerGen: SyncChannelGen {
     }
 
     PulseCompilerGen()
-        : output(throw_if_not(PyDict_New()))
+        : output(pydict_new())
     {
     }
     void start() override
@@ -199,22 +199,21 @@ Generator *new_pulse_compiler_generator()
 }
 
 PulseCompilerGen::Info::Info()
-    : channel_key(throw_if_not(PyUnicode_FromString("channel"))),
-      tone_key(throw_if_not(PyUnicode_FromString("tone"))),
-      duration_cycles_key(throw_if_not(PyUnicode_FromString("duration_cycles"))),
-      frequency_hz_key(throw_if_not(PyUnicode_FromString("frequency_hz"))),
-      amplitude_key(throw_if_not(PyUnicode_FromString("amplitude"))),
-      phase_rad_key(throw_if_not(PyUnicode_FromString("phase_rad"))),
-      frame_rotation_rad_key(throw_if_not(PyUnicode_FromString("frame_rotation_rad"))),
-      wait_trigger_key(throw_if_not(PyUnicode_FromString("wait_trigger"))),
-      sync_key(throw_if_not(PyUnicode_FromString("sync"))),
-      output_enable_key(throw_if_not(PyUnicode_FromString("output_enable"))),
-      feedback_enable_key(throw_if_not(PyUnicode_FromString("feedback_enable"))),
-      bypass_lookup_tables_key(
-          throw_if_not(PyUnicode_FromString("bypass_lookup_tables")))
+    : channel_key(pyunicode_from_string("channel")),
+      tone_key(pyunicode_from_string("tone")),
+      duration_cycles_key(pyunicode_from_string("duration_cycles")),
+      frequency_hz_key(pyunicode_from_string("frequency_hz")),
+      amplitude_key(pyunicode_from_string("amplitude")),
+      phase_rad_key(pyunicode_from_string("phase_rad")),
+      frame_rotation_rad_key(pyunicode_from_string("frame_rotation_rad")),
+      wait_trigger_key(pyunicode_from_string("wait_trigger")),
+      sync_key(pyunicode_from_string("sync")),
+      output_enable_key(pyunicode_from_string("output_enable")),
+      feedback_enable_key(pyunicode_from_string("feedback_enable")),
+      bypass_lookup_tables_key(pyunicode_from_string("bypass_lookup_tables"))
 {
     for (int i = 0; i < 64; i++)
-        py_nums[i] = throw_if_not(PyLong_FromLong(i));
+        py_nums[i] = pylong_from_long(i);
     py_object tonedata_mod(
         throw_if_not(PyImport_ImportModule("pulsecompiler.rfsoc.tones.tonedata")));
     ToneData = throw_if_not(PyObject_GetAttrString(tonedata_mod, "ToneData"));

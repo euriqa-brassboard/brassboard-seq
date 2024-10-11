@@ -29,7 +29,7 @@ _new_cb_arg2(PyObject *RTValueType, ValueType type, PyObject *cb_arg2,
              PyObject *ty, RuntimeValue*)
 {
     auto datatype = pytype_to_datatype(ty);
-    auto o = throw_if_not(PyType_GenericAlloc((PyTypeObject*)RTValueType, 0));
+    auto o = pytype_genericalloc(RTValueType);
     auto self = (RuntimeValue*)o;
     self->datatype = datatype;
     // self->cache_err = EvalError::NoError;
@@ -46,7 +46,7 @@ template<typename RuntimeValue>
 static inline __attribute__((returns_nonnull)) RuntimeValue*
 _new_expr1(PyObject *RTValueType, ValueType type, RuntimeValue *arg0)
 {
-    auto o = throw_if_not(PyType_GenericAlloc((PyTypeObject*)RTValueType, 0));
+    auto o = pytype_genericalloc(RTValueType);
     auto datatype = unary_return_type(type, arg0->datatype);
     auto self = (RuntimeValue*)o;
     self->datatype = datatype;
@@ -65,7 +65,7 @@ static inline __attribute__((returns_nonnull)) RuntimeValue*
 _new_expr2(PyObject *RTValueType, ValueType type, RuntimeValue *arg0,
            RuntimeValue *arg1)
 {
-    auto o = throw_if_not(PyType_GenericAlloc((PyTypeObject*)RTValueType, 0));
+    auto o = pytype_genericalloc(RTValueType);
     auto datatype = binary_return_type(type, arg0->datatype, arg1->datatype);
     auto self = (RuntimeValue*)o;
     self->datatype = datatype;
@@ -83,7 +83,7 @@ template<typename RuntimeValue>
 static inline __attribute__((returns_nonnull)) RuntimeValue*
 new_const(PyObject *RTValueType, TagVal v, RuntimeValue*)
 {
-    auto o = throw_if_not(PyType_GenericAlloc((PyTypeObject*)RTValueType, 0));
+    auto o = pytype_genericalloc(RTValueType);
     auto self = (RuntimeValue*)o;
     self->datatype = v.type;
     // self->cache_err = EvalError::NoError;
