@@ -74,7 +74,7 @@ def action_get_value(action.Action action):
 
 def action_get_compile_info(action.Action action):
     return dict(tid=action.tid, end_tid=action.end_tid, length=action.length,
-                prev_val=action.prev_val, end_val=action.end_val)
+                end_val=action.end_val)
 
 def action_get_cond_val(action.Action action):
     return action.data.cond_val

@@ -42,7 +42,6 @@ new_action(PyObject *ActionType, PyObject *value, PyObject *cond,
     p->aid = aid;
 
     p->length = py_newref(Py_None);
-    p->prev_val = py_newref(Py_None);
     p->end_val = py_newref(Py_None);
     return p;
 }

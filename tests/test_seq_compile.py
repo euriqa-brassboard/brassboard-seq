@@ -89,13 +89,11 @@ def test_cond_order1(max_bt):
     info2 = test_utils.action_get_compile_info(action2)
     assert info1['tid'] == 1
     assert info1['end_tid'] == 2
-    assert info1['prev_val'] == 0
     assert info1['length'] == 1
     assert str(info1['end_val']) == f'ifelse(bool({c1}), True, 0)'
 
     assert info2['tid'] == 3
     assert info2['end_tid'] == 4
-    assert info2['prev_val'] is info1['end_val']
     assert info2['length'] == 2
     assert info2['end_val'] is False
 
@@ -204,13 +202,11 @@ def test_cond_order2(max_bt):
     info2 = test_utils.action_get_compile_info(action2)
     assert info1['tid'] == 1
     assert info1['end_tid'] == 2
-    assert info1['prev_val'] == 0
     assert info1['length'] == 1
     assert str(info1['end_val']) == f'ifelse(bool({c1}), True, 0)'
 
     assert info2['tid'] == 4
     assert info2['end_tid'] == 5
-    assert info2['prev_val'] is info1['end_val']
     assert info2['length'] == 2
     assert info2['end_val'] is False
 
@@ -369,13 +365,11 @@ def test_order_error3(max_bt):
     info2 = test_utils.action_get_compile_info(action2)
     assert info1['tid'] == 0
     assert info1['end_tid'] == 1
-    assert info1['prev_val'] == 0
     assert info1['length'] == 0.1
     assert info1['end_val'] is True
 
     assert info2['tid'] == 2
     assert info2['end_tid'] == 3
-    assert info2['prev_val'] is True
     assert info2['length'] == 0.1
     assert info2['end_val'] is False
 
@@ -420,13 +414,11 @@ def test_order_error3(max_bt):
     info2 = test_utils.action_get_compile_info(action2)
     assert info1['tid'] == 0
     assert info1['end_tid'] == 1
-    assert info1['prev_val'] == 0
     assert info1['length'] == 0.1
     assert info1['end_val'] is True
 
     assert info2['tid'] == 2
     assert info2['end_tid'] == 3
-    assert info2['prev_val'] is True
     assert info2['length'] == 0.1
     assert info2['end_val'] is True
 
@@ -574,19 +566,16 @@ def test_ramp_order1(max_bt):
     info3 = test_utils.action_get_compile_info(action3)
     assert info1['tid'] == 0
     assert info1['end_tid'] == 1
-    assert info1['prev_val'] == 0
     assert info1['length'] == 0
     assert info1['end_val'] is c1
 
     assert info2['tid'] == 1
     assert info2['end_tid'] == 2
-    assert info2['prev_val'] is c1
     assert info2['length'] is c2
     assert str(info2['end_val']) == f'({c2} / 2 + {c1}) - {c2}'
 
     assert info3['tid'] == 4
     assert info3['end_tid'] == 5
-    assert info3['prev_val'] is info2['end_val']
     assert info3['length'] == 0.1
     assert info3['end_val'] is info2['end_val']
 

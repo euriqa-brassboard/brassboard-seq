@@ -40,7 +40,6 @@ cdef class Action:
     cdef int tid
     cdef int end_tid
     cdef object length
-    cdef object prev_val
     cdef object end_val
 
 cdef class RampFunction:

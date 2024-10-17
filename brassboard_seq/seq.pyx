@@ -407,7 +407,6 @@ cdef class Seq(SubSeq):
                         bb_err_format(ValueError, action_key(action.aid),
                                       "Actions on %U is not statically ordered",
                                       <PyObject*>name)
-                action.prev_val = value
                 action_value = action.value
                 isramp = isinstance(action_value, RampFunction)
                 if not action.data.is_pulse:
