@@ -330,6 +330,13 @@ extern PyObject *pyfloat_0;
 extern PyObject *pyfloat_0_5;
 extern PyObject *pyfloat_1;
 
+static inline void pyassign(auto *&field, auto *v)
+{
+    auto oldval = field;
+    field = py_newref(v);
+    Py_DECREF((PyObject*)oldval);
+}
+
 __attribute__((returns_nonnull)) static inline PyObject*
 pyfloat_from_double(double v)
 {

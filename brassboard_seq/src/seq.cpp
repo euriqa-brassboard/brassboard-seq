@@ -369,12 +369,8 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
                             "Unexpected arguments when creating new time step, %S.",
                             arg_tuple.get());
     }
-    if (type == AddStepType::Step) {
-        auto new_seq = (TimeSeq*)res;
-        auto prev_time = subseq->__pyx_base.end_time;
-        subseq->__pyx_base.end_time = py_newref(new_seq->end_time);
-        Py_DECREF(prev_time);
-    }
+    if (type == AddStepType::Step)
+        pyassign(subseq->__pyx_base.end_time, ((TimeSeq*)res)->end_time);
     return res;
 }
 catch (...) {
