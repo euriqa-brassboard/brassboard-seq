@@ -27,6 +27,13 @@ namespace brassboard_seq::event_time {
 
 static constexpr long long time_scale = 1000000000000ll;
 
+enum TimeOrder {
+    NoOrder,
+    OrderBefore,
+    OrderEqual,
+    OrderAfter,
+};
+
 struct EventTimeData {
     int id;
     bool floating: 1;
@@ -211,6 +218,27 @@ round_time_rt(PyObject *RTValueType, RuntimeValue *v, RuntimeValue *rt_time_scal
     py_object scaled_t((PyObject*)rtval::_new_expr2(RTValueType, rtval::Mul, v,
                                                     rt_time_scale));
     return rtval::rt_round_int64(RTValueType, (RuntimeValue*)scaled_t.get());
+}
+
+static inline TimeOrder is_ordered(auto *t1, auto *t2)
+{
+    auto manager_status = t1->manager_status.get();
+    assert(manager_status == t2->manager_status.get());
+    if (!manager_status->finalized)
+        py_throw_format(PyExc_RuntimeError, "Event times not finalized");
+    if (t1 == t2)
+        return OrderEqual;
+    auto chain1 = t1->data.chain_id;
+    auto chain2 = t2->data.chain_id;
+    // Assume t1 and t2 are on different chain if idx1 == idx2
+    // Since otherwise they should've been the same time
+    if (t2->chain_pos[chain1] >= t1->chain_pos[chain1])
+        return OrderBefore;
+    if (chain1 == chain2)
+        return OrderAfter;
+    if (t1->chain_pos[chain2] >= t2->chain_pos[chain2])
+        return OrderAfter;
+    return NoOrder;
 }
 
 }

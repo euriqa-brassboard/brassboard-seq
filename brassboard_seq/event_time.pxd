@@ -57,6 +57,14 @@ cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
     long long round_time_int(v) except +
     RuntimeValue round_time_rt(object, RuntimeValue, RuntimeValue) except +
 
+    enum TimeOrder:
+        NoOrder
+        OrderBefore
+        OrderEqual
+        OrderAfter
+
+    TimeOrder is_ordered(EventTime t1, EventTime t2) except +
+
 cdef object py_time_scale
 cdef RuntimeValue rt_time_scale
 
@@ -128,12 +136,3 @@ cdef inline int set_base_rt(EventTime self, EventTime base,
     self.data.set_rt_offset(offset)
     self.data.floating = False
     return 0
-
-cdef enum TimeOrder:
-    NoOrder,
-    OrderBefore,
-    OrderEqual,
-    OrderAfter,
-    OrderError
-
-cdef TimeOrder is_ordered(EventTime t1, EventTime t2) except OrderError

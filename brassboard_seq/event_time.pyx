@@ -318,29 +318,6 @@ cdef class EventTime:
         return str(self)
 
 
-cdef TimeOrder is_ordered(EventTime t1, EventTime t2) except OrderError:
-    assert t1.manager_status.get() == t2.manager_status.get()
-    manager_status = t1.manager_status.get()
-    if not manager_status.finalized:
-        PyErr_Format(PyExc_RuntimeError, "Event times not finalized")
-    if t1 is t2:
-        return OrderEqual
-    chain1 = t1.data.chain_id
-    chain2 = t2.data.chain_id
-    idx1 = t1.chain_pos[chain1]
-    idx2 = t2.chain_pos[chain1]
-    if idx2 >= idx1:
-        # Assume t1 and t2 are on different chain if idx1 == idx2
-        # Since otherwise they should've been the same time
-        return OrderBefore
-    if chain1 == chain2:
-        return OrderAfter
-    idx1 = t1.chain_pos[chain2]
-    idx2 = t2.chain_pos[chain2]
-    if idx1 >= idx2:
-        return OrderAfter
-    return NoOrder
-
 cdef EventTime find_common_root(EventTimeDiff self, unsigned age, py_object &pyage):
     cdef cppmap[int,void*] frontier
     if not self.t1.manager_status.get().finalized:

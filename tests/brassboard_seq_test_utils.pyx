@@ -162,7 +162,6 @@ def event_time_get_static(event_time.EventTime self):
 
 def event_time_is_ordered(event_time.EventTime t1, event_time.EventTime t2):
     res = event_time.is_ordered(t1, t2)
-    assert res != event_time.OrderError
     if res == event_time.NoOrder:
         assert event_time.is_ordered(t2, t1) == event_time.NoOrder
         return 'NoOrder'
