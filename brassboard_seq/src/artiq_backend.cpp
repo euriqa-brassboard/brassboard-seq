@@ -36,6 +36,7 @@ struct ArtiqConsts {
     int URUKUL_CONFIG;
     int URUKUL_CONFIG_END;
     int URUKUL_SPIT_DDS_WR;
+    int URUKUL_DEFAULT_PROFILE;
     int SPI_CONFIG_ADDR;
     int SPI_DATA_ADDR;
 };
@@ -586,9 +587,10 @@ void UrukulBus::add_dds_action(auto &add_action, DDSAction &action)
     int64_t lb_mu1 = (start_write_before_update ? last_bus_mu :
                       std::max(last_bus_mu, last_io_update_mu));
     int64_t lb_mu2 = std::max(last_bus_mu, last_io_update_mu);
+    auto profile_reg = (artiq_consts._AD9910_REG_PROFILE0 +
+                        artiq_consts.URUKUL_DEFAULT_PROFILE);
     auto t1 = config_and_write(artiq_consts.URUKUL_CONFIG, 8,
-                               artiq_consts._AD9910_REG_PROFILE0 << 24,
-                               lb_mu1, lb_mu2);
+                               profile_reg << 24, lb_mu1, lb_mu2);
     auto t2 = config_and_write(artiq_consts.URUKUL_CONFIG, 32, action.data1, t1, t1);
     auto t3 = config_and_write(artiq_consts.URUKUL_CONFIG_END, 32, action.data2,
                                t2, t2);
