@@ -239,6 +239,24 @@ void _bb_err_format(PyObject *exc, uintptr_t key, const char *format, ...);
                                   const char *format, ...);
 [[noreturn]] void py_throw_format(PyObject *exc, const char *format, ...);
 
+template<typename T>
+static inline __attribute__((always_inline))
+std::remove_reference_t<T> throw_if_not(T &&v, uintptr_t key)
+{
+    if (!v)
+        bb_rethrow(key);
+    return std::move(v);
+}
+
+template<typename T>
+static inline __attribute__((always_inline))
+std::remove_reference_t<T> throw_if(T &&v, uintptr_t key)
+{
+    if (v)
+        bb_rethrow(key);
+    return std::move(v);
+}
+
 // Wrapper inline function to make it more clear to the C compiler
 // that the function returns 0
 static inline __attribute__((always_inline))

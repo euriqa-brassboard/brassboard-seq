@@ -217,7 +217,7 @@ void _bb_err_format(PyObject *exc, uintptr_t key, const char *format, ...)
     va_start(vargs, format);
     PyErr_FormatV(exc, format, vargs);
     va_end(vargs);
-    bb_rethrow(uintptr_t(-1));
+    throw0();
 }
 
 // We will leak these objects.

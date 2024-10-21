@@ -556,10 +556,9 @@ void collect_actions(auto *rb, Action*, EventTime*)
             auto sync = parse_action_kws(action->kws, action->aid);
             auto value = action->value;
             auto is_ramp = py_issubtype_nontrivial(Py_TYPE(value), rampfunction_type);
-            if (is_ff && is_ramp) {
+            if (is_ff && is_ramp)
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "Feed forward control cannot be ramped");
-            }
             auto cond = action->cond;
             if (cond == Py_False)
                 continue;
@@ -1129,21 +1128,18 @@ void gen_rfsoc_data(auto *rb, RuntimeValue*, RampFunction*, SeqCubicSpline*)
                     prev_v = v3;
                 }
                 bb_reraise_and_throw_if(PyErr_Occurred(), action_key(action.aid));
-                if (!(prev_t < len)) [[unlikely]] {
+                if (!(prev_t < len)) [[unlikely]]
                     bb_throw_format(PyExc_ValueError, action_key(action.aid),
                                     "Segment time point must not "
                                     "exceed action length.");
-                }
-                else {
-                    auto t1 = len * (1.0 / 3.0) + prev_t * (2.0 / 3.0);
-                    auto t2 = len * (2.0 / 3.0) + prev_t * (1.0 / 3.0);
-                    auto t3 = len;
-                    auto v0 = prev_v;
-                    auto v1 = eval_ramp(t1);
-                    auto v2 = eval_ramp(t2);
-                    auto v3 = eval_ramp(t3);
-                    add_sample(t3, v0, v1, v2, v3);
-                }
+                auto t1 = len * (1.0 / 3.0) + prev_t * (2.0 / 3.0);
+                auto t2 = len * (2.0 / 3.0) + prev_t * (1.0 / 3.0);
+                auto t3 = len;
+                auto v0 = prev_v;
+                auto v1 = eval_ramp(t1);
+                auto v2 = eval_ramp(t2);
+                auto v3 = eval_ramp(t3);
+                add_sample(t3, v0, v1, v2, v3);
                 cur_cycle = sp_cycle;
                 bb_debug("Use ramp function provided segments on %s spline: "
                          "new cycle:%" PRId64 "\n", param_name(param), cur_cycle);
