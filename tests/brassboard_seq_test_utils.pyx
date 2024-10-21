@@ -4,7 +4,11 @@ from brassboard_seq cimport action, event_time, rtval, seq, utils
 
 import numpy as np
 
+from libcpp.memory cimport unique_ptr
+from libcpp.utility cimport move
 from libcpp.vector cimport vector
+
+from cpython cimport PyObject, Py_INCREF
 
 cdef extern from *:
     """
@@ -50,34 +54,67 @@ def new_const(c):
 def new_arg(idx):
     return rtval.new_arg(idx)
 
+cdef class Action:
+    cdef unique_ptr[action.Action] tofree
+    cdef action.Action *action
+    cdef object ref
+
+    def __str__(self):
+        return action.action_str(self.action)
+
+    def __repr__(self):
+        return action.action_str(self.action)
+
+cdef _ref_action(action.Action *p, parent):
+    a = <Action>Action.__new__(Action)
+    a.action = p
+    a.ref = parent
+    return a
+
 def new_action(value, cond, bint is_pulse, bint exact_time, dict kws, int aid):
-    return action.new_action(action.Action, value, cond, is_pulse, exact_time,
-                             kws, aid, None)
+    a = <Action>Action.__new__(Action)
+    cdef utils.py_object _kws
+    if kws is not None:
+        Py_INCREF(kws)
+        _kws.reset(<PyObject*>kws)
+    p = new action.Action(value, cond, is_pulse, exact_time, move(_kws), aid)
+    p.length = <PyObject*>NULL
+    a.action = p
+    a.tofree.reset(p)
+    return a
 
-def action_set_tid(action.Action action, int tid):
-    action.tid = tid
+def action_set_tid(Action action, int tid):
+    action.action.tid = tid
 
-def action_get_aid(action.Action action):
-    return action.aid
+def action_get_aid(Action action):
+    return action.action.aid
 
-def action_get_is_pulse(action.Action action):
-    return action.data.is_pulse
+def action_get_is_pulse(Action action):
+    return action.action.is_pulse
 
-def action_get_exact_time(action.Action action):
-    return action.data.exact_time
+def action_get_exact_time(Action action):
+    return action.action.exact_time
 
-def action_get_cond(action.Action action):
-    return action.cond
+cdef get_pyobject(utils.py_object &v):
+    p = v.get()
+    if p == NULL:
+        return
+    return <object>p
 
-def action_get_value(action.Action action):
-    return action.value
+def action_get_cond(Action action):
+    return get_pyobject(action.action.cond)
 
-def action_get_compile_info(action.Action action):
-    return dict(tid=action.tid, end_tid=action.end_tid, length=action.length,
-                end_val=action.end_val)
+def action_get_value(Action action):
+    return get_pyobject(action.action.value)
 
-def action_get_cond_val(action.Action action):
-    return action.data.cond_val
+def action_get_compile_info(Action action):
+    pa = action.action
+    return dict(tid=pa.tid, end_tid=pa.end_tid,
+                length=<object>pa.length if pa.length != NULL else None,
+                end_val=get_pyobject(pa.end_val))
+
+def action_get_cond_val(Action action):
+    return action.action.cond_val
 
 cdef double tagval_to_float(rtval.TagVal tv):
     rtval.throw_py_error(tv.err)
@@ -191,7 +228,13 @@ def seq_finalize(seq.Seq s):
     s.finalize()
 
 def seq_get_all_actions(seq.Seq s):
-    return s.all_actions
+    cdef int nchn = len(s.seqinfo.channel_paths)
+    all_actions = <vector[action.Action*]*>s.all_actions.get()
+    res = []
+    for cid in range(nchn):
+        actions = all_actions[cid]
+        res.append([_ref_action(action, s) for action in actions])
+    return res
 
 def seq_runtime_finalize(seq.Seq s, unsigned age):
     cdef utils.py_object pyage

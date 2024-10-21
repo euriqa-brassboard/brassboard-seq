@@ -20,6 +20,7 @@
 
 #include "event_time.h"
 
+#include <algorithm>
 #include <vector>
 
 namespace brassboard_seq::seq {
@@ -95,8 +96,7 @@ new_round_time(TimeManager *self, EventTime *prev, PyObject *offset, PyObject *c
 
 template<typename TimeStep, typename RuntimeValue, typename SubSeq, typename EventTime>
 static inline __attribute__((returns_nonnull)) TimeStep*
-add_time_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *length,
-              TimeStep*, RuntimeValue*)
+add_time_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *length)
 {
     auto seqinfo = self->__pyx_base.seqinfo;
     py_object end_time((PyObject*)new_round_time(seqinfo->time_mgr, start_time, length,
@@ -360,9 +360,8 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
                             arg_tuple.get(), kws.get());
     }
     else if (tuple_nargs == 0) {
-        res = (PyObject*)add_time_step(subseq, cond, (EventTime*)start_time.get(),
-                                       first_arg, (TimeStep*)nullptr,
-                                       (RuntimeValue*)nullptr);
+        res = (PyObject*)add_time_step<TimeStep,RuntimeValue>(
+            subseq, cond, (EventTime*)start_time.get(), first_arg);
     }
     else {
         py_object arg_tuple(get_args_tuple());
@@ -378,6 +377,71 @@ catch (...) {
     return nullptr;
 }
 
+static PyObject *py_slash = pyunicode_from_string("/");
+
+static py_object get_channel_name(auto *seqinfo, int cid)
+{
+    auto path = PyList_GET_ITEM(seqinfo->channel_paths, cid);
+    return py_object(throw_if_not(PyUnicode_Join(py_slash, path)));
+}
+
+static inline void
+timestep_set(auto *self, PyObject *chn, PyObject *value, PyObject *cond,
+             bool is_pulse, bool exact_time, py_object &&kws)
+{
+    auto seqinfo = self->__pyx_base.seqinfo;
+    int cid;
+    if (Py_TYPE(chn) == &PyLong_Type) {
+        auto lcid = PyLong_AsLong(chn);
+        if (lcid < 0 || lcid > PyList_GET_SIZE(seqinfo->channel_paths))
+            py_throw_format(PyExc_ValueError, "Channel id %ld out of bound", lcid);
+        cid = lcid;
+    }
+    else {
+        cid = __pyx_f_14brassboard_seq_3seq__get_channel_id(seqinfo, chn);
+        throw_if_not(cid >= 0);
+    }
+    if (cid >= self->actions.size()) {
+        self->actions.resize(cid + 1);
+    }
+    else if (self->actions[cid]) {
+        auto name = get_channel_name(seqinfo, cid);
+        py_throw_format(PyExc_ValueError,
+                        "Multiple actions added for the same channel "
+                        "at the same time on %U.", name.get());
+    }
+    auto aid = seqinfo->action_counter;
+    auto action = seqinfo->action_alloc.alloc(value, cond, is_pulse, exact_time,
+                                              std::move(kws), aid);
+    action->length = self->length;
+    seqinfo->bt_tracker.record(action_key(aid));
+    seqinfo->action_counter = aid + 1;
+    self->actions[cid] = action;
+}
+
+static PyObject *py0 = PyLong_FromLong(0);
+
+template<typename RuntimeValue>
+static inline void
+subseq_set(auto *self, PyObject *chn, PyObject *value, PyObject *cond,
+           bool exact_time, py_object &&kws)
+{
+    auto *step = self->dummy_step;
+    using TimeStep = std::remove_reference_t<decltype(*step)>;
+    auto *start_time = self->__pyx_base.end_time;
+    if ((PyObject*)step == Py_None || step->__pyx_base.end_time != start_time) {
+        step = add_time_step<TimeStep,RuntimeValue>(self, self->__pyx_base.cond,
+                                                    start_time, py0);
+        Py_DECREF(self->dummy_step);
+        self->dummy_step = step;
+        // Update the current time so that a normal step added later
+        // this is treated as ordered after this set event
+        // rather than at the same time.
+        pyassign(self->__pyx_base.end_time, step->__pyx_base.end_time);
+    }
+    timestep_set(step, chn, value, cond, false, exact_time, std::move(kws));
+}
+
 template<typename CondSeq, typename RuntimeValue,
          bool is_cond, bool is_step=false, bool is_pulse=false>
 static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
@@ -389,13 +453,11 @@ static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
     auto cond = condseq_get_cond<is_cond>(self);
     CondCombiner<RuntimeValue> cc(cond, params.cond);
     if constexpr (is_step)
-        throw_if(__pyx_f_14brassboard_seq_3seq_timestep_set(
-                     subseq, params.chn, params.value, cc.cond, is_pulse,
-                     params.exact_time, params.kwargs()));
+        timestep_set(subseq, params.chn, params.value, cc.cond, is_pulse,
+                     params.exact_time, std::move(params.kws));
     else
-        throw_if(__pyx_f_14brassboard_seq_3seq_subseq_set(
-                     subseq, params.chn, params.value,
-                     cc.cond, params.exact_time, params.kwargs()));
+        subseq_set<RuntimeValue>(subseq, params.chn, params.value,
+                                 cc.cond, params.exact_time, std::move(params.kws));
     return py_newref(py_self);
 }
 catch (...) {
@@ -511,40 +573,35 @@ update_conditional(ConditionalWrapper*, TimeSeq*, TimeStep*, RuntimeValue*)
     PyType_Modified(condwrapper_type);
 }
 
-template<typename TimeStep, typename Action, typename SubSeq>
-static void collect_actions(SubSeq *self, PyObject *actions)
+template<typename TimeStep, typename SubSeq>
+static void collect_actions(SubSeq *self, std::vector<action::Action*> *actions)
 {
     auto sub_seqs = self->sub_seqs;
     int n = PyList_GET_SIZE(sub_seqs);
     for (int i = 0; i < n; i++) {
         auto subseq = PyList_GET_ITEM(sub_seqs, i);
         if (Py_TYPE(subseq) != timestep_type) {
-            collect_actions<TimeStep,Action>((SubSeq*)subseq, actions);
+            collect_actions<TimeStep>((SubSeq*)subseq, actions);
             continue;
         }
         auto step = (TimeStep*)subseq;
         auto tid = step->__pyx_base.start_time->data.id;
         auto end_tid = step->__pyx_base.end_time->data.id;
-        auto length = step->length;
         int nactions = step->actions.size();
         for (int chn = 0; chn < nactions; chn++) {
-            auto action = (Action*)step->actions[chn].get();
+            auto action = step->actions[chn];
             if (!action)
                 continue;
             action->tid = tid;
             action->end_tid = end_tid;
-            pyassign(action->length, length);
-            pylist_append(PyList_GET_ITEM(actions, chn), (PyObject*)action);
+            actions[chn].push_back(action);
         }
     }
 }
 
-static PyObject *py_slash = pyunicode_from_string("/");
-
-template<typename TimeStep, typename Action, typename RampFunction,
+template<typename TimeStep, typename RampFunction,
          typename RuntimeValue, typename Seq>
-static inline void seq_finalize(Seq *self, TimeStep*, Action*, RampFunction*,
-                                RuntimeValue*)
+static inline void seq_finalize(Seq *self, TimeStep*, RampFunction*, RuntimeValue*)
 {
     using EventTime = std::remove_reference_t<decltype(*self->__pyx_base.__pyx_base.start_time)>;
     auto seqinfo = self->__pyx_base.__pyx_base.seqinfo;
@@ -553,31 +610,28 @@ static inline void seq_finalize(Seq *self, TimeStep*, Action*, RampFunction*,
     time_mgr->__pyx_vtab->finalize(time_mgr);
     pyassign(seqinfo->channel_name_map, Py_None); // Free up memory
     auto nchn = (int)PyList_GET_SIZE(seqinfo->channel_paths);
-    py_object all_actions(new_list_of_list(nchn));
-    collect_actions<TimeStep,Action>(&self->__pyx_base, all_actions);
+    auto all_actions = new std::vector<action::Action*>[nchn];
+    self->all_actions.reset(all_actions);
+    collect_actions<TimeStep>(&self->__pyx_base, all_actions);
     auto get_time = [event_times=time_mgr->event_times] (int tid) {
         return (EventTime*)PyList_GET_ITEM(event_times, tid);
     };
-    auto get_chn_name = [&] (int cid) {
-        auto path = PyList_GET_ITEM(seqinfo->channel_paths, cid);
-        return py_object(throw_if_not(PyUnicode_Join(py_slash, path)));
-    };
     for (int cid = 0; cid < nchn; cid++) {
-        auto actions = PyList_GET_ITEM(all_actions.get(), cid);
-        throw_if(PyList_Sort(actions));
+        auto &actions = all_actions[cid];
+        std::ranges::sort(actions, [] (auto *a1, auto *a2) {
+            return a1->tid < a2->tid;
+        });
         py_object value(pylong_from_long(0));
         EventTime *last_time = nullptr;
         bool last_is_start = false;
         int tid = -1;
-        int nactions = PyList_GET_SIZE(actions);
-        for (int i = 0; i < nactions; i++) {
-            auto action = (Action*)PyList_GET_ITEM(actions, i);
+        for (auto action: actions) {
             if (action->tid == tid) {
                 // It is difficult to decide the ordering of actions
                 // if multiple were added to exactly the same time points.
                 // We disallow this in the same timestep and we'll also disallow
                 // this here.
-                auto name = get_chn_name(cid);
+                auto name = get_channel_name(seqinfo, cid);
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "Multiple actions added for the same channel "
                                 "at the same time on %U.", name.get());
@@ -588,18 +642,18 @@ static inline void seq_finalize(Seq *self, TimeStep*, Action*, RampFunction*,
                 auto o = event_time::is_ordered(last_time, start_time);
                 if (o != event_time::OrderBefore &&
                     (o != event_time::OrderEqual || last_is_start)) {
-                    auto name = get_chn_name(cid);
+                    auto name = get_channel_name(seqinfo, cid);
                     bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                     "Actions on %U is not statically ordered",
                                     name.get());
                 }
             }
-            auto action_value = action->value;
+            auto action_value = action->value.get();
             auto isramp = py_issubtype_nontrivial(Py_TYPE(action_value),
                                                   rampfunction_type);
-            auto cond = action->cond;
+            auto cond = action->cond.get();
             last_is_start = false;
-            if (!action->data.is_pulse) {
+            if (!action->is_pulse) {
                 last_is_start = !isramp;
                 if (cond != Py_False) {
                     py_object new_value;
@@ -635,16 +689,14 @@ static inline void seq_finalize(Seq *self, TimeStep*, Action*, RampFunction*,
                          action_key(action->aid));
             }
             last_time = last_is_start ? start_time : get_time(action->end_tid);
-            pyassign(action->end_val, value.get());
+            action->end_val.reset(py_newref(value.get()));
         }
     }
-    Py_DECREF(self->all_actions);
-    self->all_actions = all_actions.release();
 }
 
-template<typename Action, typename RampFunction, typename RuntimeValue, typename Seq>
+template<typename RampFunction, typename RuntimeValue, typename Seq>
 static inline void seq_runtime_finalize(Seq *self, unsigned age, py_object &pyage,
-                                        Action*, RampFunction*, RuntimeValue*)
+                                        RampFunction*, RuntimeValue*)
 {
     auto seqinfo = self->__pyx_base.__pyx_base.seqinfo;
     auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);
@@ -661,9 +713,8 @@ static inline void seq_runtime_finalize(Seq *self, unsigned age, py_object &pyag
                             "%U", PyTuple_GET_ITEM(a, 1));
         }
     }
-    auto all_actions = self->all_actions;
-    auto get_condval = [&] (Action *action) {
-        auto cond = action->cond;
+    auto get_condval = [&] (auto *action) {
+        auto cond = action->cond.get();
         if (cond == Py_True)
             return true;
         if (cond == Py_False)
@@ -677,18 +728,16 @@ static inline void seq_runtime_finalize(Seq *self, unsigned age, py_object &pyag
             bb_rethrow(action_key(action->aid));
         }
     };
-    auto nchn = (int)PyList_GET_SIZE(all_actions);
+    auto nchn = (int)PyList_GET_SIZE(seqinfo->channel_paths);
     for (int cid = 0; cid < nchn; cid++) {
-        auto actions = PyList_GET_ITEM(all_actions, cid);
+        auto &actions = self->all_actions[cid];
         long long prev_time = 0;
-        int nactions = PyList_GET_SIZE(actions);
-        for (int i = 0; i < nactions; i++) {
-            auto action = (Action*)PyList_GET_ITEM(actions, i);
+        for (auto action: actions) {
             bool cond_val = get_condval(action);
-            action->data.cond_val = cond_val;
+            action->cond_val = cond_val;
             if (!cond_val)
                 continue;
-            auto action_value = action->value;
+            auto action_value = action->value.get();
             auto isramp = py_issubtype_nontrivial(Py_TYPE(action_value),
                                                   rampfunction_type);
             if (isramp) {
@@ -700,7 +749,7 @@ static inline void seq_runtime_finalize(Seq *self, unsigned age, py_object &pyag
                 rtval::rt_eval_throw((RuntimeValue*)action_value, age, pyage,
                                      action_key(action->aid));
             }
-            auto action_end_val = action->end_val;
+            auto action_end_val = action->end_val.get();
             if (action_end_val != action_value &&
                 Py_TYPE(action_end_val) == runtime_value_type) {
                 rtval::rt_eval_throw((RuntimeValue*)action_end_val, age, pyage,
@@ -713,7 +762,7 @@ static inline void seq_runtime_finalize(Seq *self, unsigned age, py_object &pyag
             if (prev_time > start_time || start_time > end_time)
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "Action time order violation");
-            prev_time = (isramp || action->data.is_pulse) ? end_time: start_time;
+            prev_time = (isramp || action->is_pulse) ? end_time : start_time;
         }
     }
 }

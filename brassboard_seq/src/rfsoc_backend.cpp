@@ -514,7 +514,8 @@ inline void ChannelInfo::ensure_both_tones()
 
 static inline bool parse_action_kws(PyObject *kws, int aid)
 {
-    if (kws == Py_None)
+    assert(kws != Py_None);
+    if (!kws)
         return false;
     bool sync = false;
     PyObject *key, *value;
@@ -530,12 +531,11 @@ static inline bool parse_action_kws(PyObject *kws, int aid)
     return sync;
 }
 
-template<typename Action, typename EventTime>
+template<typename EventTime>
 static __attribute__((always_inline)) inline
-void collect_actions(auto *rb, Action*, EventTime*)
+void collect_actions(auto *rb, EventTime*)
 {
     auto seq = rb->__pyx_base.seq;
-    auto all_actions = seq->all_actions;
 
     ValueIndexer<int> bool_values;
     ValueIndexer<double> float_values;
@@ -549,17 +549,14 @@ void collect_actions(auto *rb, Action*, EventTime*)
         auto is_ff = param == ToneFF;
         auto &channel = rb->channels.channels[chn_idx];
         auto &rfsoc_actions = channel.actions[(int)param];
-        auto actions = PyList_GET_ITEM(all_actions, seq_chn);
-        auto nactions = PyList_GET_SIZE(actions);
-        for (int idx = 0; idx < nactions; idx++) {
-            auto action = (Action*)PyList_GET_ITEM(actions, idx);
-            auto sync = parse_action_kws(action->kws, action->aid);
-            auto value = action->value;
+        for (auto action: seq->all_actions[seq_chn]) {
+            auto sync = parse_action_kws(action->kws.get(), action->aid);
+            auto value = action->value.get();
             auto is_ramp = py_issubtype_nontrivial(Py_TYPE(value), rampfunction_type);
             if (is_ff && is_ramp)
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "Feed forward control cannot be ramped");
-            auto cond = action->cond;
+            auto cond = action->cond.get();
             if (cond == Py_False)
                 continue;
             bool cond_need_reloc = Py_TYPE(cond) == rtval_type;
@@ -625,9 +622,9 @@ void collect_actions(auto *rb, Action*, EventTime*)
                 }
                 rfsoc_actions.push_back(rfsoc_action);
             };
-            add_action(action->value, action->tid, sync, is_ramp, false);
-            if (action->data.is_pulse || is_ramp) {
-                add_action(action->end_val, action->end_tid, false, false, true);
+            add_action(action->value.get(), action->tid, sync, is_ramp, false);
+            if (action->is_pulse || is_ramp) {
+                add_action(action->end_val.get(), action->end_tid, false, false, true);
             }
         }
     }

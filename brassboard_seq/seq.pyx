@@ -17,11 +17,11 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.action cimport new_action, Action, RampFunction
+from brassboard_seq.action cimport RampFunction, action_str
 from brassboard_seq.config cimport translate_channel
 from brassboard_seq.event_time cimport round_time_int, round_time_rt, \
   set_base_int, set_base_rt, rt_time_scale, new_time_manager
-from brassboard_seq.rtval cimport get_value_bool, is_rtval, RuntimeValue
+from brassboard_seq.rtval cimport is_rtval, RuntimeValue
 from brassboard_seq.scan cimport new_param_pack
 from brassboard_seq.utils cimport assume_not_none, _assume_not_none, \
   action_key, assert_key, event_time_key, \
@@ -31,9 +31,7 @@ cdef StringIO # hide import
 from io import StringIO
 
 cimport cython
-from cpython cimport PyObject, PyDict_GetItemWithError, \
-  PyList_GET_SIZE, PyList_GET_ITEM, \
-  Py_INCREF, PyLong_AsLong, PyTypeObject, PyTuple_GET_ITEM
+from cpython cimport PyObject, PyDict_GetItemWithError, PyList_GET_SIZE, PyTypeObject
 
 cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
     PyTypeObject *event_time_type
@@ -49,13 +47,11 @@ cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
     void update_conditional(ConditionalWrapper, TimeSeq, TimeStep,
                             RuntimeValue) except +
     object combine_cond(object cond1, object new_cond, RuntimeValue) except +
-    TimeStep add_time_step(SubSeq, object cond, EventTime, object,
-                           TimeStep, RuntimeValue) except +
     SubSeq add_custom_step(SubSeq, object cond, EventTime, object,
                            RuntimeValue) except +
-    void seq_finalize(Seq, TimeStep, Action, RampFunction, RuntimeValue) except +
+    void seq_finalize(Seq, TimeStep, RampFunction, RuntimeValue) except +
     void seq_runtime_finalize(Seq, unsigned age, py_object &pyage,
-                              Action, RampFunction, RuntimeValue) except +
+                              RampFunction, RuntimeValue) except +
 
 
 event_time_type = <PyTypeObject*>EventTime
@@ -114,33 +110,6 @@ cdef class TimeStep(TimeSeq):
     def __repr__(self):
         return str(self)
 
-cdef inline int timestep_set(TimeStep self, chn, value, cond, bint is_pulse,
-                             bint exact_time, dict kws) except -1:
-    cdef int cid
-    seqinfo = self.seqinfo
-    if type(chn) is int:
-        lcid = PyLong_AsLong(chn)
-        _assume_not_none(<void*>seqinfo.channel_paths)
-        if lcid < 0 or lcid > len(seqinfo.channel_paths):
-            PyErr_Format(PyExc_ValueError, "Channel id %ld out of bound", lcid)
-        cid = lcid
-    else:
-        cid = _get_channel_id(seqinfo, chn)
-    if cid >= self.actions.size():
-        self.actions.resize(cid + 1)
-    elif self.actions[cid].get() != NULL:
-        name = '/'.join(seqinfo.channel_paths[cid])
-        PyErr_Format(PyExc_ValueError,
-                     "Multiple actions added for the same channel "
-                     "at the same time on %U.", <PyObject*>name)
-    self.seqinfo.bt_tracker.record(action_key(seqinfo.action_counter))
-    action = new_action(Action, value, cond, is_pulse, exact_time, kws,
-                        seqinfo.action_counter, None)
-    seqinfo.action_counter += 1
-    Py_INCREF(action)
-    self.actions[cid].reset(<PyObject*>action)
-    return 0
-
 cdef int timestep_show(TimeStep self, write, int indent) except -1:
     write(' ' * indent)
     write(f'TimeStep({self.length})@T[{self.start_time.data.id}]')
@@ -151,13 +120,12 @@ cdef int timestep_show(TimeStep self, write, int indent) except -1:
         write('\n')
     nactions = self.actions.size()
     for chn_idx in range(nactions):
-        paction = self.actions[chn_idx].get()
-        if paction == NULL:
+        action = self.actions[chn_idx]
+        if action == NULL:
             continue
-        action = <Action>paction
         chn = '/'.join(self.seqinfo.channel_paths[chn_idx])
         write(' ' * (indent + 2))
-        write(f'{chn}: {str(action)}\n')
+        write(f'{chn}: {action_str(action)}\n')
     return 0
 
 @cython.auto_pickle(False)
@@ -249,19 +217,6 @@ cdef int wait_for_cond(SubSeq self, _tp0, offset, cond) except -1:
     self.seqinfo.bt_tracker.record(event_time_key(<void*>self.end_time))
     return 0
 
-cdef inline int subseq_set(SubSeq self, chn, value, cond,
-                           bint exact_time, dict kws) except -1:
-    step = self.dummy_step
-    start_time = self.end_time
-    if step is None or step.end_time is not start_time:
-        step = add_time_step(self, self.cond, start_time, 0, None, None)
-        self.dummy_step = step
-        # Update the current time so that a normal step added later
-        # this is treated as ordered after this set event
-        # rather than at the same time.
-        self.end_time = step.end_time
-    return timestep_set(step, chn, value, cond, False, exact_time, kws)
-
 cdef int subseq_show_subseqs(SubSeq self, write, int indent) except -1:
     for _subseq in self.sub_seqs:
         subseq = <TimeSeq>_subseq
@@ -339,10 +294,10 @@ cdef class Seq(SubSeq):
         return str(self)
 
     cdef int finalize(self) except -1:
-        seq_finalize(self, None, None, None, None)
+        seq_finalize(self, None, None, None)
 
     cdef int runtime_finalize(self, unsigned age, py_object &pyage) except -1:
-        seq_runtime_finalize(self, age, pyage, None, None, None)
+        seq_runtime_finalize(self, age, pyage, None, None)
 
 cdef int seq_show(Seq self, write, int indent) except -1:
     write(' ' * indent)

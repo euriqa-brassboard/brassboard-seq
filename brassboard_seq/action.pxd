@@ -22,25 +22,27 @@ from brassboard_seq.utils cimport py_object
 
 from libcpp.memory cimport unique_ptr
 
+from cpython cimport PyObject
+
 cdef extern from "src/action.h" namespace "brassboard_seq::action":
-    cppclass ActionData:
-        bint is_pulse;
-        bint exact_time;
-        bint cond_val;
-    Action new_action(object, object, object, bint, bint, object, int, Action) except +
+    cppclass Action:
+        Action(object, object, bint, bint, py_object&, int)
+        py_object value
+        py_object cond
+        py_object kws
+        bint is_pulse
+        bint exact_time
+        bint cond_val
+        int aid
+        int tid
+        int end_tid
+        PyObject *length
+        py_object end_val
 
-cdef class Action:
-    cdef object value
-    cdef object cond
-    cdef dict kws
-    cdef ActionData data
-    cdef int aid
+    cppclass ActionAllocator:
+        pass
 
-    # Used for processing after the sequence has been programmed only.
-    cdef int tid
-    cdef int end_tid
-    cdef object length
-    cdef object end_val
+cdef str action_str(Action*)
 
 cdef class RampFunction:
     cdef object _eval

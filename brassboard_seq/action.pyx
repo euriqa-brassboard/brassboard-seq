@@ -19,12 +19,11 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.rtval cimport get_value_f64, ifelse, is_rtval, \
   new_arg, new_const, _new_expr2, ValueType, DataType, RuntimeValue
-from brassboard_seq.utils cimport PyErr_Format, Py_NotImplemented, \
-  PyExc_TypeError, _PyObject_Vectorcall, pyfloat_from_double
+from brassboard_seq.utils cimport _PyObject_Vectorcall, pyfloat_from_double
 
 cimport cython
 from cython.operator cimport dereference as deref
-from cpython cimport PyObject, Py_LT, Py_GT, PyFloat_AS_DOUBLE
+from cpython cimport PyFloat_AS_DOUBLE
 
 cdef np # hide import
 import numpy as np
@@ -36,43 +35,22 @@ from libcpp.utility cimport move
 cdef extern from "src/action.cpp" namespace "brassboard_seq::action":
     void rampfunc_set_time(RampFunction self, double t)
 
-@cython.auto_pickle(False)
-@cython.no_gc
-@cython.final
-cdef class Action:
-    def __init__(self):
-        PyErr_Format(PyExc_TypeError, "Action cannot be created directly")
-
-    def __richcmp__(self, other, int op):
-        # For sorting actions according to their times.
-        tid1 = self.tid
-        if type(other) is not Action:
-            # Action is a final type so we can use direct type comparison
-            return <object>Py_NotImplemented
-        tid2 = (<Action>other).tid
-        if op == Py_LT:
-            return tid1 < tid2
-        elif op == Py_GT:
-            return tid1 > tid2
-        return <object>Py_NotImplemented
-
-    def __str__(self):
-        name = 'Pulse' if self.data.is_pulse else 'Set'
-        if self.kws is None:
-            kws = ''
-        else:
-            kws = ''.join(f', {name}={val}' for (name, val) in self.kws.items())
-        cond = self.cond
-        if cond is not True:
-            cond_str = f', cond={cond}'
-        else:
-            cond_str = ''
-        if self.data.exact_time:
-            return f'{name}({self.value}{cond_str}, exact_time=True{kws})'
-        return f'{name}({self.value}{cond_str}{kws})'
-
-    def __repr__(self):
-        return str(self)
+cdef str action_str(Action *self):
+    name = 'Pulse' if self.is_pulse else 'Set'
+    if self.kws.get() == NULL:
+        kws = ''
+    else:
+        kws = ''.join(f', {name}={val}'
+                      for (name, val) in (<dict>self.kws.get()).items())
+    cond = <object>self.cond.get()
+    if cond is not True:
+        cond_str = f', cond={cond}'
+    else:
+        cond_str = ''
+    value = <object>self.value.get()
+    if self.exact_time:
+        return f'{name}({value}{cond_str}, exact_time=True{kws})'
+    return f'{name}({value}{cond_str}{kws})'
 
 cdef RuntimeValue arg0 = new_arg(0)
 cdef RuntimeValue const0 = new_const(RuntimeValue, 0.0, <RuntimeValue>None)

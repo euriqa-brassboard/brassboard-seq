@@ -21,8 +21,10 @@ from brassboard_seq.config cimport Config
 from brassboard_seq.event_time cimport TimeManager, EventTime
 from brassboard_seq.utils cimport BacktraceTracker, py_object
 from brassboard_seq.scan cimport ParamPack
+from brassboard_seq.action cimport Action, ActionAllocator
 
 from libcpp.vector cimport vector
+from libcpp.memory cimport unique_ptr
 
 cdef class TimeSeq:
     # Toplevel parent sequence
@@ -47,7 +49,7 @@ cdef class TimeStep(TimeSeq):
     # if the action added to this step contains ramps.
     cdef object length
     # The array of channel -> actions
-    cdef vector[py_object] actions
+    cdef vector[Action*] actions
 
 
 cdef class ConditionalWrapper:
@@ -75,11 +77,13 @@ cdef class SeqInfo:
     cdef dict channel_name_map
     cdef dict channel_path_map
     cdef list channel_paths
+    cdef ActionAllocator action_alloc
     cdef int action_counter
 
+ctypedef vector[Action*] _action_vector
 
 cdef class Seq(SubSeq):
-    cdef list all_actions
+    cdef unique_ptr[_action_vector[]] all_actions
 
     cdef long long total_time
 

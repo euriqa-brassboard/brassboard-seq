@@ -448,15 +448,6 @@ private:
 template<typename CB>
 ScopeExit(CB) -> ScopeExit<CB>;
 
-static inline __attribute__((returns_nonnull))
-PyObject *new_list_of_list(int n)
-{
-    py_object list(pylist_new(n));
-    for (int i = 0; i < n; i++)
-        PyList_SET_ITEM(list.get(), i, pylist_new(0));
-    return list.release();
-}
-
 static inline PyObject *pynum_add_or_sub(PyObject *a, PyObject *b, bool issub)
 {
     if (issub) {
@@ -524,6 +515,43 @@ static inline bool py_issubtype_nontrivial(PyTypeObject *a, PyTypeObject *b)
     }
     return false;
 }
+
+template<typename T, size_t N>
+class PermAllocator {
+public:
+    template<typename ... Args>
+    T *alloc(Args&&... args)
+    {
+        if (space_left == 0) {
+            pages.push_back((T*)malloc(sizeof(T) * N));
+            space_left = N;
+        }
+        auto page = pages.back();
+        auto p = &page[N - space_left];
+        space_left--;
+        new (p) T(std::forward<Args>(args)...);
+        return p;
+    }
+    PermAllocator() = default;
+    PermAllocator(const PermAllocator&) = delete;
+    PermAllocator(PermAllocator&&) = delete;
+
+    ~PermAllocator()
+    {
+        auto npages = pages.size();
+        for (size_t i = 0; i < npages; i++) {
+            size_t cnt = i == npages - 1 ? N - space_left : N;
+            auto page = pages[i];
+            for (size_t j = 0; j < cnt; j++) {
+                page[j].~T();
+            }
+            free(page);
+        }
+    }
+private:
+    std::vector<T*> pages;
+    size_t space_left{0};
+};
 
 // Input: S
 // Output: SA (require S.size() == SA.size())

@@ -19,32 +19,37 @@
 #ifndef BRASSBOARD_SEQ_SRC_ACTION_H
 #define BRASSBOARD_SEQ_SRC_ACTION_H
 
+#include "utils.h"
+
 namespace brassboard_seq::action {
 
-struct ActionData {
+struct Action {
+    py_object value;
+    py_object cond;
+    py_object kws;
     bool is_pulse;
     bool exact_time;
     bool cond_val;
+    int aid;
+    int tid;
+    int end_tid;
+    PyObject *length;
+    py_object end_val;
+
+    Action(PyObject *value, PyObject *cond,
+           bool is_pulse, bool exact_time, py_object &&kws, int aid)
+        : value(py_newref(value)),
+          cond(py_newref(cond)),
+          kws(std::move(kws)),
+          is_pulse(is_pulse),
+          exact_time(exact_time),
+          cond_val(false),
+          aid(aid)
+    {
+    }
 };
 
-template<typename Action>
-static inline __attribute__((returns_nonnull)) Action*
-new_action(PyObject *ActionType, PyObject *value, PyObject *cond,
-           bool is_pulse, bool exact_time, PyObject *kws, int aid, Action*)
-{
-    auto o = pytype_genericalloc(ActionType);
-    auto p = (Action*)o;
-    p->data.is_pulse = is_pulse;
-    p->data.exact_time = exact_time;
-    p->value = py_newref(value);
-    p->cond = py_newref(cond);
-    p->kws = py_newref(kws);
-    p->aid = aid;
-
-    p->length = py_newref(Py_None);
-    p->end_val = py_newref(Py_None);
-    return p;
-}
+using ActionAllocator = PermAllocator<Action,146>;
 
 }
 

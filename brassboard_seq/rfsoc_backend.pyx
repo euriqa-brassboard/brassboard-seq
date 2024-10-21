@@ -17,7 +17,7 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.action cimport Action, RampFunction, SeqCubicSpline
+from brassboard_seq.action cimport RampFunction, SeqCubicSpline
 from brassboard_seq.event_time cimport EventTime, round_time_f64
 from brassboard_seq.rtval cimport is_rtval, rtval_cache, rt_eval_throw, RuntimeValue
 from brassboard_seq.utils cimport pyfloat_from_double, set_global_tracker, \
@@ -34,7 +34,7 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
     PyTypeObject *rtval_type
     PyTypeObject *rampfunction_type
     PyTypeObject *seqcubicspline_type
-    void collect_actions(RFSOCBackend ab, Action, EventTime) except+
+    void collect_actions(RFSOCBackend ab, EventTime) except+
     void gen_rfsoc_data(RFSOCBackend ab, RuntimeValue, RampFunction,
                         SeqCubicSpline) except +
 
@@ -139,7 +139,7 @@ cdef class RFSOCBackend:
                 param_enum = ToneFF
                 raise_invalid_channel(path)
             self.channels.add_seq_channel(idx, chn_idx, param_enum)
-        collect_actions(self, None, None)
+        collect_actions(self, None)
 
     cdef int runtime_finalize(self, unsigned age, py_object &pyage) except -1:
         bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)

@@ -17,7 +17,7 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.action cimport Action, RampFunction
+from brassboard_seq.action cimport RampFunction
 from brassboard_seq.event_time cimport EventTime, round_time_int
 from brassboard_seq.rtval cimport ExternCallback, is_rtval, new_extern, RuntimeValue
 from brassboard_seq.seq cimport Seq
@@ -69,7 +69,7 @@ cdef extern from "src/artiq_backend.cpp" namespace "brassboard_seq::artiq_backen
     PyTypeObject *rtval_type
     PyTypeObject *rampfunction_type
 
-    void collect_actions(ArtiqBackend ab, Action, EventTime) except +
+    void collect_actions(ArtiqBackend ab, EventTime) except +
 
     void generate_rtios(ArtiqBackend ab, unsigned age, py_object&,
                         RuntimeValue) except +
@@ -228,7 +228,7 @@ cdef class ArtiqBackend:
         bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)
         collect_channels(&self.channels, self.prefix, self.sys, self.seq,
                          self.device_delay)
-        collect_actions(self, None, None)
+        collect_actions(self, None)
 
     cdef int runtime_finalize(self, unsigned age, py_object &pyage) except -1:
         bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)

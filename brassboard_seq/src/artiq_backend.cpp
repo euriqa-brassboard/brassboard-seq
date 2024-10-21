@@ -98,12 +98,11 @@ inline void ChannelsInfo::add_dds_param_channel(int seqchn, uint32_t bus_id,
                                                     delay, rt_delay), param};
 }
 
-template<typename Action, typename EventTime>
+template<typename EventTime>
 static __attribute__((always_inline)) inline
-void collect_actions(auto *ab, Action*, EventTime*)
+void collect_actions(auto *ab, EventTime*)
 {
     auto seq = ab->__pyx_base.seq;
-    auto all_actions = seq->all_actions;
     std::vector<ArtiqAction> &artiq_actions = ab->all_actions;
 
     ValueIndexer<int> bool_values;
@@ -112,14 +111,14 @@ void collect_actions(auto *ab, Action*, EventTime*)
 
     auto event_times = seq->__pyx_base.__pyx_base.seqinfo->time_mgr->event_times;
 
-    auto add_single_action = [&] (Action *action, ChannelType type, int chn_idx,
+    auto add_single_action = [&] (auto *action, ChannelType type, int chn_idx,
                                   int tid, PyObject *value, int cond_reloc,
                                   bool is_end) {
         ArtiqAction artiq_action;
         int aid = action->aid;
         artiq_action.type = type;
         artiq_action.cond = true;
-        artiq_action.exact_time = action->data.exact_time;
+        artiq_action.exact_time = action->exact_time;
         artiq_action.eval_status = false;
         artiq_action.chn_idx = chn_idx;
         artiq_action.tid = tid;
@@ -200,8 +199,8 @@ void collect_actions(auto *ab, Action*, EventTime*)
         }
         artiq_actions.push_back(artiq_action);
     };
-    auto add_action = [&] (Action *action, ChannelType type, int chn_idx) {
-        auto cond = action->cond;
+    auto add_action = [&] (auto *action, ChannelType type, int chn_idx) {
+        auto cond = action->cond.get();
         int cond_reloc = -1;
         if (Py_TYPE(cond) == rtval_type) {
             cond_reloc = bool_values.get_id(cond);
@@ -212,7 +211,7 @@ void collect_actions(auto *ab, Action*, EventTime*)
         }
         add_single_action(action, type, chn_idx, action->tid, action->value,
                           cond_reloc, false);
-        if (action->data.is_pulse) {
+        if (action->is_pulse) {
             add_single_action(action, type, chn_idx, action->end_tid, action->end_val,
                               cond_reloc, true);
         }
@@ -221,18 +220,16 @@ void collect_actions(auto *ab, Action*, EventTime*)
     for (auto [chn, ttl_idx]: ab->channels.ttl_chn_map) {
         auto ttl_chn_info = ab->channels.ttlchns[ttl_idx];
         auto type = ttl_chn_info.iscounter ? CounterEnable : TTLOut;
-        auto actions = PyList_GET_ITEM(all_actions, chn);
-        auto nactions = PyList_GET_SIZE(actions);
-        for (int idx = 0; idx < nactions; idx++) {
-            auto action = (Action*)PyList_GET_ITEM(actions, idx);
-            if (action->kws != Py_None)
+        for (auto action: seq->all_actions[chn]) {
+            if (action->kws)
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
-                                "Invalid output keyword argument %S", action->kws);
-            auto value = action->value;
+                                "Invalid output keyword argument %S",
+                                action->kws.get());
+            auto value = action->value.get();
             if (py_issubtype_nontrivial(Py_TYPE(value), rampfunction_type))
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "TTL Channel cannot be ramped");
-            if (action->cond == Py_False)
+            if (action->cond.get() == Py_False)
                 continue;
             add_action(action, type, ttl_idx);
         }
@@ -240,18 +237,16 @@ void collect_actions(auto *ab, Action*, EventTime*)
 
     for (auto [chn, value]: ab->channels.dds_param_chn_map) {
         auto [dds_idx, type] = value;
-        auto actions = PyList_GET_ITEM(all_actions, chn);
-        auto nactions = PyList_GET_SIZE(actions);
-        for (int idx = 0; idx < nactions; idx++) {
-            auto action = (Action*)PyList_GET_ITEM(actions, idx);
-            if (action->kws != Py_None)
+        for (auto action: seq->all_actions[chn]) {
+            if (action->kws)
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
-                                "Invalid output keyword argument %S", action->kws);
-            auto value = action->value;
+                                "Invalid output keyword argument %S",
+                                action->kws.get());
+            auto value = action->value.get();
             if (py_issubtype_nontrivial(Py_TYPE(value), rampfunction_type))
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "DDS Channel cannot be ramped");
-            if (action->cond == Py_False)
+            if (action->cond.get() == Py_False)
                 continue;
             add_action(action, type, dds_idx);
         }
