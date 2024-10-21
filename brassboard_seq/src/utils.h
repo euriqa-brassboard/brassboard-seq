@@ -230,7 +230,6 @@ uintptr_t assert_key(int aid)
     return (uintptr_t)(aid << 2) | 2;
 }
 
-void _bb_raise(PyObject *exc, uintptr_t key);
 void bb_reraise(uintptr_t key);
 void _bb_err_format(PyObject *exc, uintptr_t key, const char *format, ...);
 
@@ -259,12 +258,6 @@ std::remove_reference_t<T> throw_if(T &&v, uintptr_t key)
 
 // Wrapper inline function to make it more clear to the C compiler
 // that the function returns 0
-static inline __attribute__((always_inline))
-int bb_raise(PyObject *exc, uintptr_t key)
-{
-    _bb_raise(exc, key);
-    return 0;
-}
 template<typename... T>
 inline __attribute__((always_inline))
 int bb_err_format(PyObject *exc, uintptr_t key, const char *format, T&&... args)

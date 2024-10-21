@@ -20,7 +20,7 @@
 from brassboard_seq.rtval cimport get_value_bool, \
   new_const, new_extern_age, rt_eval_throw, ExternCallback
 from brassboard_seq.utils cimport _assume_not_none, assume_not_none, \
-  event_time_key, bb_err_format, bb_raise, PyExc_RuntimeError, PyExc_TypeError
+  event_time_key, bb_err_format, PyExc_RuntimeError, PyExc_TypeError
 
 from libcpp.map cimport map as cppmap
 from libcpp.algorithm cimport fill as cppfill

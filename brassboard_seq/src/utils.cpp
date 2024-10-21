@@ -168,14 +168,6 @@ static inline PyObject *get_global_backtrace(uintptr_t key)
     throw 0;
 }
 
-void _bb_raise(PyObject *exc, uintptr_t key)
-{
-    auto type = (PyObject*)Py_TYPE(exc);
-    PyErr_Restore(py_newref(type), py_newref(exc),
-                  combine_traceback(PyException_GetTraceback(exc),
-                                    get_global_backtrace(key)));
-}
-
 void bb_reraise(uintptr_t key)
 {
     PyObject *exc, *type, *old_tb;
