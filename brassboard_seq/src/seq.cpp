@@ -406,8 +406,6 @@ timestep_set(auto *self, PyObject *chn, PyObject *value, PyObject *cond,
     self->actions[cid] = action;
 }
 
-static PyObject *py0 = PyLong_FromLong(0);
-
 template<typename RuntimeValue>
 static inline void
 subseq_set(auto *self, PyObject *chn, PyObject *value, PyObject *cond,
@@ -418,7 +416,7 @@ subseq_set(auto *self, PyObject *chn, PyObject *value, PyObject *cond,
     auto *start_time = self->__pyx_base.end_time;
     if ((PyObject*)step == Py_None || step->__pyx_base.end_time != start_time) {
         step = add_time_step<TimeStep,RuntimeValue>(self, self->__pyx_base.cond,
-                                                    start_time, py0);
+                                                    start_time, pylong_cached(0));
         Py_DECREF(self->dummy_step);
         self->dummy_step = step;
         // Update the current time so that a normal step added later

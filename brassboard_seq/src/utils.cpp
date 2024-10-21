@@ -220,6 +220,13 @@ PyObject *pyfloat_0(PyFloat_FromDouble(0));
 PyObject *pyfloat_0_5(PyFloat_FromDouble(0.5));
 PyObject *pyfloat_1(PyFloat_FromDouble(1));
 
+const std::array<PyObject*,_pylong_cache_max * 2> _pylongs_cache = [] {
+    std::array<PyObject*,_pylong_cache_max * 2> res;
+    for (int i = 0; i < _pylong_cache_max * 2; i++)
+        res[i] = throw_if_not(PyLong_FromLong(i - _pylong_cache_max));
+    return res;
+} ();
+
 PyObject *pytuple_append1(PyObject *tuple, PyObject *obj)
 {
     Py_ssize_t nele = PyTuple_GET_SIZE(tuple);

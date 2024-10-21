@@ -22,6 +22,7 @@
 #include "Python.h"
 #include "frameobject.h"
 
+#include <array>
 #include <cmath>
 #include <map>
 #include <memory>
@@ -369,15 +370,30 @@ pyfloat_from_double(double v)
     return throw_if_not(PyFloat_FromDouble(v));
 }
 
+static constexpr int _pylong_cache_max = 4096;
+extern const std::array<PyObject*,_pylong_cache_max * 2> _pylongs_cache;
+
+__attribute__((returns_nonnull)) static inline PyObject*
+pylong_cached(int v)
+{
+    assert(v < _pylong_cache_max);
+    assert(v >= -_pylong_cache_max);
+    return _pylongs_cache[v + _pylong_cache_max];
+}
+
 __attribute__((returns_nonnull)) static inline PyObject*
 pylong_from_long(long v)
 {
+    if (v < _pylong_cache_max && v >= -_pylong_cache_max)
+        return py_newref(pylong_cached(v));
     return throw_if_not(PyLong_FromLong(v));
 }
 
 __attribute__((returns_nonnull)) static inline PyObject*
 pylong_from_longlong(long long v)
 {
+    if (v < _pylong_cache_max && v >= -_pylong_cache_max)
+        return py_newref(pylong_cached(v));
     return throw_if_not(PyLong_FromLongLong(v));
 }
 

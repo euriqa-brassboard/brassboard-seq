@@ -51,7 +51,6 @@ struct PulseCompilerGen: SyncChannelGen {
                   hash(PyObject_Hash(str))
             {}
         };
-        PyObject *py_nums[64];
         PyObject *channel_list[64];
         PyObject *CubicSpline;
         PyObject *ToneData;
@@ -107,8 +106,9 @@ struct PulseCompilerGen: SyncChannelGen {
             py_object td_dict(throw_if_not(PyObject_GenericGetDict(td, nullptr)));
             for (auto [key, value]: tonedata_fields)
                 dict_setitem(td_dict, key, value);
-            dict_setitem(td_dict, channel_key, py_nums[channel]);
-            dict_setitem(td_dict, tone_key, py_nums[tone]);
+            static_assert(_pylong_cache_max >= 32);
+            dict_setitem(td_dict, channel_key, pylong_cached(channel));
+            dict_setitem(td_dict, tone_key, pylong_cached(tone));
             {
                 py_object py_cycles(pylong_from_longlong(duration_cycles));
                 dict_setitem(td_dict, duration_cycles_key, py_cycles);
@@ -212,8 +212,6 @@ PulseCompilerGen::Info::Info()
       feedback_enable_key(pyunicode_from_string("feedback_enable")),
       bypass_lookup_tables_key(pyunicode_from_string("bypass_lookup_tables"))
 {
-    for (int i = 0; i < 64; i++)
-        py_nums[i] = pylong_from_long(i);
     py_object tonedata_mod(
         throw_if_not(PyImport_ImportModule("pulsecompiler.rfsoc.tones.tonedata")));
     ToneData = throw_if_not(PyObject_GetAttrString(tonedata_mod, "ToneData"));
@@ -226,6 +224,11 @@ PulseCompilerGen::Info::Info()
                                                                  "ControlChannel")));
     py_object DriveChannel(throw_if_not(PyObject_GetAttrString(pulse_mod,
                                                                "DriveChannel")));
+
+    static_assert(_pylong_cache_max >= 64);
+    PyObject *py_nums[64];
+    for (int i = 0; i < 64; i++)
+        py_nums[i] = pylong_cached(i);
 
     channel_list[0] = throw_if_not(
         _PyObject_Vectorcall(ControlChannel, &py_nums[0], 1, nullptr));
