@@ -63,35 +63,4 @@ _new_expr2_wrap1(PyObject *RTValueType, ValueType type,
     return self;
 }
 
-template<typename RuntimeValue>
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-_wrap_rtval(PyObject *RTValueType, PyObject *v, RuntimeValue*)
-{
-    if (Py_TYPE(v) == (PyTypeObject*)RTValueType)
-        return (RuntimeValue*)py_newref(v);
-    return new_const(RTValueType, v, (RuntimeValue*)nullptr);
-}
-
-template<typename RuntimeValue>
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-_new_select(PyObject *RTValueType, RuntimeValue *arg0,
-            PyObject *arg1, PyObject *arg2)
-{
-    py_object rtarg1((PyObject*)_wrap_rtval(RTValueType, arg1, (RuntimeValue*)nullptr));
-    py_object rtarg2((PyObject*)_wrap_rtval(RTValueType, arg2, (RuntimeValue*)nullptr));
-    auto datatype = promote_type(((RuntimeValue*)rtarg1.get())->datatype,
-                                 ((RuntimeValue*)rtarg2.get())->datatype);
-    auto o = pytype_genericalloc(RTValueType);
-    auto self = (RuntimeValue*)o;
-    self->datatype = datatype;
-    // self->cache_err = EvalError::NoError;
-    // self->cache_val = { .i64_val = 0 };
-    self->type_ = Select;
-    self->age = (unsigned)-1;
-    self->arg0 = (RuntimeValue*)py_newref((PyObject*)arg0);
-    self->arg1 = (RuntimeValue*)rtarg1.release();
-    self->cb_arg2 = rtarg2.release();
-    return self;
-}
-
 }
