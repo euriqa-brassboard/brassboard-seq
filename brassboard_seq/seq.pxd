@@ -39,7 +39,6 @@ cdef class TimeSeq:
     # This can be either a runtime value or `True` or `False`.
     # This is also always guaranteed to be true only if the parent's condition is true.
     cdef object cond
-    cdef readonly ParamPack C
 
 
 cdef class TimeStep(TimeSeq):
@@ -55,7 +54,6 @@ cdef class TimeStep(TimeSeq):
 cdef class ConditionalWrapper:
     cdef SubSeq seq
     cdef object cond
-    cdef readonly ParamPack C
 
 
 cdef class SubSeq(TimeSeq):
@@ -77,6 +75,7 @@ cdef class SeqInfo:
     cdef dict channel_name_map
     cdef dict channel_path_map
     cdef list channel_paths
+    cdef ParamPack C
     cdef ActionAllocator action_alloc
     cdef int action_counter
 

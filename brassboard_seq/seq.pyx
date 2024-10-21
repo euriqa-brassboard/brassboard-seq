@@ -91,6 +91,10 @@ cdef class TimeSeq:
         if not c:
             raise AssertionError(msg)
 
+    @property
+    def C(self):
+        return self.seqinfo.C
+
 @cython.auto_pickle(False)
 @cython.no_gc
 @cython.final
@@ -161,6 +165,10 @@ cdef class ConditionalWrapper:
 
     def __repr__(self):
         return str(self)
+
+    @property
+    def C(self):
+        return self.seq.seqinfo.C
 
 cdef int conditionalwrapper_show(ConditionalWrapper self, write, int indent) except -1:
     write(' ' * indent)
@@ -271,7 +279,6 @@ cdef class Seq(SubSeq):
     def __init__(self, Config config, /, int max_frame=0):
         self.cond = True
         self.sub_seqs = []
-        self.C = new_param_pack(ParamPack, {}, {}, 'root', None)
         seqinfo = <SeqInfo>SeqInfo.__new__(SeqInfo)
         seqinfo.config = config
         seqinfo.time_mgr = new_time_manager()
@@ -280,6 +287,7 @@ cdef class Seq(SubSeq):
         seqinfo.channel_name_map = {}
         seqinfo.channel_path_map = {}
         seqinfo.channel_paths = []
+        seqinfo.C = new_param_pack(ParamPack, {}, {}, 'root', None)
         seqinfo.action_counter = 0
         self.seqinfo = seqinfo
         self.end_time = seqinfo.time_mgr.new_time_int(None, 0, False, True, None)

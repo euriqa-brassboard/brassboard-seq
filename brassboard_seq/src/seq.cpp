@@ -110,7 +110,6 @@ add_time_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *len
     seq->start_time = py_newref(start_time);
     seq->end_time = (EventTime*)end_time.release();
     seq->cond = py_newref(cond);
-    seq->C = py_newref(self->__pyx_base.C);
     step->length = py_newref(length);
     seqinfo->bt_tracker.record(event_time_key(seq->end_time));
     pylist_append(self->sub_seqs, o);
@@ -132,7 +131,6 @@ add_custom_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *c
     seq->start_time = py_newref(start_time);
     seq->end_time = py_newref(start_time);
     seq->cond = py_newref(cond);
-    seq->C = py_newref(self->__pyx_base.C);
     subseq->sub_seqs = sub_seqs.release();
     subseq->dummy_step = (decltype(subseq->dummy_step))py_newref(Py_None);
     if (nargs || kwargs) {
@@ -254,17 +252,6 @@ static inline auto condseq_get_cond(auto *self)
     }
     else {
         return self->__pyx_base.cond;
-    }
-}
-
-template<bool is_cond>
-static inline auto condseq_get_C(auto *self)
-{
-    if constexpr (is_cond) {
-        return self->C;
-    }
-    else {
-        return self->__pyx_base.C;
     }
 }
 
@@ -479,7 +466,6 @@ static PyObject *condseq_conditional(PyObject *py_self, PyObject *const *args,
     auto wrapper = (ConditionalWrapper*)o;
     wrapper->seq = py_newref(subseq);
     wrapper->cond = cc.take_cond();
-    wrapper->C = py_newref(condseq_get_C<is_cond>(self));
     return o;
 }
 catch (...) {
