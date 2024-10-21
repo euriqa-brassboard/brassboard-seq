@@ -1386,3 +1386,7 @@ def test_seq_C():
     assert isinstance(s.C, scan.ParamPack)
     assert s.C.a(1) == 1
     assert s.C[:] == dict(a=1)
+
+    c = s.conditional(False)
+    assert isinstance(c, seq.ConditionalWrapper)
+    assert c.C is s.C
