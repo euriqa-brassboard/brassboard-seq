@@ -19,15 +19,12 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.action cimport new_action, Action, RampFunction
 from brassboard_seq.config cimport translate_channel
-from brassboard_seq cimport event_time
-from brassboard_seq.event_time cimport is_ordered, round_time_int, round_time_rt, \
+from brassboard_seq.event_time cimport round_time_int, round_time_rt, \
   set_base_int, set_base_rt, rt_time_scale, new_time_manager
-from brassboard_seq.rtval cimport get_value_bool, ifelse, is_rtval, \
-  RuntimeValue, rtval_cache, rt_eval_throw
+from brassboard_seq.rtval cimport get_value_bool, is_rtval, RuntimeValue
 from brassboard_seq.scan cimport new_param_pack
 from brassboard_seq.utils cimport assume_not_none, _assume_not_none, \
-  action_key, assert_key, bb_err_format, bb_raise, event_time_key, \
-  new_list_of_list, set_global_tracker, \
+  action_key, assert_key, event_time_key, \
   PyErr_Format, PyExc_TypeError, PyExc_ValueError
 
 cdef StringIO # hide import
@@ -44,6 +41,7 @@ cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
     PyTypeObject *timestep_type
     PyTypeObject *subseq_type
     PyTypeObject *condwrapper_type
+    PyTypeObject *rampfunction_type
     PyObject *_rt_time_scale "brassboard_seq::seq::rt_time_scale"
     void update_timestep(TimeStep, RuntimeValue) except +
     void update_subseq(SubSeq, ConditionalWrapper, TimeSeq, TimeStep,
@@ -55,6 +53,9 @@ cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
                            TimeStep, RuntimeValue) except +
     SubSeq add_custom_step(SubSeq, object cond, EventTime, object,
                            RuntimeValue) except +
+    void seq_finalize(Seq, TimeStep, Action, RampFunction, RuntimeValue) except +
+    void seq_runtime_finalize(Seq, unsigned age, py_object &pyage,
+                              Action, RampFunction, RuntimeValue) except +
 
 
 event_time_type = <PyTypeObject*>EventTime
@@ -62,6 +63,7 @@ runtime_value_type = <PyTypeObject*>RuntimeValue
 timestep_type = <PyTypeObject*>TimeStep
 subseq_type = <PyTypeObject*>SubSeq
 condwrapper_type = <PyTypeObject*>ConditionalWrapper
+rampfunction_type = <PyTypeObject*>RampFunction
 _rt_time_scale = <PyObject*>rt_time_scale
 
 update_timestep(None, None)
@@ -280,31 +282,6 @@ cdef int subseq_show(SubSeq self, write, int indent) except -1:
     subseq_show_subseqs(self, write, indent + 2)
     return 0
 
-cdef int collect_actions(SubSeq self, list actions) except -1:
-    _assume_not_none(<void*>self.sub_seqs)
-    for _subseq in self.sub_seqs:
-        subseq = <TimeSeq>_subseq
-        if type(subseq) is not TimeStep:
-            collect_actions(<SubSeq>subseq, actions)
-            continue
-        step = <TimeStep>subseq
-        tid = step.start_time.data.id
-        end_tid = step.end_time.data.id
-        length = step.length
-        nactions = step.actions.size()
-        for chn in range(nactions):
-            paction = step.actions[chn].get()
-            if paction == NULL:
-                continue
-            action = <Action>paction
-            action.tid = tid
-            action.end_tid = end_tid
-            action.length = length
-            _actions = <list>PyList_GET_ITEM(actions, chn)
-            assume_not_none(_actions)
-            _actions.append(action)
-    return 0
-
 @cython.auto_pickle(False)
 @cython.no_gc
 @cython.final
@@ -362,142 +339,10 @@ cdef class Seq(SubSeq):
         return str(self)
 
     cdef int finalize(self) except -1:
-        bt_guard = set_global_tracker(&self.seqinfo.bt_tracker)
-        seqinfo = self.seqinfo
-        time_mgr = seqinfo.time_mgr
-        time_mgr.finalize()
-        seqinfo.channel_name_map = None # Free up memory
-        cdef int nchn = PyList_GET_SIZE(seqinfo.channel_paths)
-        all_actions = new_list_of_list(nchn)
-        collect_actions(self, all_actions)
-        event_times = time_mgr.event_times
-        cdef EventTime last_time
-        cdef bint last_is_start
-        cdef int cid = -1
-        cdef int tid
-        assume_not_none(all_actions)
-        for _actions in all_actions:
-            cid += 1
-            actions = <list>_actions
-            assume_not_none(actions)
-            actions.sort()
-            value = 0
-            last_time = None
-            last_is_start = False
-            assume_not_none(actions)
-            tid = -1
-            for _action in actions:
-                action = <Action>_action
-                if action.tid == tid:
-                    # It is difficult to decide the ordering of actions
-                    # if multiple were added to exactly the same time points.
-                    # We disallow this in the same timestep and we'll also disallow
-                    # this here.
-                    name = '/'.join(seqinfo.channel_paths[cid])
-                    bb_err_format(ValueError, action_key(action.aid),
-                                  "Multiple actions added for the same channel "
-                                  "at the same time on %U.", <PyObject*>name)
-                tid = action.tid
-                start_time = <EventTime>PyList_GET_ITEM(event_times, tid)
-                if last_time is not None:
-                    o = is_ordered(last_time, start_time)
-                    if (o != event_time.OrderBefore and
-                        (o != event_time.OrderEqual or last_is_start)):
-                        name = '/'.join(seqinfo.channel_paths[cid])
-                        bb_err_format(ValueError, action_key(action.aid),
-                                      "Actions on %U is not statically ordered",
-                                      <PyObject*>name)
-                action_value = action.value
-                isramp = isinstance(action_value, RampFunction)
-                if not action.data.is_pulse:
-                    last_is_start = not isramp
-                    if action.cond is False:
-                        if isramp:
-                            last_time = <EventTime>PyList_GET_ITEM(event_times,
-                                                                   action.end_tid)
-                        else:
-                            last_time = start_time
-                    elif isramp:
-                        rampf = <RampFunction>action_value
-                        try:
-                            length = action.length
-                            rampf.set_compile_params(length, value)
-                            new_value = rampf.eval(length, length, value)
-                        except Exception as ex:
-                            bb_raise(ex, action_key(action.aid))
-                        value = ifelse(action.cond, new_value, value)
-                        last_time = <EventTime>PyList_GET_ITEM(event_times,
-                                                               action.end_tid)
-                    else:
-                        value = ifelse(action.cond, action_value, value)
-                        last_time = start_time
-                else:
-                    if action.cond is not False and isramp:
-                        rampf = <RampFunction>action_value
-                        try:
-                            rampf.set_compile_params(action.length, value)
-                        except Exception as ex:
-                            bb_raise(ex, action_key(action.aid))
-                    last_time = <EventTime>PyList_GET_ITEM(event_times, action.end_tid)
-                    last_is_start = False
-                action.end_val = value
-        self.all_actions = all_actions
-        return 0
+        seq_finalize(self, None, None, None, None)
 
     cdef int runtime_finalize(self, unsigned age, py_object &pyage) except -1:
-        bt_guard = set_global_tracker(&self.seqinfo.bt_tracker)
-        time_mgr = self.seqinfo.time_mgr
-        self.total_time = time_mgr.compute_all_times(age, pyage)
-        _assume_not_none(<void*>self.seqinfo.assertions)
-        cdef int assert_id = 0
-        for _a in self.seqinfo.assertions:
-            a = <tuple>_a
-            c = <RuntimeValue>PyTuple_GET_ITEM(a, 0)
-            rt_eval_throw(c, age, pyage, assert_key(assert_id))
-            if rtval_cache(c).is_zero():
-                bb_raise(AssertionError(<object>PyTuple_GET_ITEM(a, 1)),
-                         assert_key(assert_id))
-            assert_id += 1
-        cdef long long prev_time
-        cdef bint cond_val
-        cdef bint is_ramp
-        _assume_not_none(<void*>self.all_actions)
-        for _actions in self.all_actions:
-            actions = <list>_actions
-            prev_time = 0
-            assume_not_none(actions)
-            for _action in actions:
-                action = <Action>_action
-                try:
-                    cond_val = get_value_bool(action.cond, age, pyage)
-                except Exception as ex:
-                    bb_raise(ex, action_key(action.aid))
-                action.data.cond_val = cond_val
-                if not cond_val:
-                    continue
-                action_value = action.value
-                is_ramp = isinstance(action_value, RampFunction)
-                if is_ramp:
-                    (<RampFunction>action_value).set_runtime_params(age, pyage)
-                elif is_rtval(action_value):
-                    rt_eval_throw(<RuntimeValue>action_value, age, pyage,
-                                  action_key(action.aid))
-                action_end_val = action.end_val
-                if action_end_val is not action_value and is_rtval(action_end_val):
-                    rt_eval_throw(<RuntimeValue>action_end_val, age, pyage,
-                                  action_key(action.aid))
-                # No need to evaluate action.length since the `compute_all_times`
-                # above should've done it already.
-                start_time = time_mgr.time_values[action.tid]
-                end_time = time_mgr.time_values[action.end_tid]
-                if prev_time > start_time or start_time > end_time:
-                    bb_err_format(ValueError, action_key(action.aid),
-                                  "Action time order violation")
-                if is_ramp or action.data.is_pulse:
-                    prev_time = end_time
-                else:
-                    prev_time = start_time
-        return 0
+        seq_runtime_finalize(self, age, pyage, None, None, None)
 
 cdef int seq_show(Seq self, write, int indent) except -1:
     write(' ' * indent)
