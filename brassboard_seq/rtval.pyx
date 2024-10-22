@@ -34,10 +34,8 @@ from libc cimport math as cmath
 
 cdef extern from "src/rtval.cpp" namespace "brassboard_seq::rtval":
     PyTypeObject *RTVal_Type
-    DataType unary_return_type(ValueType, DataType t1)
-    DataType binary_return_type(ValueType, DataType t1, DataType t2)
-    TagVal tagval_add_or_sub(TagVal, TagVal, bint)
     RuntimeValue new_expr2_wrap1(ValueType, object, object, RuntimeValue) except +
+    object build_addsub(object v0, object v1, bint) except +
 
 RTVal_Type = <PyTypeObject*>RuntimeValue
 
@@ -222,87 +220,6 @@ cdef int show(io, write, RuntimeValue v) except -1:
     else:
         write('Unknown value')
 
-cdef _new_addsub(TagVal c, RuntimeValue v, bint s):
-    if c.is_zero() and not s:
-        return v
-    return new_expr2(ValueType.Sub if s else ValueType.Add,
-                     new_const(c, <RuntimeValue>None), v)
-
-cdef _build_addsub(v0, v1, bint issub):
-    cdef bint ns0 = False
-    cdef bint ns1 = False
-    cdef TagVal nc
-    cdef RuntimeValue nv0
-    cdef RuntimeValue nv1
-    cdef ValueType type_
-    if not is_rtval(v0):
-        nc = TagVal.from_py(v0)
-        nv0 = None
-    else:
-        nc = TagVal()
-        nv0 = <RuntimeValue>v0
-        type_ = nv0.type_
-        if type_ == ValueType.Const:
-            nc = rtval_cache(nv0)
-            nv0 = None
-        elif type_ == ValueType.Add:
-            arg0 = nv0.arg0
-            # Add/Sub should only have the first argument as constant
-            if arg0.type_ == ValueType.Const:
-                nc = rtval_cache(arg0)
-                nv0 = nv0.arg1
-        elif type_ == ValueType.Sub:
-            arg0 = nv0.arg0
-            # Add/Sub should only have the first argument as constant
-            if arg0.type_ == ValueType.Const:
-                ns0 = True
-                nc = rtval_cache(arg0)
-                nv0 = nv0.arg1
-    if not is_rtval(v1):
-        nc = tagval_add_or_sub(nc, TagVal.from_py(v1), issub)
-        nv1 = None
-    else:
-        nv1 = <RuntimeValue>v1
-        type_ = nv1.type_
-        if type_ == ValueType.Const:
-            nc = tagval_add_or_sub(nc, rtval_cache(nv1), issub)
-            nv1 = None
-        elif type_ == ValueType.Add:
-            arg0 = nv1.arg0
-            # Add/Sub should only have the first argument as constant
-            if arg0.type_ == ValueType.Const:
-                nc = tagval_add_or_sub(nc, rtval_cache(arg0), issub)
-                nv1 = nv1.arg1
-        elif type_ == ValueType.Sub:
-            arg0 = nv1.arg0
-            # Add/Sub should only have the first argument as constant
-            if arg0.type_ == ValueType.Const:
-                ns1 = True
-                nc = tagval_add_or_sub(nc, rtval_cache(arg0), issub)
-                nv1 = nv1.arg1
-    if nv0 is v0 and v1 is nv1:
-        return new_expr2(ValueType.Sub if issub else ValueType.Add, v0, v1)
-    if issub:
-        ns1 = not ns1
-    if nv0 is None:
-        if nv1 is None:
-            return new_const(nc, <RuntimeValue>None)
-        return _new_addsub(nc, nv1, ns1)
-    if nv1 is None:
-        return _new_addsub(nc, nv0, ns0)
-    cdef bint ns = False
-    if ns0:
-        if ns1:
-            nv = new_expr2(ValueType.Add, nv0, nv1)
-            ns = True
-        else:
-            nv = new_expr2(ValueType.Sub, nv1, nv0)
-    elif ns1:
-        nv = new_expr2(ValueType.Sub, nv0, nv1)
-    else:
-        nv = new_expr2(ValueType.Add, nv0, nv1)
-    return _new_addsub(nc, nv, ns)
-
 cdef np_add = np.add
 cdef np_subtract = np.subtract
 cdef np_multiply = np.multiply
@@ -396,9 +313,9 @@ cdef class RuntimeValue:
         PyErr_Format(PyExc_TypeError, "Cannot convert runtime value to boolean")
 
     def __add__(self, other):
-        return _build_addsub(self, other, False)
+        return build_addsub(self, other, False)
     def __sub__(self, other):
-        return _build_addsub(self, other, True)
+        return build_addsub(self, other, True)
 
     def __mul__(self, other):
         return new_expr2_wrap1(ValueType.Mul, self, other, None)
@@ -424,7 +341,7 @@ cdef class RuntimeValue:
     def __pos__(self):
         return self
     def __neg__(self):
-        return _build_addsub(0, self, True)
+        return build_addsub(0, self, True)
 
     def __richcmp__(self, other, int op):
         typ = pycmp2valcmp(op)
@@ -464,11 +381,11 @@ cdef class RuntimeValue:
             return <object>Py_NotImplemented
         # Needed for numpy type support
         if ufunc is np_add:
-            return _build_addsub(<object>PyTuple_GET_ITEM(inputs, 0),
-                                 <object>PyTuple_GET_ITEM(inputs, 1), False)
+            return build_addsub(<object>PyTuple_GET_ITEM(inputs, 0),
+                                <object>PyTuple_GET_ITEM(inputs, 1), False)
         if ufunc is np_subtract:
-            return _build_addsub(<object>PyTuple_GET_ITEM(inputs, 0),
-                                 <object>PyTuple_GET_ITEM(inputs, 1), True)
+            return build_addsub(<object>PyTuple_GET_ITEM(inputs, 0),
+                                <object>PyTuple_GET_ITEM(inputs, 1), True)
         if ufunc is np_multiply:
             return new_expr2_wrap1(ValueType.Mul, <object>PyTuple_GET_ITEM(inputs, 0),
                                    <object>PyTuple_GET_ITEM(inputs, 1), None)
