@@ -1069,7 +1069,6 @@ void rt_eval_throw(RuntimeValue *self, unsigned age, py_object &pyage,
 
 std::pair<EvalError,GenVal> interpret_func(const int *code, GenVal *data,
                                            EvalError *errors);
-int get_label_offset(ValueType op, DataType t1, DataType t2);
 
 struct InterpFunction {
     std::vector<int> code;

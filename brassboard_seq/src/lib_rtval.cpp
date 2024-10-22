@@ -299,6 +299,7 @@ static inline bool is_numpy_int(PyObject *value)
     return PyArray_IsZeroDim(value) && PyArray_ISINTEGER((PyArrayObject*)value);
 }
 
+__attribute__((visibility("protected")))
 TagVal TagVal::from_py(PyObject *value)
 {
     if (value == Py_True)
@@ -457,11 +458,12 @@ static const auto interp_label_offsets = [] {
 } ();
 
 // For ifelse/select, the t1 t2 below is actually t2, t3 since the actual t1 isn't used.
-int get_label_offset(ValueType op, DataType t1, DataType t2)
+static inline int get_label_offset(ValueType op, DataType t1, DataType t2)
 {
     return interp_label_offsets[get_label_id(op, t1, t2)];
 }
 
+__attribute__((visibility("protected")))
 void InterpFunction::_set_value(_RuntimeValue *value, std::vector<DataType> &args)
 {
     int nargs = args.size();
@@ -647,6 +649,7 @@ InterpFunction::visit_value(_RuntimeValue *value, Builder &builder)
     }
 }
 
+__attribute__((visibility("protected")))
 void InterpFunction::_eval_all(unsigned age, py_object &pyage)
 {
     for (size_t i = 0; i < rt_vals.size(); i++) {
