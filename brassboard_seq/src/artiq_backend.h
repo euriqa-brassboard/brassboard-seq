@@ -96,7 +96,6 @@ struct UrukulBus {
 
     // We keep dds actions around that are within this time frame.
     static constexpr int max_action_shift = 2000;
-    static constexpr bool start_write_before_update = true;
 
     void reset(int64_t start_mu)
     {

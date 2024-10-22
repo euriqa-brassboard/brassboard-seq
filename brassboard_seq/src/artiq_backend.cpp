@@ -581,16 +581,13 @@ void UrukulBus::add_dds_action(auto &add_action, DDSAction &action)
         auto t2 = add_action(data_target, data, action.aid, lb_mu2, lb_mu2, false);
         return t2 + data_time_mu;
     };
+    auto profile_reg = (artiq_consts._AD9910_REG_PROFILE0 +
+                        artiq_consts.URUKUL_DEFAULT_PROFILE);
     // We can't start the write safely before the previous io_update finishes
     // since it may abort the write. However, we can configure the SPI controller
     // before the io_update finishes since no signal should be sent to the DDS.
-    int64_t lb_mu1 = (start_write_before_update ? last_bus_mu :
-                      std::max(last_bus_mu, last_io_update_mu));
-    int64_t lb_mu2 = std::max(last_bus_mu, last_io_update_mu);
-    auto profile_reg = (artiq_consts._AD9910_REG_PROFILE0 +
-                        artiq_consts.URUKUL_DEFAULT_PROFILE);
-    auto t1 = config_and_write(artiq_consts.URUKUL_CONFIG, 8,
-                               profile_reg << 24, lb_mu1, lb_mu2);
+    auto t1 = config_and_write(artiq_consts.URUKUL_CONFIG, 8, profile_reg << 24,
+                               last_bus_mu, std::max(last_bus_mu, last_io_update_mu));
     auto t2 = config_and_write(artiq_consts.URUKUL_CONFIG, 32, action.data1, t1, t1);
     auto t3 = config_and_write(artiq_consts.URUKUL_CONFIG_END, 32, action.data2,
                                t2, t2);
