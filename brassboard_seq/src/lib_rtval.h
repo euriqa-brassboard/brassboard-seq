@@ -957,6 +957,80 @@ static inline void assert_compatible_rtvalue()
     ASSERT_FIELD_OFFSET(cb_arg2);
 }
 
+extern PyTypeObject *RTVal_Type;
+
+static inline bool is_rtval(PyObject *v)
+{
+    return Py_TYPE(v) == RTVal_Type;
+}
+
+__attribute__((returns_nonnull)) _RuntimeValue*
+_new_cb_arg2(ValueType type, PyObject *cb_arg2, PyObject *ty);
+template<typename RuntimeValue>
+static inline __attribute__((returns_nonnull)) RuntimeValue*
+new_cb_arg2(ValueType type, PyObject *cb_arg2, PyObject *ty, RuntimeValue*)
+{
+    assert_compatible_rtvalue<RuntimeValue>();
+    return (RuntimeValue*)_new_cb_arg2(type, cb_arg2, ty);
+}
+
+__attribute__((returns_nonnull)) _RuntimeValue*
+_new_expr1(ValueType type, _RuntimeValue *arg0);
+template<typename RuntimeValue>
+static inline __attribute__((returns_nonnull)) RuntimeValue*
+new_expr1(ValueType type, RuntimeValue *arg0)
+{
+    assert_compatible_rtvalue<RuntimeValue>();
+    return (RuntimeValue*)_new_expr1(type, (_RuntimeValue*)arg0);
+}
+
+__attribute__((returns_nonnull)) _RuntimeValue*
+_new_expr2(ValueType type, _RuntimeValue *arg0, _RuntimeValue *arg1);
+template<typename RuntimeValue>
+static inline __attribute__((returns_nonnull)) RuntimeValue*
+new_expr2(ValueType type, RuntimeValue *arg0, RuntimeValue *arg1)
+{
+    assert_compatible_rtvalue<RuntimeValue>();
+    return (RuntimeValue*)_new_expr2(type, (_RuntimeValue*)arg0, (_RuntimeValue*)arg1);
+}
+
+__attribute__((returns_nonnull)) _RuntimeValue *_new_const(TagVal v);
+template<typename RuntimeValue>
+static inline __attribute__((returns_nonnull)) RuntimeValue*
+new_const(TagVal v, RuntimeValue*)
+{
+    assert_compatible_rtvalue<RuntimeValue>();
+    return (RuntimeValue*)_new_const(v);
+}
+
+template<typename RuntimeValue>
+static inline __attribute__((returns_nonnull)) RuntimeValue*
+new_const(PyObject *v, RuntimeValue*)
+{
+    assert_compatible_rtvalue<RuntimeValue>();
+    return (RuntimeValue*)_new_const(TagVal::from_py(v));
+}
+
+__attribute__((returns_nonnull)) _RuntimeValue*
+_new_expr2_wrap1(ValueType type, PyObject *arg0, PyObject *arg1);
+template<typename RuntimeValue>
+static inline __attribute__((returns_nonnull)) RuntimeValue*
+new_expr2_wrap1(ValueType type, PyObject *arg0, PyObject *arg1, RuntimeValue*)
+{
+    assert_compatible_rtvalue<RuntimeValue>();
+    return (RuntimeValue*)_new_expr2_wrap1(type, arg0, arg1);
+}
+
+__attribute__((returns_nonnull)) _RuntimeValue*
+_new_select(_RuntimeValue *arg0, PyObject *arg1, PyObject *arg2);
+template<typename RuntimeValue>
+static inline __attribute__((returns_nonnull)) RuntimeValue*
+new_select(RuntimeValue *arg0, PyObject *arg1, PyObject *arg2)
+{
+    assert_compatible_rtvalue<RuntimeValue>();
+    return (RuntimeValue*)_new_select((_RuntimeValue*)arg0, arg1, arg2);
+}
+
 template<typename RuntimeValue>
 static inline __attribute__((always_inline)) TagVal rtval_cache(RuntimeValue *rtval)
 {

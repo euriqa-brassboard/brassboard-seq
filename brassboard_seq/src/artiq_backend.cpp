@@ -43,7 +43,6 @@ struct ArtiqConsts {
 
 static ArtiqConsts artiq_consts;
 
-static PyTypeObject *rtval_type;
 static PyTypeObject *rampfunction_type;
 
 inline int ChannelsInfo::add_bus_channel(int bus_channel, uint32_t io_update_target,
@@ -158,7 +157,7 @@ void collect_actions(auto *ab, EventTime*)
             needs_reloc = true;
             reloc.time_idx = tid;
         }
-        if (Py_TYPE(value) == rtval_type) {
+        if (rtval::is_rtval(value)) {
             needs_reloc = true;
             if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
                 reloc.val_idx = float_values.get_id(value);
@@ -203,7 +202,7 @@ void collect_actions(auto *ab, EventTime*)
     auto add_action = [&] (auto *action, ChannelType type, int chn_idx) {
         auto cond = action->cond.get();
         int cond_reloc = -1;
-        if (Py_TYPE(cond) == rtval_type) {
+        if (rtval::is_rtval(cond)) {
             cond_reloc = bool_values.get_id(cond);
             assume(cond_reloc >= 0);
         }

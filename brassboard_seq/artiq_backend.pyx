@@ -67,7 +67,6 @@ cdef extern from "src/artiq_backend.cpp" namespace "brassboard_seq::artiq_backen
         int SPI_DATA_ADDR
 
     ArtiqConsts artiq_consts
-    PyTypeObject *rtval_type
     PyTypeObject *rampfunction_type
 
     void collect_actions(ArtiqBackend ab, EventTime) except +
@@ -84,7 +83,6 @@ artiq_consts.URUKUL_SPIT_DDS_WR = <int?>urukul.SPIT_DDS_WR
 artiq_consts.URUKUL_DEFAULT_PROFILE = urukul.DEFAULT_PROFILE if hasattr(urukul, 'DEFAULT_PROFILE') else 0
 artiq_consts.SPI_DATA_ADDR = <int?>spi2.SPI_DATA_ADDR
 artiq_consts.SPI_CONFIG_ADDR = <int?>spi2.SPI_CONFIG_ADDR
-rtval_type = <PyTypeObject*>RuntimeValue
 rampfunction_type = <PyTypeObject*>RampFunction
 
 cdef PyObject *raise_invalid_channel(tuple path) except NULL:

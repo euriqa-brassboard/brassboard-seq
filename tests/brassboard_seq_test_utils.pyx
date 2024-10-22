@@ -49,7 +49,7 @@ def new_invalid_rtval():
     return rv
 
 def new_const(c):
-    return rtval.new_const(rtval.RuntimeValue, c, <rtval.RuntimeValue>None)
+    return rtval.new_const(c, <rtval.RuntimeValue>None)
 
 def new_arg(idx):
     return rtval.new_arg(idx)
@@ -144,8 +144,7 @@ def ramp_get_spline_segments(action.RampFunction self, length, oldval):
 
 def round_time(v):
     if rtval.is_rtval(v):
-        return event_time.round_time_rt(rtval.RuntimeValue, <rtval.RuntimeValue>v,
-                                        event_time.rt_time_scale)
+        return event_time.round_time_rt(<rtval.RuntimeValue>v, event_time.rt_time_scale)
     else:
         return event_time.round_time_int(v)
 

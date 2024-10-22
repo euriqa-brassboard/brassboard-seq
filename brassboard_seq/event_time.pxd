@@ -55,7 +55,7 @@ cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
 
     long long round_time_f64(double v)
     long long round_time_int(v) except +
-    RuntimeValue round_time_rt(object, RuntimeValue, RuntimeValue) except +
+    RuntimeValue round_time_rt(RuntimeValue, RuntimeValue) except +
 
     enum TimeOrder:
         NoOrder
@@ -85,8 +85,8 @@ cdef class TimeManager:
                                          cond, EventTime wait_for):
         if is_rtval(offset):
             return _new_time_rt(self, EventTime, prev,
-                                round_time_rt(RuntimeValue, <RuntimeValue>offset,
-                                              rt_time_scale), cond, wait_for)
+                                round_time_rt(<RuntimeValue>offset, rt_time_scale),
+                                cond, wait_for)
         else:
             return _new_time_int(self, EventTime, prev, round_time_int(offset),
                                  False, cond, wait_for)

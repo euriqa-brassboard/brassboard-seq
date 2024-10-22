@@ -29,7 +29,6 @@
 
 namespace brassboard_seq::rfsoc_backend {
 
-static PyTypeObject *rtval_type;
 static PyTypeObject *rampfunction_type;
 static PyTypeObject *seqcubicspline_type;
 
@@ -562,7 +561,7 @@ void collect_actions(auto *rb, EventTime*)
             auto cond = action->cond.get();
             if (cond == Py_False)
                 continue;
-            bool cond_need_reloc = Py_TYPE(cond) == rtval_type;
+            bool cond_need_reloc = rtval::is_rtval(cond);
             assert(cond_need_reloc || cond == Py_True);
             int cond_idx = cond_need_reloc ? bool_values.get_id(cond) : -1;
             auto add_action = [&] (auto value, int tid, bool sync, bool is_ramp,
@@ -590,7 +589,7 @@ void collect_actions(auto *rb, EventTime*)
                 if (is_ramp) {
                     rfsoc_action.ramp = value;
                     auto len = action->length;
-                    if (Py_TYPE(len) == rtval_type) {
+                    if (rtval::is_rtval(len)) {
                         needs_reloc = true;
                         reloc.val_idx = float_values.get_id(len);
                     }
@@ -599,7 +598,7 @@ void collect_actions(auto *rb, EventTime*)
                             get_value_f64(len, action_key(action->aid));
                     }
                 }
-                else if (Py_TYPE(value) == rtval_type) {
+                else if (rtval::is_rtval(value)) {
                     needs_reloc = true;
                     if (is_ff) {
                         reloc.val_idx = bool_values.get_id(value);

@@ -27,40 +27,4 @@ static inline TagVal tagval_add_or_sub(TagVal v1, TagVal v2, bool issub)
     return (issub ? Sub_op::generic_eval(v1, v2) : Add_op::generic_eval(v1, v2));
 }
 
-template<typename RuntimeValue>
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-_new_expr2_wrap1(PyObject *RTValueType, ValueType type,
-                 PyObject *arg0, PyObject *arg1, RuntimeValue*)
-{
-    py_object rtarg0;
-    py_object rtarg1;
-    if (Py_TYPE(arg0) != (PyTypeObject*)RTValueType) {
-        rtarg0.reset((PyObject*)new_const(RTValueType, arg0, (RuntimeValue*)nullptr));
-        rtarg1.reset(py_newref(arg1));
-    }
-    else {
-        if (Py_TYPE(arg1) == (PyTypeObject*)RTValueType) {
-            rtarg1.reset(py_newref(arg1));
-        }
-        else {
-            rtarg1.reset((PyObject*)new_const(RTValueType, arg1,
-                                              (RuntimeValue*)nullptr));
-        }
-        rtarg0.reset(py_newref(arg0));
-    }
-    auto datatype = binary_return_type(type, ((RuntimeValue*)rtarg0.get())->datatype,
-                                       ((RuntimeValue*)rtarg1.get())->datatype);
-    auto o = pytype_genericalloc(RTValueType);
-    auto self = (RuntimeValue*)o;
-    self->datatype = datatype;
-    // self->cache_err = EvalError::NoError;
-    // self->cache_val = { .i64_val = 0 };
-    self->type_ = type;
-    self->age = (unsigned)-1;
-    self->arg0 = (RuntimeValue*)rtarg0.release();
-    self->arg1 = (RuntimeValue*)rtarg1.release();
-    self->cb_arg2 = py_newref(Py_None);
-    return self;
-}
-
 }

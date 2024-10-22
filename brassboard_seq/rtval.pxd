@@ -115,15 +115,16 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
 
     TagVal rtval_cache(RuntimeValue)
 
-    RuntimeValue _new_cb_arg2(object RTValueType, ValueType, object, object ty,
-                              RuntimeValue) except +
-    RuntimeValue _new_expr1(object RTValueType, ValueType, RuntimeValue) except +
-    RuntimeValue _new_expr2(object RTValueType, ValueType,
-                            RuntimeValue, RuntimeValue) except +
-    RuntimeValue new_const(object RTValueType, TagVal, RuntimeValue) except +
-    RuntimeValue new_const(object RTValueType, object, RuntimeValue) except +
-    RuntimeValue rt_convert_bool(object RTValueType, RuntimeValue) except +
-    RuntimeValue rt_round_int64(object RTValueType, RuntimeValue) except +
+    bint is_rtval(object)
+
+    RuntimeValue new_cb_arg2(ValueType, object, object ty, RuntimeValue) except +
+    RuntimeValue new_expr1(ValueType, RuntimeValue) except +
+    RuntimeValue new_expr2(ValueType, RuntimeValue, RuntimeValue) except +
+    RuntimeValue new_const(TagVal, RuntimeValue) except +
+    RuntimeValue new_const(object, RuntimeValue) except +
+    RuntimeValue new_select(RuntimeValue arg0, object, object) except +
+    RuntimeValue rt_convert_bool(RuntimeValue) except +
+    RuntimeValue rt_round_int64(RuntimeValue) except +
 
     void rt_eval_cache(RuntimeValue self, unsigned age, py_object &pyage) except +
     void rt_eval_throw(RuntimeValue self, unsigned age, py_object &pyage) except +
@@ -146,18 +147,15 @@ cdef class RuntimeValue:
     cdef object cb_arg2 # Also used as argument index
 
 cdef inline RuntimeValue new_arg(idx, ty=float):
-    return _new_cb_arg2(RuntimeValue, ValueType.Arg, idx, ty, None)
+    return new_cb_arg2(ValueType.Arg, idx, ty, None)
 
 cpdef inline RuntimeValue new_extern(cb, ty=float):
-    return _new_cb_arg2(RuntimeValue, ValueType.Extern, cb, ty, None)
+    return new_cb_arg2(ValueType.Extern, cb, ty, None)
 
 cpdef inline RuntimeValue new_extern_age(cb, ty=float):
-    return _new_cb_arg2(RuntimeValue, ValueType.ExternAge, cb, ty, None)
+    return new_cb_arg2(ValueType.ExternAge, cb, ty, None)
 
 cpdef ifelse(b, v1, v2)
-
-cdef inline bint is_rtval(v) noexcept:
-    return type(v) is RuntimeValue
 
 cdef inline bint get_value_bool(v, unsigned age, py_object &pyage) except -1:
     if is_rtval(v):

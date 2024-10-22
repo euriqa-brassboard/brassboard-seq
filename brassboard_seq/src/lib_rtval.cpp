@@ -24,6 +24,137 @@
 
 namespace brassboard_seq::rtval {
 
+__attribute__((visibility("protected")))
+PyTypeObject *RTVal_Type;
+
+__attribute__((returns_nonnull)) _RuntimeValue*
+_new_cb_arg2(ValueType type, PyObject *cb_arg2, PyObject *ty)
+{
+    auto datatype = pytype_to_datatype(ty);
+    auto o = pytype_genericalloc(RTVal_Type);
+    auto self = (_RuntimeValue*)o;
+    self->datatype = datatype;
+    // self->cache_err = EvalError::NoError;
+    // self->cache_val = { .i64_val = 0 };
+    self->type_ = type;
+    self->age = (unsigned)-1;
+    self->arg0 = (_RuntimeValue*)py_newref(Py_None);
+    self->arg1 = (_RuntimeValue*)py_newref(Py_None);
+    self->cb_arg2 = py_newref(cb_arg2);
+    return self;
+}
+
+__attribute__((returns_nonnull)) _RuntimeValue*
+_new_expr1(ValueType type, _RuntimeValue *arg0)
+{
+    auto o = pytype_genericalloc(RTVal_Type);
+    auto datatype = unary_return_type(type, arg0->datatype);
+    auto self = (_RuntimeValue*)o;
+    self->datatype = datatype;
+    // self->cache_err = EvalError::NoError;
+    // self->cache_val = { .i64_val = 0 };
+    self->type_ = type;
+    self->age = (unsigned)-1;
+    self->arg0 = py_newref(arg0);
+    self->arg1 = (_RuntimeValue*)py_newref(Py_None);
+    self->cb_arg2 = py_newref(Py_None);
+    return self;
+}
+
+__attribute__((returns_nonnull)) _RuntimeValue*
+_new_expr2(ValueType type, _RuntimeValue *arg0, _RuntimeValue *arg1)
+{
+    auto o = pytype_genericalloc(RTVal_Type);
+    auto datatype = binary_return_type(type, arg0->datatype, arg1->datatype);
+    auto self = (_RuntimeValue*)o;
+    self->datatype = datatype;
+    // self->cache_err = EvalError::NoError;
+    // self->cache_val = { .i64_val = 0 };
+    self->type_ = type;
+    self->age = (unsigned)-1;
+    self->arg0 = py_newref(arg0);
+    self->arg1 = py_newref(arg1);
+    self->cb_arg2 = py_newref(Py_None);
+    return self;
+}
+
+__attribute__((returns_nonnull)) _RuntimeValue*
+_new_const(TagVal v)
+{
+    auto o = pytype_genericalloc(RTVal_Type);
+    auto self = (_RuntimeValue*)o;
+    self->datatype = v.type;
+    // self->cache_err = EvalError::NoError;
+    self->cache_val = v.val;
+    self->type_ = Const;
+    self->age = (unsigned)-1;
+    self->arg0 = (_RuntimeValue*)py_newref(Py_None);
+    self->arg1 = (_RuntimeValue*)py_newref(Py_None);
+    self->cb_arg2 = py_newref(Py_None);
+    return self;
+}
+
+__attribute__((returns_nonnull)) _RuntimeValue*
+_new_expr2_wrap1(ValueType type, PyObject *arg0, PyObject *arg1)
+{
+    py_object rtarg0;
+    py_object rtarg1;
+    if (!is_rtval(arg0)) {
+        rtarg0.reset((PyObject*)_new_const(TagVal::from_py(arg0)));
+        rtarg1.reset(py_newref(arg1));
+    }
+    else {
+        if (is_rtval(arg1)) {
+            rtarg1.reset(py_newref(arg1));
+        }
+        else {
+            rtarg1.reset((PyObject*)_new_const(TagVal::from_py(arg1)));
+        }
+        rtarg0.reset(py_newref(arg0));
+    }
+    auto datatype = binary_return_type(type, ((_RuntimeValue*)rtarg0.get())->datatype,
+                                       ((_RuntimeValue*)rtarg1.get())->datatype);
+    auto o = pytype_genericalloc(RTVal_Type);
+    auto self = (_RuntimeValue*)o;
+    self->datatype = datatype;
+    // self->cache_err = EvalError::NoError;
+    // self->cache_val = { .i64_val = 0 };
+    self->type_ = type;
+    self->age = (unsigned)-1;
+    self->arg0 = (_RuntimeValue*)rtarg0.release();
+    self->arg1 = (_RuntimeValue*)rtarg1.release();
+    self->cb_arg2 = py_newref(Py_None);
+    return self;
+}
+
+static inline __attribute__((returns_nonnull)) _RuntimeValue*
+_wrap_rtval(PyObject *v)
+{
+    if (is_rtval(v))
+        return (_RuntimeValue*)py_newref(v);
+    return _new_const(TagVal::from_py(v));
+}
+
+__attribute__((returns_nonnull)) _RuntimeValue*
+_new_select(_RuntimeValue *arg0, PyObject *arg1, PyObject *arg2)
+{
+    py_object rtarg1((PyObject*)_wrap_rtval(arg1));
+    py_object rtarg2((PyObject*)_wrap_rtval(arg2));
+    auto datatype = promote_type(((_RuntimeValue*)rtarg1.get())->datatype,
+                                 ((_RuntimeValue*)rtarg2.get())->datatype);
+    auto o = pytype_genericalloc(RTVal_Type);
+    auto self = (_RuntimeValue*)o;
+    self->datatype = datatype;
+    // self->cache_err = EvalError::NoError;
+    // self->cache_val = { .i64_val = 0 };
+    self->type_ = Select;
+    self->age = (unsigned)-1;
+    self->arg0 = py_newref(arg0);
+    self->arg1 = (_RuntimeValue*)rtarg1.release();
+    self->cb_arg2 = rtarg2.release();
+    return self;
+}
+
 __attribute__((visibility("hidden")))
 void init()
 {

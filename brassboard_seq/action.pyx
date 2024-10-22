@@ -18,7 +18,7 @@
 
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.rtval cimport get_value_f64, ifelse, is_rtval, \
-  new_arg, new_const, _new_expr2, ValueType, DataType, RuntimeValue
+  new_arg, new_const, new_expr2, ValueType, DataType, RuntimeValue
 from brassboard_seq.utils cimport _PyObject_Vectorcall, pyfloat_from_double
 
 cimport cython
@@ -53,7 +53,7 @@ cdef str action_str(Action *self):
     return f'{name}({value}{cond_str}{kws})'
 
 cdef RuntimeValue arg0 = new_arg(0)
-cdef RuntimeValue const0 = new_const(RuntimeValue, 0.0, <RuntimeValue>None)
+cdef RuntimeValue const0 = new_const(0.0, <RuntimeValue>None)
 cdef dummy_spline_segments = []
 
 cdef class RampFunction:
@@ -99,7 +99,7 @@ cdef class RampFunction:
             interp_func.reset(new InterpFunction())
             args.push_back(DataType.Float64)
             if (<RuntimeValue>fvalue).datatype != DataType.Float64:
-                fvalue = _new_expr2(RuntimeValue, ValueType.Add, fvalue, const0)
+                fvalue = new_expr2(ValueType.Add, fvalue, const0)
             deref(interp_func).set_value(<RuntimeValue>fvalue, args)
             self.interp_func = move(interp_func)
         else:

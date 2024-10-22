@@ -29,17 +29,17 @@ cnpy._import_array()
 init_library()
 
 cimport cython
-from cpython cimport PyFloat_AS_DOUBLE, PyTuple_GET_ITEM
+from cpython cimport PyTypeObject, PyFloat_AS_DOUBLE, PyTuple_GET_ITEM
 from libc cimport math as cmath
 
 cdef extern from "src/rtval.cpp" namespace "brassboard_seq::rtval":
+    PyTypeObject *RTVal_Type
     DataType unary_return_type(ValueType, DataType t1)
     DataType binary_return_type(ValueType, DataType t1, DataType t2)
     TagVal tagval_add_or_sub(TagVal, TagVal, bint)
-    RuntimeValue _new_expr2_wrap1(object RTValueType, ValueType, object, object,
-                                  RuntimeValue) except +
-    RuntimeValue _new_select(object RTValueType, RuntimeValue arg0,
-                             object, object) except +
+    RuntimeValue new_expr2_wrap1(ValueType, object, object, RuntimeValue) except +
+
+RTVal_Type = <PyTypeObject*>RuntimeValue
 
 cdef int operator_precedence(ValueType type_) noexcept:
     if type_ == ValueType.Add or type_ == ValueType.Sub:
@@ -226,7 +226,7 @@ cdef _new_addsub(TagVal c, RuntimeValue v, bint s):
     if c.is_zero() and not s:
         return v
     return new_expr2(ValueType.Sub if s else ValueType.Add,
-                     new_const(RuntimeValue, c, <RuntimeValue>None), v)
+                     new_const(c, <RuntimeValue>None), v)
 
 cdef _build_addsub(v0, v1, bint issub):
     cdef bint ns0 = False
@@ -286,7 +286,7 @@ cdef _build_addsub(v0, v1, bint issub):
         ns1 = not ns1
     if nv0 is None:
         if nv1 is None:
-            return new_const(RuntimeValue, nc, <RuntimeValue>None)
+            return new_const(nc, <RuntimeValue>None)
         return _new_addsub(nc, nv1, ns1)
     if nv1 is None:
         return _new_addsub(nc, nv0, ns0)
@@ -365,16 +365,6 @@ def get_value(v, age):
         return rtval_cache(<RuntimeValue>v).to_py()
     return v
 
-cdef inline RuntimeValue new_expr1(ValueType type_, RuntimeValue arg0):
-    return _new_expr1(RuntimeValue, type_, arg0)
-
-cdef inline RuntimeValue new_expr2(ValueType type_, RuntimeValue arg0,
-                                   RuntimeValue arg1):
-    return _new_expr2(RuntimeValue, type_, arg0, arg1)
-
-cdef inline RuntimeValue new_expr2_wrap1(ValueType type_, arg0, arg1):
-    return _new_expr2_wrap1(RuntimeValue, type_, arg0, arg1, None)
-
 @cython.auto_pickle(False)
 @cython.c_api_binop_methods(True)
 @cython.final
@@ -411,25 +401,25 @@ cdef class RuntimeValue:
         return _build_addsub(self, other, True)
 
     def __mul__(self, other):
-        return new_expr2_wrap1(ValueType.Mul, self, other)
+        return new_expr2_wrap1(ValueType.Mul, self, other, None)
 
     def __truediv__(self, other):
-        return new_expr2_wrap1(ValueType.Div, self, other)
+        return new_expr2_wrap1(ValueType.Div, self, other, None)
 
     def __and__(self, other):
-        return new_expr2_wrap1(ValueType.And, self, other)
+        return new_expr2_wrap1(ValueType.And, self, other, None)
 
     def __or__(self, other):
-        return new_expr2_wrap1(ValueType.Or, self, other)
+        return new_expr2_wrap1(ValueType.Or, self, other, None)
 
     def __xor__(self, other):
-        return new_expr2_wrap1(ValueType.Xor, self, other)
+        return new_expr2_wrap1(ValueType.Xor, self, other, None)
 
     def __pow__(self, other):
-        return new_expr2_wrap1(ValueType.Pow, self, other)
+        return new_expr2_wrap1(ValueType.Pow, self, other, None)
 
     def __mod__(self, other):
-        return new_expr2_wrap1(ValueType.Mod, self, other)
+        return new_expr2_wrap1(ValueType.Mod, self, other, None)
 
     def __pos__(self):
         return self
@@ -445,7 +435,7 @@ cdef class RuntimeValue:
                         typ == ValueType.CmpEQ)
             v2 = <RuntimeValue>other
         else:
-            v2 = new_const(RuntimeValue, other, <RuntimeValue>None)
+            v2 = new_const(other, <RuntimeValue>None)
         return new_expr2(typ, self, v2)
 
     def __abs__(self):
@@ -464,7 +454,7 @@ cdef class RuntimeValue:
         return new_expr1(ValueType.Floor, self)
 
     def __round__(self):
-        return rt_round_int64(RuntimeValue, self)
+        return rt_round_int64(self)
 
     # Artifically limit the supported ufunc
     # in case we need to do any processing later
@@ -481,65 +471,65 @@ cdef class RuntimeValue:
                                  <object>PyTuple_GET_ITEM(inputs, 1), True)
         if ufunc is np_multiply:
             return new_expr2_wrap1(ValueType.Mul, <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
+                                   <object>PyTuple_GET_ITEM(inputs, 1), None)
         if ufunc is np_divide:
             return new_expr2_wrap1(ValueType.Div, <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
+                                   <object>PyTuple_GET_ITEM(inputs, 1), None)
         if ufunc is np_remainder:
             return new_expr2_wrap1(ValueType.Mod, <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
+                                   <object>PyTuple_GET_ITEM(inputs, 1), None)
         if ufunc is np_bitwise_and:
             return new_expr2_wrap1(ValueType.And, <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
+                                   <object>PyTuple_GET_ITEM(inputs, 1), None)
         if ufunc is np_bitwise_or:
             return new_expr2_wrap1(ValueType.Or, <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
+                                   <object>PyTuple_GET_ITEM(inputs, 1), None)
         if ufunc is np_bitwise_xor:
             return new_expr2_wrap1(ValueType.Xor, <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
+                                   <object>PyTuple_GET_ITEM(inputs, 1), None)
         if ufunc is np_logical_not:
             if self.type_ == ValueType.Not:
-                return rt_convert_bool(RuntimeValue, self.arg0)
+                return rt_convert_bool(self.arg0)
             return new_expr1(ValueType.Not, self)
         if ufunc is np_power:
             return new_expr2_wrap1(ValueType.Pow, <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
+                                   <object>PyTuple_GET_ITEM(inputs, 1), None)
         if ufunc is np_less:
             return new_expr2_wrap1(ValueType.CmpLT,
                                    <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
+                                   <object>PyTuple_GET_ITEM(inputs, 1), None)
         if ufunc is np_greater:
             return new_expr2_wrap1(ValueType.CmpGT,
                                    <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
+                                   <object>PyTuple_GET_ITEM(inputs, 1), None)
         if ufunc is np_less_equal:
             return new_expr2_wrap1(ValueType.CmpLE,
                                    <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
+                                   <object>PyTuple_GET_ITEM(inputs, 1), None)
         if ufunc is np_greater_equal:
             return new_expr2_wrap1(ValueType.CmpGE,
                                    <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
+                                   <object>PyTuple_GET_ITEM(inputs, 1), None)
         if ufunc is np_equal:
             return new_expr2_wrap1(ValueType.CmpEQ,
                                    <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
+                                   <object>PyTuple_GET_ITEM(inputs, 1), None)
         if ufunc is np_not_equal:
             return new_expr2_wrap1(ValueType.CmpNE,
                                    <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
+                                   <object>PyTuple_GET_ITEM(inputs, 1), None)
         if ufunc is np_fmin:
             v1 = PyTuple_GET_ITEM(inputs, 0)
             v2 = PyTuple_GET_ITEM(inputs, 1)
             if v1 == v2:
                 return <object>v1
-            return new_expr2_wrap1(ValueType.Min, <object>v1, <object>v2)
+            return new_expr2_wrap1(ValueType.Min, <object>v1, <object>v2, None)
         if ufunc is np_fmax:
             v1 = PyTuple_GET_ITEM(inputs, 0)
             v2 = PyTuple_GET_ITEM(inputs, 1)
             if v1 == v2:
                 return <object>v1
-            return new_expr2_wrap1(ValueType.Max, <object>v1, <object>v2)
+            return new_expr2_wrap1(ValueType.Max, <object>v1, <object>v2, None)
         if ufunc is np_abs:
             if self.type_ == ValueType.Abs:
                 return self
@@ -575,7 +565,7 @@ cdef class RuntimeValue:
         if ufunc is np_arctan2:
             return new_expr2_wrap1(ValueType.Atan2,
                                    <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
+                                   <object>PyTuple_GET_ITEM(inputs, 1), None)
         if ufunc is np_arcsinh:
             return new_expr1(ValueType.Asinh, self)
         if ufunc is np_arccosh:
@@ -597,7 +587,7 @@ cdef class RuntimeValue:
         if ufunc is np_hypot:
             return new_expr2_wrap1(ValueType.Hypot,
                                    <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
+                                   <object>PyTuple_GET_ITEM(inputs, 1), None)
         if ufunc is np_rint:
             if self.type_ == ValueType.Rint:
                 return self
@@ -611,7 +601,7 @@ def inv(v, /):
     if is_rtval(v):
         _v = <RuntimeValue>v
         if _v.type_ == ValueType.Not:
-            return rt_convert_bool(RuntimeValue, _v.arg0)
+            return rt_convert_bool(_v.arg0)
         return new_expr1(ValueType.Not, _v)
     if isinstance(v, cnpy.ndarray):
         return np_logical_not(v)
@@ -619,7 +609,7 @@ def inv(v, /):
 
 def convert_bool(_v):
     if is_rtval(_v):
-        return rt_convert_bool(RuntimeValue, <RuntimeValue>_v)
+        return rt_convert_bool(<RuntimeValue>_v)
     if isinstance(_v, cnpy.ndarray):
         return cnpy.PyArray_Cast(_v, cnpy.NPY_BOOL)
     return bool(_v)
@@ -627,7 +617,7 @@ def convert_bool(_v):
 def round_int64(_v, /):
     cdef RuntimeValue v
     if is_rtval(_v):
-        return rt_round_int64(RuntimeValue, <RuntimeValue>_v)
+        return rt_round_int64(<RuntimeValue>_v)
     if isinstance(_v, cnpy.ndarray):
         ary = <cnpy.ndarray>_v
         if cnpy.PyArray_TYPE(ary) == cnpy.NPY_INT64:
@@ -644,7 +634,7 @@ cpdef ifelse(b, v1, v2):
     if same_value(v1, v2):
         return v1
     if is_rtval(b):
-        return _new_select(RuntimeValue, <RuntimeValue>b, v1, v2)
+        return new_select(<RuntimeValue>b, v1, v2)
     return v1 if b else v2
 
 cpdef inline bint same_value(v1, v2) noexcept:

@@ -35,7 +35,6 @@ from cpython cimport PyObject, PyDict_GetItemWithError, PyList_GET_SIZE, PyTypeO
 
 cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
     PyTypeObject *event_time_type
-    PyTypeObject *runtime_value_type
     PyTypeObject *timestep_type
     PyTypeObject *subseq_type
     PyTypeObject *condwrapper_type
@@ -55,7 +54,6 @@ cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
 
 
 event_time_type = <PyTypeObject*>EventTime
-runtime_value_type = <PyTypeObject*>RuntimeValue
 timestep_type = <PyTypeObject*>TimeStep
 subseq_type = <PyTypeObject*>SubSeq
 condwrapper_type = <PyTypeObject*>ConditionalWrapper
@@ -77,8 +75,7 @@ cdef class TimeSeq:
     def set_time(self, EventTime time, /, offset=0): # offset in seconds
         if is_rtval(offset):
             set_base_rt(self.start_time, time,
-                        round_time_rt(RuntimeValue, <RuntimeValue>offset,
-                                      rt_time_scale))
+                        round_time_rt(<RuntimeValue>offset, rt_time_scale))
         else:
             set_base_int(self.start_time, time, round_time_int(offset))
         self.seqinfo.bt_tracker.record(event_time_key(<void*>self.start_time))

@@ -31,7 +31,6 @@ cdef re # hide import
 import re
 
 cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backend":
-    PyTypeObject *rtval_type
     PyTypeObject *rampfunction_type
     PyTypeObject *seqcubicspline_type
     void collect_actions(RFSOCBackend ab, EventTime) except+
@@ -42,7 +41,6 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
     cppclass PulseCompilerGen(Generator):
         PyObject *output
 
-rtval_type = <PyTypeObject*>RuntimeValue
 rampfunction_type = <PyTypeObject*>RampFunction
 seqcubicspline_type = <PyTypeObject*>SeqCubicSpline
 

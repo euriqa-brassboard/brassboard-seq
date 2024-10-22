@@ -26,7 +26,6 @@
 namespace brassboard_seq::seq {
 
 static PyTypeObject *event_time_type;
-static PyTypeObject *runtime_value_type;
 static PyTypeObject *timestep_type;
 static PyTypeObject *subseq_type;
 static PyTypeObject *condwrapper_type;
@@ -39,7 +38,7 @@ _combine_cond(PyObject *cond1, PyObject *new_cond, RuntimeValue*)
 {
     if (cond1 == Py_False)
         return { Py_False, false };
-    if (Py_TYPE(new_cond) != runtime_value_type) {
+    if (!rtval::is_rtval(new_cond)) {
         if (get_value_bool(new_cond, (uintptr_t)-1)) {
             return { cond1, false };
         }
@@ -47,12 +46,11 @@ _combine_cond(PyObject *cond1, PyObject *new_cond, RuntimeValue*)
             return { Py_False, false };
         }
     }
-    py_object cond2((PyObject*)rtval::rt_convert_bool((PyObject*)runtime_value_type,
-                                                      (RuntimeValue*)new_cond));
+    py_object cond2((PyObject*)rtval::rt_convert_bool((RuntimeValue*)new_cond));
     if (cond1 == Py_True)
         return { cond2.release(), true };
-    assert(Py_TYPE(cond1) == runtime_value_type);
-    auto o = pytype_genericalloc(runtime_value_type);
+    assert(rtval::is_rtval(cond1));
+    auto o = pytype_genericalloc(rtval::RTVal_Type);
     auto self = (RuntimeValue*)o;
     self->datatype = rtval::DataType::Bool;
     // self->cache_err = rtval::EvalError::NoError;
@@ -80,10 +78,9 @@ static inline __attribute__((returns_nonnull)) EventTime*
 new_round_time(TimeManager *self, EventTime *prev, PyObject *offset, PyObject *cond,
                EventTime *wait_for, RuntimeValue*)
 {
-    if (Py_TYPE(offset) == runtime_value_type) {
+    if (rtval::is_rtval(offset)) {
         py_object rt_offset((PyObject*)event_time::round_time_rt(
-                                (PyObject*)runtime_value_type, (RuntimeValue*)offset,
-                                (RuntimeValue*)rt_time_scale));
+                                (RuntimeValue*)offset, (RuntimeValue*)rt_time_scale));
         return event_time::_new_time_rt(self, (PyObject*)event_time_type, prev,
                                         (RuntimeValue*)rt_offset.get(), cond, wait_for);
     }
@@ -658,10 +655,9 @@ static inline void seq_finalize(Seq *self, TimeStep*, RampFunction*, RuntimeValu
                         std::swap(value, new_value);
                     }
                     else if (new_value.get() != value.get()) {
-                        assert(Py_TYPE(cond) == runtime_value_type);
-                        auto endval = rtval::_new_select(
-                            (PyObject*)runtime_value_type, (RuntimeValue*)cond,
-                            new_value, value);
+                        assert(rtval::is_rtval(cond));
+                        auto endval = rtval::_new_select((rtval::_RuntimeValue*)cond,
+                                                         new_value, value);
                         value.reset((PyObject*)endval);
                     }
                 }
@@ -703,7 +699,7 @@ static inline void seq_runtime_finalize(Seq *self, unsigned age, py_object &pyag
             return true;
         if (cond == Py_False)
             return false;
-        assert(Py_TYPE(cond) == runtime_value_type);
+        assert(rtval::is_rtval(cond));
         try {
             rtval::rt_eval_throw((RuntimeValue*)cond, age, pyage);
             return !rtval::rtval_cache((RuntimeValue*)cond).is_zero();
@@ -729,13 +725,12 @@ static inline void seq_runtime_finalize(Seq *self, unsigned age, py_object &pyag
                 throw_if(rampf->__pyx_vtab->set_runtime_params(rampf, age, pyage),
                          action_key(action->aid));
             }
-            else if (Py_TYPE(action_value) == runtime_value_type) {
+            else if (rtval::is_rtval(action_value)) {
                 rtval::rt_eval_throw((RuntimeValue*)action_value, age, pyage,
                                      action_key(action->aid));
             }
             auto action_end_val = action->end_val.get();
-            if (action_end_val != action_value &&
-                Py_TYPE(action_end_val) == runtime_value_type) {
+            if (action_end_val != action_value && rtval::is_rtval(action_end_val)) {
                 rtval::rt_eval_throw((RuntimeValue*)action_end_val, age, pyage,
                                      action_key(action->aid));
             }

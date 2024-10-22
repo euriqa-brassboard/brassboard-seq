@@ -213,11 +213,10 @@ static inline long long round_time_int(PyObject *v)
 
 template<typename RuntimeValue>
 static inline __attribute__((returns_nonnull)) RuntimeValue*
-round_time_rt(PyObject *RTValueType, RuntimeValue *v, RuntimeValue *rt_time_scale)
+round_time_rt(RuntimeValue *v, RuntimeValue *rt_time_scale)
 {
-    py_object scaled_t((PyObject*)rtval::_new_expr2(RTValueType, rtval::Mul, v,
-                                                    rt_time_scale));
-    return rtval::rt_round_int64(RTValueType, (RuntimeValue*)scaled_t.get());
+    py_object scaled_t((PyObject*)rtval::new_expr2(rtval::Mul, v, rt_time_scale));
+    return rtval::rt_round_int64((RuntimeValue*)scaled_t.get());
 }
 
 static inline TimeOrder is_ordered(auto *t1, auto *t2)
