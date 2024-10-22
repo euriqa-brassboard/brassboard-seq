@@ -27,7 +27,7 @@ namespace brassboard_seq::rtval {
 __attribute__((visibility("protected")))
 PyTypeObject *RTVal_Type;
 
-__attribute__((returns_nonnull)) _RuntimeValue*
+__attribute__((returns_nonnull,visibility("protected"))) _RuntimeValue*
 _new_cb_arg2(ValueType type, PyObject *cb_arg2, PyObject *ty)
 {
     auto datatype = pytype_to_datatype(ty);
@@ -44,7 +44,7 @@ _new_cb_arg2(ValueType type, PyObject *cb_arg2, PyObject *ty)
     return self;
 }
 
-__attribute__((returns_nonnull)) _RuntimeValue*
+__attribute__((returns_nonnull,visibility("protected"))) _RuntimeValue*
 _new_expr1(ValueType type, _RuntimeValue *arg0)
 {
     auto o = pytype_genericalloc(RTVal_Type);
@@ -61,7 +61,7 @@ _new_expr1(ValueType type, _RuntimeValue *arg0)
     return self;
 }
 
-__attribute__((returns_nonnull)) _RuntimeValue*
+__attribute__((returns_nonnull,visibility("protected"))) _RuntimeValue*
 _new_expr2(ValueType type, _RuntimeValue *arg0, _RuntimeValue *arg1)
 {
     auto o = pytype_genericalloc(RTVal_Type);
@@ -78,7 +78,7 @@ _new_expr2(ValueType type, _RuntimeValue *arg0, _RuntimeValue *arg1)
     return self;
 }
 
-__attribute__((returns_nonnull)) _RuntimeValue*
+__attribute__((returns_nonnull,visibility("protected"))) _RuntimeValue*
 _new_const(TagVal v)
 {
     auto o = pytype_genericalloc(RTVal_Type);
@@ -94,7 +94,7 @@ _new_const(TagVal v)
     return self;
 }
 
-__attribute__((returns_nonnull)) _RuntimeValue*
+__attribute__((returns_nonnull,visibility("protected"))) _RuntimeValue*
 _new_expr2_wrap1(ValueType type, PyObject *arg0, PyObject *arg1)
 {
     py_object rtarg0;
@@ -135,7 +135,7 @@ _wrap_rtval(PyObject *v)
     return _new_const(TagVal::from_py(v));
 }
 
-__attribute__((returns_nonnull)) _RuntimeValue*
+__attribute__((returns_nonnull,visibility("protected"))) _RuntimeValue*
 _new_select(_RuntimeValue *arg0, PyObject *arg1, PyObject *arg2)
 {
     py_object rtarg1((PyObject*)_wrap_rtval(arg1));
@@ -161,7 +161,7 @@ void init()
     _import_array();
 }
 
-__attribute__((flatten))
+__attribute__((flatten,visibility("protected")))
 void _rt_eval_cache(_RuntimeValue *self, unsigned age, py_object &pyage)
 {
     if (self->age == age)
