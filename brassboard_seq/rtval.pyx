@@ -373,9 +373,6 @@ cdef class RuntimeValue:
     def __round__(self):
         return rt_round_int64(self)
 
-    # Artifically limit the supported ufunc
-    # in case we need to do any processing later
-    # (e.g. compiling/sending it to kernel etc).
     def __array_ufunc__(self, ufunc, methods, /, *inputs):
         if methods != '__call__':
             return <object>Py_NotImplemented
