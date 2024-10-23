@@ -1011,15 +1011,8 @@ new_const(PyObject *v, RuntimeValue*)
     return (RuntimeValue*)_new_const(TagVal::from_py(v));
 }
 
-__attribute__((returns_nonnull)) _RuntimeValue*
-_new_expr2_wrap1(ValueType type, PyObject *arg0, PyObject *arg1);
-template<typename RuntimeValue>
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-new_expr2_wrap1(ValueType type, PyObject *arg0, PyObject *arg1, RuntimeValue*)
-{
-    assert_compatible_rtvalue<RuntimeValue>();
-    return (RuntimeValue*)_new_expr2_wrap1(type, arg0, arg1);
-}
+__attribute__((returns_nonnull)) PyObject*
+new_expr2_wrap1(ValueType type, PyObject *arg0, PyObject *arg1);
 
 __attribute__((returns_nonnull)) _RuntimeValue*
 _new_select(_RuntimeValue *arg0, PyObject *arg1, PyObject *arg2);

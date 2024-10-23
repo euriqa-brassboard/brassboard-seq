@@ -94,8 +94,8 @@ _new_const(TagVal v)
     return self;
 }
 
-__attribute__((returns_nonnull,visibility("protected"))) _RuntimeValue*
-_new_expr2_wrap1(ValueType type, PyObject *arg0, PyObject *arg1)
+__attribute__((returns_nonnull,visibility("protected"))) PyObject*
+new_expr2_wrap1(ValueType type, PyObject *arg0, PyObject *arg1)
 {
     py_object rtarg0;
     py_object rtarg1;
@@ -124,7 +124,7 @@ _new_expr2_wrap1(ValueType type, PyObject *arg0, PyObject *arg1)
     self->arg0 = (_RuntimeValue*)rtarg0.release();
     self->arg1 = (_RuntimeValue*)rtarg1.release();
     self->cb_arg2 = py_newref(Py_None);
-    return self;
+    return o;
 }
 
 static inline __attribute__((returns_nonnull)) _RuntimeValue*

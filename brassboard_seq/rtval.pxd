@@ -120,7 +120,6 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
     RuntimeValue new_cb_arg2(ValueType, object, object ty, RuntimeValue) except +
     RuntimeValue new_expr1(ValueType, RuntimeValue) except +
     RuntimeValue new_expr2(ValueType, RuntimeValue, RuntimeValue) except +
-    RuntimeValue new_const(TagVal, RuntimeValue) except +
     RuntimeValue new_const(object, RuntimeValue) except +
     RuntimeValue new_select(RuntimeValue arg0, object, object) except +
     RuntimeValue rt_convert_bool(RuntimeValue) except +
