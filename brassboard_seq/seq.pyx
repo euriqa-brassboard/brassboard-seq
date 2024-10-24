@@ -24,8 +24,7 @@ from brassboard_seq.event_time cimport round_time_int, round_time_rt, \
 from brassboard_seq.rtval cimport is_rtval, RuntimeValue
 from brassboard_seq.scan cimport new_param_pack
 from brassboard_seq.utils cimport assume_not_none, _assume_not_none, \
-  action_key, assert_key, event_time_key, \
-  PyErr_Format, PyExc_TypeError, PyExc_ValueError
+  assert_key, event_time_key, PyErr_Format, PyExc_TypeError
 
 cdef StringIO # hide import
 from io import StringIO

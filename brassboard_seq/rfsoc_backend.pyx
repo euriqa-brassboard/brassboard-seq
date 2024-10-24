@@ -20,7 +20,7 @@
 from brassboard_seq.action cimport RampFunction, SeqCubicSpline
 from brassboard_seq.event_time cimport EventTime, round_time_f64
 from brassboard_seq.rtval cimport is_rtval, rtval_cache, rt_eval_throw, RuntimeValue
-from brassboard_seq.utils cimport pyfloat_from_double, set_global_tracker, \
+from brassboard_seq.utils cimport set_global_tracker, \
   PyErr_Format, PyExc_ValueError, assume_not_none, _assume_not_none, py_object
 
 cimport cython
