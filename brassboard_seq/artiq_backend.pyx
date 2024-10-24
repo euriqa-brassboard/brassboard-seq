@@ -19,7 +19,7 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.action cimport RampFunction
 from brassboard_seq.event_time cimport EventTime, round_time_int
-from brassboard_seq.rtval cimport ExternCallback, is_rtval, new_extern, RuntimeValue
+from brassboard_seq.rtval cimport ExternCallback, is_rtval, new_extern
 from brassboard_seq.seq cimport Seq
 from brassboard_seq.utils cimport set_global_tracker, PyErr_Format, \
   PyExc_RuntimeError, PyExc_TypeError, PyExc_ValueError, pyobject_call, py_object
@@ -71,8 +71,7 @@ cdef extern from "src/artiq_backend.cpp" namespace "brassboard_seq::artiq_backen
 
     void collect_actions(ArtiqBackend ab, EventTime) except +
 
-    void generate_rtios(ArtiqBackend ab, unsigned age, py_object&,
-                        RuntimeValue) except +
+    void generate_rtios(ArtiqBackend ab, unsigned age, py_object&) except +
 
 artiq_consts.COUNTER_ENABLE = <int?>edge_counter.CONFIG_COUNT_RISING | <int?>edge_counter.CONFIG_RESET_TO_ZERO
 artiq_consts.COUNTER_DISABLE = <int?>edge_counter.CONFIG_SEND_COUNT_EVENT
@@ -232,7 +231,7 @@ cdef class ArtiqBackend:
 
     cdef int runtime_finalize(self, unsigned age, py_object &pyage) except -1:
         bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)
-        generate_rtios(self, age, pyage, None)
+        generate_rtios(self, age, pyage)
 
 @cython.internal
 @cython.auto_pickle(False)

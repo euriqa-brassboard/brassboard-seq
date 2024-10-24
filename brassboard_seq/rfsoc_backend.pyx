@@ -34,8 +34,7 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
     PyTypeObject *rampfunction_type
     PyTypeObject *seqcubicspline_type
     void collect_actions(RFSOCBackend ab, EventTime) except+
-    void gen_rfsoc_data(RFSOCBackend ab, RuntimeValue, RampFunction,
-                        SeqCubicSpline) except +
+    void gen_rfsoc_data(RFSOCBackend ab, RampFunction, SeqCubicSpline) except +
 
     Generator *new_pulse_compiler_generator() except +
     cppclass PulseCompilerGen(Generator):
@@ -146,6 +145,6 @@ cdef class RFSOCBackend:
             set_dds_delay(self, dds, rtval_cache(<RuntimeValue>delay).get[double]())
         self.generator.gen.get().start()
         try:
-            gen_rfsoc_data(self, None, None, None)
+            gen_rfsoc_data(self, None, None)
         finally:
             self.generator.gen.get().end()

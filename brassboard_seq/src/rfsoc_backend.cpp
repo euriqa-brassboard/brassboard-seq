@@ -848,19 +848,19 @@ SyncTimeMgr::add_action(std::vector<DDSParamAction> &actions, int64_t start_cycl
     }
 }
 
-template<typename RuntimeValue, typename RampFunction, typename SeqCubicSpline>
+template<typename RampFunction, typename SeqCubicSpline>
 static __attribute__((always_inline)) inline
-void gen_rfsoc_data(auto *rb, RuntimeValue*, RampFunction*, SeqCubicSpline*)
+void gen_rfsoc_data(auto *rb, RampFunction*, SeqCubicSpline*)
 {
     bb_debug("gen_rfsoc_data: start\n");
     auto seq = rb->__pyx_base.seq;
     for (size_t i = 0, nreloc = rb->bool_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = rb->bool_values[i];
-        val = !rtval::rtval_cache((RuntimeValue*)rtval).is_zero();
+        val = !rtval::rtval_cache((rtval::_RuntimeValue*)rtval).is_zero();
     }
     for (size_t i = 0, nreloc = rb->float_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = rb->float_values[i];
-        val = rtval::rtval_cache((RuntimeValue*)rtval).template get<double>();
+        val = rtval::rtval_cache((rtval::_RuntimeValue*)rtval).template get<double>();
     }
     auto &time_values = seq->__pyx_base.__pyx_base.seqinfo->time_mgr->time_values;
     auto reloc_action = [rb, &time_values] (const RFSOCAction &action,

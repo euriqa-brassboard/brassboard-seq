@@ -39,17 +39,14 @@ cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
     PyTypeObject *condwrapper_type
     PyTypeObject *rampfunction_type
     PyObject *_rt_time_scale "brassboard_seq::seq::rt_time_scale"
-    void update_timestep(TimeStep, RuntimeValue) except +
-    void update_subseq(SubSeq, ConditionalWrapper, TimeSeq, TimeStep,
-                       RuntimeValue) except +
-    void update_conditional(ConditionalWrapper, TimeSeq, TimeStep,
-                            RuntimeValue) except +
-    object combine_cond(object cond1, object new_cond, RuntimeValue) except +
-    SubSeq add_custom_step(SubSeq, object cond, EventTime, object,
-                           RuntimeValue) except +
-    void seq_finalize(Seq, TimeStep, RampFunction, RuntimeValue) except +
+    void update_timestep(TimeStep) except +
+    void update_subseq(SubSeq, ConditionalWrapper, TimeSeq, TimeStep) except +
+    void update_conditional(ConditionalWrapper, TimeSeq, TimeStep) except +
+    object combine_cond(object cond1, object new_cond) except +
+    SubSeq add_custom_step(SubSeq, object cond, EventTime, object) except +
+    void seq_finalize(Seq, TimeStep, RampFunction) except +
     void seq_runtime_finalize(Seq, unsigned age, py_object &pyage,
-                              RampFunction, RuntimeValue) except +
+                              RampFunction) except +
 
 
 event_time_type = <PyTypeObject*>EventTime
@@ -59,9 +56,9 @@ condwrapper_type = <PyTypeObject*>ConditionalWrapper
 rampfunction_type = <PyTypeObject*>RampFunction
 _rt_time_scale = <PyObject*>rt_time_scale
 
-update_timestep(None, None)
-update_subseq(None, None, None, None, None)
-update_conditional(None, None, None, None)
+update_timestep(None)
+update_subseq(None, None, None, None)
+update_conditional(None, None, None)
 
 @cython.auto_pickle(False)
 cdef class TimeSeq:
@@ -135,7 +132,7 @@ cdef class ConditionalWrapper:
         PyErr_Format(PyExc_TypeError, "ConditionalWrapper cannot be created directly")
 
     def wait(self, length, /, *, cond=True):
-        wait_cond(self.seq, length, combine_cond(self.cond, cond, None))
+        wait_cond(self.seq, length, combine_cond(self.cond, cond))
 
     def wait_for(self, tp, /, offset=0):
         wait_for_cond(self.seq, tp, offset, self.cond)
@@ -150,7 +147,7 @@ cdef class ConditionalWrapper:
 
     # Shorthand for add_step of custom step. Meant to be used as decorator
     def __call__(self, cb, /):
-        step = add_custom_step(self.seq, self.cond, self.seq.end_time, cb, None)
+        step = add_custom_step(self.seq, self.cond, self.seq.end_time, cb)
         self.seq.end_time = step.end_time
         return step
 
@@ -183,7 +180,7 @@ cdef class SubSeq(TimeSeq):
         return self.end_time
 
     def wait(self, length, /, *, cond=True):
-        wait_cond(self, length, combine_cond(self.cond, cond, None))
+        wait_cond(self, length, combine_cond(self.cond, cond))
 
     def wait_for(self, tp, /, offset=0):
         wait_for_cond(self, tp, offset, self.cond)
@@ -298,10 +295,10 @@ cdef class Seq(SubSeq):
         return str(self)
 
     cdef int finalize(self) except -1:
-        seq_finalize(self, None, None, None)
+        seq_finalize(self, None, None)
 
     cdef int runtime_finalize(self, unsigned age, py_object &pyage) except -1:
-        seq_runtime_finalize(self, age, pyage, None, None)
+        seq_runtime_finalize(self, age, pyage, None)
 
 cdef int seq_show(Seq self, write, int indent) except -1:
     write(' ' * indent)

@@ -256,22 +256,21 @@ void collect_actions(auto *ab, EventTime*)
     ab->float_values = std::move(float_values.values);
 }
 
-template<typename RuntimeValue>
 static __attribute__((always_inline)) inline
-void generate_rtios(auto *ab, unsigned age, py_object &pyage, RuntimeValue*)
+void generate_rtios(auto *ab, unsigned age, py_object &pyage)
 {
     bb_debug("generate_rtios: start\n");
     auto seq = ab->__pyx_base.seq;
     for (size_t i = 0, nreloc = ab->bool_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = ab->bool_values[i];
-        val = !rtval::rtval_cache((RuntimeValue*)rtval).is_zero();
+        val = !rtval::rtval_cache((rtval::_RuntimeValue*)rtval).is_zero();
     }
     for (size_t i = 0, nreloc = ab->float_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = ab->float_values[i];
-        val = rtval::rtval_cache((RuntimeValue*)rtval).template get<double>();
+        val = rtval::rtval_cache((rtval::_RuntimeValue*)rtval).template get<double>();
     }
     int64_t max_delay = 0;
-    auto relocate_delay = [&] (int64_t &delay, RuntimeValue *rt_delay) {
+    auto relocate_delay = [&] (int64_t &delay, rtval::_RuntimeValue *rt_delay) {
         if (!rt_delay)
             return;
         rtval::rt_eval_throw(rt_delay, age, pyage);
@@ -290,11 +289,11 @@ void generate_rtios(auto *ab, unsigned age, py_object &pyage, RuntimeValue*)
         delay = int64_t(fdelay * event_time::time_scale + 0.5);
     };
     for (auto &ttlchn: ab->channels.ttlchns) {
-        relocate_delay(ttlchn.delay, (RuntimeValue*)ttlchn.rt_delay);
+        relocate_delay(ttlchn.delay, (rtval::_RuntimeValue*)ttlchn.rt_delay);
         max_delay = std::max(max_delay, ttlchn.delay);
     }
     for (auto &ddschn: ab->channels.ddschns) {
-        relocate_delay(ddschn.delay, (RuntimeValue*)ddschn.rt_delay);
+        relocate_delay(ddschn.delay, (rtval::_RuntimeValue*)ddschn.rt_delay);
         max_delay = std::max(max_delay, ddschn.delay);
     }
     auto &time_values = seq->__pyx_base.__pyx_base.seqinfo->time_mgr->time_values;

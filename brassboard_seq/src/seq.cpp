@@ -32,13 +32,14 @@ static PyTypeObject *condwrapper_type;
 static PyTypeObject *rampfunction_type;
 static PyObject *rt_time_scale;
 
-template<typename RuntimeValue>
+using namespace rtval;
+
 static inline std::pair<PyObject*,bool>
-_combine_cond(PyObject *cond1, PyObject *new_cond, RuntimeValue*)
+_combine_cond(PyObject *cond1, PyObject *new_cond)
 {
     if (cond1 == Py_False)
         return { Py_False, false };
-    if (!rtval::is_rtval(new_cond)) {
+    if (!is_rtval(new_cond)) {
         if (get_value_bool(new_cond, (uintptr_t)-1)) {
             return { cond1, false };
         }
@@ -46,43 +47,43 @@ _combine_cond(PyObject *cond1, PyObject *new_cond, RuntimeValue*)
             return { Py_False, false };
         }
     }
-    py_object cond2((PyObject*)rtval::rt_convert_bool((RuntimeValue*)new_cond));
+    py_object cond2((PyObject*)rt_convert_bool((_RuntimeValue*)new_cond));
     if (cond1 == Py_True)
         return { cond2.release(), true };
-    assert(rtval::is_rtval(cond1));
-    auto o = pytype_genericalloc(rtval::RTVal_Type);
-    auto self = (RuntimeValue*)o;
-    self->datatype = rtval::DataType::Bool;
-    // self->cache_err = rtval::EvalError::NoError;
+    assert(is_rtval(cond1));
+    auto o = pytype_genericalloc(RTVal_Type);
+    auto self = (_RuntimeValue*)o;
+    self->datatype = DataType::Bool;
+    // self->cache_err = EvalError::NoError;
     // self->cache_val = { .i64_val = 0 };
-    self->type_ = rtval::And;
+    self->type_ = And;
     self->age = (unsigned)-1;
-    self->arg0 = (RuntimeValue*)py_newref(cond1);
-    self->arg1 = (RuntimeValue*)cond2.release();
+    self->arg0 = (_RuntimeValue*)py_newref(cond1);
+    self->arg1 = (_RuntimeValue*)cond2.release();
     self->cb_arg2 = py_newref(Py_None);
     return { o, true };
 }
 
-template<typename RuntimeValue>
 static inline __attribute__((returns_nonnull)) PyObject*
-combine_cond(PyObject *cond1, PyObject *new_cond, RuntimeValue*)
+combine_cond(PyObject *cond1, PyObject *new_cond)
 {
-    auto [res, needs_free] = _combine_cond(cond1, new_cond, (RuntimeValue*)nullptr);
+    auto [res, needs_free] = _combine_cond(cond1, new_cond);
     if (!needs_free)
         Py_INCREF(res);
     return res;
 }
 
-template<typename TimeManager, typename EventTime, typename RuntimeValue>
+template<typename TimeManager, typename EventTime>
 static inline __attribute__((returns_nonnull)) EventTime*
 new_round_time(TimeManager *self, EventTime *prev, PyObject *offset, PyObject *cond,
-               EventTime *wait_for, RuntimeValue*)
+               EventTime *wait_for)
 {
-    if (rtval::is_rtval(offset)) {
+    if (is_rtval(offset)) {
         py_object rt_offset((PyObject*)event_time::round_time_rt(
-                                (RuntimeValue*)offset, (RuntimeValue*)rt_time_scale));
+                                (_RuntimeValue*)offset, (_RuntimeValue*)rt_time_scale));
         return event_time::_new_time_rt(self, (PyObject*)event_time_type, prev,
-                                        (RuntimeValue*)rt_offset.get(), cond, wait_for);
+                                        (_RuntimeValue*)rt_offset.get(),
+                                        cond, wait_for);
     }
     else {
         auto coffset = event_time::round_time_int(offset);
@@ -91,14 +92,13 @@ new_round_time(TimeManager *self, EventTime *prev, PyObject *offset, PyObject *c
     }
 }
 
-template<typename TimeStep, typename RuntimeValue, typename SubSeq, typename EventTime>
+template<typename TimeStep, typename SubSeq, typename EventTime>
 static inline __attribute__((returns_nonnull)) TimeStep*
 add_time_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *length)
 {
     auto seqinfo = self->__pyx_base.seqinfo;
     py_object end_time((PyObject*)new_round_time(seqinfo->time_mgr, start_time, length,
-                                                 cond, (EventTime*)Py_None,
-                                                 (RuntimeValue*)nullptr));
+                                                 cond, (EventTime*)Py_None));
     py_object o(pytype_genericalloc(timestep_type));
     auto step = (TimeStep*)o.get();
     auto seq = &step->__pyx_base;
@@ -113,11 +113,10 @@ add_time_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *len
     return (TimeStep*)o.release();
 }
 
-template<typename RuntimeValue, typename SubSeq, typename EventTime>
+template<typename SubSeq, typename EventTime>
 static inline __attribute__((returns_nonnull)) SubSeq*
 add_custom_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *cb,
-                RuntimeValue*, size_t nargs=0, PyObject *const *args=nullptr,
-                PyObject *kwargs=nullptr)
+                size_t nargs=0, PyObject *const *args=nullptr, PyObject *kwargs=nullptr)
 {
     py_object sub_seqs(pylist_new(0));
     auto seqinfo = self->__pyx_base.seqinfo;
@@ -203,14 +202,12 @@ struct seq_set_params {
     }
 };
 
-template<typename RuntimeValue>
 struct CondCombiner {
     PyObject *cond{nullptr};
     bool needs_free{false};
     CondCombiner(PyObject *cond1, PyObject *cond2)
     {
-        auto [_cond, _needs_free] = _combine_cond(cond1, cond2,
-                                                  (RuntimeValue*)nullptr);
+        auto [_cond, _needs_free] = _combine_cond(cond1, cond2);
         cond = _cond;
         needs_free = _needs_free;
     }
@@ -273,7 +270,7 @@ const char *add_step_name(AddStepType type)
 
 static auto empty_tuple = PyTuple_New(0);
 
-template<typename CondSeq, typename TimeSeq, typename TimeStep, typename RuntimeValue,
+template<typename CondSeq, typename TimeSeq, typename TimeStep,
          bool is_cond, AddStepType type>
 static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
                                Py_ssize_t nargs, PyObject *kwnames) try
@@ -334,8 +331,8 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
     PyObject *res;
     if (Py_TYPE(first_arg)->tp_call) {
         res = (PyObject*)add_custom_step(subseq, cond, (EventTime*)start_time.get(),
-                                         first_arg, (RuntimeValue*)nullptr,
-                                         tuple_nargs, args + nargs_min, kws.get());
+                                         first_arg, tuple_nargs, args + nargs_min,
+                                         kws.get());
     }
     else if (kws) {
         py_object arg_tuple(get_args_tuple());
@@ -344,7 +341,7 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
                             arg_tuple.get(), kws.get());
     }
     else if (tuple_nargs == 0) {
-        res = (PyObject*)add_time_step<TimeStep,RuntimeValue>(
+        res = (PyObject*)add_time_step<TimeStep>(
             subseq, cond, (EventTime*)start_time.get(), first_arg);
     }
     else {
@@ -403,7 +400,6 @@ timestep_set(auto *self, PyObject *chn, PyObject *value, PyObject *cond,
     self->actions[cid] = action;
 }
 
-template<typename RuntimeValue>
 static inline void
 subseq_set(auto *self, PyObject *chn, PyObject *value, PyObject *cond,
            bool exact_time, py_object &&kws)
@@ -412,8 +408,8 @@ subseq_set(auto *self, PyObject *chn, PyObject *value, PyObject *cond,
     using TimeStep = std::remove_reference_t<decltype(*step)>;
     auto *start_time = self->__pyx_base.end_time;
     if ((PyObject*)step == Py_None || step->__pyx_base.end_time != start_time) {
-        step = add_time_step<TimeStep,RuntimeValue>(self, self->__pyx_base.cond,
-                                                    start_time, pylong_cached(0));
+        step = add_time_step<TimeStep>(self, self->__pyx_base.cond,
+                                       start_time, pylong_cached(0));
         Py_DECREF(self->dummy_step);
         self->dummy_step = step;
         // Update the current time so that a normal step added later
@@ -424,8 +420,7 @@ subseq_set(auto *self, PyObject *chn, PyObject *value, PyObject *cond,
     timestep_set(step, chn, value, cond, false, exact_time, std::move(kws));
 }
 
-template<typename CondSeq, typename RuntimeValue,
-         bool is_cond, bool is_step=false, bool is_pulse=false>
+template<typename CondSeq, bool is_cond, bool is_step=false, bool is_pulse=false>
 static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
                              Py_ssize_t nargs, PyObject *kwnames) try
 {
@@ -433,21 +428,20 @@ static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
     auto self = (CondSeq*)py_self;
     auto subseq = condseq_get_subseq<is_cond>(self);
     auto cond = condseq_get_cond<is_cond>(self);
-    CondCombiner<RuntimeValue> cc(cond, params.cond);
+    CondCombiner cc(cond, params.cond);
     if constexpr (is_step)
         timestep_set(subseq, params.chn, params.value, cc.cond, is_pulse,
                      params.exact_time, std::move(params.kws));
     else
-        subseq_set<RuntimeValue>(subseq, params.chn, params.value,
-                                 cc.cond, params.exact_time, std::move(params.kws));
+        subseq_set(subseq, params.chn, params.value, cc.cond, params.exact_time,
+                   std::move(params.kws));
     return py_newref(py_self);
 }
 catch (...) {
     return nullptr;
 }
 
-template<typename CondSeq, typename ConditionalWrapper,
-         typename RuntimeValue, bool is_cond>
+template<typename CondSeq, typename ConditionalWrapper, bool is_cond>
 static PyObject *condseq_conditional(PyObject *py_self, PyObject *const *args,
                                      Py_ssize_t nargs) try
 {
@@ -456,7 +450,7 @@ static PyObject *condseq_conditional(PyObject *py_self, PyObject *const *args,
     auto self = (CondSeq*)py_self;
     auto subseq = condseq_get_subseq<is_cond>(self);
     auto cond = condseq_get_cond<is_cond>(self);
-    CondCombiner<RuntimeValue> cc(cond, args[0]);
+    CondCombiner cc(cond, args[0]);
     auto o = pytype_genericalloc(condwrapper_type);
     auto wrapper = (ConditionalWrapper*)o;
     wrapper->seq = py_newref(subseq);
@@ -467,15 +461,14 @@ catch (...) {
     return nullptr;
 }
 
-template<typename TimeStep, typename RuntimeValue>
-static inline void
-update_timestep(TimeStep*, RuntimeValue*)
+template<typename TimeStep>
+static inline void update_timestep(TimeStep*)
 {
     static PyMethodDef timestep_set_method = {
-        "set", (PyCFunction)(void*)condseq_set<TimeStep,RuntimeValue,false,true,false>,
+        "set", (PyCFunction)(void*)condseq_set<TimeStep,false,true,false>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef timestep_pulse_method = {
-        "pulse", (PyCFunction)(void*)condseq_set<TimeStep,RuntimeValue,false,true,true>,
+        "pulse", (PyCFunction)(void*)condseq_set<TimeStep,false,true,true>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     type_add_method(timestep_type, &timestep_set_method);
     type_add_method(timestep_type, &timestep_pulse_method);
@@ -483,31 +476,30 @@ update_timestep(TimeStep*, RuntimeValue*)
 }
 
 template<typename SubSeq, typename ConditionalWrapper, typename TimeSeq,
-         typename TimeStep, typename RuntimeValue>
-static inline void update_subseq(SubSeq*, ConditionalWrapper*, TimeSeq*, TimeStep*,
-                                 RuntimeValue*)
+         typename TimeStep>
+static inline void update_subseq(SubSeq*, ConditionalWrapper*, TimeSeq*, TimeStep*)
 {
     static PyMethodDef subseq_conditional_method = {
-        "conditional", (PyCFunction)(void*)condseq_conditional<SubSeq,ConditionalWrapper,RuntimeValue,false>,
+        "conditional", (PyCFunction)(void*)condseq_conditional<SubSeq,ConditionalWrapper,false>,
         METH_FASTCALL, 0};
     static PyMethodDef subseq_set_method = {
-        "set", (PyCFunction)(void*)condseq_set<SubSeq,RuntimeValue,false>,
+        "set", (PyCFunction)(void*)condseq_set<SubSeq,false>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef subseq_add_step_method = {
         "add_step",
-        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,TimeStep,RuntimeValue,false,AddStepType::Step>,
+        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,TimeStep,false,AddStepType::Step>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef subseq_add_background_method = {
         "add_background",
-        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,TimeStep,RuntimeValue,false,AddStepType::Background>,
+        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,TimeStep,false,AddStepType::Background>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef subseq_add_floating_method = {
         "add_floating",
-        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,TimeStep,RuntimeValue,false,AddStepType::Floating>,
+        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,TimeStep,false,AddStepType::Floating>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef subseq_add_at_method = {
         "add_at",
-        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,TimeStep,RuntimeValue,false,AddStepType::At>,
+        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,TimeStep,false,AddStepType::At>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     type_add_method(subseq_type, &subseq_conditional_method);
     type_add_method(subseq_type, &subseq_set_method);
@@ -518,32 +510,31 @@ static inline void update_subseq(SubSeq*, ConditionalWrapper*, TimeSeq*, TimeSte
     PyType_Modified(subseq_type);
 }
 
-template<typename ConditionalWrapper, typename TimeSeq, typename TimeStep,
-         typename RuntimeValue>
+template<typename ConditionalWrapper, typename TimeSeq, typename TimeStep>
 static inline void
-update_conditional(ConditionalWrapper*, TimeSeq*, TimeStep*, RuntimeValue*)
+update_conditional(ConditionalWrapper*, TimeSeq*, TimeStep*)
 {
     static PyMethodDef conditional_conditional_method = {
-        "conditional", (PyCFunction)(void*)condseq_conditional<ConditionalWrapper,ConditionalWrapper,RuntimeValue,true>,
+        "conditional", (PyCFunction)(void*)condseq_conditional<ConditionalWrapper,ConditionalWrapper,true>,
         METH_FASTCALL, 0};
     static PyMethodDef conditional_set_method = {
-        "set", (PyCFunction)(void*)condseq_set<ConditionalWrapper,RuntimeValue,true>,
+        "set", (PyCFunction)(void*)condseq_set<ConditionalWrapper,true>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef conditional_add_step_method = {
         "add_step",
-        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,TimeStep,RuntimeValue,true,AddStepType::Step>,
+        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,TimeStep,true,AddStepType::Step>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef conditional_add_background_method = {
         "add_background",
-        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,TimeStep,RuntimeValue,true,AddStepType::Background>,
+        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,TimeStep,true,AddStepType::Background>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef conditional_add_floating_method = {
         "add_floating",
-        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,TimeStep,RuntimeValue,true,AddStepType::Floating>,
+        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,TimeStep,true,AddStepType::Floating>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef conditional_add_at_method = {
         "add_at",
-        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,TimeStep,RuntimeValue,true,AddStepType::At>,
+        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,TimeStep,true,AddStepType::At>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     type_add_method(condwrapper_type, &conditional_conditional_method);
     type_add_method(condwrapper_type, &conditional_set_method);
@@ -580,9 +571,8 @@ static void collect_actions(SubSeq *self, std::vector<action::Action*> *actions)
     }
 }
 
-template<typename TimeStep, typename RampFunction,
-         typename RuntimeValue, typename Seq>
-static inline void seq_finalize(Seq *self, TimeStep*, RampFunction*, RuntimeValue*)
+template<typename TimeStep, typename RampFunction, typename Seq>
+static inline void seq_finalize(Seq *self, TimeStep*, RampFunction*)
 {
     using EventTime = std::remove_reference_t<decltype(*self->__pyx_base.__pyx_base.start_time)>;
     auto seqinfo = self->__pyx_base.__pyx_base.seqinfo;
@@ -655,9 +645,9 @@ static inline void seq_finalize(Seq *self, TimeStep*, RampFunction*, RuntimeValu
                         std::swap(value, new_value);
                     }
                     else if (new_value.get() != value.get()) {
-                        assert(rtval::is_rtval(cond));
-                        auto endval = rtval::_new_select((rtval::_RuntimeValue*)cond,
-                                                         new_value, value);
+                        assert(is_rtval(cond));
+                        auto endval = _new_select((_RuntimeValue*)cond,
+                                                  new_value, value);
                         value.reset((PyObject*)endval);
                     }
                 }
@@ -674,9 +664,9 @@ static inline void seq_finalize(Seq *self, TimeStep*, RampFunction*, RuntimeValu
     }
 }
 
-template<typename RampFunction, typename RuntimeValue, typename Seq>
+template<typename RampFunction, typename Seq>
 static inline void seq_runtime_finalize(Seq *self, unsigned age, py_object &pyage,
-                                        RampFunction*, RuntimeValue*)
+                                        RampFunction*)
 {
     auto seqinfo = self->__pyx_base.__pyx_base.seqinfo;
     auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);
@@ -686,9 +676,9 @@ static inline void seq_runtime_finalize(Seq *self, unsigned age, py_object &pyag
     int nassert = PyList_GET_SIZE(assertions);
     for (int assert_id = 0; assert_id < nassert; assert_id++) {
         auto a = PyList_GET_ITEM(assertions, assert_id);
-        auto c = (RuntimeValue*)PyTuple_GET_ITEM(a, 0);
-        rtval::rt_eval_throw(c, age, pyage, assert_key(assert_id));
-        if (rtval::rtval_cache(c).is_zero()) {
+        auto c = (_RuntimeValue*)PyTuple_GET_ITEM(a, 0);
+        rt_eval_throw(c, age, pyage, assert_key(assert_id));
+        if (rtval_cache(c).is_zero()) {
             bb_throw_format(PyExc_AssertionError, assert_key(assert_id),
                             "%U", PyTuple_GET_ITEM(a, 1));
         }
@@ -699,10 +689,10 @@ static inline void seq_runtime_finalize(Seq *self, unsigned age, py_object &pyag
             return true;
         if (cond == Py_False)
             return false;
-        assert(rtval::is_rtval(cond));
+        assert(is_rtval(cond));
         try {
-            rtval::rt_eval_throw((RuntimeValue*)cond, age, pyage);
-            return !rtval::rtval_cache((RuntimeValue*)cond).is_zero();
+            rt_eval_throw((_RuntimeValue*)cond, age, pyage);
+            return !rtval_cache((_RuntimeValue*)cond).is_zero();
         }
         catch (...) {
             bb_rethrow(action_key(action->aid));
@@ -725,14 +715,14 @@ static inline void seq_runtime_finalize(Seq *self, unsigned age, py_object &pyag
                 throw_if(rampf->__pyx_vtab->set_runtime_params(rampf, age, pyage),
                          action_key(action->aid));
             }
-            else if (rtval::is_rtval(action_value)) {
-                rtval::rt_eval_throw((RuntimeValue*)action_value, age, pyage,
-                                     action_key(action->aid));
+            else if (is_rtval(action_value)) {
+                rt_eval_throw((_RuntimeValue*)action_value, age, pyage,
+                              action_key(action->aid));
             }
             auto action_end_val = action->end_val.get();
-            if (action_end_val != action_value && rtval::is_rtval(action_end_val)) {
-                rtval::rt_eval_throw((RuntimeValue*)action_end_val, age, pyage,
-                                     action_key(action->aid));
+            if (action_end_val != action_value && is_rtval(action_end_val)) {
+                rt_eval_throw((_RuntimeValue*)action_end_val, age, pyage,
+                              action_key(action->aid));
             }
             // No need to evaluate action.length since the `compute_all_times`
             // above should've done it already.
