@@ -25,6 +25,7 @@ def check_suffix_array(l):
 
 def test_0():
     assert test_utils.get_suffix_array([]) == []
+    assert test_utils.get_height_array([], []) == []
 
 @pytest.mark.parametrize('n', [0, 1, 2, 3, 4, 5, 6, 7])
 def test_short(n):
