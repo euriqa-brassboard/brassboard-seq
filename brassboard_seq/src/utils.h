@@ -258,18 +258,16 @@ static inline __attribute__((always_inline)) auto throw_if(auto &&v, uintptr_t k
 
 // Wrapper inline function to make it more clear to the C compiler
 // that the function returns 0
-template<typename... T>
-inline __attribute__((always_inline))
-int bb_err_format(PyObject *exc, uintptr_t key, const char *format, T&&... args)
+static inline __attribute__((always_inline))
+int bb_err_format(PyObject *exc, uintptr_t key, const char *format, auto... args)
 {
-    _bb_err_format(exc, key, format, std::forward<T>(args)...);
+    _bb_err_format(exc, key, format, args...);
     return 0;
 }
-template<typename... T>
 static inline __attribute__((always_inline))
-PyObject *PyErr_Format(PyObject *exc, const char *format, T&&... args)
+PyObject *PyErr_Format(PyObject *exc, const char *format, auto... args)
 {
-    ::PyErr_Format(exc, format, std::forward<T>(args)...);
+    ::PyErr_Format(exc, format, args...);
     return nullptr;
 }
 
