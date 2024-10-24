@@ -662,20 +662,22 @@ void get_height_array(std::span<int> height, std::span<int> S,
                       std::span<int> SA, std::span<int> RK)
 {
     int N = S.size();
-    assert(height.size() == N);
+    if (N <= 2)
+        return;
+    assert(height.size() == N - 2);
     assert(SA.size() == N);
     assert(RK.size() == N);
     for (int i = 0, k = 0; i < N; i++) {
         auto rk = RK[i];
-        if (rk == 0) {
-            height[0] = 0;
+        if (rk <= 1) {
+            k = 0;
             continue;
         }
         if (k)
             k -= 1;
         for (auto prev_i = SA[rk - 1]; S[i + k] == S[prev_i + k];)
             k++;
-        height[rk] = k;
+        height[rk - 2] = k;
     }
 }
 

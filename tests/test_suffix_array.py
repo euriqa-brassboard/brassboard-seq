@@ -15,7 +15,7 @@ def check_suffix_array(l):
     for i in range(1, len(l)):
         suffix = l[res[i]:]
         assert prev_suffix < suffix
-        h = height[i]
+        h = 0 if i == 1 else height[i - 2]
         assert len(prev_suffix) >= h
         assert len(suffix) >= h
         assert suffix[:h] == prev_suffix[:h]

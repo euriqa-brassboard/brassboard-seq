@@ -26,8 +26,10 @@ cdef extern from *:
                                                      std::vector<int> SA)
     {
         int N = S.size();
+        if (N <= 2)
+            return {};
         std::vector<int> RK(N);
-        std::vector<int> height(N);
+        std::vector<int> height(N - 2);
         brassboard_seq::order_to_rank(RK, SA);
         brassboard_seq::get_height_array(height, S, SA, RK);
         return height;
