@@ -280,7 +280,7 @@ struct TagVal {
         throw_py_error(err);
         switch (type) {
         case DataType::Bool:
-            return py_newref(val.b_val ? Py_True : Py_False);
+            return py_immref(val.b_val ? Py_True : Py_False);
         case DataType::Int64:
             return pylong_from_longlong(val.i64_val);
         default:

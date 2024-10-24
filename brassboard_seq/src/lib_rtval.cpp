@@ -38,8 +38,8 @@ _new_cb_arg2(ValueType type, PyObject *cb_arg2, PyObject *ty)
     // self->cache_val = { .i64_val = 0 };
     self->type_ = type;
     self->age = (unsigned)-1;
-    self->arg0 = (_RuntimeValue*)py_newref(Py_None);
-    self->arg1 = (_RuntimeValue*)py_newref(Py_None);
+    self->arg0 = (_RuntimeValue*)py_immref(Py_None);
+    self->arg1 = (_RuntimeValue*)py_immref(Py_None);
     self->cb_arg2 = py_newref(cb_arg2);
     return self;
 }
@@ -56,8 +56,8 @@ _new_expr1(ValueType type, _RuntimeValue *arg0)
     self->type_ = type;
     self->age = (unsigned)-1;
     self->arg0 = py_newref(arg0);
-    self->arg1 = (_RuntimeValue*)py_newref(Py_None);
-    self->cb_arg2 = py_newref(Py_None);
+    self->arg1 = (_RuntimeValue*)py_immref(Py_None);
+    self->cb_arg2 = py_immref(Py_None);
     return self;
 }
 
@@ -74,7 +74,7 @@ _new_expr2(ValueType type, _RuntimeValue *arg0, _RuntimeValue *arg1)
     self->age = (unsigned)-1;
     self->arg0 = py_newref(arg0);
     self->arg1 = py_newref(arg1);
-    self->cb_arg2 = py_newref(Py_None);
+    self->cb_arg2 = py_immref(Py_None);
     return self;
 }
 
@@ -88,9 +88,9 @@ _new_const(TagVal v)
     self->cache_val = v.val;
     self->type_ = Const;
     self->age = (unsigned)-1;
-    self->arg0 = (_RuntimeValue*)py_newref(Py_None);
-    self->arg1 = (_RuntimeValue*)py_newref(Py_None);
-    self->cb_arg2 = py_newref(Py_None);
+    self->arg0 = (_RuntimeValue*)py_immref(Py_None);
+    self->arg1 = (_RuntimeValue*)py_immref(Py_None);
+    self->cb_arg2 = py_immref(Py_None);
     return self;
 }
 
@@ -123,7 +123,7 @@ new_expr2_wrap1(ValueType type, PyObject *arg0, PyObject *arg1)
     self->age = (unsigned)-1;
     self->arg0 = (_RuntimeValue*)rtarg0.release();
     self->arg1 = (_RuntimeValue*)rtarg1.release();
-    self->cb_arg2 = py_newref(Py_None);
+    self->cb_arg2 = py_immref(Py_None);
     return o;
 }
 

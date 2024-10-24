@@ -60,7 +60,7 @@ _combine_cond(PyObject *cond1, PyObject *new_cond)
     self->age = (unsigned)-1;
     self->arg0 = (_RuntimeValue*)py_newref(cond1);
     self->arg1 = (_RuntimeValue*)cond2.release();
-    self->cb_arg2 = py_newref(Py_None);
+    self->cb_arg2 = py_immref(Py_None);
     return { o, true };
 }
 
@@ -128,7 +128,7 @@ add_custom_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *c
     seq->end_time = py_newref(start_time);
     seq->cond = py_newref(cond);
     subseq->sub_seqs = sub_seqs.release();
-    subseq->dummy_step = (decltype(subseq->dummy_step))py_newref(Py_None);
+    subseq->dummy_step = (decltype(subseq->dummy_step))py_immref(Py_None);
     if (nargs || kwargs) {
         py_object full_args(pytuple_new(nargs + 1));
         PyTuple_SET_ITEM(full_args.get(), 0, py_newref(o.get()));

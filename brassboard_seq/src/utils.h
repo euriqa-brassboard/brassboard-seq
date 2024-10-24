@@ -121,6 +121,20 @@ static inline T *py_xnewref(T *obj)
     return obj;
 }
 
+#if PY_VERSION_HEX >= 0x030c0000
+template<typename T>
+static inline T *py_immref(T *obj)
+{
+    return obj;
+}
+#else
+template<typename T>
+static inline T *py_immref(T *obj)
+{
+    return py_newref(obj);
+}
+#endif
+
 struct BacktraceTracker {
     // Record the backtrace to be used later.
     // We'd like to do this with the lowest overhead possible at record time.

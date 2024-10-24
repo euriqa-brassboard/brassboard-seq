@@ -240,7 +240,7 @@ PulseCompilerGen::Info::Info()
     py_object orig_post_init(
         throw_if_not(PyObject_GetAttrString(ToneData, "__post_init__")));
     auto dummy_post_init_cb = [] (PyObject*, PyObject *const*, Py_ssize_t) {
-        return py_newref(Py_None);
+        return py_immref(Py_None);
     };
     static PyMethodDef dummy_post_init_method = {
         "__post_init__", (PyCFunction)(void*)(_PyCFunctionFast)dummy_post_init_cb,
