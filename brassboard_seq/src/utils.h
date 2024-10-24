@@ -42,15 +42,13 @@ namespace brassboard_seq {
 
 // Replace with C++23 [[assume()]];
 #if bb_has_builtin(__builtin_assume)
-template<typename T>
-static inline __attribute__((always_inline)) T assume(T v)
+static inline __attribute__((always_inline)) auto assume(auto v)
 {
     __builtin_assume(bool(v));
     return v;
 }
 #elif defined(__GNUC__)
-template<typename T>
-static inline __attribute__((always_inline)) T assume(T v)
+static inline __attribute__((always_inline)) auto assume(auto v)
 {
 #  if __GNUC__ >= 13
     __attribute__((assume(bool(v))));
@@ -61,8 +59,7 @@ static inline __attribute__((always_inline)) T assume(T v)
     return v;
 }
 #else
-template<typename T>
-static inline __attribute__((always_inline)) T assume(T v)
+static inline __attribute__((always_inline)) auto assume(auto v)
 {
     return v;
 }
@@ -75,18 +72,14 @@ static inline __attribute__((always_inline)) void assume_not_none(auto *obj)
 
 [[noreturn]] void throw0();
 
-template<typename T>
-static inline __attribute__((always_inline))
-std::remove_reference_t<T> throw_if_not(T &&v)
+static inline __attribute__((always_inline)) auto throw_if_not(auto &&v)
 {
     if (!v)
         throw0();
     return std::move(v);
 }
 
-template<typename T>
-static inline __attribute__((always_inline))
-std::remove_reference_t<T> throw_if(T &&v)
+static inline __attribute__((always_inline)) auto throw_if(auto &&v)
 {
     if (v)
         throw0();
@@ -107,29 +100,25 @@ extern BBLogLevel bb_logging_level;
 #define bb_debug(...) bb_log(BB_LOG_DEBUG, __VA_ARGS__)
 #define bb_info(...) bb_log(BB_LOG_INFO, __VA_ARGS__)
 
-template<typename T>
-static inline T *py_newref(T *obj)
+static inline auto py_newref(auto *obj)
 {
     Py_INCREF(obj);
     return obj;
 }
 
-template<typename T>
-static inline T *py_xnewref(T *obj)
+static inline auto py_xnewref(auto *obj)
 {
     Py_XINCREF(obj);
     return obj;
 }
 
 #if PY_VERSION_HEX >= 0x030c0000
-template<typename T>
-static inline T *py_immref(T *obj)
+static inline auto py_immref(auto *obj)
 {
     return obj;
 }
 #else
-template<typename T>
-static inline T *py_immref(T *obj)
+static inline auto py_immref(auto *obj)
 {
     return py_newref(obj);
 }
@@ -253,18 +242,14 @@ void _bb_err_format(PyObject *exc, uintptr_t key, const char *format, ...);
                                   const char *format, ...);
 [[noreturn]] void py_throw_format(PyObject *exc, const char *format, ...);
 
-template<typename T>
-static inline __attribute__((always_inline))
-std::remove_reference_t<T> throw_if_not(T &&v, uintptr_t key)
+static inline __attribute__((always_inline)) auto throw_if_not(auto &&v, uintptr_t key)
 {
     if (!v)
         bb_rethrow(key);
     return std::move(v);
 }
 
-template<typename T>
-static inline __attribute__((always_inline))
-std::remove_reference_t<T> throw_if(T &&v, uintptr_t key)
+static inline __attribute__((always_inline)) auto throw_if(auto &&v, uintptr_t key)
 {
     if (v)
         bb_rethrow(key);
@@ -502,9 +487,8 @@ static inline void pylist_append(PyObject* list, PyObject* x)
     throw_if(PyList_Append(list, x));
 }
 
-template<typename T>
 __attribute__((returns_nonnull)) static inline PyObject*
-pytype_genericalloc(T *ty, Py_ssize_t sz=0)
+pytype_genericalloc(auto *ty, Py_ssize_t sz=0)
 {
     return throw_if_not(PyType_GenericAlloc((PyTypeObject*)ty, sz));
 }
