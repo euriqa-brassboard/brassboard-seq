@@ -34,9 +34,27 @@ cdef extern from *:
         brassboard_seq::get_height_array(height, S, SA, RK);
         return height;
     }
+    struct MaxRange {
+        int i0;
+        int i1;
+        int maxv;
+    };
+    static inline std::vector<MaxRange> _get_max_range(std::vector<int> value)
+    {
+        std::vector<MaxRange> res;
+        brassboard_seq::foreach_max_range(value, [&] (int i0, int i1, int maxv) {
+            res.push_back({ i0, i1, maxv });
+        });
+        return res;
+    }
     """
     vector[int] _get_suffix_array(vector[int])
     vector[int] _get_height_array(vector[int], vector[int])
+    cppclass MaxRange:
+        int i0
+        int i1
+        int maxv
+    vector[MaxRange] _get_max_range(vector[int])
 
 def new_invalid_rtval():
     # This should only happen if something really wrong happens.
@@ -254,3 +272,18 @@ def get_suffix_array(ary):
 
 def get_height_array(s, sa):
     return _get_height_array(s, sa)
+
+def get_max_range(list v):
+    return [(mr.i0, mr.i1, mr.maxv) for mr in _get_max_range(v)]
+
+def check_range(list vs, int i0, int i1, int maxv):
+    cdef bint found_equal = False
+    cdef int i
+    cdef int v
+    for i in range(i0, i1 + 1):
+        v = vs[i]
+        if v == maxv:
+            found_equal = True
+        elif v < maxv:
+            return False
+    return found_equal

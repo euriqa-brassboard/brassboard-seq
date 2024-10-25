@@ -12,9 +12,11 @@ python_test("${CMAKE_BINARY_DIR}"
   dummy_artiq.py
   dummy_pulse_compiler.py
   check_artiq_backend.py
-  # Keep these two as the first in a parallel run since they take the longest
+  # Keep these as the first in a parallel run since they take the longest
+  test_max_range.py
   test_suffix_array.py
   test_rtval.py
+  #
   test_action.py
   test_artiq_backend.py
   test_artiq_backend_nodax.py

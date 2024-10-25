@@ -26,6 +26,7 @@
 #include <cmath>
 #include <map>
 #include <memory>
+#include <ranges>
 #include <span>
 #include <vector>
 
@@ -573,6 +574,30 @@ static inline void order_to_rank(std::span<int> out, std::span<int> in)
 }
 void get_height_array(std::span<int> height, std::span<int> S,
                       std::span<int> SA, std::span<int> RK);
+
+static void foreach_max_range(std::span<int> value, auto &&cb)
+{
+    int N = value.size();
+    // Stack of v=>idx
+    std::vector<std::pair<int,int>> maxv_stack;
+    for (int i = 0; i < N; i++) {
+        auto v = value[i];
+        int start_idx = i;
+        while (!maxv_stack.empty()) {
+            auto [prev_v, prev_idx] = maxv_stack.back();
+            if (prev_v < v)
+                break;
+            if (prev_v > v)
+                cb(prev_idx, i - 1, prev_v);
+            maxv_stack.pop_back();
+            start_idx = prev_idx;
+        }
+        maxv_stack.emplace_back(v, start_idx);
+    }
+    for (auto [prev_v, prev_idx]: std::ranges::views::reverse(maxv_stack)) {
+        cb(prev_idx, N - 1, prev_v);
+    }
+}
 
 void init_library();
 
