@@ -22,8 +22,12 @@
 #include "Python.h"
 #include "frameobject.h"
 
+#include <algorithm>
 #include <array>
+#include <bit>
 #include <cmath>
+#include <concepts>
+#include <iostream>
 #include <map>
 #include <memory>
 #include <ranges>
@@ -558,6 +562,287 @@ private:
     std::vector<T*> pages;
     size_t space_left{0};
 };
+
+
+// Assuming little endian
+template<std::integral ELT,unsigned N>
+struct Bits {
+    static_assert(std::endian::native == std::endian::little);
+    constexpr Bits() = default;
+    constexpr Bits(const Bits&) = default;
+    static constexpr Bits mask(unsigned b1, unsigned b2)
+    {
+        Bits res;
+        if (b1 > b2)
+            return res;
+        unsigned idx1 = b1 / elbits;
+        unsigned bit1 = b1 % elbits;
+        unsigned idx2 = b2 / elbits;
+        unsigned bit2 = b2 % elbits;
+        if (idx1 == idx2) {
+            res[idx1] = mask_ele(bit1, bit2);
+        }
+        else {
+            res[idx1] = mask_ele(bit1, elbits - 1);
+            for (unsigned i = idx1 + 1; i < idx2; i++)
+                res[i] = ELT(-1);
+            res[idx2] = mask_ele(0, bit2);
+        }
+        return res;
+    }
+
+    template<std::integral ELT2>
+    explicit constexpr Bits(ELT2 v)
+    {
+        Bits<ELT2,1> res;
+        res[0] = v;
+        *this = Bits(res);
+    }
+    explicit constexpr Bits(std::span<ELT,N> data)
+    {
+        for (unsigned i = 0; i < N; i++) {
+            bits[i] = data[i];
+        }
+    }
+
+    constexpr operator bool() const
+    {
+        return std::ranges::any_of(bits, [] (auto v) { return bool(v); });
+    }
+
+    constexpr Bits operator<<(int n) const
+    {
+        if (n > 0)
+            return left_shift(n);
+        if (n < 0)
+            return right_shift(-n);
+        return *this;
+    }
+    constexpr Bits operator>>(int n) const
+    {
+        if (n > 0)
+            return right_shift(n);
+        if (n < 0)
+            return left_shift(-n);
+        return *this;
+    }
+    constexpr ELT &operator[](int n)
+    {
+        return bits[n];
+    }
+    constexpr const ELT &operator[](int n) const
+    {
+        return bits[n];
+    }
+    auto operator==(const Bits &other) const
+    {
+        return bits == other.bits;
+    }
+    auto operator<=>(const Bits &other) const
+    {
+        return std::lexicographical_compare_three_way(
+            bits.rbegin(), bits.rend(), other.bits.rbegin(), other.bits.rend(),
+            [&] (UELT v1, UELT v2) {
+                return v1 <=> v2;
+            });
+    }
+
+    template<std::integral ELT2,unsigned N2>
+    constexpr auto &operator|=(const Bits<ELT2,N2> &other)
+    {
+        *this = *this | Bits(other);
+        return *this;
+    }
+    template<std::integral ELT2,unsigned N2>
+    constexpr auto &operator&=(const Bits<ELT2,N2> &other)
+    {
+        *this = *this & Bits(other);
+        return *this;
+    }
+    template<std::integral ELT2,unsigned N2>
+    constexpr auto &operator^=(const Bits<ELT2,N2> &other)
+    {
+        *this = *this ^ Bits(other);
+        return *this;
+    }
+
+    constexpr auto operator~() const
+    {
+        Bits res;
+        for (unsigned i = 0; i < N; i++)
+            res.bits[i] = ~bits[i];
+        return res;
+    }
+    template<std::integral ELT2,unsigned N2>
+    constexpr auto operator|(const Bits<ELT2,N2> &other) const
+    {
+        return elwise_promote_op(other, [] (auto &a, auto &b) { a |= b; });
+    }
+    template<std::integral ELT2,unsigned N2>
+    constexpr auto operator&(const Bits<ELT2,N2> &other) const
+    {
+        return elwise_promote_op(other, [] (auto &a, auto &b) { a &= b; });
+    }
+    template<std::integral ELT2,unsigned N2>
+    constexpr auto operator^(const Bits<ELT2,N2> &other) const
+    {
+        return elwise_promote_op(other, [] (auto &a, auto &b) { a ^= b; });
+    }
+    template<std::integral ELT2,unsigned N2>
+    constexpr operator Bits<ELT2,N2>() const
+    {
+        Bits<ELT2,N2> res;
+        if constexpr (sizeof(ELT) == sizeof(ELT2)) {
+            auto n = std::min(N, N2);
+            for (unsigned i = 0; i < n; i++) {
+                res.bits[i] = std::bit_cast<ELT2>(bits[i]);
+            }
+        }
+        else if constexpr (sizeof(ELT) < sizeof(ELT2)) {
+            // Cast to wider size
+            static_assert(sizeof(ELT2) % sizeof(ELT) == 0);
+            constexpr unsigned ne = sizeof(ELT2) / sizeof(ELT);
+            auto n = std::min((N + ne - 1) / ne, N2);
+            for (unsigned i = 0; i < n; i++) {
+                std::array<ELT,ne> subbits{};
+                for (unsigned j = 0; j < ne; j++) {
+                    if (i * ne + j >= N)
+                        break;
+                    subbits[j] = bits[i * ne + j];
+                }
+                res.bits[i] = std::bit_cast<ELT2>(subbits);
+            }
+        }
+        else {
+            // Cast to narrower size
+            static_assert(sizeof(ELT) % sizeof(ELT2) == 0);
+            constexpr unsigned ne = sizeof(ELT) / sizeof(ELT2);
+            constexpr auto _N = ne * N;
+            auto _bits = std::bit_cast<std::array<ELT2,_N>>(bits);
+            auto n = std::min(_N, N2);
+            for (unsigned i = 0; i < n; i++) {
+                res.bits[i] = std::bit_cast<ELT2>(_bits[i]);
+            }
+        }
+        return res;
+    }
+    void print(std::ostream &stm) const
+    {
+        auto flags = stm.flags();
+        stm.setf(std::ios_base::hex | std::ios_base::right,
+                 std::ios_base::basefield | std::ios_base::adjustfield |
+                 std::ios_base::showbase);
+        auto fc = stm.fill();
+
+        if (flags & std::ios_base::showbase) {
+            stm.width(0);
+            stm << "0x";
+        }
+        for (auto v: std::ranges::views::reverse(bits)) {
+            stm.fill('0');
+            stm.width(elbits / 4);
+            if constexpr (elbits == 8) {
+                stm << int(UELT(v));
+            }
+            else {
+                stm << v;
+            }
+        }
+        stm.fill(fc);
+        stm.width(0);
+        stm.setf(flags);
+    }
+    PyObject *to_pybytes() const
+    {
+        return throw_if_not(PyBytes_FromStringAndSize((const char*)&bits[0],
+                                                      sizeof(bits)));
+    }
+    PyObject *to_pylong() const
+    {
+#if PY_VERSION_HEX >= 0x030d0000
+        return throw_if_not(PyLong_FromUnsignedNativeBytes(&bits[0], sizeof(bits), 0));
+#else
+        return throw_if_not(_PyLong_FromByteArray((const unsigned char*)&bits[0],
+                                                  sizeof(bits), true, 0));
+#endif
+    }
+
+    std::array<ELT,N> bits{};
+private:
+    using UELT = std::make_unsigned_t<ELT>;
+    static constexpr ELT mask_ele(unsigned bit1, unsigned bit2)
+    {
+        assert(bit1 < elbits);
+        assert(bit2 < elbits);
+        if (bit2 - bit1 == elbits - 1)
+            return ELT(-1);
+        UELT v = (UELT(1) << (bit2 - bit1 + 1)) - 1;
+        return ELT(v << bit1);
+    }
+    template<std::integral ELT2,unsigned N2>
+    constexpr auto elwise_promote_op(const Bits<ELT2,N2> &other, auto &&cb) const
+    {
+        if constexpr (sizeof(Bits) >= sizeof(Bits<ELT2,N2>)) {
+            Bits res(other);
+            for (unsigned i = 0; i < N; i++)
+                cb(res.bits[i], bits[i]);
+            return res;
+        }
+        else {
+            Bits<ELT2,N2> res(*this);
+            for (unsigned i = 0; i < N2; i++)
+                cb(res.bits[i], other.bits[i]);
+            return res;
+        }
+    }
+    static constexpr unsigned elbits = sizeof(ELT) * 8;
+    constexpr Bits left_shift(unsigned n) const
+    {
+        Bits res{};
+        unsigned shift_idx = n / elbits;
+        unsigned shift_bit = n % elbits;
+        if (shift_idx >= N)
+            return res;
+        if (shift_bit == 0) {
+            for (unsigned i = 0; i < N - shift_idx; i++)
+                res.bits[i + shift_idx] = bits[i];
+            return res;
+        }
+        unsigned rshift = elbits - shift_bit;
+        res.bits[shift_idx] = ELT(UELT(bits[0]) << shift_bit);
+        for (unsigned i = 1; i < N - shift_idx; i++)
+            res.bits[i + shift_idx] = ELT((UELT(bits[i]) << shift_bit) |
+                                          (UELT(bits[i - 1]) >> rshift));
+        return res;
+    }
+    constexpr Bits right_shift(unsigned n) const
+    {
+        Bits res{};
+        unsigned shift_idx = n / elbits;
+        unsigned shift_bit = n % elbits;
+        if (shift_idx >= N)
+            return res;
+        if (shift_bit == 0) {
+            for (unsigned i = 0; i < N - shift_idx; i++)
+                res.bits[i] = bits[i + shift_idx];
+            return res;
+        }
+        unsigned lshift = elbits - shift_bit;
+        for (unsigned i = 0; i < N - shift_idx - 1; i++)
+            res.bits[i] = ELT((UELT(bits[i + shift_idx]) >> shift_bit) |
+                              (UELT(bits[i + 1 + shift_idx]) << lshift));
+        res.bits[N - shift_idx - 1] = ELT(UELT(bits[N - 1]) >> shift_bit);
+        return res;
+    }
+    template<std::integral ELT2,unsigned N2> friend class Bits;
+};
+
+template<std::integral ELT,unsigned N>
+static inline std::ostream &operator<<(std::ostream &io, const Bits<ELT,N> &bits)
+{
+    bits.print(io);
+    return io;
+}
 
 // Input: S
 // Output: SA (require S.size() == SA.size())

@@ -7,12 +7,16 @@ import numpy as np
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+from libcpp.string cimport string as cppstr
 
-from cpython cimport PyObject, Py_INCREF
+from libc.stdint cimport *
+
+from cpython cimport PyObject, Py_INCREF, Py_EQ, Py_NE, Py_GT, Py_LT, Py_GE, Py_LE
 
 cdef extern from *:
     """
     #include <vector>
+    #include <sstream>
 
     static inline std::vector<int> _get_suffix_array(std::vector<int> S)
     {
@@ -45,6 +49,79 @@ cdef extern from *:
         });
         return res;
     }
+
+    using _Bits_i32x5 = brassboard_seq::Bits<int32_t,5>;
+    using _Bits_i64x4 = brassboard_seq::Bits<int64_t,4>;
+    using _Bits_u64x4 = brassboard_seq::Bits<uint64_t,4>;
+    using _Bits_i8x43 = brassboard_seq::Bits<int8_t,43>;
+
+    template<typename T>
+    T get_mask(unsigned b1, unsigned b2)
+    {
+        return T::mask(b1, b2);
+    }
+
+    template<typename Res>
+    auto convert(const auto &v)
+    {
+        return Res(v);
+    }
+
+    auto op_not(const auto &v)
+    {
+        return ~v;
+    }
+    template<typename Res>
+    auto op_or(const auto &v1, const auto &v2)
+    {
+        return Res(v1 | v2);
+    }
+    template<typename Res>
+    auto op_and(const auto &v1, const auto &v2)
+    {
+        return Res(v1 & v2);
+    }
+    template<typename Res>
+    auto op_xor(const auto &v1, const auto &v2)
+    {
+        return Res(v1 ^ v2);
+    }
+    void op_ior(auto &v1, const auto &v2)
+    {
+        v1 |= v2;
+    }
+    void op_iand(auto &v1, const auto &v2)
+    {
+        v1 &= v2;
+    }
+    void op_ixor(auto &v1, const auto &v2)
+    {
+        v1 ^= v2;
+    }
+
+    bool bits_to_bool(const auto &v)
+    {
+        return bool(v);
+    }
+
+    auto bits_to_pylong(const auto &v)
+    {
+        return v.to_pylong();
+    }
+
+    auto bits_to_pybytes(const auto &v)
+    {
+        return v.to_pybytes();
+    }
+
+    std::string bits_to_str(const auto &v, bool showbase)
+    {
+        std::ostringstream io;
+        if (showbase)
+            io << std::showbase;
+        io << v;
+        return io.str();
+    }
     """
     vector[int] _get_suffix_array(vector[int])
     vector[int] _get_height_array(vector[int], vector[int])
@@ -53,6 +130,71 @@ cdef extern from *:
         int i1
         int maxv
     vector[MaxRange] _get_max_range(vector[int])
+    cppclass _Bits_i32x5:
+        _Bits_i32x5()
+        _Bits_i32x5(int32_t)
+        int32_t &operator[](int)
+        _Bits_i32x5 operator<<(int) const
+        _Bits_i32x5 operator>>(int) const
+        bint operator==(const _Bits_i32x5&) const
+        bint operator!=(const _Bits_i32x5&) const
+        bint operator<(const _Bits_i32x5&) const
+        bint operator>(const _Bits_i32x5&) const
+        bint operator<=(const _Bits_i32x5&) const
+        bint operator>=(const _Bits_i32x5&) const
+
+    cppclass _Bits_i64x4:
+        _Bits_i64x4()
+        _Bits_i64x4(int64_t)
+        int64_t &operator[](int)
+        _Bits_i64x4 operator<<(int) const
+        _Bits_i64x4 operator>>(int) const
+        bint operator==(const _Bits_i64x4&) const
+        bint operator!=(const _Bits_i64x4&) const
+        bint operator<(const _Bits_i64x4&) const
+        bint operator>(const _Bits_i64x4&) const
+        bint operator<=(const _Bits_i64x4&) const
+        bint operator>=(const _Bits_i64x4&) const
+
+    cppclass _Bits_u64x4:
+        _Bits_u64x4()
+        _Bits_u64x4(uint64_t)
+        uint64_t &operator[](int)
+        _Bits_u64x4 operator<<(int) const
+        _Bits_u64x4 operator>>(int) const
+        bint operator==(const _Bits_u64x4&) const
+        bint operator!=(const _Bits_u64x4&) const
+        bint operator<(const _Bits_u64x4&) const
+        bint operator>(const _Bits_u64x4&) const
+        bint operator<=(const _Bits_u64x4&) const
+        bint operator>=(const _Bits_u64x4&) const
+
+    cppclass _Bits_i8x43:
+        _Bits_i8x43()
+        _Bits_i8x43(int8_t)
+        int8_t &operator[](int)
+        _Bits_i8x43 operator<<(int) const
+        _Bits_i8x43 operator>>(int) const
+        bint operator==(const _Bits_i8x43&) const
+        bint operator!=(const _Bits_i8x43&) const
+        bint operator<(const _Bits_i8x43&) const
+        bint operator>(const _Bits_i8x43&) const
+        bint operator<=(const _Bits_i8x43&) const
+        bint operator>=(const _Bits_i8x43&) const
+
+    T get_mask[T](unsigned b1, unsigned b2)
+    Res convert[Res,In](const In&)
+    T op_not[T](const T &v)
+    Res op_or[Res,T1,T2](const T1&, const T2&)
+    Res op_and[Res,T1,T2](const T1&, const T2&)
+    Res op_xor[Res,T1,T2](const T1&, const T2&)
+    void op_ior[T1,T2](T1&, const T2&)
+    void op_iand[T1,T2](T1&, const T2&)
+    void op_ixor[T1,T2](T1&, const T2&)
+    bint bits_to_bool[T](const T&)
+    object bits_to_pylong[T](const T&)
+    object bits_to_pybytes[T](const T&)
+    cppstr bits_to_str[T](const T&, bint)
 
 def new_invalid_rtval():
     # This should only happen if something really wrong happens.
@@ -285,3 +427,659 @@ def check_range(list vs, int i0, int i1, int maxv):
         elif v < maxv:
             return False
     return found_equal
+
+cdef class Bits_i32x5:
+    cdef _Bits_i32x5 bits
+    @staticmethod
+    cdef Bits_i32x5 _new(_Bits_i32x5 bits):
+        res = <Bits_i32x5>Bits_i32x5.__new__(Bits_i32x5)
+        res.bits = bits
+        return res
+
+    def __init__(self, bits=0):
+        if isinstance(bits, int):
+            self.bits = _Bits_i32x5(<int32_t>bits)
+        elif isinstance(bits, Bits_i32x5):
+            self.bits = (<Bits_i32x5>bits).bits
+        elif isinstance(bits, Bits_i64x4):
+            self.bits = convert[_Bits_i32x5,_Bits_i64x4]((<Bits_i64x4>bits).bits)
+        elif isinstance(bits, Bits_u64x4):
+            self.bits = convert[_Bits_i32x5,_Bits_u64x4]((<Bits_u64x4>bits).bits)
+        elif isinstance(bits, Bits_i8x43):
+            self.bits = convert[_Bits_i32x5,_Bits_i8x43]((<Bits_i8x43>bits).bits)
+        else:
+            raise TypeError("Unknown input type")
+
+    @staticmethod
+    def spec():
+        return 5, 32, True
+
+    @staticmethod
+    def get_mask(unsigned b1, unsigned b2):
+        return Bits_i32x5._new(get_mask[_Bits_i32x5](b1, b2))
+
+    def __richcmp__(self, Bits_i32x5 other, int op):
+        if op == Py_EQ:
+            return self.bits == other.bits
+        if op == Py_NE:
+            return self.bits != other.bits
+        if op == Py_GT:
+            return self.bits > other.bits
+        if op == Py_LT:
+            return self.bits < other.bits
+        if op == Py_GE:
+            return self.bits >= other.bits
+        if op == Py_LE:
+            return self.bits <= other.bits
+
+    def __len__(self):
+        return 5
+
+    def __getitem__(self, int i):
+        return (<const _Bits_i32x5&>self.bits)[i]
+
+    def __setitem__(self, int i, v):
+        self.bits[i] = v
+
+    def __lshift__(self, int i):
+        return Bits_i32x5._new(self.bits << i)
+
+    def __rshift__(self, int i):
+        return Bits_i32x5._new(self.bits >> i)
+
+    def __index__(self):
+        return bits_to_pylong(self.bits)
+
+    def __bool__(self):
+        return bits_to_bool(self.bits)
+
+    def bytes(self):
+        return bits_to_pybytes(self.bits)
+
+    def __str__(self):
+        return bytes(bits_to_str(self.bits, False)).decode()
+
+    def __repr__(self):
+        return bytes(bits_to_str(self.bits, True)).decode()
+
+    def __invert__(self):
+        return Bits_i32x5._new(op_not(self.bits))
+
+    def __or__(self, other):
+        if isinstance(other, Bits_i32x5):
+            return Bits_i32x5._new(op_or[_Bits_i32x5,_Bits_i32x5,_Bits_i32x5](
+                self.bits, (<Bits_i32x5>other).bits))
+        elif isinstance(other, Bits_i64x4):
+            return Bits_i64x4._new(op_or[_Bits_i64x4,_Bits_i32x5,_Bits_i64x4](
+                self.bits, (<Bits_i64x4>other).bits))
+        elif isinstance(other, Bits_u64x4):
+            return Bits_u64x4._new(op_or[_Bits_u64x4,_Bits_i32x5,_Bits_u64x4](
+                self.bits, (<Bits_u64x4>other).bits))
+        elif isinstance(other, Bits_i8x43):
+            return Bits_i8x43._new(op_or[_Bits_i8x43,_Bits_i32x5,_Bits_i8x43](
+                self.bits, (<Bits_i8x43>other).bits))
+        else:
+            raise TypeError("Unknown input type")
+
+    def __and__(self, other):
+        if isinstance(other, Bits_i32x5):
+            return Bits_i32x5._new(op_and[_Bits_i32x5,_Bits_i32x5,_Bits_i32x5](
+                self.bits, (<Bits_i32x5>other).bits))
+        elif isinstance(other, Bits_i64x4):
+            return Bits_i64x4._new(op_and[_Bits_i64x4,_Bits_i32x5,_Bits_i64x4](
+                self.bits, (<Bits_i64x4>other).bits))
+        elif isinstance(other, Bits_u64x4):
+            return Bits_u64x4._new(op_and[_Bits_u64x4,_Bits_i32x5,_Bits_u64x4](
+                self.bits, (<Bits_u64x4>other).bits))
+        elif isinstance(other, Bits_i8x43):
+            return Bits_i8x43._new(op_and[_Bits_i8x43,_Bits_i32x5,_Bits_i8x43](
+                self.bits, (<Bits_i8x43>other).bits))
+        else:
+            raise TypeError("Unknown input type")
+
+    def __xor__(self, other):
+        if isinstance(other, Bits_i32x5):
+            return Bits_i32x5._new(op_xor[_Bits_i32x5,_Bits_i32x5,_Bits_i32x5](
+                self.bits, (<Bits_i32x5>other).bits))
+        elif isinstance(other, Bits_i64x4):
+            return Bits_i64x4._new(op_xor[_Bits_i64x4,_Bits_i32x5,_Bits_i64x4](
+                self.bits, (<Bits_i64x4>other).bits))
+        elif isinstance(other, Bits_u64x4):
+            return Bits_u64x4._new(op_xor[_Bits_u64x4,_Bits_i32x5,_Bits_u64x4](
+                self.bits, (<Bits_u64x4>other).bits))
+        elif isinstance(other, Bits_i8x43):
+            return Bits_i8x43._new(op_xor[_Bits_i8x43,_Bits_i32x5,_Bits_i8x43](
+                self.bits, (<Bits_i8x43>other).bits))
+        else:
+            raise TypeError("Unknown input type")
+
+    def __ior__(self, other):
+        if isinstance(other, Bits_i32x5):
+            op_ior(self.bits, (<Bits_i32x5>other).bits)
+        elif isinstance(other, Bits_i64x4):
+            op_ior(self.bits, (<Bits_i64x4>other).bits)
+        elif isinstance(other, Bits_u64x4):
+            op_ior(self.bits, (<Bits_u64x4>other).bits)
+        elif isinstance(other, Bits_i8x43):
+            op_ior(self.bits, (<Bits_i8x43>other).bits)
+        else:
+            raise TypeError("Unknown input type")
+        return self
+
+    def __iand__(self, other):
+        if isinstance(other, Bits_i32x5):
+            op_iand(self.bits, (<Bits_i32x5>other).bits)
+        elif isinstance(other, Bits_i64x4):
+            op_iand(self.bits, (<Bits_i64x4>other).bits)
+        elif isinstance(other, Bits_u64x4):
+            op_iand(self.bits, (<Bits_u64x4>other).bits)
+        elif isinstance(other, Bits_i8x43):
+            op_iand(self.bits, (<Bits_i8x43>other).bits)
+        else:
+            raise TypeError("Unknown input type")
+        return self
+
+    def __ixor__(self, other):
+        if isinstance(other, Bits_i32x5):
+            op_ixor(self.bits, (<Bits_i32x5>other).bits)
+        elif isinstance(other, Bits_i64x4):
+            op_ixor(self.bits, (<Bits_i64x4>other).bits)
+        elif isinstance(other, Bits_u64x4):
+            op_ixor(self.bits, (<Bits_u64x4>other).bits)
+        elif isinstance(other, Bits_i8x43):
+            op_ixor(self.bits, (<Bits_i8x43>other).bits)
+        else:
+            raise TypeError("Unknown input type")
+        return self
+
+cdef class Bits_i64x4:
+    cdef _Bits_i64x4 bits
+    @staticmethod
+    cdef Bits_i64x4 _new(_Bits_i64x4 bits):
+        res = <Bits_i64x4>Bits_i64x4.__new__(Bits_i64x4)
+        res.bits = bits
+        return res
+
+    def __init__(self, bits=0):
+        if isinstance(bits, int):
+            self.bits = _Bits_i64x4(<int64_t>bits)
+        elif isinstance(bits, Bits_i32x5):
+            self.bits = convert[_Bits_i64x4,_Bits_i32x5]((<Bits_i32x5>bits).bits)
+        elif isinstance(bits, Bits_i64x4):
+            self.bits = (<Bits_i64x4>bits).bits
+        elif isinstance(bits, Bits_u64x4):
+            self.bits = convert[_Bits_i64x4,_Bits_u64x4]((<Bits_u64x4>bits).bits)
+        elif isinstance(bits, Bits_i8x43):
+            self.bits = convert[_Bits_i64x4,_Bits_i8x43]((<Bits_i8x43>bits).bits)
+        else:
+            raise TypeError("Unknown input type")
+
+    @staticmethod
+    def spec():
+        return 4, 64, True
+
+    @staticmethod
+    def get_mask(unsigned b1, unsigned b2):
+        return Bits_i64x4._new(get_mask[_Bits_i64x4](b1, b2))
+
+    def __richcmp__(self, Bits_i64x4 other, int op):
+        if op == Py_EQ:
+            return self.bits == other.bits
+        if op == Py_NE:
+            return self.bits != other.bits
+        if op == Py_GT:
+            return self.bits > other.bits
+        if op == Py_LT:
+            return self.bits < other.bits
+        if op == Py_GE:
+            return self.bits >= other.bits
+        if op == Py_LE:
+            return self.bits <= other.bits
+
+    def __len__(self):
+        return 4
+
+    def __getitem__(self, int i):
+        return (<const _Bits_i64x4&>self.bits)[i]
+
+    def __setitem__(self, int i, v):
+        self.bits[i] = v
+
+    def __lshift__(self, int i):
+        return Bits_i64x4._new(self.bits << i)
+
+    def __rshift__(self, int i):
+        return Bits_i64x4._new(self.bits >> i)
+
+    def __index__(self):
+        return bits_to_pylong(self.bits)
+
+    def __bool__(self):
+        return bits_to_bool(self.bits)
+
+    def bytes(self):
+        return bits_to_pybytes(self.bits)
+
+    def __str__(self):
+        return bytes(bits_to_str(self.bits, False)).decode()
+
+    def __repr__(self):
+        return bytes(bits_to_str(self.bits, True)).decode()
+
+    def __invert__(self):
+        return Bits_i64x4._new(op_not(self.bits))
+
+    def __or__(self, other):
+        if isinstance(other, Bits_i32x5):
+            return Bits_i64x4._new(op_or[_Bits_i64x4,_Bits_i64x4,_Bits_i32x5](
+                self.bits, (<Bits_i32x5>other).bits))
+        elif isinstance(other, Bits_i64x4):
+            return Bits_i64x4._new(op_or[_Bits_i64x4,_Bits_i64x4,_Bits_i64x4](
+                self.bits, (<Bits_i64x4>other).bits))
+        elif isinstance(other, Bits_u64x4):
+            return Bits_i64x4._new(op_or[_Bits_i64x4,_Bits_i64x4,_Bits_u64x4](
+                self.bits, (<Bits_u64x4>other).bits))
+        elif isinstance(other, Bits_i8x43):
+            return Bits_i8x43._new(op_or[_Bits_i8x43,_Bits_i64x4,_Bits_i8x43](
+                self.bits, (<Bits_i8x43>other).bits))
+        else:
+            raise TypeError("Unknown input type")
+
+    def __and__(self, other):
+        if isinstance(other, Bits_i32x5):
+            return Bits_i64x4._new(op_and[_Bits_i64x4,_Bits_i64x4,_Bits_i32x5](
+                self.bits, (<Bits_i32x5>other).bits))
+        elif isinstance(other, Bits_i64x4):
+            return Bits_i64x4._new(op_and[_Bits_i64x4,_Bits_i64x4,_Bits_i64x4](
+                self.bits, (<Bits_i64x4>other).bits))
+        elif isinstance(other, Bits_u64x4):
+            return Bits_i64x4._new(op_and[_Bits_i64x4,_Bits_i64x4,_Bits_u64x4](
+                self.bits, (<Bits_u64x4>other).bits))
+        elif isinstance(other, Bits_i8x43):
+            return Bits_i8x43._new(op_and[_Bits_i8x43,_Bits_i64x4,_Bits_i8x43](
+                self.bits, (<Bits_i8x43>other).bits))
+        else:
+            raise TypeError("Unknown input type")
+
+    def __xor__(self, other):
+        if isinstance(other, Bits_i32x5):
+            return Bits_i64x4._new(op_xor[_Bits_i64x4,_Bits_i64x4,_Bits_i32x5](
+                self.bits, (<Bits_i32x5>other).bits))
+        elif isinstance(other, Bits_i64x4):
+            return Bits_i64x4._new(op_xor[_Bits_i64x4,_Bits_i64x4,_Bits_i64x4](
+                self.bits, (<Bits_i64x4>other).bits))
+        elif isinstance(other, Bits_u64x4):
+            return Bits_i64x4._new(op_xor[_Bits_i64x4,_Bits_i64x4,_Bits_u64x4](
+                self.bits, (<Bits_u64x4>other).bits))
+        elif isinstance(other, Bits_i8x43):
+            return Bits_i8x43._new(op_xor[_Bits_i8x43,_Bits_i64x4,_Bits_i8x43](
+                self.bits, (<Bits_i8x43>other).bits))
+        else:
+            raise TypeError("Unknown input type")
+
+    def __ior__(self, other):
+        if isinstance(other, Bits_i32x5):
+            op_ior(self.bits, (<Bits_i32x5>other).bits)
+        elif isinstance(other, Bits_i64x4):
+            op_ior(self.bits, (<Bits_i64x4>other).bits)
+        elif isinstance(other, Bits_u64x4):
+            op_ior(self.bits, (<Bits_u64x4>other).bits)
+        elif isinstance(other, Bits_i8x43):
+            op_ior(self.bits, (<Bits_i8x43>other).bits)
+        else:
+            raise TypeError("Unknown input type")
+        return self
+
+    def __iand__(self, other):
+        if isinstance(other, Bits_i32x5):
+            op_iand(self.bits, (<Bits_i32x5>other).bits)
+        elif isinstance(other, Bits_i64x4):
+            op_iand(self.bits, (<Bits_i64x4>other).bits)
+        elif isinstance(other, Bits_u64x4):
+            op_iand(self.bits, (<Bits_u64x4>other).bits)
+        elif isinstance(other, Bits_i8x43):
+            op_iand(self.bits, (<Bits_i8x43>other).bits)
+        else:
+            raise TypeError("Unknown input type")
+        return self
+
+    def __ixor__(self, other):
+        if isinstance(other, Bits_i32x5):
+            op_ixor(self.bits, (<Bits_i32x5>other).bits)
+        elif isinstance(other, Bits_i64x4):
+            op_ixor(self.bits, (<Bits_i64x4>other).bits)
+        elif isinstance(other, Bits_u64x4):
+            op_ixor(self.bits, (<Bits_u64x4>other).bits)
+        elif isinstance(other, Bits_i8x43):
+            op_ixor(self.bits, (<Bits_i8x43>other).bits)
+        else:
+            raise TypeError("Unknown input type")
+        return self
+
+cdef class Bits_u64x4:
+    cdef _Bits_u64x4 bits
+    @staticmethod
+    cdef Bits_u64x4 _new(_Bits_u64x4 bits):
+        res = <Bits_u64x4>Bits_u64x4.__new__(Bits_u64x4)
+        res.bits = bits
+        return res
+
+    def __init__(self, bits=0):
+        if isinstance(bits, int):
+            self.bits = _Bits_u64x4(<uint64_t>bits)
+        elif isinstance(bits, Bits_i32x5):
+            self.bits = convert[_Bits_u64x4,_Bits_i32x5]((<Bits_i32x5>bits).bits)
+        elif isinstance(bits, Bits_i64x4):
+            self.bits = convert[_Bits_u64x4,_Bits_i64x4]((<Bits_i64x4>bits).bits)
+        elif isinstance(bits, Bits_u64x4):
+            self.bits = (<Bits_u64x4>bits).bits
+        elif isinstance(bits, Bits_i8x43):
+            self.bits = convert[_Bits_u64x4,_Bits_i8x43]((<Bits_i8x43>bits).bits)
+        else:
+            raise TypeError("Unknown input type")
+
+    @staticmethod
+    def spec():
+        return 4, 64, False
+
+    @staticmethod
+    def get_mask(unsigned b1, unsigned b2):
+        return Bits_u64x4._new(get_mask[_Bits_u64x4](b1, b2))
+
+    def __richcmp__(self, Bits_u64x4 other, int op):
+        if op == Py_EQ:
+            return self.bits == other.bits
+        if op == Py_NE:
+            return self.bits != other.bits
+        if op == Py_GT:
+            return self.bits > other.bits
+        if op == Py_LT:
+            return self.bits < other.bits
+        if op == Py_GE:
+            return self.bits >= other.bits
+        if op == Py_LE:
+            return self.bits <= other.bits
+
+    def __len__(self):
+        return 4
+
+    def __getitem__(self, int i):
+        return (<const _Bits_u64x4&>self.bits)[i]
+
+    def __setitem__(self, int i, v):
+        self.bits[i] = v
+
+    def __lshift__(self, int i):
+        return Bits_u64x4._new(self.bits << i)
+
+    def __rshift__(self, int i):
+        return Bits_u64x4._new(self.bits >> i)
+
+    def __index__(self):
+        return bits_to_pylong(self.bits)
+
+    def __bool__(self):
+        return bits_to_bool(self.bits)
+
+    def bytes(self):
+        return bits_to_pybytes(self.bits)
+
+    def __str__(self):
+        return bytes(bits_to_str(self.bits, False)).decode()
+
+    def __repr__(self):
+        return bytes(bits_to_str(self.bits, True)).decode()
+
+    def __invert__(self):
+        return Bits_u64x4._new(op_not(self.bits))
+
+    def __or__(self, other):
+        if isinstance(other, Bits_i32x5):
+            return Bits_u64x4._new(op_or[_Bits_u64x4,_Bits_u64x4,_Bits_i32x5](
+                self.bits, (<Bits_i32x5>other).bits))
+        elif isinstance(other, Bits_i64x4):
+            return Bits_u64x4._new(op_or[_Bits_u64x4,_Bits_u64x4,_Bits_i64x4](
+                self.bits, (<Bits_i64x4>other).bits))
+        elif isinstance(other, Bits_u64x4):
+            return Bits_u64x4._new(op_or[_Bits_u64x4,_Bits_u64x4,_Bits_u64x4](
+                self.bits, (<Bits_u64x4>other).bits))
+        elif isinstance(other, Bits_i8x43):
+            return Bits_i8x43._new(op_or[_Bits_i8x43,_Bits_u64x4,_Bits_i8x43](
+                self.bits, (<Bits_i8x43>other).bits))
+        else:
+            raise TypeError("Unknown input type")
+
+    def __and__(self, other):
+        if isinstance(other, Bits_i32x5):
+            return Bits_u64x4._new(op_and[_Bits_u64x4,_Bits_u64x4,_Bits_i32x5](
+                self.bits, (<Bits_i32x5>other).bits))
+        elif isinstance(other, Bits_i64x4):
+            return Bits_u64x4._new(op_and[_Bits_u64x4,_Bits_u64x4,_Bits_i64x4](
+                self.bits, (<Bits_i64x4>other).bits))
+        elif isinstance(other, Bits_u64x4):
+            return Bits_u64x4._new(op_and[_Bits_u64x4,_Bits_u64x4,_Bits_u64x4](
+                self.bits, (<Bits_u64x4>other).bits))
+        elif isinstance(other, Bits_i8x43):
+            return Bits_i8x43._new(op_and[_Bits_i8x43,_Bits_u64x4,_Bits_i8x43](
+                self.bits, (<Bits_i8x43>other).bits))
+        else:
+            raise TypeError("Unknown input type")
+
+    def __xor__(self, other):
+        if isinstance(other, Bits_i32x5):
+            return Bits_u64x4._new(op_xor[_Bits_u64x4,_Bits_u64x4,_Bits_i32x5](
+                self.bits, (<Bits_i32x5>other).bits))
+        elif isinstance(other, Bits_i64x4):
+            return Bits_u64x4._new(op_xor[_Bits_u64x4,_Bits_u64x4,_Bits_i64x4](
+                self.bits, (<Bits_i64x4>other).bits))
+        elif isinstance(other, Bits_u64x4):
+            return Bits_u64x4._new(op_xor[_Bits_u64x4,_Bits_u64x4,_Bits_u64x4](
+                self.bits, (<Bits_u64x4>other).bits))
+        elif isinstance(other, Bits_i8x43):
+            return Bits_i8x43._new(op_xor[_Bits_i8x43,_Bits_u64x4,_Bits_i8x43](
+                self.bits, (<Bits_i8x43>other).bits))
+        else:
+            raise TypeError("Unknown input type")
+
+    def __ior__(self, other):
+        if isinstance(other, Bits_i32x5):
+            op_ior(self.bits, (<Bits_i32x5>other).bits)
+        elif isinstance(other, Bits_i64x4):
+            op_ior(self.bits, (<Bits_i64x4>other).bits)
+        elif isinstance(other, Bits_u64x4):
+            op_ior(self.bits, (<Bits_u64x4>other).bits)
+        elif isinstance(other, Bits_i8x43):
+            op_ior(self.bits, (<Bits_i8x43>other).bits)
+        else:
+            raise TypeError("Unknown input type")
+        return self
+
+    def __iand__(self, other):
+        if isinstance(other, Bits_i32x5):
+            op_iand(self.bits, (<Bits_i32x5>other).bits)
+        elif isinstance(other, Bits_i64x4):
+            op_iand(self.bits, (<Bits_i64x4>other).bits)
+        elif isinstance(other, Bits_u64x4):
+            op_iand(self.bits, (<Bits_u64x4>other).bits)
+        elif isinstance(other, Bits_i8x43):
+            op_iand(self.bits, (<Bits_i8x43>other).bits)
+        else:
+            raise TypeError("Unknown input type")
+        return self
+
+    def __ixor__(self, other):
+        if isinstance(other, Bits_i32x5):
+            op_ixor(self.bits, (<Bits_i32x5>other).bits)
+        elif isinstance(other, Bits_i64x4):
+            op_ixor(self.bits, (<Bits_i64x4>other).bits)
+        elif isinstance(other, Bits_u64x4):
+            op_ixor(self.bits, (<Bits_u64x4>other).bits)
+        elif isinstance(other, Bits_i8x43):
+            op_ixor(self.bits, (<Bits_i8x43>other).bits)
+        else:
+            raise TypeError("Unknown input type")
+        return self
+
+cdef class Bits_i8x43:
+    cdef _Bits_i8x43 bits
+    @staticmethod
+    cdef Bits_i8x43 _new(_Bits_i8x43 bits):
+        res = <Bits_i8x43>Bits_i8x43.__new__(Bits_i8x43)
+        res.bits = bits
+        return res
+
+    def __init__(self, bits=0):
+        if isinstance(bits, int):
+            self.bits = _Bits_i8x43(<int>bits)
+        elif isinstance(bits, Bits_i32x5):
+            self.bits = convert[_Bits_i8x43,_Bits_i32x5]((<Bits_i32x5>bits).bits)
+        elif isinstance(bits, Bits_i64x4):
+            self.bits = convert[_Bits_i8x43,_Bits_i64x4]((<Bits_i64x4>bits).bits)
+        elif isinstance(bits, Bits_u64x4):
+            self.bits = convert[_Bits_i8x43,_Bits_u64x4]((<Bits_u64x4>bits).bits)
+        elif isinstance(bits, Bits_i8x43):
+            self.bits = (<Bits_i8x43>bits).bits
+        else:
+            raise TypeError("Unknown input type")
+
+    @staticmethod
+    def spec():
+        return 43, 8, True
+
+    @staticmethod
+    def get_mask(unsigned b1, unsigned b2):
+        return Bits_i8x43._new(get_mask[_Bits_i8x43](b1, b2))
+
+    def __richcmp__(self, Bits_i8x43 other, int op):
+        if op == Py_EQ:
+            return self.bits == other.bits
+        if op == Py_NE:
+            return self.bits != other.bits
+        if op == Py_GT:
+            return self.bits > other.bits
+        if op == Py_LT:
+            return self.bits < other.bits
+        if op == Py_GE:
+            return self.bits >= other.bits
+        if op == Py_LE:
+            return self.bits <= other.bits
+
+    def __len__(self):
+        return 43
+
+    def __getitem__(self, int i):
+        return (<const _Bits_i8x43&>self.bits)[i]
+
+    def __setitem__(self, int i, v):
+        self.bits[i] = v
+
+    def __lshift__(self, int i):
+        return Bits_i8x43._new(self.bits << i)
+
+    def __rshift__(self, int i):
+        return Bits_i8x43._new(self.bits >> i)
+
+    def __index__(self):
+        return bits_to_pylong(self.bits)
+
+    def __bool__(self):
+        return bits_to_bool(self.bits)
+
+    def bytes(self):
+        return bits_to_pybytes(self.bits)
+
+    def __str__(self):
+        return bytes(bits_to_str(self.bits, False)).decode()
+
+    def __repr__(self):
+        return bytes(bits_to_str(self.bits, True)).decode()
+
+    def __invert__(self):
+        return Bits_i8x43._new(op_not(self.bits))
+
+    def __or__(self, other):
+        if isinstance(other, Bits_i32x5):
+            return Bits_i8x43._new(op_or[_Bits_i8x43,_Bits_i8x43,_Bits_i32x5](
+                self.bits, (<Bits_i32x5>other).bits))
+        elif isinstance(other, Bits_i64x4):
+            return Bits_i8x43._new(op_or[_Bits_i8x43,_Bits_i8x43,_Bits_i64x4](
+                self.bits, (<Bits_i64x4>other).bits))
+        elif isinstance(other, Bits_u64x4):
+            return Bits_i8x43._new(op_or[_Bits_i8x43,_Bits_i8x43,_Bits_u64x4](
+                self.bits, (<Bits_u64x4>other).bits))
+        elif isinstance(other, Bits_i8x43):
+            return Bits_i8x43._new(op_or[_Bits_i8x43,_Bits_i8x43,_Bits_i8x43](
+                self.bits, (<Bits_i8x43>other).bits))
+        else:
+            raise TypeError("Unknown input type")
+
+    def __and__(self, other):
+        if isinstance(other, Bits_i32x5):
+            return Bits_i8x43._new(op_and[_Bits_i8x43,_Bits_i8x43,_Bits_i32x5](
+                self.bits, (<Bits_i32x5>other).bits))
+        elif isinstance(other, Bits_i64x4):
+            return Bits_i8x43._new(op_and[_Bits_i8x43,_Bits_i8x43,_Bits_i64x4](
+                self.bits, (<Bits_i64x4>other).bits))
+        elif isinstance(other, Bits_u64x4):
+            return Bits_i8x43._new(op_and[_Bits_i8x43,_Bits_i8x43,_Bits_u64x4](
+                self.bits, (<Bits_u64x4>other).bits))
+        elif isinstance(other, Bits_i8x43):
+            return Bits_i8x43._new(op_and[_Bits_i8x43,_Bits_i8x43,_Bits_i8x43](
+                self.bits, (<Bits_i8x43>other).bits))
+        else:
+            raise TypeError("Unknown input type")
+
+    def __xor__(self, other):
+        if isinstance(other, Bits_i32x5):
+            return Bits_i8x43._new(op_xor[_Bits_i8x43,_Bits_i8x43,_Bits_i32x5](
+                self.bits, (<Bits_i32x5>other).bits))
+        elif isinstance(other, Bits_i64x4):
+            return Bits_i8x43._new(op_xor[_Bits_i8x43,_Bits_i8x43,_Bits_i64x4](
+                self.bits, (<Bits_i64x4>other).bits))
+        elif isinstance(other, Bits_u64x4):
+            return Bits_i8x43._new(op_xor[_Bits_i8x43,_Bits_i8x43,_Bits_u64x4](
+                self.bits, (<Bits_u64x4>other).bits))
+        elif isinstance(other, Bits_i8x43):
+            return Bits_i8x43._new(op_xor[_Bits_i8x43,_Bits_i8x43,_Bits_i8x43](
+                self.bits, (<Bits_i8x43>other).bits))
+        else:
+            raise TypeError("Unknown input type")
+
+    def __ior__(self, other):
+        if isinstance(other, Bits_i32x5):
+            op_ior(self.bits, (<Bits_i32x5>other).bits)
+        elif isinstance(other, Bits_i64x4):
+            op_ior(self.bits, (<Bits_i64x4>other).bits)
+        elif isinstance(other, Bits_u64x4):
+            op_ior(self.bits, (<Bits_u64x4>other).bits)
+        elif isinstance(other, Bits_i8x43):
+            op_ior(self.bits, (<Bits_i8x43>other).bits)
+        else:
+            raise TypeError("Unknown input type")
+        return self
+
+    def __iand__(self, other):
+        if isinstance(other, Bits_i32x5):
+            op_iand(self.bits, (<Bits_i32x5>other).bits)
+        elif isinstance(other, Bits_i64x4):
+            op_iand(self.bits, (<Bits_i64x4>other).bits)
+        elif isinstance(other, Bits_u64x4):
+            op_iand(self.bits, (<Bits_u64x4>other).bits)
+        elif isinstance(other, Bits_i8x43):
+            op_iand(self.bits, (<Bits_i8x43>other).bits)
+        else:
+            raise TypeError("Unknown input type")
+        return self
+
+    def __ixor__(self, other):
+        if isinstance(other, Bits_i32x5):
+            op_ixor(self.bits, (<Bits_i32x5>other).bits)
+        elif isinstance(other, Bits_i64x4):
+            op_ixor(self.bits, (<Bits_i64x4>other).bits)
+        elif isinstance(other, Bits_u64x4):
+            op_ixor(self.bits, (<Bits_u64x4>other).bits)
+        elif isinstance(other, Bits_i8x43):
+            op_ixor(self.bits, (<Bits_i8x43>other).bits)
+        else:
+            raise TypeError("Unknown input type")
+        return self
