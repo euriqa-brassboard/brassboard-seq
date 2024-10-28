@@ -844,6 +844,98 @@ static inline std::ostream &operator<<(std::ostream &io, const Bits<ELT,N> &bits
     return io;
 }
 
+// Similar to `std::stringstream` but is also indexable.
+// The subtypes also support multiple different back storages
+// and can generally transfer the ownership of the buffer
+// which is not possible with `std::stringstream`.
+class buff_streambuf : public std::streambuf {
+public:
+    buff_streambuf(size_t sz=0)
+        : m_end(sz)
+    {}
+    pos_type tellg() const
+    {
+        return pptr() - pbase();
+    }
+    const char &operator[](size_t i) const
+    {
+        return pbase()[i];
+    }
+    char &operator[](size_t i)
+    {
+        return pbase()[i];
+    }
+
+private:
+    std::streamsize xsputn(const char* s, std::streamsize count) override;
+    int_type overflow(int_type ch) override;
+    pos_type seekoff(off_type off, std::ios_base::seekdir dir,
+                     std::ios_base::openmode which) override;
+    pos_type seekpos(pos_type pos, std::ios_base::openmode which) override;
+    int sync() override;
+
+    pos_type _seekpos(pos_type pos);
+    void update_size();
+
+    // The base class defines most of the interface with the stream framework
+    // and subclasses only need to define the `extend` method, which should
+    // resize the buffer to fit at least `sz` bytes from the current pointer
+    // without loosing any existing content (up to `m_end`).
+    virtual char *extend(size_t sz) = 0;
+
+protected:
+    // This is the last location accessed on the stream.
+    // In another word, this is the length of the file.
+    ssize_t m_end;
+};
+
+class pybytes_streambuf : public buff_streambuf {
+public:
+    pybytes_streambuf();
+    ~pybytes_streambuf() override;
+
+    __attribute__((returns_nonnull)) PyObject *get_buf();
+
+private:
+    char *extend(size_t sz) override;
+
+    PyObject *m_buf = nullptr;
+};
+
+class buff_ostream : public std::ostream {
+public:
+    buff_ostream(buff_streambuf *buf)
+        : std::ostream(buf)
+    {}
+    pos_type tellg()
+    {
+        return static_cast<buff_streambuf*>(rdbuf())->tellg();
+    }
+    const char &operator[](size_t i) const
+    {
+        return (*static_cast<const buff_streambuf*>(rdbuf()))[i];
+    }
+    char &operator[](size_t i)
+    {
+        return (*static_cast<buff_streambuf*>(rdbuf()))[i];
+    }
+};
+
+class pybytes_ostream : public buff_ostream {
+public:
+    pybytes_ostream();
+    ~pybytes_ostream();
+
+    __attribute__((returns_nonnull)) PyObject *get_buf()
+    {
+        flush();
+        return m_buf.get_buf();
+    }
+
+private:
+    pybytes_streambuf m_buf;
+};
+
 // Input: S
 // Output: SA (require S.size() == SA.size())
 // Character set must be within [0, N-1] where N is the size of S,

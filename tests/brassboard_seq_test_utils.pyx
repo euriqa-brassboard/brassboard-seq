@@ -11,7 +11,8 @@ from libcpp.string cimport string as cppstr
 
 from libc.stdint cimport *
 
-from cpython cimport PyObject, Py_INCREF, Py_EQ, Py_NE, Py_GT, Py_LT, Py_GE, Py_LE
+from cpython cimport PyObject, Py_INCREF, Py_EQ, Py_NE, Py_GT, Py_LT, Py_GE, Py_LE, \
+  PyBytes_GET_SIZE, PyBytes_AS_STRING
 
 cdef extern from *:
     """
@@ -1083,3 +1084,28 @@ cdef class Bits_i8x43:
         else:
             raise TypeError("Unknown input type")
         return self
+
+cdef class PyBytesStream:
+    cdef utils.pybytes_ostream stm
+
+    def put(self, char c):
+        self.stm.put(c)
+
+    def write(self, str s):
+        b = <bytes>s.encode()
+        self.stm.write(PyBytes_AS_STRING(b), PyBytes_GET_SIZE(b))
+
+    def seek(self, ssize_t p):
+        self.stm.seekp(p)
+
+    def flush(self):
+        self.stm.flush()
+
+    def get_buf(self):
+        return self.stm.get_buf()
+
+    def fail(self):
+        return self.stm.fail()
+
+    def clear(self):
+        self.stm.clear()

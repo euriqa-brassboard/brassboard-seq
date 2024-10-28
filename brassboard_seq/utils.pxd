@@ -20,6 +20,16 @@ from cpython cimport PyObject, PyTypeObject
 
 from libc.stdint cimport *
 
+cdef extern from "<ostream>" namespace "std":
+    cdef cppclass ostream:
+        ostream &operator<<[T](const T&)
+        ostream &put(char)
+        ostream &write(const char*, size_t)
+        ostream &seekp(ssize_t)
+        ostream &flush()
+        bint fail() const
+        void clear()
+
 cdef extern from "src/utils.h" namespace "brassboard_seq":
     T assume[T](T) noexcept nogil
     void assume_not_none(object) noexcept nogil
@@ -52,6 +62,9 @@ cdef extern from "src/utils.h" namespace "brassboard_seq":
     object pydict_deepcopy(object) except +
     object pyobject_call(object, tuple)
     object pyobject_call(object, tuple, dict)
+
+    cppclass pybytes_ostream(ostream):
+        object get_buf() except +
 
     void init_library()
 
