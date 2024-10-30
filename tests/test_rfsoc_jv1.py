@@ -290,10 +290,18 @@ class MatchFramePulse(MatchPulse):
 def check_invaild(v, msg):
     assert str(Jaqal_v1.dump_insts(v.to_bytes(32, 'little'))) == f'invalid({msg}): {v:0>64x}'
 
-def test_dump_insts():
+def test_insts():
     assert Jaqal_v1.dump_insts(b'') == ''
     with pytest.raises(ValueError, match="Instruction stream length not a multiple of instruction size"):
         Jaqal_v1.dump_insts(b'x')
+
+    assert str(JaqalInst_v1()) == 'pulse_data.0 freq0 <0> {0}'
+    with pytest.raises(TypeError, match=f"Invalid type '{int}'"):
+        JaqalInst_v1(2)
+    with pytest.raises(ValueError, match=f"Invalid address '-1'"):
+        Jaqal_v1.program_PLUT(JaqalInst_v1(), -1)
+    with pytest.raises(ValueError, match=f"Invalid address '4096'"):
+        Jaqal_v1.program_PLUT(JaqalInst_v1(), 4096)
 
 def test_glut():
     with pytest.raises(ValueError, match="Invalid channel number '-1'"):
