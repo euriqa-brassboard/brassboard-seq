@@ -43,13 +43,13 @@ namespace brassboard_seq {
 
 // Replace with C++23 [[assume()]];
 #if bb_has_builtin(__builtin_assume)
-static inline __attribute__((always_inline)) auto assume(auto v)
+static constexpr inline __attribute__((always_inline)) auto assume(auto v)
 {
     __builtin_assume(bool(v));
     return v;
 }
 #elif defined(__GNUC__)
-static inline __attribute__((always_inline)) auto assume(auto v)
+static constexpr inline __attribute__((always_inline)) auto assume(auto v)
 {
 #  if __GNUC__ >= 13
     __attribute__((assume(bool(v))));
@@ -60,7 +60,7 @@ static inline __attribute__((always_inline)) auto assume(auto v)
     return v;
 }
 #else
-static inline __attribute__((always_inline)) auto assume(auto v)
+static constexpr inline __attribute__((always_inline)) auto assume(auto v)
 {
     return v;
 }
