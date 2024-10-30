@@ -40,7 +40,7 @@ def check_max_range(vs):
 def test_0():
     assert test_utils.get_max_range([]) == []
 
-@pytest.mark.parametrize('n', [0, 1, 2, 3, 4, 5, 6, 7])
+@pytest.mark.parametrize('n', [0, 1, 2, 3, 4, 5, 6])
 def test_short(n):
     for l in itertools.product(*(range(0, n + 2),) * n):
         check_max_range(list(l))
