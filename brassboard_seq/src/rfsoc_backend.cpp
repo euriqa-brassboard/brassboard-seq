@@ -24,6 +24,7 @@
 #include "utils.h"
 
 #include <bitset>
+#include <charconv>
 
 #include <assert.h>
 
@@ -127,6 +128,37 @@ convert_pdq_spline_phase(std::array<double,4> sp, int64_t cycles)
 }
 
 using JaqalInst = Bits<int64_t,4>;
+
+struct PDQSpline {
+    std::array<int64_t,4> orders;
+    int shift;
+    double scale;
+    cubic_spline_t get_spline(uint64_t cycles) const
+    {
+        double order_scale = 1 / double(1ll << shift);
+        double order_scale2 = order_scale * order_scale;
+        std::array<double,4> forders;
+        forders[0] = double(orders[0]) * scale;
+        forders[1] = double(orders[1]) * (scale * order_scale);
+        forders[2] = double(orders[2]) * (scale * order_scale2);
+        forders[3] = double(orders[3]) * (scale * order_scale * order_scale2);
+
+        double fcycles = double(cycles);
+        double fcycles2 = fcycles * fcycles;
+
+        forders[1] = (forders[1] - forders[2] / 2 + forders[3] / 3) * fcycles;
+        forders[2] = (forders[2] - forders[3]) / 2 * fcycles2;
+        forders[3] = forders[3] / 6 * fcycles2 * fcycles;
+
+        return cubic_spline_t{ forders[0], forders[1], forders[2], forders[3] };
+    }
+};
+
+static inline constexpr bool
+test_bits(const JaqalInst &inst, unsigned b1, unsigned b2)
+{
+    return inst & JaqalInst::mask(b1, b2);
+}
 
 struct Jaqal_v1 {
     // All the instructions are 256 bits (32 bytes) and there are 7 types of
@@ -490,6 +522,423 @@ struct Jaqal_v1 {
         inst |= JaqalInst(n) << Bits::GSEQ_CNT;
         inst |= JaqalInst(chn) << Bits::DMA_MUX;
         return inst;
+    }
+
+    struct Executor {
+        enum class Error {
+            Reserved,
+            GLUT_OOB,
+            SLUT_OOB,
+            GSEQ_OOB,
+        };
+        static const char *error_msg(Error err)
+        {
+            switch (err) {
+            default:
+            case Error::Reserved:
+                return "reserved";
+            case Error::GLUT_OOB:
+                return "glut_oob";
+            case Error::SLUT_OOB:
+                return "slut_oob";
+            case Error::GSEQ_OOB:
+                return "gseq_oob";
+            }
+        }
+        struct PulseTarget {
+            enum Type {
+                None,
+                PLUT,
+                Stream,
+            } type;
+            uint16_t addr;
+        };
+        enum class ParamType {
+            Freq,
+            Amp,
+            Phase,
+        };
+        template<typename T>
+        static void execute(auto &&cb, const std::span<T> insts, bool allow_op0=false)
+        {
+            auto sz = insts.size_bytes();
+            if (sz % sizeof(JaqalInst) != 0)
+                throw std::invalid_argument("Instruction stream length "
+                                            "not a multiple of instruction size");
+            auto p = (const char*)insts.data();
+            for (size_t i = 0; i < sz; i += sizeof(JaqalInst)) {
+                JaqalInst inst;
+                memcpy(&inst, p + i, sizeof(JaqalInst));
+                if (i != 0)
+                    cb.next();
+                execute(cb, inst, allow_op0);
+            }
+        }
+        static void execute(auto &&cb, const JaqalInst &inst, bool allow_op0=true)
+        {
+            int op = (inst >> Bits::PROG_MODE)[0] & 0x7;
+            switch (op) {
+            default:
+            case 0:
+                if (!allow_op0) {
+                    invalid(cb, inst, Error::Reserved);
+                    return;
+                }
+                pulse(cb, inst, PulseTarget::None);
+                return;
+            case int(ProgMode::PLUT):
+                pulse(cb, inst, PulseTarget::PLUT);
+                return;
+            case int(SeqMode::STREAM) | 4:
+                pulse(cb, inst, PulseTarget::Stream);
+                return;
+
+            case int(ProgMode::GLUT):
+                GLUT(cb, inst);
+                return;
+            case int(ProgMode::SLUT):
+                SLUT(cb, inst);
+                return;
+            case int(SeqMode::GATE) | 4:
+            case int(SeqMode::WAIT_ANC) | 4:
+            case int(SeqMode::CONT_ANC) | 4:
+                GSEQ(cb, inst, SeqMode(op & 3));
+                return;
+            }
+        }
+    private:
+        static void invalid(auto &&cb, const JaqalInst &inst, Error err)
+        {
+            cb.invalid(inst, err);
+        }
+        static void GLUT(auto &&cb, const JaqalInst &inst)
+        {
+            if (test_bits(inst, 248, 255) || test_bits(inst, 239, 244) ||
+                test_bits(inst, 223, 228)) {
+                invalid(cb, inst, Error::Reserved);
+                return;
+            }
+            int cnt = (inst >> Bits::GLUT_CNT)[0] & 0x7;
+            int chn = (inst >> Bits::DMA_MUX)[0] & 0x7;
+            if (cnt > GLUT_MAXCNT) {
+                invalid(cb, inst, Error::GLUT_OOB);
+                return;
+            }
+            else if (test_bits(inst, GLUT_ELSZ * cnt, 219)) {
+                invalid(cb, inst, Error::Reserved);
+                return;
+            }
+            uint16_t gaddrs[GLUT_MAXCNT];
+            uint16_t starts[GLUT_MAXCNT];
+            uint16_t ends[GLUT_MAXCNT];
+            for (int i = 0; i < cnt; i++) {
+                auto w = (inst >> GLUT_ELSZ * i)[0];
+                gaddrs[i] = (w >> (SLUTW * 2)) & ((1 << GPRGW) - 1);
+                ends[i] = (w >> SLUTW) & ((1 << SLUTW) - 1);
+                starts[i] = w & ((1 << SLUTW) - 1);
+            }
+            cb.GLUT(chn, gaddrs, starts, ends, cnt);
+        }
+
+        static void SLUT(auto &&cb, const JaqalInst &inst)
+        {
+            if (test_bits(inst, 248, 255) || test_bits(inst, 240, 244) ||
+                test_bits(inst, 223, 228)) {
+                invalid(cb, inst, Error::Reserved);
+                return;
+            }
+            int cnt = (inst >> Bits::SLUT_CNT)[0] & 0xf;
+            int chn = (inst >> Bits::DMA_MUX)[0] & 0x7;
+            if (cnt > SLUT_MAXCNT) {
+                invalid(cb, inst, Error::SLUT_OOB);
+                return;
+            }
+            else if (test_bits(inst, SLUT_ELSZ * cnt, 219)) {
+                invalid(cb, inst, Error::Reserved);
+                return;
+            }
+            uint16_t saddrs[SLUT_MAXCNT];
+            uint16_t paddrs[SLUT_MAXCNT];
+            for (int i = 0; i < cnt; i++) {
+                auto w = (inst >> SLUT_ELSZ * i)[0];
+                saddrs[i] = (w >> PLUTW) & ((1 << SLUTW) - 1);
+                paddrs[i] = w & ((1 << PLUTW) - 1);
+            }
+            cb.SLUT(chn, saddrs, paddrs, cnt);
+        }
+
+        static void GSEQ(auto &&cb, const JaqalInst &inst, SeqMode m)
+        {
+            if (test_bits(inst, 248, 255) || test_bits(inst, 223, 238)) {
+                invalid(cb, inst, Error::Reserved);
+                return;
+            }
+            int cnt = (inst >> Bits::GSEQ_CNT)[0] & 0x3f;
+            int chn = (inst >> Bits::DMA_MUX)[0] & 0x7;
+            if (cnt > GSEQ_MAXCNT) {
+                invalid(cb, inst, Error::GSEQ_OOB);
+                return;
+            }
+            else if (test_bits(inst, GSEQ_ELSZ * cnt, 219)) {
+                invalid(cb, inst, Error::Reserved);
+                return;
+            }
+            uint16_t gaddrs[GSEQ_MAXCNT];
+            for (int i = 0; i < cnt; i++) {
+                auto w = (inst >> GSEQ_ELSZ * i)[0];
+                gaddrs[i] = w & ((1 << GLUTW) - 1);
+            }
+            cb.GSEQ(chn, gaddrs, cnt, m);
+        }
+
+        static void pulse(auto &&cb, const JaqalInst &inst, PulseTarget::Type type)
+        {
+            uint16_t addr = (inst >> Bits::PLUT_ADDR)[0] & ((1 << 12) - 1);
+            if (type != PulseTarget::PLUT && addr) {
+                invalid(cb, inst, Error::Reserved);
+                return;
+            }
+            PulseTarget tgt{type, addr};
+            if (test_bits(inst, 241, 244) || test_bits(inst, 223, 223)) {
+                invalid(cb, inst, Error::Reserved);
+                return;
+            }
+            int chn = (inst >> Bits::DMA_MUX)[0] & 0x7;
+            PDQSpline spl;
+            spl.shift = (inst >> Bits::SPLSHIFT)[0] & 0x1f;
+            auto load_s40 = [&] (int offset) {
+                auto mask = (int64_t(1) << 40) - 1;
+                auto data = (inst >> offset)[0] & mask;
+                if (data & (int64_t(1) << 39))
+                    return data | ~mask;
+                return data;
+            };
+            spl.orders[0] = load_s40(40 * 0);
+            spl.orders[1] = load_s40(40 * 1);
+            spl.orders[2] = load_s40(40 * 2);
+            spl.orders[3] = load_s40(40 * 3);
+            int64_t cycles = (inst >> 40 * 4)[0] & ((int64_t(1) << 40) - 1);
+            switch (ModType((inst >> Bits::MODTYPE)[0] & 0x7)) {
+            case ModType::FRQMOD0:
+                spl.scale = output_clock / double(1ll << 40);
+                param_pulse(cb, inst, chn, 0, ParamType::Freq, spl, cycles, tgt);
+                return;
+            case ModType::AMPMOD0:
+                spl.scale = 1 / double(((1ll << 16) - 1ll) << 23);
+                param_pulse(cb, inst, chn, 0, ParamType::Amp, spl, cycles, tgt);
+                return;
+            case ModType::PHSMOD0:
+                spl.scale = 1 / double(1ll << 40);
+                param_pulse(cb, inst, chn, 0, ParamType::Phase, spl, cycles, tgt);
+                return;
+            case ModType::FRQMOD1:
+                spl.scale = output_clock / double(1ll << 40);
+                param_pulse(cb, inst, chn, 1, ParamType::Freq, spl, cycles, tgt);
+                return;
+            case ModType::AMPMOD1:
+                spl.scale = 1 / double(((1ll << 16) - 1ll) << 23);
+                param_pulse(cb, inst, chn, 1, ParamType::Amp, spl, cycles, tgt);
+                return;
+            case ModType::PHSMOD1:
+                spl.scale = 1 / double(1ll << 40);
+                param_pulse(cb, inst, chn, 1, ParamType::Phase, spl, cycles, tgt);
+                return;
+            case ModType::FRMROT0:
+                spl.scale = 1 / double(1ll << 40);
+                frame_pulse(cb, inst, chn, 0, spl, cycles, tgt);
+                return;
+            case ModType::FRMROT1:
+                spl.scale = 1 / double(1ll << 40);
+                frame_pulse(cb, inst, chn, 1, spl, cycles, tgt);
+                return;
+            }
+        }
+        static void param_pulse(auto &&cb, const JaqalInst &inst, int chn, int tone,
+                                ParamType param, const PDQSpline &spl, int64_t cycles,
+                                PulseTarget tgt)
+        {
+            if (test_bits(inst, 200, 219) ||
+                test_bits(inst, Bits::AMP_FB_EN, Bits::AMP_FB_EN)) {
+                invalid(cb, inst, Error::Reserved);
+                return;
+            }
+            bool fb = (inst >> Bits::FRQ_FB_EN)[0] & 1;
+            bool en = (inst >> Bits::OUTPUT_EN)[0] & 1;
+            bool sync = (inst >> Bits::SYNC_FLAG)[0] & 1;
+            bool trig = (inst >> Bits::WAIT_TRIG)[0] & 1;
+            cb.param_pulse(chn, tone, param, spl, cycles, trig, sync, en, fb, tgt);
+
+        }
+        static void frame_pulse(auto &&cb, const JaqalInst &inst, int chn, int tone,
+                                const PDQSpline &spl, int64_t cycles, PulseTarget tgt)
+        {
+            if (test_bits(inst, 200, 217)) {
+                invalid(cb, inst, Error::Reserved);
+                return;
+            }
+            bool trig = (inst >> Bits::WAIT_TRIG)[0] & 1;
+            bool apply_eof = (inst >> Bits::APPLY_EOF)[0] & 1;
+            bool clr_frame = (inst >> Bits::CLR_FRAME)[0] & 1;
+            int fwd_frame_mask = (inst >> Bits::FWD_FRM)[0] & 3;
+            int inv_frame_mask = (inst >> Bits::INV_FRM)[0] & 3;
+            cb.frame_pulse(chn, tone, spl, cycles, trig, apply_eof, clr_frame,
+                           fwd_frame_mask, inv_frame_mask, tgt);
+        }
+    };
+
+    struct Printer {
+        void invalid(const JaqalInst &inst, Executor::Error err)
+        {
+            io << "invalid(" << Executor::error_msg(err) << "): "
+               << std::noshowbase << inst;
+        }
+
+        void next()
+        {
+            io << std::endl;
+        }
+
+        void GLUT(uint8_t chn, const uint16_t *gaddrs, const uint16_t *starts,
+                  const uint16_t *ends, int cnt)
+        {
+            io << "glut." << int(chn) << "[";
+            io << cnt << "]";
+            for (int i = 0; i < cnt; i++) {
+                io << " [" << gaddrs[i] << "]=[" << starts[i] << "," << ends[i] << "]";
+            }
+        }
+        void SLUT(uint8_t chn, const uint16_t *saddrs, const uint16_t *paddrs, int cnt)
+        {
+            io << "slut." << int(chn) << "[";
+            io << cnt << "]";
+            for (int i = 0; i < cnt; i++) {
+                io << " [" << saddrs[i] << "]=" << paddrs[i];
+            }
+        }
+        void GSEQ(uint8_t chn, const uint16_t *gaddrs, int cnt, SeqMode m)
+        {
+            if (m == SeqMode::GATE) {
+                io << "gseq.";
+            }
+            else if (m == SeqMode::WAIT_ANC) {
+                io << "wait_anc.";
+            }
+            else if (m == SeqMode::CONT_ANC) {
+                io << "cont_anc.";
+            }
+            io << int(chn) << "[";
+            io << cnt << "]";
+            for (int i = 0; i < cnt; i++) {
+                io << " " << gaddrs[i];
+            }
+        }
+
+        void param_pulse(int chn, int tone, Executor::ParamType param,
+                         const PDQSpline &spl, int64_t cycles, bool waittrig,
+                         bool sync, bool enable, bool fb_enable,
+                         Executor::PulseTarget tgt)
+        {
+            print_pulse_prefix(tgt, (param == Executor::ParamType::Freq ? "freq" :
+                                     (param == Executor::ParamType::Amp ? "amp" :
+                                      "phase")), chn, tone, cycles, spl);
+            if (waittrig)
+                io << " trig";
+            if (sync)
+                io << " sync";
+            if (enable)
+                io << " enable";
+            if (fb_enable)
+                io << " ff";
+        }
+        void frame_pulse(int chn, int tone, const PDQSpline &spl, int64_t cycles,
+                         bool waittrig, bool apply_eof, bool clr_frame,
+                         int fwd_frame_mask, int inv_frame_mask,
+                         Executor::PulseTarget tgt)
+        {
+            print_pulse_prefix(tgt, "frame_rot", chn, tone, cycles, spl);
+            if (waittrig)
+                io << " trig";
+            if (apply_eof)
+                io << " eof";
+            if (clr_frame)
+                io << " clr";
+            io << " fwd:" << std::dec << std::noshowbase << fwd_frame_mask
+               << " inv:" << std::dec << std::noshowbase << inv_frame_mask;
+        }
+
+        std::ostream &io;
+        bool print_float{true};
+
+    private:
+        void print_pulse_prefix(Executor::PulseTarget tgt, const char *name,
+                                int chn, int tone, int64_t cycles,
+                                const PDQSpline &spl)
+        {
+            if (tgt.type == Executor::PulseTarget::None) {
+                io << "pulse_data.";
+            }
+            else if (tgt.type == Executor::PulseTarget::PLUT) {
+                io << "plut.";
+            }
+            else if (tgt.type == Executor::PulseTarget::Stream) {
+                io << "stream.";
+            }
+            io << chn << " ";
+            if (tgt.type == Executor::PulseTarget::PLUT)
+                io << "[" << tgt.addr << "]=";
+            io << name << tone << " <" << cycles << "> {";
+            auto print_orders = [&] (auto order1, auto order2, auto order3, auto cb) {
+                if (order1 || order2 || order3)
+                    cb(1, order1);
+                if (order2 || order3)
+                    cb(2, order2);
+                if (order3)
+                    cb(3, order3);
+            };
+            if (print_float) {
+                auto cspl = spl.get_spline(cycles);
+                // Unlike `operator<<`, which uses a fixed precision (6 by default),
+                // `std::to_chars` of floating point number (no precision specified)
+                // is guaranteed to use the shortest accurate representation
+                // of the number.
+                // With C++23, we could use `std::print(io, "{}", order)` instead.
+                // (Not using std::format since GCC 11.1 for artiq-7 nix environment
+                //  doesn't have it)
+                auto format = [&] (auto &io, double v) {
+                    char buff[64];
+                    auto [ptr, ec] = std::to_chars(buff, buff + sizeof(buff), v);
+                    if (ec != std::errc())
+                        throw std::system_error(std::make_error_code(ec));
+                    io.write(buff, ptr - buff);
+                };
+                format(io, cspl.order0);
+                print_orders(cspl.order1, cspl.order2, cspl.order3,
+                             [&] (int, auto order) { format(io << ", ", order); });
+            }
+            else {
+                io << std::showbase << std::hex << spl.orders[0];
+                print_orders(spl.orders[1], spl.orders[2], spl.orders[3],
+                             [&] (int i, auto order) {
+                                 io << ", " << std::showbase << std::hex << order;
+                                 if (spl.shift) {
+                                     io << ">>" << std::dec << (spl.shift * i);
+                                 }
+                             });
+            }
+            io << "}";
+        }
+    };
+
+    static void print_inst(std::ostream &io, const JaqalInst &inst, bool print_float)
+    {
+        Printer printer{io, print_float};
+        Executor::execute(printer, inst);
+    }
+
+    static void print_insts(std::ostream &io, const char *p, size_t sz, bool print_float)
+    {
+        Printer printer{io, print_float};
+        Executor::execute(printer, std::span(p, sz));
     }
 
     // Set the minimum clock cycles for a pulse to help avoid underflows. This time

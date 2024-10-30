@@ -22,7 +22,8 @@ from brassboard_seq.event_time cimport EventTime, round_time_f64
 from brassboard_seq.rtval cimport is_rtval, rtval_cache, rt_eval_throw, RuntimeValue
 from brassboard_seq.utils cimport set_global_tracker, \
   PyErr_Format, PyExc_ValueError, PyExc_TypeError, \
-  assume_not_none, _assume_not_none, py_object
+  assume_not_none, _assume_not_none, py_object, \
+  ostream, pybytes_ostream
 
 cimport cython
 from cython.operator cimport dereference as deref
@@ -82,6 +83,13 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
                                const uint16_t *starts, const uint16_t *ends, int n)
         @staticmethod
         JaqalInst sequence(uint8_t chn, SeqMode m, uint16_t *gaddrs, int n)
+
+        @staticmethod
+        void print_inst(ostream &io, const JaqalInst &inst, bint print_float) except +
+
+        @staticmethod
+        void print_insts(ostream &io, const char *p, size_t sz,
+                         bint print_float) except +
 
 rampfunction_type = <PyTypeObject*>RampFunction
 seqcubicspline_type = <PyTypeObject*>SeqCubicSpline
@@ -234,6 +242,16 @@ cdef class JaqalInst_v1:
             return NotImplemented
         return self.inst == (<JaqalInst_v1>other).inst
 
+    def __str__(self):
+        cdef pybytes_ostream io
+        _Jaqal_v1.print_inst(io, self.inst, True)
+        return io.get_buf().decode()
+
+    def __repr__(self):
+        cdef pybytes_ostream io
+        _Jaqal_v1.print_inst(io, self.inst, False)
+        return io.get_buf().decode()
+
 @staticmethod
 cdef JaqalInst_v1 new_inst_v1(JaqalInst inst):
     self = <JaqalInst_v1>JaqalInst_v1.__new__(JaqalInst_v1)
@@ -329,3 +347,10 @@ cdef class Jaqal_v1:
             mode != int(_Jaqal_v1.SeqMode.CONT_ANC)):
             PyErr_Format(PyExc_ValueError, "Invalid sequencing mode %d.", mode)
         return new_inst_v1(_Jaqal_v1.sequence(chn, <_Jaqal_v1.SeqMode>mode, gaddrs, n))
+
+    @staticmethod
+    def dump_insts(bytes b, bint print_float=True):
+        cdef pybytes_ostream io
+        _Jaqal_v1.print_insts(io, PyBytes_AS_STRING(b),
+                              PyBytes_GET_SIZE(b), print_float)
+        return io.get_buf().decode()
