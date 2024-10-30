@@ -158,8 +158,8 @@ _new_time_int(auto *self, PyObject *EventTimeType, EventTime *prev,
     tp->data.floating = floating;
     tp->data.id = ntimes;
     new (&tp->chain_pos) std::vector<int> ();
-    tp->prev = (EventTime*)py_newref((PyObject*)prev);
-    tp->wait_for = (EventTime*)py_newref((PyObject*)wait_for);
+    tp->prev = py_newref(prev);
+    tp->wait_for = py_newref(wait_for);
     tp->cond = py_newref(cond);
     pylist_append(self->event_times, o.get());
     status->ntimes = ntimes + 1;
@@ -185,8 +185,8 @@ _new_time_rt(auto *self, PyObject *EventTimeType, EventTime *prev,
     tp->data.floating = false;
     tp->data.id = ntimes;
     new (&tp->chain_pos) std::vector<int> ();
-    tp->prev = (EventTime*)py_newref((PyObject*)prev);
-    tp->wait_for = (EventTime*)py_newref((PyObject*)wait_for);
+    tp->prev = py_newref(prev);
+    tp->wait_for = py_newref(wait_for);
     tp->cond = py_newref(cond);
     pylist_append(self->event_times, o.get());
     status->ntimes = ntimes + 1;
