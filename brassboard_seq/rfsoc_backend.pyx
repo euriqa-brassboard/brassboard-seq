@@ -217,6 +217,8 @@ cdef inline int _check_chn_tone(int chn, int tone) except -1:
         PyErr_Format(PyExc_ValueError, "Invalid tone number '%d'", tone)
 
 # Debugging/testing tool
+@cython.auto_pickle(False)
+@cython.no_gc
 @cython.final
 cdef class JaqalInst_v1:
     cdef JaqalInst inst
@@ -258,6 +260,8 @@ cdef JaqalInst_v1 new_inst_v1(JaqalInst inst):
     self.inst = inst
     return self
 
+@cython.auto_pickle(False)
+@cython.no_gc
 @cython.final
 cdef class Jaqal_v1:
     @staticmethod
