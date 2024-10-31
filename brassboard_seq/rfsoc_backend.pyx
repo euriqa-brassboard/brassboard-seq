@@ -94,6 +94,9 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
         void print_insts(ostream &io, const char *p, size_t sz,
                          bint print_float) except +
 
+        @staticmethod
+        vector[JaqalInst] extract_pulses(const char *p, size_t sz) except +
+
 rampfunction_type = <PyTypeObject*>RampFunction
 seqcubicspline_type = <PyTypeObject*>SeqCubicSpline
 
@@ -365,3 +368,8 @@ cdef class Jaqal_v1:
         _Jaqal_v1.print_insts(io, PyBytes_AS_STRING(b),
                               PyBytes_GET_SIZE(b), print_float)
         return io.get_buf().decode()
+
+    @staticmethod
+    def extract_pulses(bytes b):
+        pulses = _Jaqal_v1.extract_pulses(PyBytes_AS_STRING(b), PyBytes_GET_SIZE(b))
+        return [new_inst_v1(pulse) for pulse in pulses]

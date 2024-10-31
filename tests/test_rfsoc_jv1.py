@@ -841,3 +841,121 @@ def test_phase_spline(cls):
         inst = cls.pulse((o0, o1, o2, o3), cycles)
         assert inst == cls.match(cycles=cycles, fspl=(o0, o1, o2, o3),
                                  abs=1e-10, rel=1e-10)
+
+class ChannelLUTs:
+    def __init__(self, chn):
+        self.code = b''
+        self.chn = chn
+        self._pulse_map = {}
+        self._seq = []
+        self._gate_starts = []
+        self._gate_ends = []
+        self._gate_map = {}
+        self._gates = []
+        self.sequence = []
+
+    def write_pulse(self, inst):
+        inst_bytes = inst.to_bytes()
+        addr = self._pulse_map.get(inst_bytes)
+        if addr is None:
+            addr = len(self._pulse_map)
+            self.code += Jaqal_v1.program_PLUT(inst, addr).to_bytes()
+            self._pulse_map[inst_bytes] = addr
+        return addr
+
+    def write_gate(self, insts):
+        ids = tuple(self.write_pulse(inst) for inst in insts)
+        gaddr = self._gate_map.get(ids)
+        if gaddr is None:
+            start = len(self._seq)
+            end = start + len(ids) - 1
+            self._seq.extend(ids)
+            gaddr = len(self._gate_map)
+            self._gate_starts.append(start)
+            self._gate_ends.append(end)
+            self._gate_map[ids] = gaddr
+        return gaddr
+
+    def add_gate(self, insts):
+        self._gates.append(self.write_gate(insts))
+        self.sequence.extend(insts)
+
+    def finalize(self):
+        for i in range(0, len(self._seq), 9):
+            s = self._seq[i:i + 9]
+            addr = list(range(i, i + len(s)))
+            self.code += Jaqal_v1.program_SLUT(self.chn, addr, s).to_bytes()
+
+        for i in range(0, len(self._gate_starts), 6):
+            starts = self._gate_starts[i:i + 6]
+            ends = self._gate_ends[i:i + 6]
+            addr = list(range(i, i + len(starts)))
+            self.code += Jaqal_v1.program_GLUT(self.chn, addr, starts, ends).to_bytes()
+
+    def get_gate_seq(self):
+        c = b''
+        for i in range(0, len(self._gates), 24):
+            c += Jaqal_v1.sequence(self.chn, 0, self._gates[i:i + 24]).to_bytes()
+        return c
+
+class SequenceConstructor:
+    def __init__(self):
+        self.channels = [ChannelLUTs(i) for i in range(8)]
+
+    def add_gate(self, insts):
+        if not insts:
+            return
+        chn = insts[0].channel
+        for inst in insts:
+            assert inst.channel == chn
+        self.channels[chn].add_gate(insts)
+
+    def get_inst_bytes(self):
+        code = b''
+        for c in self.channels:
+            c.finalize()
+            code += c.code
+        for c in self.channels:
+            code += c.get_gate_seq()
+        return code
+
+    def check_seq(self):
+        pulses = Jaqal_v1.extract_pulses(self.get_inst_bytes())
+        expected = []
+        for c in self.channels:
+            expected.extend(c.sequence)
+        assert pulses == expected
+
+def rand_pulse(chn):
+    tone = random.randint(0, 1)
+    cycles = random.randint(10, 11)
+    ty = random.randint(0, 3)
+    o0 = random.randint(0, 3) / 3
+    o1 = random.randint(0, 3) / 3
+    o2 = random.randint(0, 3) / 3
+    o3 = random.randint(0, 3) / 3
+    if ty == 0:
+        return Jaqal_v1.freq_pulse(chn, tone, (o0 * 100e6, o1 * 200e6 - 100e6,
+                                               o2 * 200e6 - 100e6, o3 * 200e6 - 100e6),
+                                   cycles, False, False, False)
+    elif ty == 1:
+        return Jaqal_v1.amp_pulse(chn, tone, (o0 * 2 - 1, o1 * 2 - 1,
+                                              o2 * 2 - 1, o3 * 2 - 1),
+                                  cycles, False, False, False)
+    elif ty == 2:
+        return Jaqal_v1.phase_pulse(chn, tone, (o0 * 2 - 1, o1 * 2 - 1,
+                                                o2 * 2 - 1, o3 * 2 - 1),
+                                    cycles, False, False, False)
+    else:
+        return Jaqal_v1.frame_pulse(chn, tone, (o0 * 2 - 1, o1 * 2 - 1,
+                                                o2 * 2 - 1, o3 * 2 - 1),
+                                    cycles, False, False, False, 0, 0)
+
+
+def test_sequence():
+    for _ in range(100):
+        sc = SequenceConstructor()
+        for _ in range(300):
+            chn = random.randint(0, 7)
+            sc.add_gate([rand_pulse(chn) for _ in range(random.randint(3, 4))])
+        sc.check_seq()

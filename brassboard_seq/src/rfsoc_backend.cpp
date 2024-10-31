@@ -934,6 +934,119 @@ struct Jaqal_v1 {
         }
     };
 
+    struct PulseSequencer {
+        PulseSequencer()
+        {
+            reset();
+        }
+
+        void reset()
+        {
+            memset(_channel_mem, 0xff, sizeof(channels));
+        }
+
+        void invalid(const JaqalInst&, Executor::Error)
+        {
+            pulses.push_back(JaqalInst::mask(0, 255));
+        }
+
+        void next()
+        {
+        }
+
+        void GLUT(uint8_t chn, const uint16_t *gaddrs, const uint16_t *starts,
+                  const uint16_t *ends, int cnt)
+        {
+            auto &glut = channels[chn].glut;
+            for (int i = 0; i < cnt; i++) {
+                glut[gaddrs[i]] = { starts[i], ends[i] };
+            }
+        }
+        void SLUT(uint8_t chn, const uint16_t *saddrs, const uint16_t *paddrs, int cnt)
+        {
+            auto &slut = channels[chn].slut;
+            for (int i = 0; i < cnt; i++) {
+                slut[saddrs[i]] = paddrs[i];
+            }
+        }
+        void GSEQ(uint8_t chn, const uint16_t *gaddrs, int cnt, SeqMode m)
+        {
+            if (m != SeqMode::GATE) {
+                pulses.push_back(JaqalInst::mask(0, 255));
+                return;
+            }
+            auto &channel = channels[chn];
+            for (auto gaddr: std::span(gaddrs, cnt)) {
+                auto [start, end] = channel.glut[gaddr];
+                if (start >= 4096 || end >= 4096 || end < start) {
+                    pulses.push_back(JaqalInst::mask(0, 255));
+                    continue;
+                }
+                for (auto i = start; i <= end; i++) {
+                    auto paddr = channel.slut[i];
+                    if (paddr >= 4096) {
+                        pulses.push_back(JaqalInst::mask(0, 255));
+                    }
+                    else {
+                        pulses.push_back(channel.plut[paddr]);
+                    }
+                }
+            }
+        }
+
+        void param_pulse(int chn, int tone, Executor::ParamType param,
+                         const PDQSpline &spl, int64_t cycles, bool waittrig,
+                         bool sync, bool enable, bool fb_enable,
+                         Executor::PulseTarget tgt)
+        {
+            auto metadata =
+                raw_param_metadata(ModType(tone * 3 + int(param)), chn, spl.shift,
+                                   waittrig, sync, enable, fb_enable);
+            process_pulse(chn, metadata, spl.orders, cycles, tgt);
+        }
+        void frame_pulse(int chn, int tone, const PDQSpline &spl, int64_t cycles,
+                         bool waittrig, bool apply_eof, bool clr_frame,
+                         int fwd_frame_mask, int inv_frame_mask,
+                         Executor::PulseTarget tgt)
+        {
+            auto metadata =
+                raw_frame_metadata(tone ? ModType::FRMROT1 : ModType::FRMROT0,
+                                   chn, spl.shift, waittrig, apply_eof, clr_frame,
+                                   fwd_frame_mask, inv_frame_mask);
+            process_pulse(chn, metadata, spl.orders, cycles, tgt);
+        }
+
+        std::vector<JaqalInst> pulses;
+    private:
+        void process_pulse(int chn, uint64_t metadata, const std::array<int64_t,4> &_sp,
+                           int64_t cycles, Executor::PulseTarget tgt)
+        {
+            std::array<int64_t,4> sp(_sp);
+            for (auto &v: sp)
+                v &= (int64_t(1) << 40) - 1;
+            auto inst = pulse(metadata, sp, cycles);
+            if (tgt.type == Executor::PulseTarget::PLUT) {
+                channels[chn].plut[tgt.addr] = inst;
+            }
+            else {
+                pulses.push_back(inst);
+            }
+        }
+        struct ChannelLUT {
+            std::array<JaqalInst,4096> plut;
+            std::array<uint16_t,4096> slut;
+            std::array<std::pair<uint16_t,uint16_t>,4096> glut;
+        };
+        union {
+            ChannelLUT channels[8];
+            // std::memset only requires trivially-copyable
+            // but GCC decides to warn as long as the types are non-trivial
+            // (preventing us from defining default constructors)
+            // Work around this requirement with a union char buffer.
+            char _channel_mem[8 * sizeof(ChannelLUT)];
+        };
+    };
+
     static void print_inst(std::ostream &io, const JaqalInst &inst, bool print_float)
     {
         Printer printer{io, print_float};
@@ -944,6 +1057,13 @@ struct Jaqal_v1 {
     {
         Printer printer{io, print_float};
         Executor::execute(printer, std::span(p, sz));
+    }
+
+    static auto extract_pulses(const char *p, size_t sz)
+    {
+        PulseSequencer sequencer;
+        Executor::execute(sequencer, std::span(p, sz));
+        return sequencer.pulses;
     }
 
     // Set the minimum clock cycles for a pulse to help avoid underflows. This time
