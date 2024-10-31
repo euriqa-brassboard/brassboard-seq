@@ -323,6 +323,7 @@ def test_glut():
             starts = [random.randint(0, 4095) for _ in range(n)]
             ends = [random.randint(0, 4095) for _ in range(n)]
             inst = Jaqal_v1.program_GLUT(chn, gaddrs, starts, ends)
+            assert inst.channel == chn
             assert inst == MatchGLUT(chn, gaddrs, starts, ends)
             assert str(inst) == repr(inst)
             assert Jaqal_v1.dump_insts(inst.to_bytes()) == str(inst)
@@ -354,6 +355,7 @@ def test_slut():
             saddrs = [random.randint(0, 4095) for _ in range(n)]
             paddrs = [random.randint(0, 4095) for _ in range(n)]
             inst = Jaqal_v1.program_SLUT(chn, saddrs, paddrs)
+            assert inst.channel == chn
             assert inst == MatchSLUT(chn, saddrs, paddrs)
             assert str(inst) == repr(inst)
             assert Jaqal_v1.dump_insts(inst.to_bytes()) == str(inst)
@@ -386,6 +388,7 @@ def test_gseq():
             mode_str = ('gseq', 'wait_anc', 'cont_anc')[mode]
             gaddrs = [random.randint(0, 511) for _ in range(n)]
             inst = Jaqal_v1.sequence(chn, mode, gaddrs)
+            assert inst.channel == chn
             assert inst == MatchGSEQ(chn, mode_str, gaddrs)
             assert str(inst) == repr(inst)
             assert Jaqal_v1.dump_insts(inst.to_bytes()) == str(inst)
@@ -473,6 +476,10 @@ def test_pulse_inst():
         plut_inst = Jaqal_v1.program_PLUT(inst, addr)
         stm_inst = Jaqal_v1.stream(inst)
 
+        assert inst.channel == chn
+        assert plut_inst.channel == chn
+        assert stm_inst.channel == chn
+
         assert inst == MatchParamPulse(param, chn, tone, 'pulse_data', None, cycles,
                                        trig, sync, enable, ff,
                                        ispl=(0, 0, 0, 0), shift=0)
@@ -533,6 +540,10 @@ def test_pulse_inst():
         addr = random.randint(0, 4095)
         plut_inst = Jaqal_v1.program_PLUT(inst, addr)
         stm_inst = Jaqal_v1.stream(inst)
+
+        assert inst.channel == chn
+        assert plut_inst.channel == chn
+        assert stm_inst.channel == chn
 
         vi = int(inst)
 

@@ -85,6 +85,9 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
         JaqalInst sequence(uint8_t chn, SeqMode m, uint16_t *gaddrs, int n)
 
         @staticmethod
+        int get_chn(const JaqalInst &inst)
+
+        @staticmethod
         void print_inst(ostream &io, const JaqalInst &inst, bint print_float) except +
 
         @staticmethod
@@ -232,6 +235,10 @@ cdef class JaqalInst_v1:
         else:
             ty = type(data)
             PyErr_Format(PyExc_TypeError, "Invalid type '%S'", <PyObject*>ty)
+
+    @property
+    def channel(self):
+        return _Jaqal_v1.get_chn(self.inst);
 
     def to_bytes(self):
         return self.inst.to_pybytes()

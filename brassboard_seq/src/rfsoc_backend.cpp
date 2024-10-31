@@ -524,6 +524,11 @@ struct Jaqal_v1 {
         return inst;
     }
 
+    static constexpr inline int get_chn(const JaqalInst &inst)
+    {
+        return (inst >> Bits::DMA_MUX)[0] & 0x7;
+    }
+
     struct Executor {
         enum class Error {
             Reserved,
@@ -619,7 +624,7 @@ struct Jaqal_v1 {
                 return;
             }
             int cnt = (inst >> Bits::GLUT_CNT)[0] & 0x7;
-            int chn = (inst >> Bits::DMA_MUX)[0] & 0x7;
+            int chn = get_chn(inst);
             if (cnt > GLUT_MAXCNT) {
                 invalid(cb, inst, Error::GLUT_OOB);
                 return;
@@ -648,7 +653,7 @@ struct Jaqal_v1 {
                 return;
             }
             int cnt = (inst >> Bits::SLUT_CNT)[0] & 0xf;
-            int chn = (inst >> Bits::DMA_MUX)[0] & 0x7;
+            int chn = get_chn(inst);
             if (cnt > SLUT_MAXCNT) {
                 invalid(cb, inst, Error::SLUT_OOB);
                 return;
@@ -674,7 +679,7 @@ struct Jaqal_v1 {
                 return;
             }
             int cnt = (inst >> Bits::GSEQ_CNT)[0] & 0x3f;
-            int chn = (inst >> Bits::DMA_MUX)[0] & 0x7;
+            int chn = get_chn(inst);
             if (cnt > GSEQ_MAXCNT) {
                 invalid(cb, inst, Error::GSEQ_OOB);
                 return;
@@ -703,7 +708,7 @@ struct Jaqal_v1 {
                 invalid(cb, inst, Error::Reserved);
                 return;
             }
-            int chn = (inst >> Bits::DMA_MUX)[0] & 0x7;
+            int chn = get_chn(inst);
             PDQSpline spl;
             spl.shift = (inst >> Bits::SPLSHIFT)[0] & 0x1f;
             auto load_s40 = [&] (int offset) {
