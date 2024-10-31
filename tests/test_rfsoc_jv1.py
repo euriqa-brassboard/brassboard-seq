@@ -316,7 +316,7 @@ def test_glut():
         Jaqal_v1.program_GLUT(1, [1, 2], [3], [5])
     with pytest.raises(ValueError, match="Too many GLUT addresses to program"):
         Jaqal_v1.program_GLUT(0, list(range(7)), list(range(7)), list(range(7)))
-    for n in range(6):
+    for n in range(7):
         for i in range(2000):
             chn = random.randint(0, 7)
             gaddrs = [random.randint(0, 4095) for _ in range(n)]
@@ -349,7 +349,7 @@ def test_slut():
         Jaqal_v1.program_SLUT(3, [1], [2, 3])
     with pytest.raises(ValueError, match="Too many SLUT addresses to program"):
         Jaqal_v1.program_SLUT(0, list(range(10)), list(range(10)))
-    for n in range(9):
+    for n in range(10):
         for i in range(3000):
             chn = random.randint(0, 7)
             saddrs = [random.randint(0, 4095) for _ in range(n)]
