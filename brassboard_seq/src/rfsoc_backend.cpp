@@ -130,6 +130,21 @@ convert_pdq_spline_phase(std::array<double,4> sp, int64_t cycles)
 
 using JaqalInst = Bits<int64_t,4>;
 
+struct PulseAllocator {
+    std::map<JaqalInst,int> pulses;
+
+    void clear()
+    {
+        pulses.clear();
+    }
+
+    int get_addr(JaqalInst pulse)
+    {
+        auto [it, inserted] = pulses.emplace(pulse, int(pulses.size()));
+        return it->second;
+    }
+};
+
 struct PDQSpline {
     std::array<int64_t,4> orders;
     int shift;
@@ -1225,6 +1240,253 @@ struct Jaqal_v1 {
             // Work around this requirement with a union char buffer.
             char _channel_mem[8 * sizeof(ChannelLUT)];
         };
+    };
+
+    struct ChannelGen {
+        PulseAllocator pulses;
+        std::vector<std::pair<int64_t,int16_t>> pulse_ids;
+        std::vector<int16_t> slut;
+        std::vector<std::pair<int16_t,int16_t>> glut;
+        std::vector<std::pair<int64_t,int16_t>> gate_ids;
+
+        void add_pulse(const JaqalInst &inst, int64_t cycle)
+        {
+            auto idx = pulses.get_addr(inst);
+            if (idx >> Jaqal_v1::PLUTW)
+                throw std::length_error("Too many pulses in sequence.");
+            pulse_ids.push_back({ cycle, int16_t(idx) });
+        }
+
+        void clear()
+        {
+            pulses.clear();
+            pulse_ids.clear();
+            slut.clear();
+            glut.clear();
+            gate_ids.clear();
+        }
+
+        int16_t add_glut(int16_t slut_addr1, int16_t slut_addr2)
+        {
+            auto gate_id = glut.size();
+            if (gate_id >> Jaqal_v1::GLUTW)
+                throw std::length_error("Too many GLUT entries.");
+            glut.push_back({ slut_addr1, slut_addr2 });
+            return int16_t(gate_id);
+        }
+        int16_t add_slut(int npulses)
+        {
+            auto old_slut_len = slut.size();
+            auto new_slut_len = old_slut_len + npulses;
+            if ((new_slut_len - 1) >> Jaqal_v1::SLUTW)
+                throw std::length_error("Too many SLUT entries.");
+            slut.resize(new_slut_len);
+            return old_slut_len;
+        }
+
+        int16_t add_gate(std::span<std::pair<int64_t,int16_t>> pulses)
+        {
+            auto npulses = (int)pulses.size();
+            auto old_slut_len = add_slut(npulses);
+            for (size_t i = 0; i < npulses; i++)
+                slut[old_slut_len + i] = pulses[i].second;
+            return add_glut(int16_t(old_slut_len), int16_t(old_slut_len + npulses - 1));
+        }
+
+        void sequence_gate(int16_t gid, int first_pid)
+        {
+            gate_ids.push_back({ pulse_ids[first_pid].first, gid });
+        }
+
+        void end()
+        {
+            // Keep the pulses that are added together together by using stable sort.
+            // These currently belongs to the same tonedata
+            // and there's a higher chance we have some reusable subsequences
+            std::ranges::stable_sort(pulse_ids, [] (auto &a, auto &b) {
+                return a.first < b.first;
+            });
+            int npulse = pulse_ids.size();
+            if (!npulse)
+                return;
+            std::vector<int> pulse_str(npulse + 1);
+            std::vector<int> pulse_sa(npulse + 1);
+            std::vector<int> pulse_rk(npulse + 1);
+            std::vector<int> pulse_height(npulse - 1);
+            for (int i = 0; i < npulse; i++)
+                pulse_str[i] = pulse_ids[i].second + 1;
+            pulse_str[npulse] = 0;
+            get_suffix_array(pulse_sa, pulse_str, pulse_rk);
+            order_to_rank(pulse_rk, pulse_sa);
+            for (int i = 0; i < npulse; i++)
+                pulse_str[i] = pulse_ids[i].second + 1;
+            pulse_str[npulse] = 0;
+            get_height_array(pulse_height, pulse_str, pulse_sa, pulse_rk);
+
+            struct SubStrInfoSA {
+                int sa_begin;
+            };
+            struct SubStrInfoVec {
+                std::vector<int> strs;
+            };
+            struct SubStrInfos {
+                std::vector<SubStrInfoSA> sas;
+                std::vector<SubStrInfoVec> vecs;
+            };
+            // Sort substrings according to repetition and length
+            std::map<std::pair<int,int>,SubStrInfos> substrs;
+            foreach_max_range(pulse_height, [&] (int i0, int i1, int str_len) {
+                // Simple heuristic to avoid creating too many short gates
+                if (str_len < 4)
+                    return;
+                auto sa_begin = i0 + 1;
+                auto nrep = i1 - i0 + 2;
+                substrs[{nrep, str_len}].sas.push_back({ sa_begin });
+            });
+
+            // Map of start index -> (length, gate_id)
+            std::map<int,std::pair<int,int>> substr_map;
+
+            std::vector<int> substrs_cache;
+            auto sort_substr = [&] (SubStrInfoSA sa, int nrep) {
+                substrs_cache.clear();
+                auto sa_begin = sa.sa_begin;
+                auto sa_end = sa_begin + nrep;
+                for (int sa_idx = sa_begin; sa_idx < sa_end; sa_idx++)
+                    substrs_cache.push_back(pulse_sa[sa_idx]);
+                std::ranges::sort(substrs_cache);
+            };
+
+            auto check_substr = [&] (std::vector<int> &substr_idxs, int str_len) {
+                // Note that `substr_idxs` may alias `substrs_cache`.
+                // but it doesn't alias anything else that's still in use elsewhere
+                // so it can be freely mutated.
+
+                assert(str_len > 1);
+                int max_len = str_len;
+                int nsubstrs = (int)substr_idxs.size();
+                int last_substr = npulse;
+                for (int i = nsubstrs - 1; i >= 0; i--) {
+                    auto substr_idx = substr_idxs[i];
+                    assert(substr_idx < last_substr);
+                    int substr_len = std::min(max_len, last_substr - substr_idx);
+
+                    auto it = substr_map.lower_bound(substr_idx);
+                    if (it != substr_map.end()) {
+                        assert(it->first >= substr_idx);
+                        substr_len = std::min(substr_len, it->first - substr_idx);
+                    }
+                    if (it != substr_map.begin()) {
+                        --it;
+                        if (it->first + it->second.first > substr_idx) {
+                            substr_len = 0;
+                        }
+                    }
+                    assert(substr_len >= 0);
+                    if (substr_len <= 1) {
+                        substr_idxs.erase(substr_idxs.begin() + i);
+                    }
+                    else {
+                        max_len = substr_len;
+                        last_substr = substr_idx;
+                    }
+                }
+                int new_nsubstrs = (int)substr_idxs.size();
+                if (!new_nsubstrs)
+                    return;
+                if (new_nsubstrs < nsubstrs || max_len < str_len) {
+                    assert(max_len > 1);
+                    substrs[{new_nsubstrs, max_len}].vecs.emplace_back(
+                        std::move(substr_idxs));
+                    return;
+                }
+                assert(new_nsubstrs == nsubstrs && max_len == str_len);
+                int gate_id = add_gate(std::span(pulse_ids)
+                                       .subspan(substr_idxs[0], max_len));
+                for (auto substr_idx: substr_idxs) {
+                    auto [it, inserted] =
+                        substr_map.insert({substr_idx, { max_len, gate_id }});
+                    (void)it;
+                    (void)inserted;
+                    assert(inserted);
+                }
+            };
+
+            while (!substrs.empty()) {
+                auto it = --substrs.end();
+                auto [nrep, str_len] = it->first;
+                for (auto sa: it->second.sas) {
+                    sort_substr(sa, nrep);
+                    check_substr(substrs_cache, str_len);
+                }
+                for (auto &vec: it->second.vecs) {
+                    check_substr(vec.strs, str_len);
+                }
+                substrs.erase(it);
+            }
+            bool has_single_pulse = false;
+            int next_pulse = 0;
+            for (auto [str_idx, substr_info]: substr_map) {
+                assert(str_idx >= next_pulse);
+                if (str_idx > next_pulse) {
+                    int gate_id;
+                    if (str_idx == next_pulse + 1) {
+                        // Special de-dup handling for single pulse gate
+                        has_single_pulse = true;
+                        gate_id = -int(pulse_ids[next_pulse].second) - 1;
+                    }
+                    else {
+                        gate_id = add_gate(std::span(pulse_ids)
+                                           .subspan(next_pulse, str_idx - next_pulse));
+                    }
+                    sequence_gate(gate_id, next_pulse);
+                }
+                auto [max_len, gate_id] = substr_info;
+                sequence_gate(gate_id, str_idx);
+                next_pulse = str_idx + max_len;
+            }
+            if (npulse > next_pulse) {
+                int gate_id = -1;
+                if (npulse == next_pulse + 1) {
+                    // Special de-dup handling for single pulse gate
+                    has_single_pulse = true;
+                    gate_id = -int(pulse_ids[next_pulse].second) - 1;
+                }
+                else {
+                    gate_id = add_gate(std::span(pulse_ids)
+                                       .subspan(next_pulse, npulse - next_pulse));
+                }
+                sequence_gate(gate_id, next_pulse);
+            }
+            if (has_single_pulse) {
+                std::vector<int16_t> slut_map(1 << Jaqal_v1::PLUTW, -1);
+                assert((slut.size() >> 15) == 0);
+                int16_t slut_len = (int16_t)slut.size();
+                for (int16_t i = 0; i < slut_len; i++)
+                    slut_map[slut[i]] = i;
+                std::vector<int16_t> gate_map(1 << Jaqal_v1::PLUTW, -1);
+                auto get_single_gate_id = [&] (int16_t pid) {
+                    assert((pid >> Jaqal_v1::PLUTW) == 0);
+                    int16_t gid = gate_map[pid];
+                    if (gid < 0) {
+                        int16_t slut_addr = slut_map[pid];
+                        if (slut_addr < 0) {
+                            slut_addr = add_slut(1);
+                            slut[slut_addr] = pid;
+                        }
+                        gate_map[pid] = gid = add_glut(slut_addr, slut_addr);
+                    }
+                    return gid;
+                };
+                for (auto &[t, gid]: gate_ids) {
+                    if (gid >= 0)
+                        continue;
+                    auto pid = -(gid + 1);
+                    assert((pid >> 15) == 0);
+                    gid = get_single_gate_id(int16_t(pid));
+                }
+            }
+        }
     };
 
     static void print_inst(std::ostream &io, const JaqalInst &inst, bool print_float)

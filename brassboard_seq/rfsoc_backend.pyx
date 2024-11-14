@@ -23,12 +23,12 @@ from brassboard_seq.rtval cimport is_rtval, rtval_cache, rt_eval_throw, RuntimeV
 from brassboard_seq.utils cimport set_global_tracker, \
   PyErr_Format, PyExc_ValueError, PyExc_TypeError, \
   assume_not_none, _assume_not_none, py_object, \
-  ostream, pybytes_ostream
+  ostream, pybytes_ostream, pylong_from_long, pylong_from_longlong
 
 cimport cython
 from cython.operator cimport dereference as deref
 from cpython cimport PyDict_GetItemWithError, PyTypeObject, \
-  PyBytes_GET_SIZE, PyBytes_AS_STRING
+  PyBytes_GET_SIZE, PyBytes_AS_STRING, PyList_New, PyList_SET_ITEM, Py_INCREF
 
 from libc.string cimport memcpy
 
@@ -50,6 +50,9 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
         object to_pylong() except +
         int64_t &operator[](unsigned)
         bint operator==(JaqalInst)
+
+    cppclass PulseAllocator:
+        cppmap[JaqalInst,int] pulses
 
     cppclass _Jaqal_v1 "brassboard_seq::rfsoc_backend::Jaqal_v1":
         enum class SeqMode "brassboard_seq::rfsoc_backend::Jaqal_v1::SeqMode":
@@ -99,6 +102,15 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
 
         @staticmethod
         dict inst_to_dict(const JaqalInst &inst) except +
+
+        cppclass ChannelGen:
+            PulseAllocator pulses
+            vector[int16_t] slut
+            vector[pair[int16_t,int16_t]] glut
+            vector[pair[int64_t,int16_t]] gate_ids
+            void add_pulse(const JaqalInst &inst, int64_t cycle) except +
+            void clear()
+            void end() except +
 
 rampfunction_type = <PyTypeObject*>RampFunction
 seqcubicspline_type = <PyTypeObject*>SeqCubicSpline
@@ -379,3 +391,56 @@ cdef class Jaqal_v1:
     def extract_pulses(bytes b):
         pulses = _Jaqal_v1.extract_pulses(PyBytes_AS_STRING(b), PyBytes_GET_SIZE(b))
         return [new_inst_v1(pulse) for pulse in pulses]
+
+@cython.auto_pickle(False)
+@cython.no_gc
+@cython.final
+cdef class JaqalChannelGen_v1:
+    cdef _Jaqal_v1.ChannelGen chn_gen
+
+    def add_pulse(self, JaqalInst_v1 pulse, int64_t cycle, /):
+        self.chn_gen.add_pulse(pulse.inst, cycle)
+
+    def clear(self):
+        self.chn_gen.clear()
+
+    def end(self):
+        self.chn_gen.end()
+
+    def get_plut(self):
+        sz = self.chn_gen.pulses.pulses.size()
+        cdef list res = PyList_New(sz)
+        for entry in self.chn_gen.pulses.pulses:
+            inst = new_inst_v1(entry.first)
+            Py_INCREF(inst)
+            PyList_SET_ITEM(res, entry.second, inst)
+        return res
+
+    def get_slut(self):
+        sz = self.chn_gen.slut.size()
+        cdef list res = PyList_New(sz)
+        for i in range(sz):
+            v = pylong_from_long(self.chn_gen.slut[i])
+            Py_INCREF(v)
+            PyList_SET_ITEM(res, i, v)
+        return res
+
+    def get_glut(self):
+        sz = self.chn_gen.glut.size()
+        cdef list res = PyList_New(sz)
+        for i in range(sz):
+            gate = self.chn_gen.glut[i]
+            v = (pylong_from_long(gate.first), pylong_from_long(gate.second))
+            Py_INCREF(v)
+            PyList_SET_ITEM(res, i, v)
+        return res
+
+    def get_gseq(self):
+        sz = self.chn_gen.gate_ids.size()
+        cdef list res = PyList_New(sz)
+        for i in range(sz):
+            gate = self.chn_gen.gate_ids[i]
+            v = (pylong_from_longlong(gate.first), pylong_from_long(gate.second))
+            Py_INCREF(v)
+            PyList_SET_ITEM(res, i, v)
+        return res
