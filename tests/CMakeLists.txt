@@ -26,6 +26,7 @@ python_test("${CMAKE_BINARY_DIR}"
   test_config.py
   test_event_time.py
   test_rfsoc_backend.py
+  test_rfsoc_backend_jv1.py
   test_scan.py
   test_seq.py
   test_seq_compile.py

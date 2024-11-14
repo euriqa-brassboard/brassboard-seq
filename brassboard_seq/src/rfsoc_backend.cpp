@@ -1751,6 +1751,166 @@ PulseCompilerGen::Info::Info()
     }
 }
 
+struct JaqalPulseCompilerGen: SyncChannelGen {
+    struct BoardGen {
+        Jaqal_v1::ChannelGen channels[8];
+        void clear()
+        {
+            for (auto &channel: channels) {
+                channel.clear();
+            }
+        }
+        PyObject *get_prefix() const;
+        PyObject *get_sequence() const;
+        void end();
+    };
+    BoardGen boards[4]; // 4 * 8 physical channels
+
+    void start() override
+    {
+        for (auto &board: boards) {
+            board.clear();
+        }
+    }
+    void add_tone_data(int chn, int64_t duration_cycles, cubic_spline_t freq,
+                       cubic_spline_t amp, cubic_spline_t phase,
+                       output_flags_t flags, int64_t cur_cycle) override;
+    void end() override
+    {
+        for (auto &board: boards) {
+            board.end();
+        }
+    }
+    ~JaqalPulseCompilerGen() override
+    {}
+
+    __attribute__((returns_nonnull)) PyObject *get_prefix(int n) const
+    {
+        if (n < 0 || n >= 4)
+            throw std::out_of_range("Board index should be in [0, 3]");
+        return boards[n].get_prefix();
+    }
+
+    __attribute__((returns_nonnull)) PyObject *get_sequence(int n) const
+    {
+        if (n < 0 || n >= 4)
+            throw std::out_of_range("Board index should be in [0, 3]");
+        return boards[n].get_sequence();
+    }
+};
+
+Generator *new_jaqal_pulse_compiler_generator()
+{
+    return new JaqalPulseCompilerGen;
+}
+
+void JaqalPulseCompilerGen::add_tone_data(int chn, int64_t duration_cycles,
+                                          cubic_spline_t freq, cubic_spline_t amp,
+                                          cubic_spline_t phase, output_flags_t flags,
+                                          int64_t cur_cycle)
+{
+    auto board_id = chn >> 4;
+    assert(board_id < 4);
+    auto &board_gen = boards[board_id];
+    auto channel = (chn >> 1) & 7;
+    auto tone = chn & 1;
+    auto &channel_gen = board_gen.channels[channel];
+    channel_gen.add_pulse(Jaqal_v1::freq_pulse(channel, tone, freq, duration_cycles,
+                                               flags.wait_trigger, flags.sync,
+                                               flags.feedback_enable), cur_cycle);
+    channel_gen.add_pulse(Jaqal_v1::amp_pulse(channel, tone, amp, duration_cycles,
+                                              flags.wait_trigger), cur_cycle);
+    channel_gen.add_pulse(Jaqal_v1::phase_pulse(channel, tone, phase, duration_cycles,
+                                                flags.wait_trigger), cur_cycle);
+    channel_gen.add_pulse(Jaqal_v1::frame_pulse(channel, tone, {0, 0, 0, 0},
+                                                duration_cycles, flags.wait_trigger,
+                                                false, false, 0, 0), cur_cycle);
+}
+
+PyObject *JaqalPulseCompilerGen::BoardGen::get_prefix() const
+{
+    pybytes_ostream io;
+    for (int chn = 0; chn < 8; chn++) {
+        auto &channel_gen = channels[chn];
+        for (auto &[pulse, addr]: channel_gen.pulses.pulses) {
+            auto inst = Jaqal_v1::program_PLUT(pulse, addr);
+            io.write((char*)&inst, sizeof(inst));
+        }
+        uint16_t idxbuff[std::max(Jaqal_v1::SLUT_MAXCNT, Jaqal_v1::GLUT_MAXCNT)];
+        for (int i = 0; i < sizeof(idxbuff) / sizeof(uint16_t); i++)
+            idxbuff[i] = i;
+        auto nslut = (int)channel_gen.slut.size();
+        for (int i = 0; i < nslut; i += Jaqal_v1::SLUT_MAXCNT) {
+            auto blksize = std::min(Jaqal_v1::SLUT_MAXCNT, nslut - i);
+            for (int j = 0; j < blksize; j++)
+                idxbuff[j] = i + j;
+            auto inst = Jaqal_v1::program_SLUT(chn, idxbuff,
+                                               (const uint16_t*)&channel_gen.slut[i],
+                                               blksize);
+            io.write((char*)&inst, sizeof(inst));
+        }
+        auto nglut = (int)channel_gen.glut.size();
+        uint16_t starts[Jaqal_v1::GLUT_MAXCNT];
+        uint16_t ends[Jaqal_v1::GLUT_MAXCNT];
+        for (int i = 0; i < nglut; i += Jaqal_v1::GLUT_MAXCNT) {
+            auto blksize = std::min(Jaqal_v1::GLUT_MAXCNT, nglut - i);
+            for (int j = 0; j < blksize; j++) {
+                auto [start, end] = channel_gen.glut[i + j];
+                starts[j] = start;
+                ends[j] = end;
+                idxbuff[j] = i + j;
+            }
+            auto inst = Jaqal_v1::program_GLUT(chn, idxbuff, starts, ends, blksize);
+            io.write((char*)&inst, sizeof(inst));
+        }
+    }
+    return io.get_buf();
+}
+
+PyObject *JaqalPulseCompilerGen::BoardGen::get_sequence() const
+{
+    pybytes_ostream io;
+    std::span<const std::pair<int64_t,int16_t>> chn_gate_ids[8];
+    for (int chn = 0; chn < 8; chn++)
+        chn_gate_ids[chn] = std::span(channels[chn].gate_ids);
+    auto output_channel = [&] (int chn) {
+        uint16_t gaddrs[Jaqal_v1::GSEQ_MAXCNT];
+        auto &gate_ids = chn_gate_ids[chn];
+        assert(gate_ids.size() != 0);
+        int blksize = std::min(Jaqal_v1::GSEQ_MAXCNT, (int)gate_ids.size());
+        for (int i = 0; i < blksize; i++)
+            gaddrs[i] = gate_ids[i].first;
+        auto inst = Jaqal_v1::sequence(chn, Jaqal_v1::SeqMode::GATE, gaddrs, blksize);
+        io.write((char*)&inst, sizeof(inst));
+        gate_ids = gate_ids.subspan(blksize);
+    };
+    while (true) {
+        int out_chn = -1;
+        int64_t out_time = INT64_MAX;
+        for (int chn = 0; chn < 8; chn++) {
+            auto &gate_ids = chn_gate_ids[chn];
+            if (gate_ids.size() == 0)
+                continue;
+            auto first_time = gate_ids[0].first;
+            if (first_time < out_time) {
+                out_chn = chn;
+                out_time = first_time;
+            }
+        }
+        if (out_chn < 0)
+            break;
+        output_channel(out_chn);
+    }
+    return io.get_buf();
+}
+
+void JaqalPulseCompilerGen::BoardGen::end()
+{
+    for (auto &channel_gen: channels) {
+        channel_gen.end();
+    }
+}
+
 void SyncChannelGen::process_channel(ToneBuffer &tone_buffer, int chn,
                                      int64_t total_cycle)
 {
