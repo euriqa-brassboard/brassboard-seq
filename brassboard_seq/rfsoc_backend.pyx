@@ -45,6 +45,11 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
     cppclass PulseCompilerGen(Generator):
         PyObject *output
 
+    Generator *new_jaqal_pulse_compiler_generator() except +
+    cppclass JaqalPulseCompilerGen(Generator):
+        object get_prefix(int n) except +
+        object get_sequence(int n) except +
+
     cppclass JaqalInst:
         bytes to_pybytes() except +
         object to_pylong() except +
@@ -127,6 +132,18 @@ cdef class PulseCompilerGenerator(RFSOCGenerator):
     @property
     def output(self):
         return <dict>(<PulseCompilerGen*>self.gen.get()).output
+
+@cython.auto_pickle(False)
+@cython.final
+cdef class Jaqalv1Generator(RFSOCGenerator):
+    def __cinit__(self):
+        self.gen.reset(new_jaqal_pulse_compiler_generator())
+
+    def get_prefix(self, n):
+        return (<JaqalPulseCompilerGen*>self.gen.get()).get_prefix(n)
+
+    def get_sequence(self, n):
+        return (<JaqalPulseCompilerGen*>self.gen.get()).get_sequence(n)
 
 cdef PyObject *raise_invalid_channel(tuple path) except NULL:
     name = '/'.join(path)
