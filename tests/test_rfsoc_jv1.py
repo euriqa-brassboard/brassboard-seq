@@ -1,6 +1,6 @@
 #
 
-from brassboard_seq.rfsoc_backend import Jaqal_v1, JaqalInst_v1
+from brassboard_seq.rfsoc_backend import Jaqal_v1, JaqalInst_v1, JaqalChannelGen_v1
 
 import pytest
 import re
@@ -959,3 +959,115 @@ def test_sequence():
             chn = random.randint(0, 7)
             sc.add_gate([rand_pulse(chn) for _ in range(random.randint(3, 4))])
         sc.check_seq()
+
+
+def test_channel_gen():
+    freq_params = [(0, 0, 0, 0), (100e6, 0, 0, 0),
+                   (150e6, 0, 0, 0), (100e6, 0, 100e6, 0),
+                   (150e6, -100e6, 0, 0), (150e6, 10e6, 0, -20e6),
+                   (3e6, 1e6, 0, -2e6), (3e6, 1e6, 2e6, 0)]
+    amp_params = [(0, 0, 0, 0), (1, 0, 0, 0), (0.15, 0, 0, 0), (0.1, 0, 0.1, 0),
+                  (0.15, -0.1, 0, 0), (0.15, 0.01, 0, -0.02),
+                  (0.3, 0.1, 0, -0.2), (0.3, 0.1, 0.2, 0)]
+    phase_params = [(0, 0, 0, 0), (0.9, 0, 0, 0), (0.15, 0, 0, 0), (0.1, 0, 0.1, 0),
+                    (0.15, -0.1, 0, 0), (0.15, 0.01, 0, -0.02),
+                    (0.3, 0.1, 0, -0.2), (0.3, 0.1, 0.2, 0)]
+    def freq_pulse(tone, cycles, param_idx):
+        return Jaqal_v1.freq_pulse(0, tone, freq_params[param_idx],
+                                   cycles, False, False, False)
+    def amp_pulse(tone, cycles, param_idx):
+        return Jaqal_v1.amp_pulse(0, tone, amp_params[param_idx],
+                                  cycles, False, False, False)
+    def phase_pulse(tone, cycles, param_idx):
+        return Jaqal_v1.phase_pulse(0, tone, phase_params[param_idx],
+                                    cycles, False, False, False)
+    def frame_pulse(tone, cycles, param_idx):
+        return Jaqal_v1.frame_pulse(0, tone, phase_params[param_idx],
+                                    cycles, False, False, False, 0, 0)
+    gen = JaqalChannelGen_v1()
+    gen.add_pulse(freq_pulse(0, 1000, 0), 0)
+    gen.add_pulse(amp_pulse(0, 1000, 0), 0)
+    gen.add_pulse(phase_pulse(0, 1000, 0), 0)
+    gen.add_pulse(frame_pulse(0, 1000, 0), 0)
+    gen.end()
+
+    assert gen.get_plut() == [freq_pulse(0, 1000, 0), amp_pulse(0, 1000, 0),
+                              phase_pulse(0, 1000, 0), frame_pulse(0, 1000, 0)]
+    assert gen.get_slut() == [0, 1, 2, 3]
+    assert gen.get_glut() == [(0, 3)]
+    assert gen.get_gseq() == [(0, 0)]
+
+    gen.clear()
+    gen.add_pulse(freq_pulse(0, 1000, 0), 0)
+    gen.add_pulse(amp_pulse(0, 1000, 0), 0)
+    gen.add_pulse(phase_pulse(0, 1000, 0), 0)
+    gen.add_pulse(frame_pulse(0, 1000, 0), 0)
+    gen.add_pulse(freq_pulse(0, 1000, 0), 1000)
+    gen.add_pulse(amp_pulse(0, 1000, 0), 1000)
+    gen.add_pulse(phase_pulse(0, 1000, 0), 1000)
+    gen.add_pulse(frame_pulse(0, 1000, 0), 1000)
+    gen.end()
+
+    assert gen.get_plut() == [freq_pulse(0, 1000, 0), amp_pulse(0, 1000, 0),
+                              phase_pulse(0, 1000, 0), frame_pulse(0, 1000, 0)]
+    assert gen.get_slut() == [0, 1, 2, 3]
+    assert gen.get_glut() == [(0, 3)]
+    assert gen.get_gseq() == [(0, 0), (1000, 0)]
+
+    gen.clear()
+    gen.add_pulse(freq_pulse(0, 1000, 0), 0)
+    gen.add_pulse(amp_pulse(0, 1000, 0), 0)
+    gen.add_pulse(phase_pulse(0, 1000, 0), 0)
+    gen.add_pulse(frame_pulse(0, 1000, 0), 0)
+    gen.add_pulse(freq_pulse(0, 1000, 1), 1000)
+    gen.add_pulse(amp_pulse(0, 1000, 1), 1000)
+    gen.add_pulse(phase_pulse(0, 1000, 1), 1000)
+    gen.add_pulse(frame_pulse(0, 1000, 1), 1000)
+    gen.add_pulse(freq_pulse(0, 1000, 0), 2000)
+    gen.add_pulse(amp_pulse(0, 1000, 0), 2000)
+    gen.add_pulse(phase_pulse(0, 1000, 0), 2000)
+    gen.add_pulse(frame_pulse(0, 1000, 0), 2000)
+    gen.add_pulse(freq_pulse(0, 1000, 1), 3000)
+    gen.add_pulse(amp_pulse(0, 1000, 1), 3000)
+    gen.add_pulse(phase_pulse(0, 1000, 1), 3000)
+    gen.add_pulse(frame_pulse(0, 1000, 1), 3000)
+    gen.end()
+
+    assert gen.get_plut() == [freq_pulse(0, 1000, 0), amp_pulse(0, 1000, 0),
+                              phase_pulse(0, 1000, 0), frame_pulse(0, 1000, 0),
+                              freq_pulse(0, 1000, 1), amp_pulse(0, 1000, 1),
+                              phase_pulse(0, 1000, 1), frame_pulse(0, 1000, 1)]
+    assert gen.get_slut() == [0, 1, 2, 3, 4, 5, 6, 7]
+    assert gen.get_glut() == [(0, 7)]
+    assert gen.get_gseq() == [(0, 0), (2000, 0)]
+
+    gen.clear()
+    gen.add_pulse(freq_pulse(0, 1000, 0), 0)
+    gen.add_pulse(amp_pulse(0, 1000, 0), 0)
+    gen.add_pulse(phase_pulse(0, 1000, 0), 0)
+    gen.add_pulse(frame_pulse(0, 1000, 0), 0)
+    gen.add_pulse(freq_pulse(0, 1000, 1), 1000)
+    gen.add_pulse(amp_pulse(0, 1000, 1), 1000)
+    gen.add_pulse(phase_pulse(0, 1000, 1), 1000)
+    gen.add_pulse(frame_pulse(0, 1000, 1), 1000)
+    gen.add_pulse(freq_pulse(0, 1000, 0), 2000)
+    gen.add_pulse(amp_pulse(0, 1000, 0), 2000)
+    gen.add_pulse(phase_pulse(0, 1000, 0), 2000)
+    gen.add_pulse(frame_pulse(0, 1000, 0), 2000)
+    gen.add_pulse(freq_pulse(0, 1000, 1), 3000)
+    gen.add_pulse(amp_pulse(0, 1000, 1), 3000)
+    gen.add_pulse(phase_pulse(0, 1000, 1), 3000)
+    gen.add_pulse(frame_pulse(0, 1000, 1), 3000)
+    gen.add_pulse(freq_pulse(0, 1000, 0), 4000)
+    gen.add_pulse(amp_pulse(0, 1000, 0), 4000)
+    gen.add_pulse(phase_pulse(0, 1000, 0), 4000)
+    gen.add_pulse(frame_pulse(0, 1000, 0), 4000)
+    gen.end()
+
+    assert gen.get_plut() == [freq_pulse(0, 1000, 0), amp_pulse(0, 1000, 0),
+                              phase_pulse(0, 1000, 0), frame_pulse(0, 1000, 0),
+                              freq_pulse(0, 1000, 1), amp_pulse(0, 1000, 1),
+                              phase_pulse(0, 1000, 1), frame_pulse(0, 1000, 1)]
+    assert gen.get_slut() == [4, 5, 6, 7, 0, 1, 2, 3, 0, 1, 2, 3]
+    assert gen.get_glut() == [(0, 7), (8, 11)]
+    assert gen.get_gseq() == [(0, 1), (1000, 0), (3000, 0)]

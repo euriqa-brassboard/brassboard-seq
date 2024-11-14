@@ -129,6 +129,21 @@ convert_pdq_spline_phase(std::array<double,4> sp, int64_t cycles)
 
 using JaqalInst = Bits<int64_t,4>;
 
+struct PulseAllocator {
+    std::map<JaqalInst,int> pulses;
+
+    void clear()
+    {
+        pulses.clear();
+    }
+
+    int get_addr(JaqalInst pulse)
+    {
+        auto [it, inserted] = pulses.emplace(pulse, int(pulses.size()));
+        return it->second;
+    }
+};
+
 struct PDQSpline {
     std::array<int64_t,4> orders;
     int shift;
@@ -1045,6 +1060,157 @@ struct Jaqal_v1 {
             // Work around this requirement with a union char buffer.
             char _channel_mem[8 * sizeof(ChannelLUT)];
         };
+    };
+
+    struct ChannelGen {
+        PulseAllocator pulses;
+        std::vector<std::pair<int64_t,int16_t>> pulse_ids;
+        std::vector<int16_t> slut;
+        std::vector<std::pair<int16_t,int16_t>> glut;
+        std::vector<std::pair<int64_t,int16_t>> gate_ids;
+
+        void add_pulse(const JaqalInst &inst, int64_t cycle)
+        {
+            auto idx = pulses.get_addr(inst);
+            if (idx >> Jaqal_v1::PLUTW)
+                throw std::length_error("Too many pulses in sequence.");
+            pulse_ids.push_back({ cycle, int16_t(idx) });
+        }
+
+        void clear()
+        {
+            pulses.clear();
+            pulse_ids.clear();
+            slut.clear();
+            glut.clear();
+            gate_ids.clear();
+        }
+
+        int16_t add_gate(std::span<std::pair<int64_t,int16_t>> pulses)
+        {
+            auto old_slut_len = slut.size();
+            auto npulses = pulses.size();
+            auto new_slut_len = old_slut_len + npulses;
+            if (new_slut_len >> Jaqal_v1::SLUTW)
+                throw std::length_error("Too many SLUT entires.");
+            slut.resize(new_slut_len);
+            for (size_t i = 0; i < npulses; i++)
+                slut[old_slut_len + i] = pulses[i].second;
+            auto gate_id = glut.size();
+            if (gate_id >> Jaqal_v1::GLUTW)
+                throw std::length_error("Too many GLUT entires.");
+            glut.push_back({ int16_t(old_slut_len), int16_t(new_slut_len - 1) });
+            return int16_t(gate_id);
+        }
+
+        void sequence_gate(int16_t gid, int first_pid)
+        {
+            gate_ids.push_back({ pulse_ids[first_pid].first, gid });
+        }
+
+        void end()
+        {
+            // Keep the pulses that are added together together by using stable sort.
+            // These currently belongs to the same tonedata
+            // and there's a higher chance we have some reusable subsequences
+            std::ranges::stable_sort(pulse_ids, [] (auto &a, auto &b) {
+                return a.first < b.first;
+            });
+            int npulse = pulse_ids.size();
+            if (!npulse)
+                return;
+            std::vector<int> pulse_str(npulse + 1);
+            std::vector<int> pulse_sa(npulse + 1);
+            std::vector<int> pulse_rk(npulse + 1);
+            std::vector<int> pulse_height(npulse - 1);
+            for (int i = 0; i < npulse; i++)
+                pulse_str[i] = pulse_ids[i].second + 1;
+            pulse_str[npulse] = 0;
+            get_suffix_array(pulse_sa, pulse_str, pulse_rk);
+            order_to_rank(pulse_rk, pulse_sa);
+            for (int i = 0; i < npulse; i++)
+                pulse_str[i] = pulse_ids[i].second + 1;
+            pulse_str[npulse] = 0;
+            get_height_array(pulse_height, pulse_str, pulse_sa, pulse_rk);
+
+            // First construct the set of substrings from the shortest to the longest
+            struct SubStrInfo {
+                int sa_idx;
+                int nrep;
+                int str_len;
+                int16_t gate_id;
+            };
+            std::vector<SubStrInfo> substrs;
+            foreach_max_range(pulse_height, [&] (int i0, int i1, int maxh) {
+                // Simple heuristic to avoid creating too many short gates
+                if (maxh < 4 || maxh >= 256)
+                    return;
+                substrs.push_back({ i0 + 1, i1 - i0 + 2, maxh, -1 });
+            });
+            std::ranges::stable_sort(substrs, [] (auto &a, auto &b) {
+                return a.str_len > b.str_len;
+            });
+
+            std::map<int,std::pair<int,int>> substr_map;
+            int nsubstr = substrs.size();
+            for (int substr_id = 0; substr_id < nsubstr; substr_id++) {
+                int nadded = 0;
+                int last_added = 0;
+                auto &substr = substrs[substr_id];
+                auto sa_begin = substr.sa_idx;
+                auto sa_end = sa_begin + substr.nrep;
+                auto str_len = substr.str_len;
+
+                // Try to insert each substring to the map
+                for (int sa_idx = sa_begin; sa_idx < sa_end; sa_idx++) {
+                    int str_idx = pulse_sa[sa_idx];
+                    int str_end = str_idx + str_len;
+                    auto it = substr_map.upper_bound(str_idx);
+                    if (it != substr_map.begin())
+                        --it;
+                    for (; it != substr_map.end(); ++it) {
+                        auto idx2 = it->first;
+                        auto len2 = it->second.second;
+                        if (idx2 >= str_end)
+                            break;
+                        if (idx2 + len2 > str_idx) {
+                            goto skip_str;
+                        }
+                    }
+                    substr_map[str_idx] = { substr_id, str_len };
+                    nadded++;
+                    last_added = str_idx;
+                skip_str:
+                    ;
+                }
+                if (nadded == 1) {
+                    // Only added a single one, this is strictly bad,
+                    // just remove what we've added
+                    substr_map.erase(last_added);
+                }
+                else if (nadded > 1) {
+                    substr.gate_id = add_gate(
+                        std::span(pulse_ids).subspan(pulse_sa[sa_begin], str_len));
+                }
+            }
+            int next_pulse = 0;
+            for (auto [str_idx, substr_info]: substr_map) {
+                assert(str_idx >= next_pulse);
+                if (str_idx > next_pulse) {
+                    auto gate_id = add_gate(
+                        std::span(pulse_ids).subspan(next_pulse, str_idx - next_pulse));
+                    sequence_gate(gate_id, next_pulse);
+                }
+                auto &substr = substrs[substr_info.first];
+                sequence_gate(substr.gate_id, str_idx);
+                next_pulse = str_idx + substr_info.second;
+            }
+            if (npulse > next_pulse) {
+                auto gate_id = add_gate(
+                    std::span(pulse_ids).subspan(next_pulse, npulse - next_pulse));
+                sequence_gate(gate_id, next_pulse);
+            }
+        }
     };
 
     static void print_inst(std::ostream &io, const JaqalInst &inst, bool print_float)
