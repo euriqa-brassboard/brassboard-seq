@@ -1475,6 +1475,73 @@ PulseCompilerGen::Info::Info()
     }
 }
 
+struct JaqalPulseCompilerGen: SyncChannelGen {
+    struct BoardGen {
+        Jaqal_v1::ChannelGen channels[8];
+        std::vector<char> data;
+        void clear()
+        {
+            for (auto &channel: channels)
+                channel.clear();
+            data.clear();
+        }
+        void end();
+    };
+    BoardGen boards[4]; // 4 * 8 physical channels
+
+    void start() override
+    {
+        for (auto &board: boards) {
+            board.clear();
+        }
+    }
+    void add_tone_data(int chn, int64_t duration_cycles, cubic_spline_t freq,
+                       cubic_spline_t amp, cubic_spline_t phase,
+                       output_flags_t flags, int64_t cur_cycle) override;
+    void end() override
+    {
+        for (auto &board: boards) {
+            board.end();
+        }
+    }
+    ~JaqalPulseCompilerGen() override
+    {}
+};
+
+Generator *new_jaqal_pulse_compiler_generator()
+{
+    return new JaqalPulseCompilerGen;
+}
+
+void JaqalPulseCompilerGen::add_tone_data(int chn, int64_t duration_cycles,
+                                          cubic_spline_t freq, cubic_spline_t amp,
+                                          cubic_spline_t phase, output_flags_t flags,
+                                          int64_t cur_cycle)
+{
+    auto board_id = chn >> 4;
+    assert(board_id < 4);
+    auto &board_gen = boards[board_id];
+    auto channel = (chn >> 1) & 7;
+    auto tone = chn & 1;
+    auto &channel_gen = board_gen.channels[channel];
+    channel_gen.add_pulse(Jaqal_v1::freq_pulse(channel, tone, freq, duration_cycles,
+                                               flags.wait_trigger, flags.sync,
+                                               flags.feedback_enable), cur_cycle);
+    channel_gen.add_pulse(Jaqal_v1::amp_pulse(channel, tone, amp, duration_cycles,
+                                              flags.wait_trigger), cur_cycle);
+    channel_gen.add_pulse(Jaqal_v1::phase_pulse(channel, tone, phase, duration_cycles,
+                                                flags.wait_trigger), cur_cycle);
+    channel_gen.add_pulse(Jaqal_v1::frame_pulse(channel, tone, {0, 0, 0, 0},
+                                                duration_cycles, flags.wait_trigger,
+                                                false, false, 0, 0), cur_cycle);
+}
+
+void JaqalPulseCompilerGen::BoardGen::end()
+{
+    for (auto &channel_gen: channels)
+        channel_gen.end();
+}
+
 void SyncChannelGen::process_channel(ToneBuffer &tone_buffer, int chn,
                                      int64_t total_cycle)
 {
