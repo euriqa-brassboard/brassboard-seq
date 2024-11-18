@@ -266,13 +266,6 @@ cdef np_tanh = np.tanh
 cdef np_hypot = np.hypot
 cdef np_rint = np.rint
 
-cdef inline _round_int64(v):
-    if type(v) is int:
-        return v
-    if type(v) is float:
-        return cmath.llrint(PyFloat_AS_DOUBLE(v))
-    return int(round(v))
-
 def get_value(v, age):
     cdef py_object pyage
     if isinstance(age, int):
@@ -539,7 +532,11 @@ def round_int64(_v, /):
         if not (cnpy.PyArray_ISINTEGER(ary) or cnpy.PyArray_ISBOOL(ary)):
             ary = <cnpy.ndarray>np_rint(ary)
         return cnpy.PyArray_Cast(ary, cnpy.NPY_INT64)
-    return _round_int64(_v)
+    if type(_v) is int:
+        return _v
+    if type(_v) is float:
+        return cmath.llrint(PyFloat_AS_DOUBLE(_v))
+    return round(_v)
 
 cpdef ifelse(b, v1, v2):
     if (isinstance(b, cnpy.ndarray) or isinstance(v1, cnpy.ndarray) or
