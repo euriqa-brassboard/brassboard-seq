@@ -17,8 +17,8 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.rtval cimport get_value_bool, \
-  new_const, new_extern_age, rt_eval_throw, ExternCallback
+from brassboard_seq.rtval cimport new_const, new_extern_age, rt_eval_throw, \
+  ExternCallback
 from brassboard_seq.utils cimport _assume_not_none, assume_not_none, \
   event_time_key, bb_err_format, PyExc_RuntimeError, PyExc_TypeError
 
@@ -37,6 +37,7 @@ def time_scale():
     return py_time_scale
 
 cdef extern from "src/event_time.cpp" namespace "brassboard_seq::event_time":
+    bint get_cond_val(PyObject*, unsigned age, py_object &pyage) except +
     str str_time(long long) except +
     void update_event_time_gc_callback(PyTypeObject *type, EventTime)
 
@@ -239,7 +240,7 @@ cdef long long get_time_value(EventTime self, int base_id, unsigned age,
     if prev is not None:
         prev_val = get_time_value(prev, base_id, age, pyage, cache)
 
-    cdef bint cond = get_value_bool(self.cond, age, pyage)
+    cdef bint cond = get_cond_val(<PyObject*>self.cond, age, pyage)
     cdef long long offset = 0
     if cond:
         p_rt_offset = self.data.get_rt_offset()
@@ -333,7 +334,7 @@ cdef EventTime find_common_root(EventTimeDiff self, unsigned age, py_object &pya
         frontier[prev.data.id] = <void*>prev
         wait_for = t.wait_for
         if wait_for is not None:
-            if not get_value_bool(t.cond, age, pyage):
+            if not get_cond_val(<PyObject*>t.cond, age, pyage):
                 continue
             frontier[wait_for.data.id] = <void*>wait_for
     return <EventTime>deref(frontier.begin()).second

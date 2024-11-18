@@ -27,6 +27,18 @@
 
 namespace brassboard_seq::event_time {
 
+static inline bool get_cond_val(PyObject *v, unsigned age, py_object &pyage)
+{
+    if (v == Py_True) [[likely]]
+        return true;
+    if (v == Py_False)
+        return false;
+    assert(rtval::is_rtval(v));
+    auto rv = (rtval::_RuntimeValue*)v;
+    rtval::rt_eval_throw(rv, age, pyage);
+    return !rtval::rtval_cache(rv).is_zero();
+}
+
 static PyObject *str_time(long long t)
 {
     assert(time_scale == 1e12);
