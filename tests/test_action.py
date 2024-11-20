@@ -223,6 +223,12 @@ def test_const():
     expect1 = list(ts * 0 + 0.2)
     assert v1 == pytest.approx(expect1)
 
+    p = ValueFunction(1)
+    test1 = test_utils.RampTest(p, 1, 0)
+    v1 = test1.eval_runtime(0, ts)
+    expect1 = list(ts * 0 + 1)
+    assert v1 == pytest.approx(expect1)
+
     v0 = 0.1
     p = ValueFunction(rtval.new_extern(lambda: v0))
     test1 = test_utils.RampTest(p, 1, 0)

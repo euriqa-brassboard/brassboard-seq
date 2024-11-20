@@ -102,8 +102,8 @@ cdef class RampFunction:
                 fvalue = new_expr2(ValueType.Add, fvalue, const0)
             deref(interp_func).set_value(<RuntimeValue>fvalue, args)
             self.interp_func = move(interp_func)
-        else:
-            fvalue = <double>fvalue
+        elif type(fvalue) is not float:
+            fvalue = pyfloat_from_double(<double>fvalue)
         self._fvalue = fvalue
 
     cdef int set_runtime_params(self, unsigned age, py_object &pyage) except -1:
