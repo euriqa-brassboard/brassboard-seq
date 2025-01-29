@@ -1082,35 +1082,27 @@ struct SyncChannelGen: Generator {
 
 struct PulseCompilerGen: SyncChannelGen {
     struct Info {
-        struct StrKey {
-            PyObject *str;
-            Py_hash_t hash;
-            StrKey(PyObject *str)
-                : str(str),
-                  hash(PyObject_Hash(str))
-            {}
-        };
         PyObject *channel_list[64];
         PyObject *CubicSpline;
         PyObject *ToneData;
         PyObject *cubic_0;
-        std::vector<std::pair<StrKey,PyObject*>> tonedata_fields;
-        StrKey channel_key;
-        StrKey tone_key;
-        StrKey duration_cycles_key;
-        StrKey frequency_hz_key;
-        StrKey amplitude_key;
-        StrKey phase_rad_key;
-        StrKey frame_rotation_rad_key;
-        StrKey wait_trigger_key;
-        StrKey sync_key;
-        StrKey output_enable_key;
-        StrKey feedback_enable_key;
-        StrKey bypass_lookup_tables_key;
+        std::vector<std::pair<PyObject*,PyObject*>> tonedata_fields;
+        PyObject *channel_key;
+        PyObject *tone_key;
+        PyObject *duration_cycles_key;
+        PyObject *frequency_hz_key;
+        PyObject *amplitude_key;
+        PyObject *phase_rad_key;
+        PyObject *frame_rotation_rad_key;
+        PyObject *wait_trigger_key;
+        PyObject *sync_key;
+        PyObject *output_enable_key;
+        PyObject *feedback_enable_key;
+        PyObject *bypass_lookup_tables_key;
 
-        static inline void dict_setitem(PyObject *dict, StrKey key, PyObject *value)
+        static inline void dict_setitem(PyObject *dict, PyObject *key, PyObject *value)
         {
-            throw_if(_PyDict_SetItem_KnownHash(dict, key.str, value, key.hash));
+            throw_if(PyDict_SetItem(dict, key, value));
         }
 
         __attribute__((returns_nonnull,always_inline))
