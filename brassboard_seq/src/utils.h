@@ -760,7 +760,7 @@ struct Bits {
     PyObject *to_pylong() const
     {
 #if PY_VERSION_HEX >= 0x030d0000
-        return throw_if_not(PyLong_FromUnsignedNativeBytes(&bits[0], sizeof(bits), 0));
+        return throw_if_not(PyLong_FromUnsignedNativeBytes(&bits[0], sizeof(bits), 1));
 #else
         return throw_if_not(_PyLong_FromByteArray((const unsigned char*)&bits[0],
                                                   sizeof(bits), true, 0));
