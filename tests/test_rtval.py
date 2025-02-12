@@ -18,7 +18,11 @@ def cmp_value(v1, v2):
             return v1 == pytest.approx(v2, rel=1e-4, abs=1e-4)
         if isinstance(v2, np.float16):
             return v1 == pytest.approx(v2, rel=1e-3, abs=1e-3)
-        return v1 == pytest.approx(v2)
+        # Now the following code doesn't make sense
+        # but approx can actually be more restricted than == in some cases...
+        # Ref https://github.com/pytest-dev/pytest/pull/9354
+        # Ref https://github.com/pytest-dev/pytest/issues/13218
+        return v1 == v2 or v1 == pytest.approx(v2)
     if math.isnan(v1):
         return math.isnan(v2)
     if math.isinf(v1):

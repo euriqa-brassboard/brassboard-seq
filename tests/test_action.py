@@ -282,10 +282,18 @@ def cmp_list(l1, l2):
         assert np.isfinite(v1)
         assert np.isfinite(v2)
         if isinstance(v2, np.float32):
-            return v1 == pytest.approx(v2, rel=1e-4, abs=1e-4)
-        if isinstance(v2, np.float16):
-            return v1 == pytest.approx(v2, rel=1e-3, abs=1e-3)
-        return v1 == pytest.approx(v2)
+            if not v1 == pytest.approx(v2, rel=1e-4, abs=1e-4):
+                return False
+        elif isinstance(v2, np.float16):
+            if not v1 == pytest.approx(v2, rel=1e-3, abs=1e-3):
+                return False
+        # Now the following code doesn't make sense
+        # but approx can actually be more restricted than == in some cases...
+        # Ref https://github.com/pytest-dev/pytest/pull/9354
+        # Ref https://github.com/pytest-dev/pytest/issues/13218
+        elif not (v1 == v2 or v1 == pytest.approx(v2)):
+            return False
+    return True
 
 def run_check_unary(f):
     if f is np.arccosh:
