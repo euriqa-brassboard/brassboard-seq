@@ -97,6 +97,9 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
         @staticmethod
         vector[JaqalInst] extract_pulses(const char *p, size_t sz) except +
 
+        @staticmethod
+        dict inst_to_dict(const JaqalInst &inst) except +
+
 rampfunction_type = <PyTypeObject*>RampFunction
 seqcubicspline_type = <PyTypeObject*>SeqCubicSpline
 
@@ -245,6 +248,9 @@ cdef class JaqalInst_v1:
 
     def to_bytes(self):
         return self.inst.to_pybytes()
+
+    def to_dict(self):
+        return _Jaqal_v1.inst_to_dict(self.inst)
 
     def __index__(self):
         return self.inst.to_pylong()

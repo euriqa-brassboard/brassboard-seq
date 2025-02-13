@@ -28,10 +28,14 @@ class MatchGLUT:
         if not isinstance(other, JaqalInst_v1):
             return NotImplemented
         s = str(other)
+        d = other.to_dict()
+        assert d['type'] == 'glut'
         m = re.match('^glut\\.([0-7])\\[([0-6])\\]((?: \\[[0-9]+\\]=\\[[0-9]+,[0-9]+\\]){0,6})$', s)
         assert m is not None
+        assert d['channel'] == int(m[1])
         if self.chn is not None:
             assert int(m[1]) == self.chn
+        assert d['count'] == int(m[2])
         if self.cnt is not None:
             assert int(m[2]) == self.cnt
         gaddrs = []
@@ -43,6 +47,9 @@ class MatchGLUT:
             gaddrs.append(int(sm[1]))
             starts.append(int(sm[2]))
             ends.append(int(sm[3]))
+        assert d['gaddrs'] == gaddrs
+        assert d['starts'] == starts
+        assert d['ends'] == ends
         if self.gaddrs is not None:
             assert gaddrs == self.gaddrs
         if self.starts is not None:
@@ -68,10 +75,14 @@ class MatchSLUT:
         if not isinstance(other, JaqalInst_v1):
             return NotImplemented
         s = str(other)
+        d = other.to_dict()
+        assert d['type'] == 'slut'
         m = re.match('^slut\\.([0-7])\\[([0-9])\\]((?: \\[[0-9]+\\]=[0-9]+){0,9})$', s)
         assert m is not None
+        assert d['channel'] == int(m[1])
         if self.chn is not None:
             assert int(m[1]) == self.chn
+        assert d['count'] == int(m[2])
         if self.cnt is not None:
             assert int(m[2]) == self.cnt
         saddrs = []
@@ -81,6 +92,8 @@ class MatchSLUT:
             assert sm is not None
             saddrs.append(int(sm[1]))
             paddrs.append(int(sm[2]))
+        assert d['paddrs'] == paddrs
+        assert d['saddrs'] == saddrs
         if self.saddrs is not None:
             assert saddrs == self.saddrs
         if self.paddrs is not None:
@@ -101,17 +114,22 @@ class MatchGSEQ:
         if not isinstance(other, JaqalInst_v1):
             return NotImplemented
         s = str(other)
+        d = other.to_dict()
         m = re.match('^(gseq|wait_anc|cont_anc)\\.([0-7])\\[([0-9]+)\\]((?: [0-9]+)*)$', s)
         assert m is not None
+        assert d['type'] == m[1]
         if self.mode is not None:
             assert m[1] == self.mode
+        assert d['channel'] == int(m[2])
         if self.chn is not None:
             assert int(m[2]) == self.chn
+        assert d['count'] == int(m[3])
         if self.cnt is not None:
             assert int(m[3]) == self.cnt
         gaddrs = []
         for ss in m[4].split():
             gaddrs.append(int(ss))
+        assert d['gaddrs'] == gaddrs
         if self.gaddrs is not None:
             assert gaddrs == self.gaddrs
         return True
@@ -145,13 +163,31 @@ class MatchPulse:
     def check_prefix(self, other):
         assert isinstance(other, JaqalInst_v1)
         use_str = self.fspl is not None
-        s = str(other) if use_str else repr(other)
-        m = re.match('^(pulse_data|plut|stream)\\.([0-7]) ((?:\\[[0-9]+\\]=)?)([_a-z]+)([01]) <([0-9]+)> {([^{}]+)}(.*)$', s)
-        assert m is not None
+        str_inst = str(other)
+        repr_inst = repr(other)
+        m_str = re.match('^(pulse_data|plut|stream)\\.([0-7]) ((?:\\[[0-9]+\\]=)?)([_a-z]+)([01]) <([0-9]+)> {([^{}]+)}(.*)$', str_inst)
+        assert m_str is not None
+        m_repr = re.match('^(pulse_data|plut|stream)\\.([0-7]) ((?:\\[[0-9]+\\]=)?)([_a-z]+)([01]) <([0-9]+)> {([^{}]+)}(.*)$', repr_inst)
+        assert m_repr is not None
+        assert m_str[1] == m_repr[1]
+        assert m_str[2] == m_repr[2]
+        assert m_str[3] == m_repr[3]
+        assert m_str[4] == m_repr[4]
+        assert m_str[5] == m_repr[5]
+        assert m_str[6] == m_repr[6]
+        assert m_str[8] == m_repr[8]
+        d = other.to_dict()
+        m = m_str
+        assert d['type'] == m[1]
         if self.mode is not None:
             assert m[1] == self.mode
+        assert d['channel'] == int(m[2])
         if self.chn is not None:
             assert int(m[2]) == self.chn
+        if d['type'] == 'plut':
+            assert d['paddr'] == int(m[3].lstrip('[').rstrip(']='))
+        else:
+            assert 'paddr' not in d
         if self.addr is not None:
             assert self.mode == 'plut'
             assert m[3] == f'[{self.addr}]='
@@ -159,16 +195,20 @@ class MatchPulse:
             assert m[3]
         else:
             assert not m[3]
+        assert d['param'] == m[4]
         assert m[4] == self.param
+        assert d['tone'] == int(m[5])
         if self.tone is not None:
             assert int(m[5]) == self.tone
+        assert d['cycles'] == int(m[6])
         if self.cycles is not None:
             assert int(m[6]) == self.cycles
 
-        spl_orders = m[7].split(', ')
-        norders = len(spl_orders)
+        fspl_orders = [float(o) for o in m_str[7].split(', ')]
+        norders = len(fspl_orders)
+        assert d['spline'] == fspl_orders + [0] * (4 - norders)
         if self.fspl is not None:
-            got = [float(o) for o in spl_orders]
+            got = fspl_orders
             expected = list(self.fspl)
             if self.approx:
                 got = got + [0] * (4 - len(got))
@@ -180,30 +220,39 @@ class MatchPulse:
                     assert all(o == 0 for o in expected[norders:])
                     expected = expected[:norders]
             assert got == expected
-        elif self.ispl is not None:
+
+        ispl_orders_strs = m_repr[7].split(', ')
+        assert len(ispl_orders_strs) == norders
+        ispl_orders = []
+        shift = 0
+        for i, so in enumerate(ispl_orders_strs):
+            so = so.split('>>')
+            if so[0] == '0':
+                ispl_orders.append(0)
+            else:
+                assert so[0].startswith('0x')
+                ispl_orders.append(int(so[0], 0))
+            if len(so) == 1:
+                assert shift == 0
+                continue
+            if i == 1:
+                shift = int(so[1])
+                continue
+            assert i > 0
+            assert int(so[1]) == i * shift
+
+        if norders > 1:
+            assert d['spline_shift'] == shift
+        signed_ispl_orders = [v if v < 2**63 else v - 2**64 for v in ispl_orders]
+        assert d['spline_mu'] == signed_ispl_orders + [0] * (4 - norders)
+
+        if self.ispl is not None:
             expected = list(self.ispl)
             assert len(expected) >= norders
             if len(expected) > norders:
                 assert all(o == 0 for o in expected[norders:])
                 expected = expected[:norders]
-            got = []
-            shift = 0
-            for i, so in enumerate(spl_orders):
-                so = so.split('>>')
-                if so[0] == '0':
-                    got.append(0)
-                else:
-                    assert so[0].startswith('0x')
-                    got.append(int(so[0], 0))
-                if len(so) == 1:
-                    assert shift == 0
-                    continue
-                if i == 1:
-                    shift = int(so[1])
-                    continue
-                assert i > 0
-                assert int(so[1]) == i * shift
-            assert got == expected
+            assert ispl_orders == expected
             if self.shift is not None:
                 assert shift == self.shift
 
@@ -228,9 +277,16 @@ class MatchPulse:
                     continue
             raise ValueError(f'Unknown pulse flag {flag}')
 
+        assert flags['trig'] == d['trig']
         if self.param == 'frame_rot':
-            assert 'fwd' in flags
-            assert 'inv' in flags
+            assert flags['fwd'] == d['fwd']
+            assert flags['inv'] == d['inv']
+            assert flags['eof'] == d['eof']
+            assert flags['clr'] == d['clr']
+        else:
+            assert flags['sync'] == d['sync']
+            assert flags['enable'] == d['enable']
+            assert flags['ff'] == d['ff']
         return flags
 
 class MatchParamPulse(MatchPulse):
@@ -290,8 +346,13 @@ class MatchFramePulse(MatchPulse):
 invalid_pulse = JaqalInst_v1(b'\xff' * 32)
 
 def check_invalid(v, msg):
-    assert str(Jaqal_v1.dump_insts(v.to_bytes(32, 'little'))) == f'invalid({msg}): {v:0>64x}'
-    pulses, = Jaqal_v1.extract_pulses(v.to_bytes(32, 'little'))
+    inst_bytes = v.to_bytes(32, 'little')
+    assert Jaqal_v1.dump_insts(inst_bytes) == f'invalid({msg}): {v:0>64x}'
+    d = JaqalInst_v1(inst_bytes).to_dict()
+    assert d['type'] == 'invalid'
+    assert d['error'] == msg
+    assert d['inst'] == f'{v:0>64x}'
+    pulses, = Jaqal_v1.extract_pulses(inst_bytes)
     assert pulses == invalid_pulse
 
 
@@ -301,6 +362,12 @@ def test_insts():
         Jaqal_v1.dump_insts(b'x')
 
     assert str(JaqalInst_v1()) == 'pulse_data.0 freq0 <0> {0}'
+    assert JaqalInst_v1().to_dict() == {'type': 'pulse_data', 'param': 'freq',
+                                        'channel': 0, 'tone': 0, 'cycles': 0,
+                                        'spline': [0.0, 0.0, 0.0, 0.0],
+                                        'spline_mu': [0, 0, 0, 0], 'spline_shift': 0,
+                                        'trig': False, 'sync': False,
+                                        'enable': False, 'ff': False}
     with pytest.raises(TypeError, match=f"Invalid type '{int}'"):
         JaqalInst_v1(2)
     with pytest.raises(ValueError, match=f"Invalid address '-1'"):

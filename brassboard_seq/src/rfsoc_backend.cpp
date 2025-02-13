@@ -25,6 +25,7 @@
 
 #include <bitset>
 #include <charconv>
+#include <sstream>
 
 #include <assert.h>
 
@@ -934,6 +935,185 @@ struct Jaqal_v1 {
         }
     };
 
+    struct DictConverter {
+        void invalid(const JaqalInst &inst, Executor::Error err)
+        {
+            throw_if(PyDict_SetItem(dict, type_str(), invalid_str()));
+            py_object msg(pyunicode_from_string(Executor::error_msg(err)));
+            throw_if(PyDict_SetItem(dict, error_str(), msg));
+            std::ostringstream stm;
+            stm << inst;
+            auto str = stm.str();
+            py_object py_str(pyunicode_from_string(str.c_str()));
+            throw_if(PyDict_SetItem(dict, inst_str(), py_str));
+        }
+
+        void GLUT(uint8_t chn, const uint16_t *gaddrs, const uint16_t *starts,
+                  const uint16_t *ends, int cnt)
+        {
+            throw_if(PyDict_SetItem(dict, type_str(), glut_str()));
+            throw_if(PyDict_SetItem(dict, channel_str(), pylong_cached(chn)));
+            throw_if(PyDict_SetItem(dict, count_str(), pylong_cached(cnt)));
+            py_object py_gaddrs(pylist_new(cnt));
+            py_object py_starts(pylist_new(cnt));
+            py_object py_ends(pylist_new(cnt));
+            for (int i = 0; i < cnt; i++) {
+                PyList_SET_ITEM(py_gaddrs.get(), i, pylong_from_long(gaddrs[i]));
+                PyList_SET_ITEM(py_starts.get(), i, pylong_from_long(starts[i]));
+                PyList_SET_ITEM(py_ends.get(), i, pylong_from_long(ends[i]));
+            }
+            throw_if(PyDict_SetItem(dict, gaddrs_str(), py_gaddrs));
+            throw_if(PyDict_SetItem(dict, starts_str(), py_starts));
+            throw_if(PyDict_SetItem(dict, ends_str(), py_ends));
+        }
+
+        void SLUT(uint8_t chn, const uint16_t *saddrs, const uint16_t *paddrs, int cnt)
+        {
+            throw_if(PyDict_SetItem(dict, type_str(), slut_str()));
+            throw_if(PyDict_SetItem(dict, channel_str(), pylong_cached(chn)));
+            throw_if(PyDict_SetItem(dict, count_str(), pylong_cached(cnt)));
+            py_object py_saddrs(pylist_new(cnt));
+            py_object py_paddrs(pylist_new(cnt));
+            for (int i = 0; i < cnt; i++) {
+                PyList_SET_ITEM(py_saddrs.get(), i, pylong_from_long(saddrs[i]));
+                PyList_SET_ITEM(py_paddrs.get(), i, pylong_from_long(paddrs[i]));
+            }
+            throw_if(PyDict_SetItem(dict, saddrs_str(), py_saddrs));
+            throw_if(PyDict_SetItem(dict, paddrs_str(), py_paddrs));
+        }
+        void GSEQ(uint8_t chn, const uint16_t *gaddrs, int cnt, SeqMode m)
+        {
+            if (m == SeqMode::GATE) {
+                throw_if(PyDict_SetItem(dict, type_str(), gseq_str()));
+            }
+            else if (m == SeqMode::WAIT_ANC) {
+                throw_if(PyDict_SetItem(dict, type_str(), wait_anc_str()));
+            }
+            else if (m == SeqMode::CONT_ANC) {
+                throw_if(PyDict_SetItem(dict, type_str(), cont_anc_str()));
+            }
+            throw_if(PyDict_SetItem(dict, channel_str(), pylong_cached(chn)));
+            throw_if(PyDict_SetItem(dict, count_str(), pylong_cached(cnt)));
+            py_object py_gaddrs(pylist_new(cnt));
+            for (int i = 0; i < cnt; i++)
+                PyList_SET_ITEM(py_gaddrs.get(), i, pylong_from_long(gaddrs[i]));
+            throw_if(PyDict_SetItem(dict, gaddrs_str(), py_gaddrs));
+        }
+
+        void param_pulse(int chn, int tone, Executor::ParamType param,
+                         const PDQSpline &spl, int64_t cycles, bool waittrig,
+                         bool sync, bool enable, bool fb_enable,
+                         Executor::PulseTarget tgt)
+        {
+            pulse_to_dict(tgt, (param == Executor::ParamType::Freq ? freq_str() :
+                                (param == Executor::ParamType::Amp ? amp_str() :
+                                 phase_str())), chn, tone, cycles, spl);
+            throw_if(PyDict_SetItem(dict, trig_str(), waittrig ? Py_True : Py_False));
+            throw_if(PyDict_SetItem(dict, sync_str(), sync ? Py_True : Py_False));
+            throw_if(PyDict_SetItem(dict, enable_str(), enable ? Py_True : Py_False));
+            throw_if(PyDict_SetItem(dict, ff_str(), fb_enable ? Py_True : Py_False));
+        }
+        void frame_pulse(int chn, int tone, const PDQSpline &spl, int64_t cycles,
+                         bool waittrig, bool apply_eof, bool clr_frame,
+                         int fwd_frame_mask, int inv_frame_mask,
+                         Executor::PulseTarget tgt)
+        {
+            pulse_to_dict(tgt, frame_rot_str(), chn, tone, cycles, spl);
+            throw_if(PyDict_SetItem(dict, trig_str(), waittrig ? Py_True : Py_False));
+            throw_if(PyDict_SetItem(dict, eof_str(), apply_eof ? Py_True : Py_False));
+            throw_if(PyDict_SetItem(dict, clr_str(), clr_frame ? Py_True : Py_False));
+            throw_if(PyDict_SetItem(dict, fwd_str(), pylong_cached(fwd_frame_mask)));
+            throw_if(PyDict_SetItem(dict, inv_str(), pylong_cached(inv_frame_mask)));
+        }
+
+        py_object dict{pydict_new()};
+
+    private:
+#define WRAP_STR(name, str)                             \
+        static inline PyObject *name##_str()            \
+        {                                               \
+            static auto u = PyUnicode_FromString(str);  \
+            return throw_if_not(u);                     \
+        }
+        WRAP_STR(type, "type")
+        WRAP_STR(invalid, "invalid")
+        WRAP_STR(plut, "plut")
+        WRAP_STR(slut, "slut")
+        WRAP_STR(glut, "glut")
+        WRAP_STR(gseq, "gseq")
+        WRAP_STR(wait_anc, "wait_anc")
+        WRAP_STR(cont_anc, "cont_anc")
+        WRAP_STR(pulse_data, "pulse_data")
+        WRAP_STR(stream, "stream")
+
+        WRAP_STR(error, "error")
+        WRAP_STR(inst, "inst")
+        WRAP_STR(channel, "channel")
+        WRAP_STR(count, "count")
+        WRAP_STR(gaddrs, "gaddrs")
+        WRAP_STR(starts, "starts")
+        WRAP_STR(ends, "ends")
+        WRAP_STR(saddrs, "saddrs")
+        WRAP_STR(paddrs, "paddrs")
+
+        WRAP_STR(paddr, "paddr")
+        WRAP_STR(param, "param")
+        WRAP_STR(tone, "tone")
+        WRAP_STR(cycles, "cycles")
+        WRAP_STR(spline, "spline")
+        WRAP_STR(spline_mu, "spline_mu")
+        WRAP_STR(spline_shift, "spline_shift")
+
+        WRAP_STR(freq, "freq")
+        WRAP_STR(amp, "amp")
+        WRAP_STR(phase, "phase")
+        WRAP_STR(frame_rot, "frame_rot")
+
+        WRAP_STR(trig, "trig")
+        WRAP_STR(sync, "sync")
+        WRAP_STR(enable, "enable")
+        WRAP_STR(ff, "ff")
+        WRAP_STR(eof, "eof")
+        WRAP_STR(clr, "clr")
+        WRAP_STR(fwd, "fwd")
+        WRAP_STR(inv, "inv")
+
+        void pulse_to_dict(Executor::PulseTarget tgt, PyObject *name, int chn,
+                           int tone, int64_t cycles, const PDQSpline &spl)
+        {
+            if (tgt.type == Executor::PulseTarget::None) {
+                throw_if(PyDict_SetItem(dict, type_str(), pulse_data_str()));
+            }
+            else if (tgt.type == Executor::PulseTarget::PLUT) {
+                throw_if(PyDict_SetItem(dict, type_str(), plut_str()));
+            }
+            else if (tgt.type == Executor::PulseTarget::Stream) {
+                throw_if(PyDict_SetItem(dict, type_str(), stream_str()));
+            }
+            throw_if(PyDict_SetItem(dict, channel_str(), pylong_cached(chn)));
+            if (tgt.type == Executor::PulseTarget::PLUT) {
+                py_object paddr(pylong_from_long(tgt.addr));
+                throw_if(PyDict_SetItem(dict, paddr_str(), paddr));
+            }
+            throw_if(PyDict_SetItem(dict, param_str(), name));
+            throw_if(PyDict_SetItem(dict, tone_str(), pylong_cached(tone)));
+            py_object py_cycles(pylong_from_longlong(cycles));
+            throw_if(PyDict_SetItem(dict, cycles_str(), py_cycles));
+            py_object py_spl(pylist_new(4));
+            for (int i = 0; i < 4; i++)
+                PyList_SET_ITEM(py_spl.get(), i, pylong_from_longlong(spl.orders[i]));
+            throw_if(PyDict_SetItem(dict, spline_mu_str(), py_spl));
+            throw_if(PyDict_SetItem(dict, spline_shift_str(), pylong_cached(spl.shift)));
+            auto fspl = spl.get_spline(cycles);
+            py_object py_fspl(pylist_new(4));
+            PyList_SET_ITEM(py_fspl.get(), 0, pyfloat_from_double(fspl.order0));
+            PyList_SET_ITEM(py_fspl.get(), 1, pyfloat_from_double(fspl.order1));
+            PyList_SET_ITEM(py_fspl.get(), 2, pyfloat_from_double(fspl.order2));
+            PyList_SET_ITEM(py_fspl.get(), 3, pyfloat_from_double(fspl.order3));
+            throw_if(PyDict_SetItem(dict, spline_str(), py_fspl));
+        }
+    };
+
     struct PulseSequencer {
         PulseSequencer()
         {
@@ -1064,6 +1244,14 @@ struct Jaqal_v1 {
         PulseSequencer sequencer;
         Executor::execute(sequencer, std::span(p, sz));
         return sequencer.pulses;
+    }
+
+    __attribute__((returns_nonnull))
+    static PyObject *inst_to_dict(const JaqalInst &inst)
+    {
+        DictConverter converter;
+        Executor::execute(converter, inst);
+        return converter.dict.release();
     }
 
     // Set the minimum clock cycles for a pulse to help avoid underflows. This time
