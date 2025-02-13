@@ -287,8 +287,11 @@ class MatchFramePulse(MatchPulse):
             assert flags['inv'] == self.inv
         return True
 
-def check_invaild(v, msg):
+def check_invalid(v, msg):
     assert str(Jaqal_v1.dump_insts(v.to_bytes(32, 'little'))) == f'invalid({msg}): {v:0>64x}'
+    pulses, = Jaqal_v1.extract_pulses(v.to_bytes(32, 'little'))
+    assert int(pulses) == 0xffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff
+
 
 def test_insts():
     assert Jaqal_v1.dump_insts(b'') == ''
@@ -332,13 +335,13 @@ def test_glut():
 
     glut_base = 0x20000000000000000000000000000000000000000000000000000000000000
     for bit in itertools.chain(range(248, 256), range(239, 245), range(223, 229)):
-        check_invaild(glut_base | (1 << bit), 'reserved')
+        check_invalid(glut_base | (1 << bit), 'reserved')
     for n in range(7):
         glut_base_n = glut_base | (n << 236)
         for bit in range(n * 36, 220):
-            check_invaild(glut_base_n | (1 << bit), 'reserved')
+            check_invalid(glut_base_n | (1 << bit), 'reserved')
     for n in range(7, 8):
-        check_invaild(glut_base | (n << 236), 'glut_oob')
+        check_invalid(glut_base | (n << 236), 'glut_oob')
 
 def test_slut():
     with pytest.raises(ValueError, match="Invalid channel number '-1'"):
@@ -364,13 +367,13 @@ def test_slut():
 
     slut_base = 0x40000000000000000000000000000000000000000000000000000000000000
     for bit in itertools.chain(range(248, 256), range(240, 245), range(223, 229)):
-        check_invaild(slut_base | (1 << bit), 'reserved')
+        check_invalid(slut_base | (1 << bit), 'reserved')
     for n in range(10):
         slut_base_n = slut_base | (n << 236)
         for bit in range(n * 24, 220):
-            check_invaild(slut_base_n | (1 << bit), 'reserved')
+            check_invalid(slut_base_n | (1 << bit), 'reserved')
     for n in range(10, 16):
-        check_invaild(slut_base | (n << 236), 'slut_oob')
+        check_invalid(slut_base | (n << 236), 'slut_oob')
 
 def test_gseq():
     with pytest.raises(ValueError, match="Invalid channel number '-1'"):
@@ -397,13 +400,13 @@ def test_gseq():
 
     gseq_base = 0x80000000000000000000000000000000000000000000000000000000000000
     for bit in itertools.chain(range(248, 256), range(223, 239)):
-        check_invaild(gseq_base | (1 << bit), 'reserved')
+        check_invalid(gseq_base | (1 << bit), 'reserved')
     for n in range(25):
         gseq_base_n = gseq_base | (n << 239)
         for bit in range(n * 9, 220):
-            check_invaild(gseq_base_n | (1 << bit), 'reserved')
+            check_invalid(gseq_base_n | (1 << bit), 'reserved')
     for n in range(25, 64):
-        check_invaild(gseq_base | (n << 239), 'gseq_oob')
+        check_invalid(gseq_base | (n << 239), 'gseq_oob')
 
 def test_pulse_inst():
     with pytest.raises(ValueError, match="Invalid channel number '-1'"):
@@ -512,14 +515,14 @@ def test_pulse_inst():
         stm_vi = int(stm_inst)
         for bit in range(229, 241):
             # plut_addr
-            check_invaild(vi | (1 << bit), 'reserved')
-            check_invaild(stm_vi | (1 << bit), 'reserved')
+            check_invalid(vi | (1 << bit), 'reserved')
+            check_invalid(stm_vi | (1 << bit), 'reserved')
 
         for bit in itertools.chain(range(241, 245), range(228, 229), range(223, 224),
                                    range(200, 220)):
-            check_invaild(vi | (1 << bit), 'reserved')
-            check_invaild(plut_vi | (1 << bit), 'reserved')
-            check_invaild(stm_vi | (1 << bit), 'reserved')
+            check_invalid(vi | (1 << bit), 'reserved')
+            check_invalid(plut_vi | (1 << bit), 'reserved')
+            check_invalid(stm_vi | (1 << bit), 'reserved')
 
     metadatas = itertools.product(range(8), (0, 1), (False, True), (False, True),
                                   (False, True), range(4), range(4),
@@ -579,14 +582,14 @@ def test_pulse_inst():
         stm_vi = int(stm_inst)
         for bit in range(229, 241):
             # plut_addr
-            check_invaild(vi | (1 << bit), 'reserved')
-            check_invaild(stm_vi | (1 << bit), 'reserved')
+            check_invalid(vi | (1 << bit), 'reserved')
+            check_invalid(stm_vi | (1 << bit), 'reserved')
 
         for bit in itertools.chain(range(241, 245), range(223, 224),
                                    range(200, 218)):
-            check_invaild(vi | (1 << bit), 'reserved')
-            check_invaild(plut_vi | (1 << bit), 'reserved')
-            check_invaild(stm_vi | (1 << bit), 'reserved')
+            check_invalid(vi | (1 << bit), 'reserved')
+            check_invalid(plut_vi | (1 << bit), 'reserved')
+            check_invalid(stm_vi | (1 << bit), 'reserved')
 
 def test_freq_spline():
     inst = Jaqal_v1.freq_pulse(0, 0, (-409.6e6, 0, 0, 0), 1000, False, False, False)
