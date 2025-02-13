@@ -287,10 +287,12 @@ class MatchFramePulse(MatchPulse):
             assert flags['inv'] == self.inv
         return True
 
+invalid_pulse = JaqalInst_v1(b'\xff' * 32)
+
 def check_invalid(v, msg):
     assert str(Jaqal_v1.dump_insts(v.to_bytes(32, 'little'))) == f'invalid({msg}): {v:0>64x}'
     pulses, = Jaqal_v1.extract_pulses(v.to_bytes(32, 'little'))
-    assert int(pulses) == 0xffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff
+    assert pulses == invalid_pulse
 
 
 def test_insts():
@@ -954,6 +956,37 @@ def rand_pulse(chn):
                                                 o2 * 2 - 1, o3 * 2 - 1),
                                     cycles, False, False, False, 0, 0)
 
+def test_extract_pulse():
+    pulses = [rand_pulse(random.randint(0, 7)) for _ in range(3000)]
+    stream_bytes = b''
+    for pulse in pulses:
+        stream_bytes += Jaqal_v1.stream(pulse).to_bytes()
+    assert Jaqal_v1.extract_pulses(stream_bytes) == pulses
+
+    gseq = Jaqal_v1.sequence(2, 0, [0, 1, 2, 3]).to_bytes()
+    wait_anc = Jaqal_v1.sequence(2, 1, [0, 1, 2, 3]).to_bytes()
+    cont_anc = Jaqal_v1.sequence(2, 2, [0, 1, 2, 3]).to_bytes()
+    glut = Jaqal_v1.program_GLUT(2, [0, 1, 2, 3], [0, 3, 6, 10], [2, 5, 9, 10]).to_bytes()
+    glut_inverse = Jaqal_v1.program_GLUT(2, [0, 1, 2, 3],
+                                         [2, 5, 9, 10], [0, 3, 6, 10]).to_bytes()
+    slut1 = Jaqal_v1.program_SLUT(2, [0, 1, 2, 3, 4, 5, 6, 7, 8],
+                                  [0, 1, 2, 3, 0, 1, 2, 3, 0]).to_bytes()
+    slut2 = Jaqal_v1.program_SLUT(2, [9, 10, 11], [1, 2, 3]).to_bytes()
+
+    plut_mem = [rand_pulse(2) for _ in range(4)]
+    plut = b''.join(Jaqal_v1.program_PLUT(plut_mem[i], i).to_bytes() for i in range(4))
+
+    # Out of bound gate
+    assert Jaqal_v1.extract_pulses(gseq) == [invalid_pulse] * 4
+    # Out of bound sequence
+    assert Jaqal_v1.extract_pulses(glut + gseq) == [invalid_pulse] * 11
+    assert Jaqal_v1.extract_pulses(glut_inverse + gseq) == [invalid_pulse] * 4
+    # Out of bound pulse
+    assert Jaqal_v1.extract_pulses(slut1 + slut2 + glut + gseq) == [invalid_pulse] * 11
+
+    assert Jaqal_v1.extract_pulses(plut + slut1 + slut2 + glut + gseq) == plut_mem * 2 + plut_mem[:3]
+    assert Jaqal_v1.extract_pulses(plut + slut1 + slut2 + glut + wait_anc) == [invalid_pulse]
+    assert Jaqal_v1.extract_pulses(plut + slut1 + slut2 + glut + cont_anc) == [invalid_pulse]
 
 def test_sequence():
     for _ in range(100):
