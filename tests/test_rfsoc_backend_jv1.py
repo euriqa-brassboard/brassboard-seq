@@ -2347,3 +2347,105 @@ def test_cross_channel_sync2(max_bt):
           'phase': [Pulse(2048), Pulse(4), Pulse(2052)]
         },
     })
+
+@with_rfsoc_params
+def test_use_all_channels(max_bt):
+    s, comp = new_seq_compiler(max_bt)
+    rb = add_rfsoc_backend(comp)
+    assert not rb.use_all_channels
+    rb.use_all_channels = True
+    s.add_step(5e-6) \
+      .set('rfsoc/dds0/1/freq', 100e6) \
+      .set('rfsoc/dds0/1/amp', 0.2)
+    comp.finalize()
+
+    comp.runtime_finalize(1)
+    unused = {
+        'freq': [Pulse(2056)],
+        'amp': [Pulse(2056)],
+        'phase': [Pulse(2056)]
+    }
+    check_output({
+        0: unused,
+        1: {
+          'freq': [Pulse(2056, Spline(100e6))],
+          'amp': [Pulse(2056, Spline(0.2))],
+          'phase': [Pulse(2056)]
+        },
+        2: unused,
+        3: unused,
+        4: unused,
+        5: unused,
+        6: unused,
+        7: unused,
+        8: unused,
+        9: unused,
+        10: unused,
+        11: unused,
+        12: unused,
+        13: unused,
+        14: unused,
+        15: unused,
+        16: unused,
+        17: unused,
+        18: unused,
+        19: unused,
+        20: unused,
+        21: unused,
+        22: unused,
+        23: unused,
+        24: unused,
+        25: unused,
+        26: unused,
+        27: unused,
+        28: unused,
+        29: unused,
+        30: unused,
+        31: unused,
+        32: unused,
+        33: unused,
+        34: unused,
+        35: unused,
+        36: unused,
+        37: unused,
+        38: unused,
+        39: unused,
+        40: unused,
+        41: unused,
+        42: unused,
+        43: unused,
+        44: unused,
+        45: unused,
+        46: unused,
+        47: unused,
+        48: unused,
+        49: unused,
+        50: unused,
+        51: unused,
+        52: unused,
+        53: unused,
+        54: unused,
+        55: unused,
+        56: unused,
+        57: unused,
+        58: unused,
+        59: unused,
+        60: unused,
+        61: unused,
+        62: unused,
+        63: unused,
+    })
+    s, comp = new_seq_compiler(max_bt)
+    rb = add_rfsoc_backend(comp)
+    assert not rb.use_all_channels
+    rb.use_all_channels = True
+    s.wait(5e-6)
+    comp.finalize()
+
+    comp.runtime_finalize(1)
+    unused = {
+        'freq': [Pulse(2056)],
+        'amp': [Pulse(2056)],
+        'phase': [Pulse(2056)]
+    }
+    check_output({})

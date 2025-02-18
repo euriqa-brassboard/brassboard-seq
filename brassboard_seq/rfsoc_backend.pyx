@@ -169,6 +169,7 @@ cdef class RFSOCBackend:
         self.eval_status = False
         self.generator = generator
         self.rt_dds_delay = {}
+        self.use_all_channels = False
 
     @property
     def has_output(self):

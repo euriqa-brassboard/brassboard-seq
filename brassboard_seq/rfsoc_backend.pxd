@@ -93,6 +93,7 @@ cdef class RFSOCBackend(Backend):
     cdef vector[pair[void*,double]] float_values
     cdef vector[Relocation] relocations
     cdef bint eval_status
+    cdef public bint use_all_channels
     cdef ToneBuffer tone_buffer
 
     cdef dict rt_dds_delay

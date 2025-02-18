@@ -2137,8 +2137,13 @@ inline void ChannelInfo::add_seq_channel(int seq_chn, int chn_idx, ToneParam par
     chn_map.insert({seq_chn, {chn_idx, param}});
 }
 
-inline void ChannelInfo::ensure_both_tones()
+inline void ChannelInfo::ensure_unused_tones(bool all)
 {
+    // For now, do not generate RFSoC data if there's no output.
+    // This may be a problem if some of the sequences in a scan contains RFSoC outputs
+    // while others don't. The artiq integration code would need to handle this case.
+    if (channels.empty())
+        return;
     // Ensuring both tone being availabe seems to make a difference sometimes.
     // (Could be due to pulse compiler bugs)
     std::bitset<64> tone_used;
@@ -2147,10 +2152,10 @@ inline void ChannelInfo::ensure_both_tones()
     for (int i = 0; i < 32; i++) {
         bool tone0 = tone_used.test(i * 2);
         bool tone1 = tone_used.test(i * 2 + 1);
-        if (tone0 && !tone1) {
+        if ((tone0 || all) && !tone1) {
             channels.push_back({ i * 2 + 1 });
         }
-        else if (!tone0 && tone1) {
+        if (!tone0 && (tone1 || all)) {
             channels.push_back({ i * 2 });
         }
     }
@@ -2186,7 +2191,7 @@ void collect_actions(auto *rb, EventTime*)
     std::vector<Relocation> &relocations = rb->relocations;
     auto event_times = seq->__pyx_base.__pyx_base.seqinfo->time_mgr->event_times;
 
-    rb->channels.ensure_both_tones();
+    rb->channels.ensure_unused_tones(rb->use_all_channels);
 
     for (auto [seq_chn, value]: rb->channels.chn_map) {
         auto [chn_idx, param] = value;
