@@ -1252,7 +1252,7 @@ struct Jaqal_v1 {
         void add_pulse(const JaqalInst &inst, int64_t cycle)
         {
             auto idx = pulses.get_addr(inst);
-            if (idx >> Jaqal_v1::PLUTW)
+            if (idx >> PLUTW)
                 throw std::length_error("Too many pulses in sequence.");
             pulse_ids.push_back({ cycle, int16_t(idx) });
         }
@@ -1269,7 +1269,7 @@ struct Jaqal_v1 {
         int16_t add_glut(int16_t slut_addr1, int16_t slut_addr2)
         {
             auto gate_id = glut.size();
-            if (gate_id >> Jaqal_v1::GLUTW)
+            if (gate_id >> GLUTW)
                 throw std::length_error("Too many GLUT entries.");
             glut.push_back({ slut_addr1, slut_addr2 });
             return int16_t(gate_id);
@@ -1278,7 +1278,7 @@ struct Jaqal_v1 {
         {
             auto old_slut_len = slut.size();
             auto new_slut_len = old_slut_len + npulses;
-            if ((new_slut_len - 1) >> Jaqal_v1::SLUTW)
+            if ((new_slut_len - 1) >> SLUTW)
                 throw std::length_error("Too many SLUT entries.");
             slut.resize(new_slut_len);
             return old_slut_len;
@@ -1459,14 +1459,14 @@ struct Jaqal_v1 {
                 sequence_gate(gate_id, next_pulse);
             }
             if (has_single_pulse) {
-                std::vector<int16_t> slut_map(1 << Jaqal_v1::PLUTW, -1);
+                std::vector<int16_t> slut_map(1 << PLUTW, -1);
                 assert((slut.size() >> 15) == 0);
                 int16_t slut_len = (int16_t)slut.size();
                 for (int16_t i = 0; i < slut_len; i++)
                     slut_map[slut[i]] = i;
-                std::vector<int16_t> gate_map(1 << Jaqal_v1::PLUTW, -1);
+                std::vector<int16_t> gate_map(1 << PLUTW, -1);
                 auto get_single_gate_id = [&] (int16_t pid) {
-                    assert((pid >> Jaqal_v1::PLUTW) == 0);
+                    assert((pid >> PLUTW) == 0);
                     int16_t gid = gate_map[pid];
                     if (gid < 0) {
                         int16_t slut_addr = slut_map[pid];
