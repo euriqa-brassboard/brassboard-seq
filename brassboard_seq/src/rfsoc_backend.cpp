@@ -363,8 +363,6 @@ struct Jaqal_v1 {
         return pulse;
     }
 
-    // certain metadata bits should only be applied
-    // with the first pulse such as waittrig and sync
     static constexpr inline uint64_t raw_param_metadata(
         ModType modtype, int channel, int shift_len, bool waittrig, bool sync,
         bool enable, bool fb_enable)
@@ -417,8 +415,6 @@ struct Jaqal_v1 {
         return pulse(metadata, isp, cycles);
     }
 
-    // certain metadata bits should only be applied
-    // with the first pulse such as waittrig and rst_frame
     static constexpr inline uint64_t raw_frame_metadata(
         ModType modtype, int channel, int shift_len, bool waittrig,
         bool apply_at_end, bool rst_frame, int fwd_frame_mask, int inv_frame_mask)
