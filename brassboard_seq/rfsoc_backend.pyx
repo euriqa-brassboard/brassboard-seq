@@ -289,7 +289,7 @@ cdef class JaqalInstBase:
 cdef class JaqalInst_v1(JaqalInstBase):
     @property
     def channel(self):
-        return _Jaqal_v1.get_chn(self.inst);
+        return _Jaqal_v1.get_chn(self.inst)
 
     def to_dict(self):
         return _Jaqal_v1.inst_to_dict(self.inst)
