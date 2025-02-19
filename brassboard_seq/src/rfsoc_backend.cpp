@@ -23,6 +23,7 @@
 #include "event_time.h"
 #include "utils.h"
 
+#include <bit>
 #include <bitset>
 #include <sstream>
 #include <utility>
@@ -58,12 +59,15 @@ WRAP_STR(stream, "stream")
 WRAP_STR(error, "error")
 WRAP_STR(inst, "inst")
 WRAP_STR(channel, "channel")
+WRAP_STR(channels, "channels")
 WRAP_STR(count, "count")
 WRAP_STR(gaddrs, "gaddrs")
 WRAP_STR(starts, "starts")
 WRAP_STR(ends, "ends")
 WRAP_STR(saddrs, "saddrs")
 WRAP_STR(paddrs, "paddrs")
+WRAP_STR(modtype, "modtype")
+WRAP_STR(modtypes, "modtypes")
 
 WRAP_STR(paddr, "paddr")
 WRAP_STR(param, "param")
@@ -72,11 +76,22 @@ WRAP_STR(cycles, "cycles")
 WRAP_STR(spline, "spline")
 WRAP_STR(spline_mu, "spline_mu")
 WRAP_STR(spline_shift, "spline_shift")
+WRAP_STR(spline_freq, "spline_freq")
+WRAP_STR(spline_amp, "spline_amp")
+WRAP_STR(spline_phase, "spline_phase")
 
 WRAP_STR(freq, "freq")
 WRAP_STR(amp, "amp")
 WRAP_STR(phase, "phase")
 WRAP_STR(frame_rot, "frame_rot")
+WRAP_STR(freq0, "freq0")
+WRAP_STR(amp0, "amp0")
+WRAP_STR(phase0, "phase0")
+WRAP_STR(frame_rot0, "frame_rot0")
+WRAP_STR(freq1, "freq1")
+WRAP_STR(amp1, "amp1")
+WRAP_STR(phase1, "phase1")
+WRAP_STR(frame_rot1, "frame_rot1")
 
 WRAP_STR(trig, "trig")
 WRAP_STR(sync, "sync")
@@ -1649,6 +1664,1165 @@ struct Jaqal_v1 {
     static auto extract_pulses(const char *p, size_t sz)
     {
         PulseSequencer sequencer;
+        Executor::execute(sequencer, std::span(p, sz));
+        return sequencer.pulses;
+    }
+
+    __attribute__((returns_nonnull))
+    static PyObject *inst_to_dict(const JaqalInst &inst)
+    {
+        DictConverter converter;
+        Executor::execute(converter, inst);
+        return converter.dict.release();
+    }
+
+    // Set the minimum clock cycles for a pulse to help avoid underflows. This time
+    // is determined by state machine transitions for loading another gate, but does
+    // not account for serialization of pulse words.
+    static constexpr int MINIMUM_PULSE_CLOCK_CYCLES = 4;
+};
+
+struct Jaqal_v1_3 {
+    // All the instructions are 256 bits (32 bytes) and there are 7 types of
+    // instructions roughly divided into 2 groups, programming and sequence output.
+    // The two groups are determined by the GSEQ_ENABLE (247) bit,
+    // where bit value 0 means programming mode and bit value 1 means
+    // sequence output mode.
+    // For either mode, the next two bits (PROG_MODE / SEQ_MODE) indicates
+    // the exact type of the instruction and the meaning of the values is defined
+    // in ProgMode and SeqMode respectively.
+    enum class ProgMode: uint8_t {
+        // 0 not used
+        GLUT = 1, // Gate LUT
+        SLUT = 2, // Sequence LUT
+        PLUT = 3, // Pulse LUT
+    };
+    enum class SeqMode: uint8_t {
+        // Sequence gate IDs
+        GATE = 0,
+        // Wait for Ancilla trigger, and sequence gate IDs based on readout
+        WAIT_ANC = 1,
+        // Continue sequencing based on previous ancilla data
+        CONT_ANC = 2,
+        // Bypass LUT/streaming mode
+        STREAM = 3,
+    };
+
+    // Other than these bits, the only other bits thats shared by all types
+    // of instructions appears to be the channel number bits [DMA_MUX+7, DMA_MUX].
+    // The programming, sequencing as well as the lookup table storage appears to be
+    // completely and statically segregated for each channels.
+
+    // Both the STREAM instruction and the Pulse LUT instruction are used to
+    // set the low level pulse/spline parameters and therefore shares very similar
+    // format, i.e. the raw data format. The instruction consists of 6 parts,
+    // |255       200|199       160|159 120|119  80|79   40|39    0|
+    // |Metadata (56)|duration (40)|U3 (40)|U2 (40)|U1 (40)|U0 (40)|
+    // where the duration and the U0-U3 fields specify the output parameters,
+    // for a output parameter. The metadata part (bits [255, 200])
+    // includes the shared bits mentioned above as well as other bits that
+    // are meant for the spline engine/DDS.
+
+    // The metadata format also depends on the type of parameters,
+    // which is determined by the MODTYPE bitfield (bits [223, 216]) and the bit names
+    // are defined in ModType.
+    enum ModType: uint8_t {
+        FRQMOD0 = 0,
+        AMPMOD0 = 1,
+        PHSMOD0 = 2,
+        FRQMOD1 = 3,
+        AMPMOD1 = 4,
+        PHSMOD1 = 5,
+        FRMROT0 = 6,
+        FRMROT1 = 7,
+    };
+    enum ModTypeMask: uint8_t {
+        FRQMOD0_MASK = 1 << FRQMOD0,
+        AMPMOD0_MASK = 1 << AMPMOD0,
+        PHSMOD0_MASK = 1 << PHSMOD0,
+        FRQMOD1_MASK = 1 << FRQMOD1,
+        AMPMOD1_MASK = 1 << AMPMOD1,
+        PHSMOD1_MASK = 1 << PHSMOD1,
+        FRMROT0_MASK = 1 << FRMROT0,
+        FRMROT1_MASK = 1 << FRMROT1,
+    };
+    // For the frequency/amplitude/phase parameters, the metadata format was
+    // |255 248|247              245|244 241|240   229|228 224|223 216|215 213|
+    // |DMA_MUX|GSEQ_ENABLE+SEQ_MODE|   0   |PLUT_ADDR|   0   |MODTYPE|   0   |
+    // |212  208|   207   |   206   |   205   |   204   |   203   |202 200|
+    // |SPLSHIFT|AMP_FB_EN|FRQ_FB_EN|OUTPUT_EN|SYNC_FLAG|WAIT_TRIG|   0   |
+
+    // For the frame rotation parameter, the metadata format was
+    // |255 248|247              245|244 241|240   229|228 224|223 216|215 213|
+    // |DMA_MUX|GSEQ_ENABLE+SEQ_MODE|   0   |PLUT_ADDR|   0   |MODTYPE|   0   |
+    // |212  208|   207   |   206   |    205   |    204   |   203   |
+    // |SPLSHIFT|APPLY_EOF|CLR_FRAME|FWD_FRM_T1|FWD_FRM_T0|WAIT_TRIG|
+    // |    202   |    201   |200|
+    // |INV_FRM_T1|INV_FRM_T0| 0 |
+
+    // The AMP_FB_EN, FRQ_FB_EN, OUTPUT_FB_EN, SYNC_FLAG, APPLY_EOF, CLR_FRAME,
+    // FWD_FRM_T1, FWD_FRM_T0, INV_FRM_T1, INV_FRM_T0 are flags that affects
+    // the behavior of the specific spline engines/DDS and are documented below.
+
+    // SPLSHIFT is the shift that should be applied on the higher order terms
+    // in the spline coefficient.
+    // PLUT_ADDR is only used for the PLUT programming instruction and is the
+    // 12 bit address to locate the pulse in the PLUT.
+    // WAIT_TRIG is a flag to decide whether this command should wait for the trigger
+    // to happen before being consumed by the spline engine.
+
+    // The format for the SLUT programming instruction is,
+    // |255 248|247              245|244 239|238  236|235 198|
+    // |DMA_MUX|GSEQ_ENABLE+SEQ_MODE|   0   |SLUT_CNT|   0   |
+    // |197  185|184    177|176  165|164  152|151    144|143  132|
+    // | SADDR5 | MODTYPE5 | PADDR5 | SADDR4 | MODTYPE4 | PADDR4 |
+    // |131  119|118    111|110   99|98    86|85      78|77    66|
+    // | SADDR3 | MODTYPE3 | PADDR3 | SADDR2 | MODTYPE2 | PADDR2 |
+    // |65    53|52      45|44    33|32    20|19      12|11     0|
+    // | SADDR1 | MODTYPE1 | PADDR1 | SADDR0 | MODTYPE0 | PADDR0 |
+
+    // The format for the GLUT programming instruction is,
+    // |255 248|247              245|244 239|238  236|235 228|
+    // |DMA_MUX|GSEQ_ENABLE+SEQ_MODE|   0   |GLUT_CNT|   0   |
+    // |227  216|215  203|202 190|189  178|177  165|164 152|
+    // | GADDR5 | START5 |  END5 | GADDR4 | START4 |  END4 |
+    // |151  140|139  127|126 114|113  102|101   89|88  76|
+    // | GADDR3 | START3 |  END3 | GADDR2 | START2 | END2 |
+    // |75    64|63    51|50  38|37    26|25    13|12   0|
+    // | GADDR1 | START1 | END1 | GADDR0 | START0 | END0 |
+
+    // The format for the gate sequence instruction is,
+    // |255 248|247              245|244|243  239|238 220|
+    // |DMA_MUX|GSEQ_ENABLE+SEQ_MODE| 0 |GSEQ_CNT|   0   |
+    // |219   209|208   198|197   187|186   176|175   165|164   154|
+    // | GADDR19 | GADDR18 | GADDR17 | GADDR16 | GADDR15 | GADDR14 |
+    // |153   143|142   132|131   121|120   110|109   99|98    88|87    77|
+    // | GADDR13 | GADDR12 | GADDR11 | GADDR10 | GADDR9 | GADDR8 | GADDR7 |
+    // |76    66|65    55|54    44|43    33|32    22|21    11|10     0|
+    // | GADDR6 | GADDR5 | GADDR4 | GADDR3 | GADDR2 | GADDR1 | GADDR0 |
+
+    // For all three formats, bit 0 to bit 228 (really, bit 227 due to the size of
+    // the element) are packed with multiple elements of programming/sequence word
+    // (13 + 20 bits for SLUT programming, 12 + 13 * 2 bits for GLUT programming
+    // and 11 bits for gate sequence). The number of elements packed
+    // in the instruction is recorded in a count field (LSB at bit 236 for programming
+    // and LSB at bit 239 for sequence instruction).
+
+    struct Bits {
+        static constexpr int DMA_MUX = 248;
+        static constexpr int GSEQ_ENABLE = 247;
+        static constexpr int PROG_MODE = 245;
+        static constexpr int SEQ_MODE = 245;
+
+        // Number of packed GLUT programming words
+        static constexpr int GLUT_CNT = 236;
+        // Number of packed SLUT programming words
+        static constexpr int SLUT_CNT = 236;
+        // Number of packed gate sequence identifiers
+        static constexpr int GSEQ_CNT = 239;
+
+        static constexpr int PLUT_ADDR = 229;
+        static constexpr int PACKING_LIMIT = 229;
+
+        // Modulation type (freq/phase/amp/framerot)
+        static constexpr int MODTYPE = 216;
+        // Fixed point shift for spline coefficients
+        static constexpr int SPLSHIFT = 208;
+
+        //// For normal parameters
+        // Amplitude feedback enable (placeholder)
+        static constexpr int AMP_FB_EN = 207;
+        // Frequency feedback enable
+        static constexpr int FRQ_FB_EN = 206;
+        // Toggle output enable
+        static constexpr int OUTPUT_EN = 205;
+        // Apply global synchronization
+        static constexpr int SYNC_FLAG = 204;
+
+        //// For frame rotation parameters
+        // Apply frame rotation at end of pulse
+        static constexpr int APPLY_EOF = 207;
+        // Clear frame accumulator
+        static constexpr int CLR_FRAME = 206;
+        // Forward frame to tone 1/0
+        static constexpr int FWD_FRM = 204;
+
+        // Wait for external trigger
+        static constexpr int WAIT_TRIG = 203;
+
+        //// Additional bits for frame rotation parameters
+        // Invert sign on frame for tone 1/0
+        static constexpr int INV_FRM = 201;
+
+        // Start of metadata for raw data instruction
+        static constexpr int METADATA = 200;
+    };
+
+    static constexpr inline auto
+    pulse(uint64_t metadata, const std::array<int64_t,4> &isp, int64_t cycles)
+    {
+        assert((isp[0] >> 40) == 0);
+        assert((isp[1] >> 40) == 0);
+        assert((isp[2] >> 40) == 0);
+        assert((isp[3] >> 40) == 0);
+        assert((cycles >> 40) == 0);
+        assume((isp[0] >> 40) == 0);
+        assume((isp[1] >> 40) == 0);
+        assume((isp[2] >> 40) == 0);
+        assume((isp[3] >> 40) == 0);
+        assume((cycles >> 40) == 0);
+
+        std::array<int64_t,4> data{
+            isp[0] | (isp[1] << 40),
+            (isp[1] >> (64 - 40)) | (isp[2] << (80 - 64)) | (isp[3] << (120 - 64)),
+            (isp[3] >> (128 - 120)) | (cycles << (160 - 128)),
+            (cycles >> (192 - 160)) | int64_t(metadata << (200 - 192)),
+        };
+        return JaqalInst(data);
+    }
+
+    static constexpr auto modtype_mask =
+        JaqalInst::mask(Bits::MODTYPE, Bits::MODTYPE + 7);
+    static constexpr auto channel_mask =
+        JaqalInst::mask(Bits::DMA_MUX, Bits::DMA_MUX + 7);
+    static constexpr auto modtype_nmask = ~modtype_mask;
+    static constexpr auto channel_nmask = ~channel_mask;
+    static constexpr inline auto
+    apply_modtype_mask(JaqalInst pulse, ModTypeMask mod_mask)
+    {
+        return (pulse & modtype_nmask) | JaqalInst(uint8_t(mod_mask)) << Bits::MODTYPE;
+    }
+    static constexpr inline auto
+    apply_channel_mask(JaqalInst pulse, uint8_t chn_mask)
+    {
+        return (pulse & channel_nmask) | JaqalInst(chn_mask) << Bits::DMA_MUX;
+    }
+
+    static constexpr inline uint64_t raw_param_metadata(
+        int shift_len, bool waittrig, bool sync, bool enable, bool fb_enable)
+    {
+        assert(shift_len >= 0 && shift_len < 32);
+        uint64_t metadata = uint64_t(shift_len) << (Bits::SPLSHIFT - Bits::METADATA);
+        metadata |= uint64_t(waittrig) << (Bits::WAIT_TRIG - Bits::METADATA);
+        metadata |= uint64_t(enable) << (Bits::OUTPUT_EN - Bits::METADATA);
+        metadata |= uint64_t(fb_enable) << (Bits::FRQ_FB_EN - Bits::METADATA);
+        metadata |= uint64_t(sync) << (Bits::SYNC_FLAG - Bits::METADATA);
+        return metadata;
+    }
+    static constexpr inline auto
+    freq_pulse(cubic_spline_t sp, int64_t cycles, bool waittrig, bool sync, bool fb_enable)
+    {
+        assert(cycles >= 4);
+        assert((cycles >> 40) == 0);
+        auto [isp, shift_len] = convert_pdq_spline_freq(sp.to_array(), cycles);
+        auto metadata = raw_param_metadata(shift_len, waittrig, sync, false, fb_enable);
+        return pulse(metadata, isp, cycles);
+    }
+    static constexpr inline auto
+    amp_pulse(cubic_spline_t sp, int64_t cycles, bool waittrig,
+              bool sync=false, bool fb_enable=false)
+    {
+        assert(cycles >= 4);
+        assert((cycles >> 40) == 0);
+        auto [isp, shift_len] = convert_pdq_spline_amp(sp.to_array(), cycles);
+        auto metadata = raw_param_metadata(shift_len, waittrig, sync, false, fb_enable);
+        return pulse(metadata, isp, cycles);
+    }
+    static constexpr inline auto
+    phase_pulse(cubic_spline_t sp, int64_t cycles, bool waittrig,
+                bool sync=false, bool fb_enable=false)
+    {
+        assert(cycles >= 4);
+        assert((cycles >> 40) == 0);
+        auto [isp, shift_len] = convert_pdq_spline_phase(sp.to_array(), cycles);
+        auto metadata = raw_param_metadata(shift_len, waittrig, sync, false, fb_enable);
+        return pulse(metadata, isp, cycles);
+    }
+
+    static constexpr inline uint64_t raw_frame_metadata(
+        int shift_len, bool waittrig, bool apply_at_end, bool rst_frame,
+        int fwd_frame_mask, int inv_frame_mask)
+    {
+        assert(shift_len >= 0 && shift_len < 32);
+        uint64_t metadata = uint64_t(shift_len) << (Bits::SPLSHIFT - Bits::METADATA);
+        metadata |= uint64_t(waittrig) << (Bits::WAIT_TRIG - Bits::METADATA);
+        metadata |= uint64_t(apply_at_end) << (Bits::APPLY_EOF - Bits::METADATA);
+        metadata |= uint64_t(rst_frame) << (Bits::CLR_FRAME - Bits::METADATA);
+        metadata |= uint64_t(fwd_frame_mask) << (Bits::FWD_FRM - Bits::METADATA);
+        metadata |= uint64_t(inv_frame_mask) << (Bits::INV_FRM - Bits::METADATA);
+        return metadata;
+    }
+    static constexpr inline auto
+    frame_pulse(cubic_spline_t sp, int64_t cycles, bool waittrig, bool apply_at_end,
+                bool rst_frame, int fwd_frame_mask, int inv_frame_mask)
+    {
+        assert(cycles >= 4);
+        assert((cycles >> 40) == 0);
+        auto [isp, shift_len] = convert_pdq_spline_phase(sp.to_array(), cycles);
+        auto metadata = raw_frame_metadata(shift_len, waittrig, apply_at_end,
+                                           rst_frame, fwd_frame_mask, inv_frame_mask);
+        return pulse(metadata, isp, cycles);
+    }
+
+    // LUT Address Widths
+    // These values contain the number of bits used for an address for a
+    // particular LUT. The address width is the same for reading and writing
+    // data for the Pulse LUT (PLUT) and the Sequence LUT (SLUT), but the
+    // address width is asymmetric for the Gate LUT (GLUT). This is because
+    // the read address is partly completed by external hardware inputs and
+    // the read address size (GLUTW) is thus smaller than the write address
+    // size (GPRGW) used to program the GLUT
+    static constexpr int GPRGW = 12;  // Gate LUT write address width
+    static constexpr int GLUTW = 11;  // Gate LUT read address width
+    static constexpr int SLUTW = 13;  // Sequence LUT address width
+    // 12 bit plut address + 8bit parameter mask
+    static constexpr int SLUTDW = 20;  // Sequence LUT data width
+    static constexpr int PLUTW = 12;  // Pulse LUT address width
+
+    static constexpr int SLUT_ELSZ = SLUTW + SLUTDW;
+    static constexpr int GLUT_ELSZ = GPRGW + 2 * SLUTW;
+    static constexpr int GSEQ_ELSZ = GLUTW;
+    // Number of programming or gate sequence words that can be packed into a single
+    // transfer. PLUT programming data is always one word per transfer.
+    static constexpr int SLUT_MAXCNT = Bits::PACKING_LIMIT / SLUT_ELSZ;
+    static constexpr int GLUT_MAXCNT = Bits::PACKING_LIMIT / GLUT_ELSZ;
+    static constexpr int GSEQ_MAXCNT = Bits::PACKING_LIMIT / GSEQ_ELSZ;
+
+    static constexpr inline JaqalInst stream(JaqalInst pulse)
+    {
+        pulse |= JaqalInst(uint8_t(SeqMode::STREAM)) << Bits::SEQ_MODE;
+        pulse |= JaqalInst(1) << Bits::GSEQ_ENABLE;
+        return pulse;
+    }
+
+    static constexpr inline JaqalInst program_PLUT(JaqalInst pulse, uint16_t addr)
+    {
+        assert((addr >> PLUTW) == 0);
+        pulse |= JaqalInst(uint8_t(ProgMode::PLUT)) << Bits::PROG_MODE;
+        pulse |= JaqalInst(addr) << Bits::PLUT_ADDR;
+        return pulse;
+    }
+
+    static constexpr inline auto
+    program_SLUT(uint8_t chn_mask, const uint16_t *saddrs,
+                 const ModTypeMask *mod_types, const uint16_t *paddrs, int n)
+    {
+        JaqalInst inst;
+        assert(n <= SLUT_MAXCNT);
+        for (int i = 0; i < n; i++) {
+            assert((paddrs[i] >> PLUTW) == 0);
+            inst |= JaqalInst(paddrs[i]) << SLUT_ELSZ * i;
+            inst |= JaqalInst(uint8_t(mod_types[i])) << (SLUT_ELSZ * i + PLUTW);
+            assert((saddrs[i] >> SLUTW) == 0);
+            inst |= JaqalInst(saddrs[i]) << (SLUT_ELSZ * i + SLUTDW);
+        }
+        inst |= JaqalInst(uint8_t(ProgMode::SLUT)) << Bits::PROG_MODE;
+        inst |= JaqalInst(uint8_t(n)) << Bits::SLUT_CNT;
+        inst |= JaqalInst(chn_mask) << Bits::DMA_MUX;
+        return inst;
+    }
+
+    static constexpr inline auto
+    program_GLUT(uint8_t chn_mask, const uint16_t *gaddrs, const uint16_t *starts,
+                 const uint16_t *ends, int n)
+    {
+        JaqalInst inst;
+        assert(n <= GLUT_MAXCNT);
+        for (int i = 0; i < n; i++) {
+            assert((gaddrs[i] >> GPRGW) == 0);
+            inst |= JaqalInst(gaddrs[i]) << (GLUT_ELSZ * i + SLUTW * 2);
+            assert((ends[i] >> SLUTW) == 0);
+            inst |= JaqalInst(ends[i]) << (GLUT_ELSZ * i + SLUTW);
+            assert((starts[i] >> SLUTW) == 0);
+            inst |= JaqalInst(starts[i]) << (GLUT_ELSZ * i);
+        }
+        inst |= JaqalInst(uint8_t(ProgMode::GLUT)) << Bits::PROG_MODE;
+        inst |= JaqalInst(uint8_t(n)) << Bits::GLUT_CNT;
+        inst |= JaqalInst(chn_mask) << Bits::DMA_MUX;
+        return inst;
+    }
+
+    static constexpr inline auto
+    sequence(uint8_t chn_mask, SeqMode m, uint16_t *gaddrs, int n)
+    {
+        JaqalInst inst;
+        assert(n <= GSEQ_MAXCNT);
+        assert(m != SeqMode::STREAM);
+        for (int i = 0; i < n; i++) {
+            assert((gaddrs[i] >> GLUTW) == 0);
+            inst |= JaqalInst(gaddrs[i]) << (GSEQ_ELSZ * i);
+        }
+        inst |= JaqalInst(uint8_t(m)) << Bits::SEQ_MODE;
+        inst |= JaqalInst(1) << Bits::GSEQ_ENABLE;
+        inst |= JaqalInst(n) << Bits::GSEQ_CNT;
+        inst |= JaqalInst(chn_mask) << Bits::DMA_MUX;
+        return inst;
+    }
+
+    static constexpr inline uint8_t get_chn_mask(const JaqalInst &inst)
+    {
+        return uint8_t((inst >> Bits::DMA_MUX)[0]);
+    }
+
+    struct Executor {
+        enum class Error {
+            Reserved,
+            GLUT_OOB,
+            SLUT_OOB,
+            GSEQ_OOB,
+        };
+        static const char *error_msg(Error err)
+        {
+            switch (err) {
+            default:
+            case Error::Reserved:
+                return "reserved";
+            case Error::GLUT_OOB:
+                return "glut_oob";
+            case Error::SLUT_OOB:
+                return "slut_oob";
+            case Error::GSEQ_OOB:
+                return "gseq_oob";
+            }
+        }
+        struct PulseTarget {
+            enum Type {
+                None,
+                PLUT,
+                Stream,
+            } type;
+            uint16_t addr;
+        };
+        struct PulseMeta {
+            bool trig;
+            bool fb;
+            bool en;
+            bool sync;
+            bool apply_eof;
+            bool clr_frame;
+            int8_t fwd_frame_mask;
+            int8_t inv_frame_mask;
+        };
+        static cubic_spline_t freq_spline(PDQSpline spl, uint64_t cycles)
+        {
+            spl.scale = output_clock / double(1ll << 40);
+            return spl.get_spline(cycles);
+        }
+        static cubic_spline_t amp_spline(PDQSpline spl, uint64_t cycles)
+        {
+            spl.scale = 1 / double(((1ll << 16) - 1ll) << 23);
+            return spl.get_spline(cycles);
+        }
+        static cubic_spline_t phase_spline(PDQSpline spl, uint64_t cycles)
+        {
+            spl.scale = 1 / double(1ll << 40);
+            return spl.get_spline(cycles);
+        }
+        template<typename T>
+        static void execute(auto &&cb, const std::span<T> insts, bool allow_op0=false)
+        {
+            auto sz = insts.size_bytes();
+            if (sz % sizeof(JaqalInst) != 0)
+                throw std::invalid_argument("Instruction stream length "
+                                            "not a multiple of instruction size");
+            auto p = (const char*)insts.data();
+            for (size_t i = 0; i < sz; i += sizeof(JaqalInst)) {
+                JaqalInst inst;
+                memcpy(&inst, p + i, sizeof(JaqalInst));
+                if (i != 0)
+                    cb.next();
+                execute(cb, inst, allow_op0);
+            }
+        }
+        static void execute(auto &&cb, const JaqalInst &inst, bool allow_op0=true)
+        {
+            int op = (inst >> Bits::PROG_MODE)[0] & 0x7;
+            switch (op) {
+            default:
+            case 0:
+                if (!allow_op0) {
+                    invalid(cb, inst, Error::Reserved);
+                    return;
+                }
+                pulse(cb, inst, PulseTarget::None);
+                return;
+            case int(ProgMode::PLUT):
+                pulse(cb, inst, PulseTarget::PLUT);
+                return;
+            case int(SeqMode::STREAM) | 4:
+                pulse(cb, inst, PulseTarget::Stream);
+                return;
+
+            case int(ProgMode::GLUT):
+                GLUT(cb, inst);
+                return;
+            case int(ProgMode::SLUT):
+                SLUT(cb, inst);
+                return;
+            case int(SeqMode::GATE) | 4:
+            case int(SeqMode::WAIT_ANC) | 4:
+            case int(SeqMode::CONT_ANC) | 4:
+                GSEQ(cb, inst, SeqMode(op & 3));
+                return;
+            }
+        }
+    private:
+        static void invalid(auto &&cb, const JaqalInst &inst, Error err)
+        {
+            cb.invalid(inst, err);
+        }
+        static void GLUT(auto &&cb, const JaqalInst &inst)
+        {
+            if (test_bits(inst, 239, 244) || test_bits(inst, 228, 235)) {
+                invalid(cb, inst, Error::Reserved);
+                return;
+            }
+            int cnt = (inst >> Bits::GLUT_CNT)[0] & 0x7;
+            uint8_t chn_mask = get_chn_mask(inst);
+            if (cnt > GLUT_MAXCNT) {
+                invalid(cb, inst, Error::GLUT_OOB);
+                return;
+            }
+            else if (test_bits(inst, GLUT_ELSZ * cnt, 227)) {
+                invalid(cb, inst, Error::Reserved);
+                return;
+            }
+            uint16_t gaddrs[GLUT_MAXCNT];
+            uint16_t starts[GLUT_MAXCNT];
+            uint16_t ends[GLUT_MAXCNT];
+            for (int i = 0; i < cnt; i++) {
+                auto w = (inst >> GLUT_ELSZ * i)[0];
+                gaddrs[i] = (w >> (SLUTW * 2)) & ((1 << GPRGW) - 1);
+                ends[i] = (w >> SLUTW) & ((1 << SLUTW) - 1);
+                starts[i] = w & ((1 << SLUTW) - 1);
+            }
+            cb.GLUT(chn_mask, gaddrs, starts, ends, cnt);
+        }
+
+        static void SLUT(auto &&cb, const JaqalInst &inst)
+        {
+            if (test_bits(inst, 239, 244) || test_bits(inst, 198, 235)) {
+                invalid(cb, inst, Error::Reserved);
+                return;
+            }
+            int cnt = (inst >> Bits::SLUT_CNT)[0] & 0xf;
+            uint8_t chn_mask = get_chn_mask(inst);
+            if (cnt > SLUT_MAXCNT) {
+                invalid(cb, inst, Error::SLUT_OOB);
+                return;
+            }
+            else if (test_bits(inst, SLUT_ELSZ * cnt, 219)) {
+                invalid(cb, inst, Error::Reserved);
+                return;
+            }
+            uint16_t saddrs[SLUT_MAXCNT];
+            ModTypeMask mod_types[SLUT_MAXCNT];
+            uint16_t paddrs[SLUT_MAXCNT];
+            for (int i = 0; i < cnt; i++) {
+                auto w = (inst >> SLUT_ELSZ * i)[0];
+                saddrs[i] = (w >> SLUTDW) & ((1 << SLUTW) - 1);
+                mod_types[i] = ModTypeMask((w >> PLUTW) & 0xff);
+                paddrs[i] = w & ((1 << PLUTW) - 1);
+            }
+            cb.SLUT(chn_mask, saddrs, mod_types, paddrs, cnt);
+        }
+
+        static void GSEQ(auto &&cb, const JaqalInst &inst, SeqMode m)
+        {
+            if (test_bits(inst, 244, 244) || test_bits(inst, 220, 238)) {
+                invalid(cb, inst, Error::Reserved);
+                return;
+            }
+            int cnt = (inst >> Bits::GSEQ_CNT)[0] & 0x1f;
+            uint8_t chn_mask = get_chn_mask(inst);
+            if (cnt > GSEQ_MAXCNT) {
+                invalid(cb, inst, Error::GSEQ_OOB);
+                return;
+            }
+            else if (test_bits(inst, GSEQ_ELSZ * cnt, 227)) {
+                invalid(cb, inst, Error::Reserved);
+                return;
+            }
+            uint16_t gaddrs[GSEQ_MAXCNT];
+            for (int i = 0; i < cnt; i++) {
+                auto w = (inst >> GSEQ_ELSZ * i)[0];
+                gaddrs[i] = w & ((1 << GLUTW) - 1);
+            }
+            cb.GSEQ(chn_mask, gaddrs, cnt, m);
+        }
+
+        static void pulse(auto &&cb, const JaqalInst &inst, PulseTarget::Type type)
+        {
+            uint16_t addr = (inst >> Bits::PLUT_ADDR)[0] & ((1 << PLUTW) - 1);
+            if (type != PulseTarget::PLUT && addr) {
+                invalid(cb, inst, Error::Reserved);
+                return;
+            }
+            PulseTarget tgt{type, addr};
+            if (test_bits(inst, 241, 244) || test_bits(inst, 224, 228) ||
+                test_bits(inst, 213, 215)) {
+                invalid(cb, inst, Error::Reserved);
+                return;
+            }
+            uint8_t chn_mask = get_chn_mask(inst);
+            PDQSpline spl;
+            spl.shift = (inst >> Bits::SPLSHIFT)[0] & 0x1f;
+            auto load_s40 = [&] (int offset) {
+                auto mask = (int64_t(1) << 40) - 1;
+                auto data = (inst >> offset)[0] & mask;
+                if (data & (int64_t(1) << 39))
+                    return data | ~mask;
+                return data;
+            };
+            spl.orders[0] = load_s40(40 * 0);
+            spl.orders[1] = load_s40(40 * 1);
+            spl.orders[2] = load_s40(40 * 2);
+            spl.orders[3] = load_s40(40 * 3);
+            int64_t cycles = (inst >> 40 * 4)[0] & ((int64_t(1) << 40) - 1);
+            auto mod_type = ModTypeMask((inst >> Bits::MODTYPE)[0] & 0xff);
+            if (mod_type & (FRMROT0_MASK | FRMROT1_MASK) ||
+                tgt.type == Executor::PulseTarget::PLUT) {
+                if (test_bits(inst, 200, 200)) {
+                    invalid(cb, inst, Error::Reserved);
+                    return;
+                }
+            }
+            else if (test_bits(inst, 200, 202) ||
+                     test_bits(inst, Bits::AMP_FB_EN, Bits::AMP_FB_EN)) {
+                invalid(cb, inst, Error::Reserved);
+                return;
+            }
+            PulseMeta meta{
+                .trig = bool((inst >> Bits::WAIT_TRIG)[0] & 1),
+                .fb = bool((inst >> Bits::FRQ_FB_EN)[0] & 1),
+                .en = bool((inst >> Bits::OUTPUT_EN)[0] & 1),
+                .sync = bool((inst >> Bits::SYNC_FLAG)[0] & 1),
+                .apply_eof = bool((inst >> Bits::APPLY_EOF)[0] & 1),
+                .clr_frame = bool((inst >> Bits::CLR_FRAME)[0] & 1),
+                .fwd_frame_mask = int8_t((inst >> Bits::FWD_FRM)[0] & 3),
+                .inv_frame_mask = int8_t((inst >> Bits::INV_FRM)[0] & 3),
+            };
+            cb.pulse(chn_mask, mod_type, spl, cycles, meta, tgt);
+        }
+    };
+
+    struct Printer {
+        void invalid(const JaqalInst &inst, Executor::Error err)
+        {
+            io << "invalid(" << Executor::error_msg(err) << "): "
+               << std::noshowbase << inst;
+        }
+
+        void next()
+        {
+            io << std::endl;
+        }
+
+        void GLUT(uint8_t chn_mask, const uint16_t *gaddrs, const uint16_t *starts,
+                  const uint16_t *ends, int cnt)
+        {
+            io << "glut";
+            print_chn_mask(chn_mask);
+            io << "[" << cnt << "]";
+            for (int i = 0; i < cnt; i++) {
+                io << " [" << gaddrs[i] << "]=[" << starts[i] << "," << ends[i] << "]";
+            }
+        }
+        void SLUT(uint8_t chn_mask, const uint16_t *saddrs,
+                  const ModTypeMask *mod_types, const uint16_t *paddrs, int cnt)
+        {
+            io << "slut";
+            print_chn_mask(chn_mask);
+            io << "[" << cnt << "]";
+            for (int i = 0; i < cnt; i++) {
+                io << " [" << saddrs[i] << "]=" << paddrs[i];
+                print_mod_type(mod_types[i], true);
+            }
+        }
+        void GSEQ(uint8_t chn_mask, const uint16_t *gaddrs, int cnt, SeqMode m)
+        {
+            if (m == SeqMode::GATE) {
+                io << "gseq";
+            }
+            else if (m == SeqMode::WAIT_ANC) {
+                io << "wait_anc";
+            }
+            else if (m == SeqMode::CONT_ANC) {
+                io << "cont_anc";
+            }
+            print_chn_mask(chn_mask);
+            io << "[" << cnt << "]";
+            for (int i = 0; i < cnt; i++) {
+                io << " " << gaddrs[i];
+            }
+        }
+
+        void pulse(int chn_mask, ModTypeMask mod_type, const PDQSpline &spl,
+                   int64_t cycles, Executor::PulseMeta meta, Executor::PulseTarget tgt)
+        {
+            if (tgt.type == Executor::PulseTarget::None) {
+                io << "pulse_data";
+            }
+            else if (tgt.type == Executor::PulseTarget::PLUT) {
+                io << "plut";
+            }
+            else if (tgt.type == Executor::PulseTarget::Stream) {
+                io << "stream";
+            }
+            print_chn_mask(chn_mask);
+            io << " ";
+            if (tgt.type == Executor::PulseTarget::PLUT)
+                io << "[" << tgt.addr << "]={}";
+            else
+                print_mod_type(mod_type, false);
+            io << " <" << cycles << ">";
+            auto print_orders = [&] (auto order1, auto order2, auto order3, auto cb) {
+                if (order1 || order2 || order3)
+                    cb(1, order1);
+                if (order2 || order3)
+                    cb(2, order2);
+                if (order3)
+                    cb(3, order3);
+            };
+            if (print_float && tgt.type != Executor::PulseTarget::PLUT && mod_type) {
+                bool freq = mod_type & (FRQMOD0_MASK | FRQMOD1_MASK);
+                bool amp = mod_type & (AMPMOD0_MASK | AMPMOD1_MASK);
+                bool phase = mod_type & (PHSMOD0_MASK | PHSMOD1_MASK |
+                                         FRMROT0_MASK | FRMROT1_MASK);
+                bool print_name = (int(freq) + int(amp) + int(phase)) > 1;
+                auto print_spl = [&] (const char *name, auto &&cb, bool cond) {
+                    if (!cond)
+                        return;
+                    auto cspl = cb(spl, cycles);
+                    io << " ";
+                    if (print_name)
+                        io << name;
+                    io << "{";
+                    format_double(io, cspl.order0);
+                    print_orders(cspl.order1, cspl.order2, cspl.order3,
+                                 [&] (int, auto order) {
+                                     format_double(io << ", ", order); });
+                    io << "}";
+                };
+                print_spl("freq", Executor::freq_spline, freq);
+                print_spl("amp", Executor::amp_spline, amp);
+                print_spl("phase", Executor::phase_spline, phase);
+            }
+            else {
+                io << " {";
+                io << std::showbase << std::hex << spl.orders[0];
+                print_orders(spl.orders[1], spl.orders[2], spl.orders[3],
+                             [&] (int i, auto order) {
+                                 io << ", " << std::showbase << std::hex << order;
+                                 if (spl.shift) {
+                                     io << ">>" << std::dec << (spl.shift * i);
+                                 }
+                             });
+                io << "}";
+            }
+            auto print_flag = [&] (const char *name, bool cond) {
+                if (cond) {
+                    io << " " << name;
+                }
+            };
+            print_flag("trig", meta.trig);
+            if (mod_type & (FRQMOD0_MASK | AMPMOD0_MASK | PHSMOD0_MASK |
+                            FRQMOD1_MASK | AMPMOD1_MASK | PHSMOD1_MASK) ||
+                tgt.type == Executor::PulseTarget::PLUT) {
+                print_flag("sync", meta.sync);
+                print_flag("enable", meta.en);
+                print_flag("ff", meta.fb);
+            }
+            if (mod_type & (FRMROT0_MASK | FRMROT1_MASK) ||
+                tgt.type == Executor::PulseTarget::PLUT) {
+                print_flag("eof", meta.apply_eof);
+                print_flag("clr", meta.clr_frame);
+                io << " fwd:" << std::dec << std::noshowbase << int(meta.fwd_frame_mask)
+                   << " inv:" << std::dec << std::noshowbase << int(meta.inv_frame_mask);
+            }
+        }
+
+        std::ostream &io;
+        bool print_float{true};
+    private:
+        void print_list_ele(const char *name, bool cond, bool &first)
+        {
+            if (!cond)
+                return;
+            if (!std::exchange(first, false))
+                io << ",";
+            io << name;
+        }
+        void print_mod_type(ModTypeMask mod_type, bool force_brace)
+        {
+            bool use_brace = force_brace || (std::popcount(uint8_t(mod_type)) != 1);
+            bool first = true;
+            if (use_brace) {
+                io << "{";
+            }
+            print_list_ele("freq0", mod_type & FRQMOD0_MASK, first);
+            print_list_ele("amp0", mod_type & AMPMOD0_MASK, first);
+            print_list_ele("phase0", mod_type & PHSMOD0_MASK, first);
+            print_list_ele("freq1", mod_type & FRQMOD1_MASK, first);
+            print_list_ele("amp1", mod_type & AMPMOD1_MASK, first);
+            print_list_ele("phase1", mod_type & PHSMOD1_MASK, first);
+            print_list_ele("frame_rot0", mod_type & FRMROT0_MASK, first);
+            print_list_ele("frame_rot1", mod_type & FRMROT1_MASK, first);
+            if (use_brace) {
+                io << "}";
+            }
+        }
+        void print_chn_mask(uint8_t chn_mask)
+        {
+            if (chn_mask == 0xff) {
+                io << ".all";
+            }
+            else {
+                bool single = std::popcount(chn_mask) == 1;
+                bool first = true;
+                io << (single ? "." : "{");
+                print_list_ele("0", chn_mask & 1, first);
+                print_list_ele("1", chn_mask & 2, first);
+                print_list_ele("2", chn_mask & 4, first);
+                print_list_ele("3", chn_mask & 8, first);
+                print_list_ele("4", chn_mask & 16, first);
+                print_list_ele("5", chn_mask & 32, first);
+                print_list_ele("6", chn_mask & 64, first);
+                print_list_ele("7", chn_mask & 128, first);
+                if (!single) {
+                    io << "}";
+                }
+            }
+        }
+    };
+
+    struct DictConverter {
+        void invalid(const JaqalInst &inst, Executor::Error err)
+        {
+            throw_if(PyDict_SetItem(dict, type_str(), invalid_str()));
+            py_object msg(pyunicode_from_string(Executor::error_msg(err)));
+            throw_if(PyDict_SetItem(dict, error_str(), msg));
+            std::ostringstream stm;
+            stm << inst;
+            auto str = stm.str();
+            py_object py_str(pyunicode_from_string(str.c_str()));
+            throw_if(PyDict_SetItem(dict, inst_str(), py_str));
+        }
+
+        void GLUT(uint8_t chn_mask, const uint16_t *gaddrs, const uint16_t *starts,
+                  const uint16_t *ends, int cnt)
+        {
+            throw_if(PyDict_SetItem(dict, type_str(), glut_str()));
+            set_channels(chn_mask);
+            throw_if(PyDict_SetItem(dict, count_str(), pylong_cached(cnt)));
+            py_object py_gaddrs(pylist_new(cnt));
+            py_object py_starts(pylist_new(cnt));
+            py_object py_ends(pylist_new(cnt));
+            for (int i = 0; i < cnt; i++) {
+                PyList_SET_ITEM(py_gaddrs.get(), i, pylong_from_long(gaddrs[i]));
+                PyList_SET_ITEM(py_starts.get(), i, pylong_from_long(starts[i]));
+                PyList_SET_ITEM(py_ends.get(), i, pylong_from_long(ends[i]));
+            }
+            throw_if(PyDict_SetItem(dict, gaddrs_str(), py_gaddrs));
+            throw_if(PyDict_SetItem(dict, starts_str(), py_starts));
+            throw_if(PyDict_SetItem(dict, ends_str(), py_ends));
+        }
+
+        void SLUT(uint8_t chn_mask, const uint16_t *saddrs,
+                  const ModTypeMask *mod_types, const uint16_t *paddrs, int cnt)
+        {
+            throw_if(PyDict_SetItem(dict, type_str(), slut_str()));
+            set_channels(chn_mask);
+            throw_if(PyDict_SetItem(dict, count_str(), pylong_cached(cnt)));
+            py_object py_saddrs(pylist_new(cnt));
+            py_object py_modtypes(pylist_new(cnt));
+            py_object py_paddrs(pylist_new(cnt));
+            for (int i = 0; i < cnt; i++) {
+                PyList_SET_ITEM(py_saddrs.get(), i, pylong_from_long(saddrs[i]));
+                PyList_SET_ITEM(py_paddrs.get(), i, pylong_from_long(paddrs[i]));
+                PyList_SET_ITEM(py_modtypes.get(), i,
+                                mod_type_list(mod_types[i]).release());
+            }
+            throw_if(PyDict_SetItem(dict, saddrs_str(), py_saddrs));
+            throw_if(PyDict_SetItem(dict, modtypes_str(), py_modtypes));
+            throw_if(PyDict_SetItem(dict, paddrs_str(), py_paddrs));
+        }
+        void GSEQ(uint8_t chn_mask, const uint16_t *gaddrs, int cnt, SeqMode m)
+        {
+            if (m == SeqMode::GATE) {
+                throw_if(PyDict_SetItem(dict, type_str(), gseq_str()));
+            }
+            else if (m == SeqMode::WAIT_ANC) {
+                throw_if(PyDict_SetItem(dict, type_str(), wait_anc_str()));
+            }
+            else if (m == SeqMode::CONT_ANC) {
+                throw_if(PyDict_SetItem(dict, type_str(), cont_anc_str()));
+            }
+            set_channels(chn_mask);
+            throw_if(PyDict_SetItem(dict, count_str(), pylong_cached(cnt)));
+            py_object py_gaddrs(pylist_new(cnt));
+            for (int i = 0; i < cnt; i++)
+                PyList_SET_ITEM(py_gaddrs.get(), i, pylong_from_long(gaddrs[i]));
+            throw_if(PyDict_SetItem(dict, gaddrs_str(), py_gaddrs));
+        }
+
+        void pulse(int chn_mask, ModTypeMask mod_type, const PDQSpline &spl,
+                   int64_t cycles, Executor::PulseMeta meta, Executor::PulseTarget tgt)
+        {
+            if (tgt.type == Executor::PulseTarget::None) {
+                throw_if(PyDict_SetItem(dict, type_str(), pulse_data_str()));
+            }
+            else if (tgt.type == Executor::PulseTarget::PLUT) {
+                throw_if(PyDict_SetItem(dict, type_str(), plut_str()));
+            }
+            else if (tgt.type == Executor::PulseTarget::Stream) {
+                throw_if(PyDict_SetItem(dict, type_str(), stream_str()));
+            }
+            bool is_plut = tgt.type == Executor::PulseTarget::PLUT;
+            if (is_plut) {
+                py_object paddr(pylong_from_long(tgt.addr));
+                throw_if(PyDict_SetItem(dict, paddr_str(), paddr));
+            }
+            else {
+                throw_if(PyDict_SetItem(dict, modtype_str(), mod_type_list(mod_type)));
+            }
+            set_channels(chn_mask);
+            py_object py_cycles(pylong_from_longlong(cycles));
+            throw_if(PyDict_SetItem(dict, cycles_str(), py_cycles));
+            py_object py_spl(pylist_new(4));
+            for (int i = 0; i < 4; i++)
+                PyList_SET_ITEM(py_spl.get(), i, pylong_from_longlong(spl.orders[i]));
+            throw_if(PyDict_SetItem(dict, spline_mu_str(), py_spl));
+            throw_if(PyDict_SetItem(dict, spline_shift_str(), pylong_cached(spl.shift)));
+            bool freq = mod_type & (FRQMOD0_MASK | FRQMOD1_MASK) || is_plut;
+            bool amp = mod_type & (AMPMOD0_MASK | AMPMOD1_MASK) || is_plut;
+            bool phase = mod_type & (PHSMOD0_MASK | PHSMOD1_MASK |
+                                     FRMROT0_MASK | FRMROT1_MASK) || is_plut;
+            bool unprefix_spline = (int(freq) + int(amp) + int(phase)) == 1;
+            auto set_spline = [&] (PyObject *name, auto &&cb, bool cond) {
+                if (!cond)
+                    return;
+                auto fspl = cb(spl, cycles);
+                py_object py_fspl(pylist_new(4));
+                PyList_SET_ITEM(py_fspl.get(), 0, pyfloat_from_double(fspl.order0));
+                PyList_SET_ITEM(py_fspl.get(), 1, pyfloat_from_double(fspl.order1));
+                PyList_SET_ITEM(py_fspl.get(), 2, pyfloat_from_double(fspl.order2));
+                PyList_SET_ITEM(py_fspl.get(), 3, pyfloat_from_double(fspl.order3));
+                if (unprefix_spline)
+                    throw_if(PyDict_SetItem(dict, spline_str(), py_fspl));
+                throw_if(PyDict_SetItem(dict, name, py_fspl));
+            };
+            set_spline(spline_freq_str(), Executor::freq_spline, freq);
+            set_spline(spline_amp_str(), Executor::amp_spline, amp);
+            set_spline(spline_phase_str(), Executor::phase_spline, phase);
+            throw_if(PyDict_SetItem(dict, trig_str(), meta.trig ? Py_True : Py_False));
+            throw_if(PyDict_SetItem(dict, sync_str(), meta.sync ? Py_True : Py_False));
+            throw_if(PyDict_SetItem(dict, enable_str(), meta.en ? Py_True : Py_False));
+            throw_if(PyDict_SetItem(dict, ff_str(), meta.fb ? Py_True : Py_False));
+            throw_if(PyDict_SetItem(dict, eof_str(), meta.apply_eof ? Py_True : Py_False));
+            throw_if(PyDict_SetItem(dict, clr_str(), meta.clr_frame ? Py_True : Py_False));
+            throw_if(PyDict_SetItem(dict, fwd_str(), pylong_cached(meta.fwd_frame_mask)));
+            throw_if(PyDict_SetItem(dict, inv_str(), pylong_cached(meta.inv_frame_mask)));
+        }
+
+        py_object dict{pydict_new()};
+
+    private:
+        void set_channels(uint8_t chn_mask)
+        {
+            int nchns = std::popcount(chn_mask);
+            int chn_added = 0;
+            py_object chns(pylist_new(nchns));
+            for (int chn = 0; chn < 8; chn++) {
+                if (!((chn_mask >> chn) & 1))
+                    continue;
+                if (nchns == 1)
+                    throw_if(PyDict_SetItem(dict, channel_str(), pylong_cached(chn)));
+                PyList_SET_ITEM(chns.get(), chn_added, pylong_from_long(chn));
+                chn_added++;
+            }
+            assert(nchns == chn_added);
+            throw_if(PyDict_SetItem(dict, channels_str(), chns));
+        }
+        py_object mod_type_list(ModTypeMask mod_type)
+        {
+            int nmasks = std::popcount(uint8_t(mod_type));
+            py_object names(pylist_new(nmasks));
+            int name_added = 0;
+            auto add_name = [&] (auto &&cb, ModTypeMask mask) {
+                if (!(mod_type & mask))
+                    return;
+                PyList_SET_ITEM(names.get(), name_added, py_newref(cb()));
+                name_added++;
+            };
+            add_name(freq0_str, FRQMOD0_MASK);
+            add_name(amp0_str, AMPMOD0_MASK);
+            add_name(phase0_str, PHSMOD0_MASK);
+            add_name(freq1_str, FRQMOD1_MASK);
+            add_name(amp1_str, AMPMOD1_MASK);
+            add_name(phase1_str, PHSMOD1_MASK);
+            add_name(frame_rot0_str, FRMROT0_MASK);
+            add_name(frame_rot1_str, FRMROT1_MASK);
+            assert(nmasks == name_added);
+            return names;
+        }
+    };
+
+    struct PulseSequencer {
+        PulseSequencer(bool single_action)
+            : single_action(single_action)
+        {
+            reset();
+        }
+
+        void reset()
+        {
+            memset(_channel_mem, 0xff, sizeof(channels));
+        }
+
+        void invalid(const JaqalInst&, Executor::Error)
+        {
+            pulses.push_back(JaqalInst::mask(0, 255));
+        }
+
+        void next()
+        {
+        }
+
+        void GLUT(uint8_t chn_mask, const uint16_t *gaddrs, const uint16_t *starts,
+                  const uint16_t *ends, int cnt)
+        {
+            for (int chn = 0; chn < 8; chn++) {
+                if (!((chn_mask >> chn) & 1))
+                    continue;
+                auto &glut = channels[chn].glut;
+                for (int i = 0; i < cnt; i++) {
+                    glut[gaddrs[i]] = { starts[i], ends[i] };
+                }
+            }
+        }
+        void SLUT(uint8_t chn_mask, const uint16_t *saddrs,
+                  const ModTypeMask *mod_types, const uint16_t *paddrs, int cnt)
+        {
+            for (int chn = 0; chn < 8; chn++) {
+                if (!((chn_mask >> chn) & 1))
+                    continue;
+                auto &slut = channels[chn].slut;
+                for (int i = 0; i < cnt; i++) {
+                    slut[saddrs[i]] = { mod_types[i], paddrs[i] };
+                }
+            }
+        }
+        void GSEQ(uint8_t chn_mask, const uint16_t *gaddrs, int cnt, SeqMode m)
+        {
+            if (m != SeqMode::GATE) {
+                pulses.push_back(JaqalInst::mask(0, 255));
+                return;
+            }
+            for (int chn = 0; chn < 8; chn++) {
+                if (!((chn_mask >> chn) & 1))
+                    continue;
+                auto &channel = channels[chn];
+                for (auto gaddr: std::span(gaddrs, cnt)) {
+                    auto [start, end] = channel.glut[gaddr];
+                    if (start >= 8192 || end >= 8192 || end < start) {
+                        pulses.push_back(JaqalInst::mask(0, 255));
+                        continue;
+                    }
+                    for (auto i = start; i <= end; i++) {
+                        auto [mod_type, paddr] = channel.slut[i];
+                        if (paddr >= 4096) {
+                            pulses.push_back(JaqalInst::mask(0, 255));
+                        }
+                        else {
+                            auto pulse = (channel.plut[paddr] & modtype_nmask &
+                                          channel_nmask);
+                            pulse = apply_channel_mask(pulse, uint8_t(1 << chn));
+                            if (single_action) {
+                                for (int bit = 0; bit < 8; bit++) {
+                                    if (!((uint8_t(mod_type) >> bit) & 1))
+                                        continue;
+                                    pulses.push_back(apply_modtype_mask(
+                                                         pulse, ModTypeMask(1 << bit)));
+                                }
+                            }
+                            else {
+                                pulses.push_back(apply_modtype_mask(pulse, mod_type));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        void pulse(int chn_mask, ModTypeMask mod_type, const PDQSpline &spl,
+                   int64_t cycles, Executor::PulseMeta meta, Executor::PulseTarget tgt)
+        {
+            // use the frame rotation metadata since it is a superset of
+            // the normal parameter one.
+            auto metadata =
+                raw_frame_metadata(spl.shift, meta.trig, meta.apply_eof, meta.clr_frame,
+                                   meta.fwd_frame_mask, meta.inv_frame_mask);
+            std::array<int64_t,4> sp(spl.orders);
+            for (auto &v: sp)
+                v &= (int64_t(1) << 40) - 1;
+            auto inst = Jaqal_v1_3::pulse(metadata, sp, cycles);
+            for (int chn = 0; chn < 8; chn++) {
+                if (!((chn_mask >> chn) & 1))
+                    continue;
+                if (tgt.type == Executor::PulseTarget::PLUT) {
+                    channels[chn].plut[tgt.addr] = inst;
+                }
+                else {
+                    auto chninst = apply_channel_mask(inst, uint8_t(1 << chn));
+                    if (single_action) {
+                        for (int bit = 0; bit < 8; bit++) {
+                            if (!((uint8_t(mod_type) >> bit) & 1))
+                                continue;
+                            pulses.push_back(apply_modtype_mask(
+                                                 chninst, ModTypeMask(1 << bit)));
+                        }
+                    }
+                    else {
+                        pulses.push_back(apply_modtype_mask(chninst, mod_type));
+                    }
+                }
+            }
+        }
+
+        std::vector<JaqalInst> pulses;
+        const bool single_action;
+    private:
+        struct ChannelLUT {
+            std::array<JaqalInst,4096> plut;
+            std::array<std::pair<ModTypeMask,uint16_t>,8192> slut;
+            std::array<std::pair<uint16_t,uint16_t>,4096> glut;
+        };
+        union {
+            ChannelLUT channels[8];
+            // std::memset only requires trivially-copyable
+            // but GCC decides to warn as long as the types are non-trivial
+            // (preventing us from defining default constructors)
+            // Work around this requirement with a union char buffer.
+            char _channel_mem[8 * sizeof(ChannelLUT)];
+        };
+    };
+
+    static void print_inst(std::ostream &io, const JaqalInst &inst, bool print_float)
+    {
+        Printer printer{io, print_float};
+        Executor::execute(printer, inst);
+    }
+
+    static void print_insts(std::ostream &io, const char *p, size_t sz, bool print_float)
+    {
+        Printer printer{io, print_float};
+        Executor::execute(printer, std::span(p, sz));
+    }
+
+    static auto extract_pulses(const char *p, size_t sz, bool single_action)
+    {
+        PulseSequencer sequencer(single_action);
         Executor::execute(sequencer, std::span(p, sz));
         return sequencer.pulses;
     }

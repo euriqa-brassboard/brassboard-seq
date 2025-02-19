@@ -29,7 +29,8 @@ from brassboard_seq.utils cimport set_global_tracker, \
 cimport cython
 from cython.operator cimport dereference as deref
 from cpython cimport PyDict_GetItemWithError, PyTypeObject, \
-  PyBytes_GET_SIZE, PyBytes_AS_STRING, PyList_New, PyList_SET_ITEM, Py_INCREF
+  PyBytes_GET_SIZE, PyBytes_AS_STRING, PyList_New, PyList_SET_ITEM, Py_INCREF, \
+  PyLong_AsLong
 
 from libc.string cimport memcpy
 
@@ -121,6 +122,72 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
             void add_pulse(const JaqalInst &inst, int64_t cycle) except +
             void clear()
             void end() except +
+
+    cppclass _Jaqal_v1_3 "brassboard_seq::rfsoc_backend::Jaqal_v1_3":
+        enum class SeqMode "brassboard_seq::rfsoc_backend::Jaqal_v1_3::SeqMode":
+            GATE
+            WAIT_ANC
+            CONT_ANC
+            STREAM
+
+        enum class ModTypeMask "brassboard_seq::rfsoc_backend::Jaqal_v1_3::ModTypeMask":
+            FRQMOD0_MASK
+            AMPMOD0_MASK
+            PHSMOD0_MASK
+            FRQMOD1_MASK
+            AMPMOD1_MASK
+            PHSMOD1_MASK
+            FRMROT0_MASK
+            FRMROT1_MASK
+
+        @staticmethod
+        JaqalInst apply_modtype_mask(JaqalInst, ModTypeMask)
+        @staticmethod
+        JaqalInst apply_channel_mask(JaqalInst, uint8_t)
+
+        @staticmethod
+        JaqalInst freq_pulse(cubic_spline_t sp, int64_t cycles,
+                             bint waittrig, bint sync, bint fb_enable)
+        @staticmethod
+        JaqalInst amp_pulse(cubic_spline_t sp, int64_t cycles,
+                            bint waittrig, bint sync, bint fb_enable)
+        @staticmethod
+        JaqalInst phase_pulse(cubic_spline_t sp, int64_t cycles,
+                              bint waittrig, bint sync, bint fb_enable)
+        @staticmethod
+        JaqalInst frame_pulse(cubic_spline_t sp, int64_t cycles,
+                              bint waittrig, bint apply_at_end, bint rst_frame,
+                              int fwd_frame_mask, int inv_frame_mask)
+        @staticmethod
+        JaqalInst stream(JaqalInst pulse)
+        @staticmethod
+        JaqalInst program_PLUT(JaqalInst pulse, uint16_t addr)
+        @staticmethod
+        JaqalInst program_SLUT(uint8_t chn_mask, const uint16_t *saddrs,
+                               const ModTypeMask *mod_types,
+                               const uint16_t *paddrs, int n)
+        @staticmethod
+        JaqalInst program_GLUT(uint8_t chn_mask, const uint16_t *gaddrs,
+                               const uint16_t *starts, const uint16_t *ends, int n)
+        @staticmethod
+        JaqalInst sequence(uint8_t chn_mask, SeqMode m, uint16_t *gaddrs, int n)
+
+        @staticmethod
+        uint8_t get_chn_mask(const JaqalInst &inst)
+
+        @staticmethod
+        void print_inst(ostream &io, const JaqalInst &inst, bint print_float) except +
+
+        @staticmethod
+        void print_insts(ostream &io, const char *p, size_t sz,
+                         bint print_float) except +
+
+        @staticmethod
+        vector[JaqalInst] extract_pulses(const char *p, size_t sz,
+                                         bint single_action) except +
+
+        @staticmethod
+        dict inst_to_dict(const JaqalInst &inst) except +
 
 rampfunctionbase_type = <PyTypeObject*>_RampFunctionBase
 seqcubicspline_type = <PyTypeObject*>SeqCubicSpline
@@ -473,3 +540,190 @@ cdef class JaqalChannelGen_v1:
             Py_INCREF(v)
             PyList_SET_ITEM(res, i, v)
         return res
+
+cdef modtype_name_map_v1_3 = {
+    'freq0': _Jaqal_v1_3.ModTypeMask.FRQMOD0_MASK,
+    'amp0': _Jaqal_v1_3.ModTypeMask.AMPMOD0_MASK,
+    'phase0': _Jaqal_v1_3.ModTypeMask.PHSMOD0_MASK,
+    'frame_rot0': _Jaqal_v1_3.ModTypeMask.FRMROT0_MASK,
+    'freq1': _Jaqal_v1_3.ModTypeMask.FRQMOD1_MASK,
+    'amp1': _Jaqal_v1_3.ModTypeMask.AMPMOD1_MASK,
+    'phase1': _Jaqal_v1_3.ModTypeMask.PHSMOD1_MASK,
+    'frame_rot1': _Jaqal_v1_3.ModTypeMask.FRMROT1_MASK,
+}
+
+cdef int get_modtype_mask_v1_3(modtype) except -1:
+    cdef int modmask
+    if isinstance(modtype, int):
+        modmask = <int>modtype
+        if modmask < 0 or modmask > 255:
+            PyErr_Format(PyExc_ValueError, "Invalid mod type '%d'", modmask)
+        return modmask
+    elif isinstance(modtype, str):
+        maskp = PyDict_GetItemWithError(modtype_name_map_v1_3, modtype)
+        if maskp == NULL:
+            PyErr_Format(PyExc_ValueError, "Invalid mod type '%U'", <PyObject*>modtype)
+        return PyLong_AsLong(<object>maskp)
+    else:
+        modmask = 0
+        for t in modtype:
+            maskp = PyDict_GetItemWithError(modtype_name_map_v1_3, <str?>t)
+            if maskp == NULL:
+                PyErr_Format(PyExc_ValueError, "Invalid mod type '%U'", <PyObject*>t)
+            modmask |= PyLong_AsLong(<object>maskp)
+        return modmask
+
+cdef int get_chn_mask_v1_3(channels) except -1:
+    cdef int chnmask = 0
+    if isinstance(channels, int):
+        chn = <int>channels
+        _check_chn(chn)
+        return 1 << chn
+    else:
+        for _chn in channels:
+            chn = <int?>_chn
+            _check_chn(chn)
+            chnmask |= 1 << chn
+    return chnmask
+
+@cython.final
+cdef class JaqalInst_v1_3(JaqalInstBase):
+    @property
+    def channel_mask(self):
+        return _Jaqal_v1_3.get_chn_mask(self.inst)
+
+    @property
+    def channels(self):
+        cdef int chn
+        cdef uint8_t chn_mask = _Jaqal_v1_3.get_chn_mask(self.inst)
+        return [chn for chn in range(8) if (chn_mask >> chn) & 1]
+
+    def to_dict(self):
+        return _Jaqal_v1_3.inst_to_dict(self.inst)
+
+    def __str__(self):
+        cdef pybytes_ostream io
+        _Jaqal_v1_3.print_inst(io, self.inst, True)
+        return io.get_buf().decode()
+
+    def __repr__(self):
+        cdef pybytes_ostream io
+        _Jaqal_v1_3.print_inst(io, self.inst, False)
+        return io.get_buf().decode()
+
+cdef JaqalInst_v1_3 new_inst_v1_3(JaqalInst inst):
+    self = <JaqalInst_v1_3>JaqalInst_v1_3.__new__(JaqalInst_v1_3)
+    self.inst = inst
+    return self
+
+@cython.auto_pickle(False)
+@cython.no_gc
+@cython.final
+cdef class Jaqal_v1_3:
+    @staticmethod
+    def freq_pulse(spline, int64_t cycles, bint waittrig, bint sync, bint fb_enable):
+        _check_inst_cycles(cycles)
+        return new_inst_v1_3(_Jaqal_v1_3.freq_pulse(_to_spline(spline), cycles,
+                                                    waittrig, sync, fb_enable))
+
+    @staticmethod
+    def amp_pulse(spline, int64_t cycles, bint waittrig, bint sync, bint fb_enable):
+        _check_inst_cycles(cycles)
+        return new_inst_v1_3(_Jaqal_v1_3.amp_pulse( _to_spline(spline), cycles,
+                                                   waittrig, sync, fb_enable))
+
+    @staticmethod
+    def phase_pulse(spline, int64_t cycles, bint waittrig, bint sync, bint fb_enable):
+        _check_inst_cycles(cycles)
+        return new_inst_v1_3(_Jaqal_v1_3.phase_pulse(_to_spline(spline), cycles,
+                                                     waittrig, sync, fb_enable))
+
+    @staticmethod
+    def frame_pulse(spline, int64_t cycles, bint waittrig, bint apply_at_end,
+                    bint rst_frame, int fwd_frame_mask, int inv_frame_mask):
+        _check_inst_cycles(cycles)
+        return new_inst_v1_3(_Jaqal_v1_3.frame_pulse(_to_spline(spline), cycles, waittrig,
+                                                     apply_at_end, rst_frame,
+                                                     fwd_frame_mask, inv_frame_mask))
+
+    @staticmethod
+    def apply_channel_mask(JaqalInst_v1_3 pulse, channels, /):
+        return new_inst_v1_3(_Jaqal_v1_3.apply_channel_mask(pulse.inst,
+                                                            get_chn_mask_v1_3(channels)))
+
+    @staticmethod
+    def apply_modtype_mask(JaqalInst_v1_3 pulse, modtype, /):
+        modmask = <_Jaqal_v1_3.ModTypeMask>get_modtype_mask_v1_3(modtype)
+        return new_inst_v1_3(_Jaqal_v1_3.apply_modtype_mask(pulse.inst, modmask))
+
+    @staticmethod
+    def stream(JaqalInst_v1_3 pulse, /):
+        return new_inst_v1_3(_Jaqal_v1_3.stream(pulse.inst))
+
+    @staticmethod
+    def program_PLUT(JaqalInst_v1_3 pulse, int addr, /):
+        if addr < 0 or addr >= 4096:
+            PyErr_Format(PyExc_ValueError, "Invalid address '%d'", addr)
+        return new_inst_v1_3(_Jaqal_v1_3.program_PLUT(pulse.inst, addr))
+
+    @staticmethod
+    def program_SLUT(channels, _saddrs, _paddrs, _modtypes, /):
+        cdef uint16_t saddrs[6]
+        cdef _Jaqal_v1_3.ModTypeMask modtypes[6]
+        cdef uint16_t paddrs[6]
+        cdef int n = len(_saddrs)
+        if len(_paddrs) != n or len(_modtypes) != n:
+            PyErr_Format(PyExc_ValueError, "Mismatch address length")
+        if n > 6:
+            PyErr_Format(PyExc_ValueError, "Too many SLUT addresses to program")
+        for i in range(n):
+            saddrs[i] = _saddrs[i]
+            modtypes[i] = <_Jaqal_v1_3.ModTypeMask>get_modtype_mask_v1_3(_modtypes[i])
+            paddrs[i] = _paddrs[i]
+        return new_inst_v1_3(_Jaqal_v1_3.program_SLUT(get_chn_mask_v1_3(channels),
+                                                      saddrs, modtypes, paddrs, n))
+
+    @staticmethod
+    def program_GLUT(channels, _gaddrs, _starts, _ends, /):
+        cdef uint16_t gaddrs[6]
+        cdef uint16_t starts[6]
+        cdef uint16_t ends[6]
+        cdef int n = len(_gaddrs)
+        if len(_starts) != n or len(_ends) != n:
+            PyErr_Format(PyExc_ValueError, "Mismatch address length")
+        if n > 6:
+            PyErr_Format(PyExc_ValueError, "Too many GLUT addresses to program")
+        for i in range(n):
+            gaddrs[i] = _gaddrs[i]
+            starts[i] = _starts[i]
+            ends[i] = _ends[i]
+        return new_inst_v1_3(_Jaqal_v1_3.program_GLUT(get_chn_mask_v1_3(channels),
+                                                      gaddrs, starts, ends, n))
+
+    @staticmethod
+    def sequence(channels, int mode, _gaddrs, /):
+        cdef uint16_t gaddrs[20]
+        cdef int n = len(_gaddrs)
+        if n > 20:
+            PyErr_Format(PyExc_ValueError, "Too many GLUT addresses to sequence")
+        for i in range(n):
+            gaddrs[i] = _gaddrs[i]
+        if (mode != int(_Jaqal_v1_3.SeqMode.GATE) and
+            mode != int(_Jaqal_v1_3.SeqMode.WAIT_ANC) and
+            mode != int(_Jaqal_v1_3.SeqMode.CONT_ANC)):
+            PyErr_Format(PyExc_ValueError, "Invalid sequencing mode %d.", mode)
+        return new_inst_v1_3(_Jaqal_v1_3.sequence(get_chn_mask_v1_3(channels),
+                                                  <_Jaqal_v1_3.SeqMode>mode, gaddrs, n))
+
+    @staticmethod
+    def dump_insts(bytes b, bint print_float=True):
+        cdef pybytes_ostream io
+        _Jaqal_v1_3.print_insts(io, PyBytes_AS_STRING(b),
+                                PyBytes_GET_SIZE(b), print_float)
+        return io.get_buf().decode()
+
+    @staticmethod
+    def extract_pulses(bytes b, bint single_action=True):
+        pulses = _Jaqal_v1_3.extract_pulses(PyBytes_AS_STRING(b), PyBytes_GET_SIZE(b),
+                                            single_action)
+        return [new_inst_v1_3(pulse) for pulse in pulses]
