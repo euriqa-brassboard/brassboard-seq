@@ -31,6 +31,57 @@
 
 namespace brassboard_seq::rfsoc_backend {
 
+namespace {
+#define WRAP_STR(name, str)                             \
+    static inline PyObject *name##_str()                \
+    {                                                   \
+        static auto u = PyUnicode_FromString(str);      \
+        return throw_if_not(u);                         \
+    }
+WRAP_STR(type, "type")
+WRAP_STR(invalid, "invalid")
+WRAP_STR(plut, "plut")
+WRAP_STR(slut, "slut")
+WRAP_STR(glut, "glut")
+WRAP_STR(gseq, "gseq")
+WRAP_STR(wait_anc, "wait_anc")
+WRAP_STR(cont_anc, "cont_anc")
+WRAP_STR(pulse_data, "pulse_data")
+WRAP_STR(stream, "stream")
+
+WRAP_STR(error, "error")
+WRAP_STR(inst, "inst")
+WRAP_STR(channel, "channel")
+WRAP_STR(count, "count")
+WRAP_STR(gaddrs, "gaddrs")
+WRAP_STR(starts, "starts")
+WRAP_STR(ends, "ends")
+WRAP_STR(saddrs, "saddrs")
+WRAP_STR(paddrs, "paddrs")
+
+WRAP_STR(paddr, "paddr")
+WRAP_STR(param, "param")
+WRAP_STR(tone, "tone")
+WRAP_STR(cycles, "cycles")
+WRAP_STR(spline, "spline")
+WRAP_STR(spline_mu, "spline_mu")
+WRAP_STR(spline_shift, "spline_shift")
+
+WRAP_STR(freq, "freq")
+WRAP_STR(amp, "amp")
+WRAP_STR(phase, "phase")
+WRAP_STR(frame_rot, "frame_rot")
+
+WRAP_STR(trig, "trig")
+WRAP_STR(sync, "sync")
+WRAP_STR(enable, "enable")
+WRAP_STR(ff, "ff")
+WRAP_STR(eof, "eof")
+WRAP_STR(clr, "clr")
+WRAP_STR(fwd, "fwd")
+WRAP_STR(inv, "inv")
+}
+
 static PyTypeObject *rampfunction_type;
 static PyTypeObject *seqcubicspline_type;
 
@@ -1040,55 +1091,6 @@ struct Jaqal_v1 {
         py_object dict{pydict_new()};
 
     private:
-#define WRAP_STR(name, str)                             \
-        static inline PyObject *name##_str()            \
-        {                                               \
-            static auto u = PyUnicode_FromString(str);  \
-            return throw_if_not(u);                     \
-        }
-        WRAP_STR(type, "type")
-        WRAP_STR(invalid, "invalid")
-        WRAP_STR(plut, "plut")
-        WRAP_STR(slut, "slut")
-        WRAP_STR(glut, "glut")
-        WRAP_STR(gseq, "gseq")
-        WRAP_STR(wait_anc, "wait_anc")
-        WRAP_STR(cont_anc, "cont_anc")
-        WRAP_STR(pulse_data, "pulse_data")
-        WRAP_STR(stream, "stream")
-
-        WRAP_STR(error, "error")
-        WRAP_STR(inst, "inst")
-        WRAP_STR(channel, "channel")
-        WRAP_STR(count, "count")
-        WRAP_STR(gaddrs, "gaddrs")
-        WRAP_STR(starts, "starts")
-        WRAP_STR(ends, "ends")
-        WRAP_STR(saddrs, "saddrs")
-        WRAP_STR(paddrs, "paddrs")
-
-        WRAP_STR(paddr, "paddr")
-        WRAP_STR(param, "param")
-        WRAP_STR(tone, "tone")
-        WRAP_STR(cycles, "cycles")
-        WRAP_STR(spline, "spline")
-        WRAP_STR(spline_mu, "spline_mu")
-        WRAP_STR(spline_shift, "spline_shift")
-
-        WRAP_STR(freq, "freq")
-        WRAP_STR(amp, "amp")
-        WRAP_STR(phase, "phase")
-        WRAP_STR(frame_rot, "frame_rot")
-
-        WRAP_STR(trig, "trig")
-        WRAP_STR(sync, "sync")
-        WRAP_STR(enable, "enable")
-        WRAP_STR(ff, "ff")
-        WRAP_STR(eof, "eof")
-        WRAP_STR(clr, "clr")
-        WRAP_STR(fwd, "fwd")
-        WRAP_STR(inv, "inv")
-
         void pulse_to_dict(Executor::PulseTarget tgt, PyObject *name, int chn,
                            int tone, int64_t cycles, const PDQSpline &spl)
         {
