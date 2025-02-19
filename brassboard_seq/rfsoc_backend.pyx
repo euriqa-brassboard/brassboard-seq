@@ -258,8 +258,8 @@ cdef inline int _check_chn_tone(int chn, int tone) except -1:
 # Debugging/testing tool
 @cython.auto_pickle(False)
 @cython.no_gc
-@cython.final
-cdef class JaqalInst_v1:
+@cython.internal
+cdef class JaqalInstBase:
     cdef JaqalInst inst
     def __init__(self, data=None):
         if data is None:
@@ -272,23 +272,27 @@ cdef class JaqalInst_v1:
             ty = type(data)
             PyErr_Format(PyExc_TypeError, "Invalid type '%S'", <PyObject*>ty)
 
-    @property
-    def channel(self):
-        return _Jaqal_v1.get_chn(self.inst);
-
     def to_bytes(self):
         return self.inst.to_pybytes()
-
-    def to_dict(self):
-        return _Jaqal_v1.inst_to_dict(self.inst)
 
     def __index__(self):
         return self.inst.to_pylong()
 
     def __eq__(self, other):
-        if not isinstance(other, JaqalInst_v1):
+        if not isinstance(other, JaqalInstBase):
             return NotImplemented
-        return self.inst == (<JaqalInst_v1>other).inst
+        if type(self) is not type(other):
+            return False
+        return self.inst == (<JaqalInstBase>other).inst
+
+@cython.final
+cdef class JaqalInst_v1(JaqalInstBase):
+    @property
+    def channel(self):
+        return _Jaqal_v1.get_chn(self.inst);
+
+    def to_dict(self):
+        return _Jaqal_v1.inst_to_dict(self.inst)
 
     def __str__(self):
         cdef pybytes_ostream io
