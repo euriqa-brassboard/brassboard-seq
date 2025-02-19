@@ -27,35 +27,21 @@ class MatchGLUT:
     def __eq__(self, other):
         if not isinstance(other, JaqalInst_v1):
             return NotImplemented
-        s = str(other)
         d = other.to_dict()
         assert d['type'] == 'glut'
-        m = re.match('^glut\\.([0-7])\\[([0-6])\\]((?: \\[[0-9]+\\]=\\[[0-9]+,[0-9]+\\]){0,6})$', s)
-        assert m is not None
-        assert d['channel'] == int(m[1])
+        lut_str = ''.join(f' [{gaddr}]=[{start},{end}]' for gaddr, start, end in
+                            zip(d['gaddrs'], d['starts'], d['ends']))
+        assert str(other) == f"glut.{d['channel']}[{d['count']}]{lut_str}"
         if self.chn is not None:
-            assert int(m[1]) == self.chn
-        assert d['count'] == int(m[2])
+            assert d['channel'] == self.chn
         if self.cnt is not None:
-            assert int(m[2]) == self.cnt
-        gaddrs = []
-        starts = []
-        ends = []
-        for ss in m[3].split():
-            sm = re.match('^\\[([0-9]+)\\]=\\[([0-9]+),([0-9]+)\\]$', ss)
-            assert sm is not None
-            gaddrs.append(int(sm[1]))
-            starts.append(int(sm[2]))
-            ends.append(int(sm[3]))
-        assert d['gaddrs'] == gaddrs
-        assert d['starts'] == starts
-        assert d['ends'] == ends
+            assert d['count'] == self.cnt
         if self.gaddrs is not None:
-            assert gaddrs == self.gaddrs
+            assert d['gaddrs'] == self.gaddrs
         if self.starts is not None:
-            assert starts == self.starts
+            assert d['starts'] == self.starts
         if self.ends is not None:
-            assert ends == self.ends
+            assert d['ends'] == self.ends
         return True
 
 class MatchSLUT:
@@ -74,30 +60,19 @@ class MatchSLUT:
     def __eq__(self, other):
         if not isinstance(other, JaqalInst_v1):
             return NotImplemented
-        s = str(other)
         d = other.to_dict()
         assert d['type'] == 'slut'
-        m = re.match('^slut\\.([0-7])\\[([0-9])\\]((?: \\[[0-9]+\\]=[0-9]+){0,9})$', s)
-        assert m is not None
-        assert d['channel'] == int(m[1])
+        lut_str = ''.join(f' [{saddr}]={paddr}' for saddr, paddr in
+                            zip(d['saddrs'], d['paddrs']))
+        assert str(other) == f"slut.{d['channel']}[{d['count']}]{lut_str}"
         if self.chn is not None:
-            assert int(m[1]) == self.chn
-        assert d['count'] == int(m[2])
+            assert d['channel'] == self.chn
         if self.cnt is not None:
-            assert int(m[2]) == self.cnt
-        saddrs = []
-        paddrs = []
-        for ss in m[3].split():
-            sm = re.match('^\\[([0-9]+)\\]=([0-9]+)$', ss)
-            assert sm is not None
-            saddrs.append(int(sm[1]))
-            paddrs.append(int(sm[2]))
-        assert d['paddrs'] == paddrs
-        assert d['saddrs'] == saddrs
+            assert d['count'] == self.cnt
         if self.saddrs is not None:
-            assert saddrs == self.saddrs
+            assert d['saddrs'] == self.saddrs
         if self.paddrs is not None:
-            assert paddrs == self.paddrs
+            assert d['paddrs'] == self.paddrs
         return True
 
 class MatchGSEQ:
@@ -113,26 +88,21 @@ class MatchGSEQ:
     def __eq__(self, other):
         if not isinstance(other, JaqalInst_v1):
             return NotImplemented
-        s = str(other)
         d = other.to_dict()
-        m = re.match('^(gseq|wait_anc|cont_anc)\\.([0-7])\\[([0-9]+)\\]((?: [0-9]+)*)$', s)
-        assert m is not None
-        assert d['type'] == m[1]
+        seq_str = ''.join(f' {gaddr}' for gaddr in d['gaddrs'])
+        assert str(other) == f"{d['type']}.{d['channel']}[{d['count']}]{seq_str}"
         if self.mode is not None:
-            assert m[1] == self.mode
-        assert d['channel'] == int(m[2])
+            assert d['type'] == self.mode
         if self.chn is not None:
-            assert int(m[2]) == self.chn
-        assert d['count'] == int(m[3])
+            assert d['channel'] == self.chn
         if self.cnt is not None:
-            assert int(m[3]) == self.cnt
-        gaddrs = []
-        for ss in m[4].split():
-            gaddrs.append(int(ss))
-        assert d['gaddrs'] == gaddrs
+            assert d['count'] == self.cnt
         if self.gaddrs is not None:
-            assert gaddrs == self.gaddrs
+            assert d['gaddrs'] == self.gaddrs
         return True
+
+def pad_list(lst, n, v):
+    return lst + [v] * (n - len(lst))
 
 class MatchPulse:
     def __init__(self, param, chn, tone, mode, addr, cycles,
@@ -162,132 +132,86 @@ class MatchPulse:
 
     def check_prefix(self, other):
         assert isinstance(other, JaqalInst_v1)
-        use_str = self.fspl is not None
+        d = other.to_dict()
+
         str_inst = str(other)
         repr_inst = repr(other)
-        m_str = re.match('^(pulse_data|plut|stream)\\.([0-7]) ((?:\\[[0-9]+\\]=)?)([_a-z]+)([01]) <([0-9]+)> {([^{}]+)}(.*)$', str_inst)
+        m_str = re.match('^(.*) {([^{}]+)}(.*)$', str_inst)
         assert m_str is not None
-        m_repr = re.match('^(pulse_data|plut|stream)\\.([0-7]) ((?:\\[[0-9]+\\]=)?)([_a-z]+)([01]) <([0-9]+)> {([^{}]+)}(.*)$', repr_inst)
+        m_repr = re.match('^(.*) {([^{}]+)}(.*)$', repr_inst)
         assert m_repr is not None
+
+        plut_str = f"[{d['paddr']}]=" if d['type'] == 'plut' else ''
         assert m_str[1] == m_repr[1]
-        assert m_str[2] == m_repr[2]
-        assert m_str[3] == m_repr[3]
-        assert m_str[4] == m_repr[4]
-        assert m_str[5] == m_repr[5]
-        assert m_str[6] == m_repr[6]
-        assert m_str[8] == m_repr[8]
-        d = other.to_dict()
-        m = m_str
-        assert d['type'] == m[1]
+        assert m_str[1] == f"{d['type']}.{d['channel']} {plut_str}{d['param']}{d['tone']} <{d['cycles']}>"
+
         if self.mode is not None:
-            assert m[1] == self.mode
-        assert d['channel'] == int(m[2])
+            assert d['type'] == self.mode
         if self.chn is not None:
-            assert int(m[2]) == self.chn
-        if d['type'] == 'plut':
-            assert d['paddr'] == int(m[3].lstrip('[').rstrip(']='))
-        else:
-            assert 'paddr' not in d
+            assert d['channel'] == self.chn
         if self.addr is not None:
             assert self.mode == 'plut'
-            assert m[3] == f'[{self.addr}]='
-        elif m[1] == 'plut':
-            assert m[3]
-        else:
-            assert not m[3]
-        assert d['param'] == m[4]
-        assert m[4] == self.param
-        assert d['tone'] == int(m[5])
+            assert d['paddr'] == self.addr
+        assert d['param'] == self.param
         if self.tone is not None:
-            assert int(m[5]) == self.tone
-        assert d['cycles'] == int(m[6])
+            assert d['tone'] == self.tone
         if self.cycles is not None:
-            assert int(m[6]) == self.cycles
+            assert d['cycles'] == self.cycles
 
-        fspl_orders = [float(o) for o in m_str[7].split(', ')]
-        norders = len(fspl_orders)
-        assert d['spline'] == fspl_orders + [0] * (4 - norders)
+        assert d['spline'] == pad_list([float(o) for o in m_str[2].split(', ')], 4, 0)
         if self.fspl is not None:
-            got = fspl_orders
-            expected = list(self.fspl)
+            expected = pad_list(list(self.fspl), 4, 0)
             if self.approx:
-                got = got + [0] * (4 - len(got))
-                expected = expected + [0] * (4 - len(expected))
                 expected = pytest.approx(expected, abs=self.abs, rel=self.rel)
-            else:
-                assert len(expected) >= norders
-                if len(expected) > norders:
-                    assert all(o == 0 for o in expected[norders:])
-                    expected = expected[:norders]
-            assert got == expected
+            assert d['spline'] == expected
 
-        ispl_orders_strs = m_repr[7].split(', ')
-        assert len(ispl_orders_strs) == norders
-        ispl_orders = []
-        shift = 0
-        for i, so in enumerate(ispl_orders_strs):
-            so = so.split('>>')
-            if so[0] == '0':
-                ispl_orders.append(0)
+        spline_mu = d['spline_mu']
+        spline_shift = d['spline_shift']
+        ispl_str = ''
+        found_order = False
+        for order in range(3, -1, -1):
+            spl_order = spline_mu[order]
+            if not (found_order or spl_order or order == 0):
+                continue
+            found_order = True
+            if spl_order == 0:
+                order_str = '0'
             else:
-                assert so[0].startswith('0x')
-                ispl_orders.append(int(so[0], 0))
-            if len(so) == 1:
-                assert shift == 0
-                continue
-            if i == 1:
-                shift = int(so[1])
-                continue
-            assert i > 0
-            assert int(so[1]) == i * shift
-
-        if norders > 1:
-            assert d['spline_shift'] == shift
-        signed_ispl_orders = [v if v < 2**63 else v - 2**64 for v in ispl_orders]
-        assert d['spline_mu'] == signed_ispl_orders + [0] * (4 - norders)
+                if spl_order < 0:
+                    spl_order += 2**64
+                    assert spl_order > 0
+                order_str = hex(spl_order)
+            if spline_shift * order:
+                ispl_str = f">>{spline_shift * order}" + ispl_str
+            ispl_str = f"{order_str}" + ispl_str
+            if order != 0:
+                ispl_str = ", " + ispl_str
+        assert m_repr[2] == ispl_str
 
         if self.ispl is not None:
-            expected = list(self.ispl)
-            assert len(expected) >= norders
-            if len(expected) > norders:
-                assert all(o == 0 for o in expected[norders:])
-                expected = expected[:norders]
-            assert ispl_orders == expected
-            if self.shift is not None:
-                assert shift == self.shift
+            assert spline_mu == pad_list(list(self.ispl), 4, 0)
+        if self.shift is not None:
+            assert spline_shift == self.shift
 
+        flags = ' trig' if d['trig'] else ''
         if self.param == 'frame_rot':
-            flags = dict(trig=False, eof=False, clr=False)
+            if d['eof']:
+                flags += ' eof'
+            if d['clr']:
+                flags += ' clr'
+            flags += f" fwd:{d['fwd']} inv:{d['inv']}"
         else:
-            flags = dict(trig=False, sync=False, enable=False, ff=False)
+            if d['sync']:
+                flags += ' sync'
+            if d['enable']:
+                flags += ' enable'
+            if d['ff']:
+                flags += ' ff'
 
-        for flag in m[8].split():
-            if flag in flags:
-                assert not flags[flag]
-                flags[flag] = True
-                continue
-            if self.param == 'frame_rot':
-                if flag.startswith('fwd:'):
-                    assert 'fwd' not in flags
-                    flags['fwd'] = int(flag[4:])
-                    continue
-                if flag.startswith('inv:'):
-                    assert 'inv' not in flags
-                    flags['inv'] = int(flag[4:])
-                    continue
-            raise ValueError(f'Unknown pulse flag {flag}')
+        assert m_str[3] == flags
+        assert m_repr[3] == m_str[3]
 
-        assert flags['trig'] == d['trig']
-        if self.param == 'frame_rot':
-            assert flags['fwd'] == d['fwd']
-            assert flags['inv'] == d['inv']
-            assert flags['eof'] == d['eof']
-            assert flags['clr'] == d['clr']
-        else:
-            assert flags['sync'] == d['sync']
-            assert flags['enable'] == d['enable']
-            assert flags['ff'] == d['ff']
-        return flags
+        return d
 
 class MatchParamPulse(MatchPulse):
     def __init__(self, param, chn=None, tone=None, mode=None, addr=None,
@@ -554,17 +478,17 @@ def test_pulse_inst():
 
         assert inst == MatchParamPulse(param, chn, tone, 'pulse_data', None, cycles,
                                        trig, sync, enable, ff,
-                                       ispl=(0, 0, 0, 0), shift=0)
+                                       ispl=(0, 0, 0, 0), shift=31)
         assert inst == MatchParamPulse(param, chn, tone, 'pulse_data', None, cycles,
                                        trig, sync, enable, ff, fspl=(0, 0, 0, 0))
         assert plut_inst == MatchParamPulse(param, chn, tone, 'plut', addr, cycles,
                                             trig, sync, enable, ff,
-                                            ispl=(0, 0, 0, 0), shift=0)
+                                            ispl=(0, 0, 0, 0), shift=31)
         assert plut_inst == MatchParamPulse(param, chn, tone, 'plut', addr, cycles,
                                             trig, sync, enable, ff, fspl=(0, 0, 0, 0))
         assert stm_inst == MatchParamPulse(param, chn, tone, 'stream', None, cycles,
                                            trig, sync, enable, ff,
-                                           ispl=(0, 0, 0, 0), shift=0)
+                                           ispl=(0, 0, 0, 0), shift=31)
         assert stm_inst == MatchParamPulse(param, chn, tone, 'stream', None, cycles,
                                            trig, sync, enable, ff, fspl=(0, 0, 0, 0))
         assert str(inst) == f'pulse_data.{chn} {param}{tone} <{cycles}> {{0}}{flags}'
@@ -621,17 +545,17 @@ def test_pulse_inst():
 
         assert inst == MatchFramePulse(chn, tone, 'pulse_data', None, cycles,
                                        trig, eof, clr, fwd, inv,
-                                       ispl=(0, 0, 0, 0), shift=0)
+                                       ispl=(0, 0, 0, 0), shift=31)
         assert inst == MatchFramePulse(chn, tone, 'pulse_data', None, cycles,
                                        trig, eof, clr, fwd, inv, fspl=(0, 0, 0, 0))
         assert plut_inst == MatchFramePulse(chn, tone, 'plut', addr, cycles,
                                             trig, eof, clr, fwd, inv,
-                                            ispl=(0, 0, 0, 0), shift=0)
+                                            ispl=(0, 0, 0, 0), shift=31)
         assert plut_inst == MatchFramePulse(chn, tone, 'plut', addr, cycles,
                                             trig, eof, clr, fwd, inv, fspl=(0, 0, 0, 0))
         assert stm_inst == MatchFramePulse(chn, tone, 'stream', None, cycles,
                                            trig, eof, clr, fwd, inv,
-                                           ispl=(0, 0, 0, 0), shift=0)
+                                           ispl=(0, 0, 0, 0), shift=31)
         assert stm_inst == MatchFramePulse(chn, tone, 'stream', None, cycles,
                                            trig, eof, clr, fwd, inv, fspl=(0, 0, 0, 0))
         assert str(inst) == f'pulse_data.{chn} frame_rot{tone} <{cycles}> {{0}}{flags}'
@@ -662,39 +586,39 @@ def test_pulse_inst():
 
 def test_freq_spline():
     inst = Jaqal_v1.freq_pulse(0, 0, (-409.6e6, 0, 0, 0), 1000, False, False, False)
-    assert inst == MatchParamPulse('freq', cycles=1000, shift=0,
-                                   ispl=(0xffffff8000000000,))
+    assert inst == MatchParamPulse('freq', cycles=1000, shift=31,
+                                   ispl=(-0x8000000000,))
     assert inst == MatchParamPulse('freq', cycles=1000, fspl=(-409.6e6,))
 
     inst = Jaqal_v1.freq_pulse(0, 0, (204.8e6, 0, 0, 0), 2100, False, False, False)
-    assert inst == MatchParamPulse('freq', cycles=2100, shift=0,
+    assert inst == MatchParamPulse('freq', cycles=2100, shift=31,
                                    ispl=(0x4000000000,))
     assert inst == MatchParamPulse('freq', cycles=2100, fspl=(204.8e6,))
 
     inst = Jaqal_v1.freq_pulse(0, 0, (-204.8e6, 819.2e6, 0, 0), 4, False, False, False)
     assert inst == MatchParamPulse('freq', cycles=4, shift=0,
-                                   ispl=(0xffffffc000000000, 0x4000000000))
+                                   ispl=(-0x4000000000, 0x4000000000))
     assert inst == MatchParamPulse('freq', cycles=4, fspl=(-204.8e6, 819.2e6))
 
     inst = Jaqal_v1.freq_pulse(0, 0, (-204.8e6, 819.2e6 * 2, 0, 0), 4, False, False, False)
     assert inst == MatchParamPulse('freq', cycles=4, shift=0,
-                                   ispl=(0xffffffc000000000, 0xffffff8000000000))
+                                   ispl=(-0x4000000000, -0x8000000000))
     assert inst == MatchParamPulse('freq', cycles=4, fspl=(-204.8e6, -1638.4e6))
 
     inst = Jaqal_v1.freq_pulse(0, 0, (-204.8e6, 8.191999999991808e8, 0, 0), 4, False, False, False)
     assert inst == MatchParamPulse('freq', cycles=4, shift=0,
-                                   ispl=(0xffffffc000000000, 0x4000000000))
+                                   ispl=(-0x4000000000, 0x4000000000))
     assert inst == MatchParamPulse('freq', cycles=4, fspl=(-204.8e6, 819.2e6))
 
     # Test the exact rounding threshold to make sure we are rounding things correctly.
     inst = Jaqal_v1.freq_pulse(0, 0, (-204.8e6, 8.191999999985099e8, 0, 0), 4, False, False, False)
     assert inst == MatchParamPulse('freq', cycles=4, shift=0,
-                                   ispl=(0xffffffc000000000, 0x4000000000))
+                                   ispl=(-0x4000000000, 0x4000000000))
     assert inst == MatchParamPulse('freq', cycles=4, fspl=(-204.8e6, 819.2e6))
 
     inst = Jaqal_v1.freq_pulse(0, 0, (-204.8e6, 8.191999999985098e8, 0, 0), 4, False, False, False)
     assert inst == MatchParamPulse('freq', cycles=4, shift=1,
-                                   ispl=(0xffffffc000000000, 0x7fffffffff))
+                                   ispl=(-0x4000000000, 0x7fffffffff))
     assert inst == MatchParamPulse('freq', cycles=4, fspl=(-204.8e6, 819199999.9985099))
 
     # Higher orders
@@ -744,60 +668,60 @@ def test_freq_spline():
 
 def test_amp_spline():
     inst = Jaqal_v1.amp_pulse(0, 0, (1, 0, 0, 0), 1000, False, False, False)
-    assert inst == MatchParamPulse('amp', cycles=1000, shift=0,
+    assert inst == MatchParamPulse('amp', cycles=1000, shift=31,
                                    ispl=(0x7fff800000,))
     assert inst == MatchParamPulse('amp', cycles=1000, fspl=(1,))
 
     inst = Jaqal_v1.amp_pulse(0, 0, (-1, 0, 0, 0), 2100, False, False, False)
-    assert inst == MatchParamPulse('amp', cycles=2100, shift=0,
-                                   ispl=(0xffffff8000800000,))
+    assert inst == MatchParamPulse('amp', cycles=2100, shift=31,
+                                   ispl=(-0x7fff800000,))
     assert inst == MatchParamPulse('amp', cycles=2100, fspl=(-1,))
 
     inst = Jaqal_v1.amp_pulse(0, 0, (-1, 2.0000305180437934, 0, 0), 4,
                               False, False, False)
     assert inst == MatchParamPulse('amp', cycles=4, shift=0,
-                                   ispl=(0xffffff8000800000, 0x4000000000))
+                                   ispl=(-0x7fff800000, 0x4000000000))
     assert inst == MatchParamPulse('amp', cycles=4, fspl=(-1, 2.0000305180437934))
 
     # Test the exact rounding threshold to make sure we are rounding things correctly.
     inst = Jaqal_v1.amp_pulse(0, 0, (-1, 2.0000000000000004, 0, 0), 4,
                               False, False, False)
     assert inst == MatchParamPulse('amp', cycles=4, shift=0,
-                                   ispl=(0xffffff8000800000, 0x4000000000))
+                                   ispl=(-0x7fff800000, 0x4000000000))
     assert inst == MatchParamPulse('amp', cycles=4, fspl=(-1, 2.0000305180437934))
 
     inst = Jaqal_v1.amp_pulse(0, 0, (-1, 2, 0, 0), 4, False, False, False)
     assert inst == MatchParamPulse('amp', cycles=4, shift=1,
-                                   ispl=(0xffffff8000800000, 0x7fff800000))
+                                   ispl=(-0x7fff800000, 0x7fff800000))
     assert inst == MatchParamPulse('amp', cycles=4, fspl=(-1, 2))
 
     # Higher orders
     inst = Jaqal_v1.amp_pulse(0, 0, (-1, 0, 2.0000305180437934, 0), 4,
                               False, False, False)
     assert inst == MatchParamPulse('amp', cycles=4, shift=0,
-                                   ispl=(0xffffff8000800000, 0x1000000000,
+                                   ispl=(-0x7fff800000, 0x1000000000,
                                          0x2000000000))
     assert inst == MatchParamPulse('amp', cycles=4, fspl=(-1, 0, 2.0000305180437934))
 
     inst = Jaqal_v1.amp_pulse(0, 0, (-1, 0, 2.0000305180437934, 0), 1024,
                               False, False, False)
     assert inst == MatchParamPulse('amp', cycles=1024, shift=8,
-                                   ispl=(0xffffff8000800000, 0x10000000,
+                                   ispl=(-0x7fff800000, 0x10000000,
                                          0x2000000000))
     assert inst == MatchParamPulse('amp', cycles=1024, fspl=(-1, 0, 2.0000305180437934))
 
     inst = Jaqal_v1.amp_pulse(0, 0, (1, 0, -2.0000305180437934, 0), 1024,
                               False, False, False)
     assert inst == MatchParamPulse('amp', cycles=1024, shift=8,
-                                   ispl=(0x7fff800000, 0xfffffffff0000000,
-                                         0xffffffe000000000))
+                                   ispl=(0x7fff800000, -0x10000000,
+                                         -0x2000000000))
     assert inst == MatchParamPulse('amp', cycles=1024, fspl=(1, 0, -2.0000305180437934))
 
 
     inst = Jaqal_v1.amp_pulse(0, 0, (-1, 0, 0, 2.0000305180437934), 4,
                               False, False, False)
     assert inst == MatchParamPulse('amp', cycles=4, shift=0,
-                                   ispl=(0xffffff8000800000, 0x400000000,
+                                   ispl=(-0x7fff800000, 0x400000000,
                                          0x1800000000, 0x1800000000))
     assert inst == MatchParamPulse('amp', cycles=4,
                                    fspl=(-1, 0, 0, 2.0000305180437934))
@@ -805,7 +729,7 @@ def test_amp_spline():
     inst = Jaqal_v1.amp_pulse(0, 0, (-1, 0, 0, 2.0000305180437934), 2048,
                               False, False, False)
     assert inst == MatchParamPulse('amp', cycles=2048, shift=9,
-                                   ispl=(0xffffff8000800000, 0, 0xc000000,
+                                   ispl=(-0x7fff800000, 0, 0xc000000,
                                          0x1800000000))
     assert inst == MatchParamPulse('amp', cycles=2048,
                                    fspl=(-1, 0, 0, 2.0000305180437934), abs=5e-7)
@@ -842,33 +766,33 @@ class FrameTester:
 @pytest.mark.parametrize('cls', [PhaseTester, FrameTester])
 def test_phase_spline(cls):
     inst = cls.pulse((-0.5, 0, 0, 0), 1000)
-    assert inst == cls.match(cycles=1000, shift=0, ispl=(0xffffff8000000000,))
+    assert inst == cls.match(cycles=1000, shift=31, ispl=(-0x8000000000,))
     assert inst == cls.match(cycles=1000, fspl=(-0.5,))
 
     inst = cls.pulse((0.25, 0, 0, 0), 2100)
-    assert inst == cls.match(cycles=2100, shift=0, ispl=(0x4000000000,))
+    assert inst == cls.match(cycles=2100, shift=31, ispl=(0x4000000000,))
     assert inst == cls.match(cycles=2100, fspl=(0.25,))
 
     inst = cls.pulse((-0.25, 1, 0, 0), 4)
-    assert inst == cls.match(cycles=4, shift=0, ispl=(0xffffffc000000000, 0x4000000000))
+    assert inst == cls.match(cycles=4, shift=0, ispl=(-0x4000000000, 0x4000000000))
     assert inst == cls.match(cycles=4, fspl=(-0.25, 1))
 
     inst = cls.pulse((-0.25, 2, 0, 0), 4)
     assert inst == cls.match(cycles=4, shift=0,
-                             ispl=(0xffffffc000000000, 0xffffff8000000000))
+                             ispl=(-0x4000000000, -0x8000000000))
     assert inst == cls.match(cycles=4, fspl=(-0.25, -2))
 
     inst = cls.pulse((-0.25, 0.999999999999, 0, 0), 4)
-    assert inst == cls.match(cycles=4, shift=0, ispl=(0xffffffc000000000, 0x4000000000))
+    assert inst == cls.match(cycles=4, shift=0, ispl=(-0x4000000000, 0x4000000000))
     assert inst == cls.match(cycles=4, fspl=(-0.25, 1))
 
     # Test the exact rounding threshold to make sure we are rounding things correctly.
     inst = cls.pulse((-0.25, 0.9999999999981811, 0, 0), 4)
-    assert inst == cls.match(cycles=4, shift=0, ispl=(0xffffffc000000000, 0x4000000000))
+    assert inst == cls.match(cycles=4, shift=0, ispl=(-0x4000000000, 0x4000000000))
     assert inst == cls.match(cycles=4, fspl=(-0.25, 1))
 
     inst = cls.pulse((-0.25, 0.999999999998181, 0, 0), 4)
-    assert inst == cls.match(cycles=4, shift=1, ispl=(0xffffffc000000000, 0x7fffffffff))
+    assert inst == cls.match(cycles=4, shift=1, ispl=(-0x4000000000, 0x7fffffffff))
     assert inst == cls.match(cycles=4, fspl=(-0.25, 0.999999999998181))
 
     # Higher orders
