@@ -80,6 +80,23 @@ WRAP_STR(eof, "eof")
 WRAP_STR(clr, "clr")
 WRAP_STR(fwd, "fwd")
 WRAP_STR(inv, "inv")
+
+static void format_double(std::ostream &io, double v)
+{
+    // Unlike `operator<<`, which uses a fixed precision (6 by default),
+    // `std::to_chars` of floating point number (no precision specified)
+    // is guaranteed to use the shortest accurate representation
+    // of the number.
+    // With C++23, we could use `std::print(io, "{}", order)` instead.
+    // (Not using std::format since GCC 11.1 for artiq-7 nix environment
+    //  doesn't have it)
+    char buff[64];
+    auto [ptr, ec] = std::to_chars(buff, buff + sizeof(buff), v);
+    if (ec != std::errc())
+        throw std::system_error(std::make_error_code(ec));
+    io.write(buff, ptr - buff);
+}
+
 }
 
 static PyTypeObject *rampfunction_type;
@@ -965,23 +982,9 @@ struct Jaqal_v1 {
             };
             if (print_float) {
                 auto cspl = spl.get_spline(cycles);
-                // Unlike `operator<<`, which uses a fixed precision (6 by default),
-                // `std::to_chars` of floating point number (no precision specified)
-                // is guaranteed to use the shortest accurate representation
-                // of the number.
-                // With C++23, we could use `std::print(io, "{}", order)` instead.
-                // (Not using std::format since GCC 11.1 for artiq-7 nix environment
-                //  doesn't have it)
-                auto format = [&] (auto &io, double v) {
-                    char buff[64];
-                    auto [ptr, ec] = std::to_chars(buff, buff + sizeof(buff), v);
-                    if (ec != std::errc())
-                        throw std::system_error(std::make_error_code(ec));
-                    io.write(buff, ptr - buff);
-                };
-                format(io, cspl.order0);
+                format_double(io, cspl.order0);
                 print_orders(cspl.order1, cspl.order2, cspl.order3,
-                             [&] (int, auto order) { format(io << ", ", order); });
+                             [&] (int, auto order) { format_double(io << ", ", order); });
             }
             else {
                 io << std::showbase << std::hex << spl.orders[0];
