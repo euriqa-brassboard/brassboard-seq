@@ -16,6 +16,7 @@ python_test("${CMAKE_BINARY_DIR}"
   test_max_range.py
   test_suffix_array.py
   test_rfsoc_jv1.py
+  test_rfsoc_jv1_3.py
   test_bits.py
   test_rtval.py
   #
