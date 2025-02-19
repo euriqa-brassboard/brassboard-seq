@@ -1248,6 +1248,330 @@ PyTypeObject PyChannelGen::Type = {
 } // Jaqal_v1
 
 namespace Jaqal_v1_3 {
+
+namespace {
+
+struct SubStrInfoSA {
+    int sa_begin;
+};
+struct SubStrInfoVec {
+    std::vector<int> strs;
+};
+struct SubStrInfos {
+    std::vector<SubStrInfoSA> sas;
+    std::vector<SubStrInfoVec> vecs;
+};
+
+struct GateConstructor {
+    GateConstructor(ChannelGen &gen)
+        : gen(gen)
+    {
+    }
+    ChannelGen &gen;
+    int nblocks;
+    std::vector<ChannelGen::Block*> linear_blocks;
+    std::map<std::pair<int8_t,int>,int> single_gates;
+
+    std::vector<int> substrs_cache;
+    void sort_substr(SubStrInfoSA sa, int nrep)
+    {
+        substrs_cache.clear();
+        auto sa_begin = sa.sa_begin;
+        auto sa_end = sa_begin + nrep;
+        for (int sa_idx = sa_begin; sa_idx < sa_end; sa_idx++)
+            substrs_cache.push_back(pulse_sa[sa_idx]);
+        std::ranges::sort(substrs_cache);
+    }
+
+    std::vector<int> pulse_str;
+    std::vector<int> pulse_sa;
+    std::vector<int> pulse_rk;
+    std::vector<int> pulse_height;
+    // Map of start index -> (length, gate_id)
+    std::map<int,std::pair<int,int>> substr_map;
+    std::map<std::pair<int,int>,SubStrInfos> substrs;
+    void discover_gate()
+    {
+        // Convert all pulse ids to a linear sequence so that we can use suffix array.
+        assert(pulse_str.empty());
+        // pulse_str value range:
+        // 0: end
+        // 1-nblocks: block end
+        // >=nblocks + 1: normal pulses (pulse_id << 3 | param)
+
+        for (auto *block: linear_blocks) {
+            auto block_id = block->block_id;
+            for (auto &pulse: block->pulse_ids)
+                pulse_str.push_back(((pulse.pulse_id << 3) | pulse.param) + nblocks + 1);
+            pulse_str.push_back(block_id + 1);
+        }
+        int npulses = pulse_str.size();
+        pulse_str.push_back(0);
+        get_suffix_array(pulse_sa, pulse_str, pulse_rk);
+        order_to_rank(pulse_rk, pulse_sa);
+        get_height_array(pulse_height, pulse_str, pulse_sa, pulse_rk);
+        pulse_rk.clear();
+        // Sort substrings according to repetition and length
+        foreach_max_range(pulse_height, [&] (int i0, int i1, int str_len) {
+            if (str_len <= 1)
+                return;
+            auto sa_begin = i0 + 1;
+            auto nrep = i1 - i0 + 2;
+            substrs[{nrep, str_len}].sas.push_back({ sa_begin });
+        });
+        pulse_height.clear();
+
+        auto new_gate = [&] {
+            int gate_id = gen.gates.size();
+            return std::pair(&gen.gates.emplace_back(), gate_id);
+        };
+        auto add_gate = [&] (int start, int len, int nrep) {
+            auto [gate, gate_id] = new_gate();
+            assert(len > 1);
+            gate->nrep = nrep;
+            for (int i = 0; i < len; i++) {
+                auto pulse_id = pulse_str[start + i] - (nblocks + 1);
+                gate->pulse_ids.push_back({pulse_id & 7, pulse_id >> 3});
+            }
+            return gate_id;
+        };
+
+        // Identify non-overlapping repeating pulse sequences.
+
+        auto check_substr = [&] (std::vector<int> &substr_idxs, int str_len) {
+            // Note that `substr_idxs` may alias `substrs_cache`.
+            // but it doesn't alias anything else that's still in use elsewhere
+            // so it can be freely mutated.
+
+            assert(str_len > 1);
+            int max_len = str_len;
+            int nsubstrs = (int)substr_idxs.size();
+            int last_substr = npulses;
+            for (int i = nsubstrs - 1; i >= 0; i--) {
+                auto substr_idx = substr_idxs[i];
+                assert(substr_idx < last_substr);
+                int substr_len = std::min(max_len, last_substr - substr_idx);
+
+                auto it = substr_map.lower_bound(substr_idx);
+                if (it != substr_map.end()) {
+                    assert(it->first >= substr_idx);
+                    substr_len = std::min(substr_len, it->first - substr_idx);
+                }
+                if (it != substr_map.begin()) {
+                    --it;
+                    if (it->first + it->second.first > substr_idx) {
+                        substr_len = 0;
+                    }
+                }
+                assert(substr_len >= 0);
+                if (substr_len <= 1) {
+                    substr_idxs.erase(substr_idxs.begin() + i);
+                }
+                else {
+                    max_len = substr_len;
+                    last_substr = substr_idx;
+                }
+            }
+            int new_nsubstrs = (int)substr_idxs.size();
+            if (!new_nsubstrs)
+                return;
+            if (new_nsubstrs < nsubstrs || max_len < str_len) {
+                assert(max_len > 1);
+                substrs[{new_nsubstrs, max_len}].vecs.emplace_back(
+                    std::move(substr_idxs));
+                return;
+            }
+            assert(new_nsubstrs == nsubstrs && max_len == str_len);
+            auto gate_id = add_gate(substr_idxs[0], max_len, new_nsubstrs);
+            for (auto substr_idx: substr_idxs) {
+                auto [it, inserted] =
+                    substr_map.insert({substr_idx, { max_len, gate_id }});
+                (void)it;
+                (void)inserted;
+                assert(inserted);
+            }
+        };
+        while (!substrs.empty()) {
+            auto it = --substrs.end();
+            auto [nrep, str_len] = it->first;
+            for (auto sa: it->second.sas) {
+                sort_substr(sa, nrep);
+                check_substr(substrs_cache, str_len);
+            }
+            for (auto &vec: it->second.vecs)
+                check_substr(vec.strs, str_len);
+            substrs.erase(it);
+        }
+        pulse_sa.clear();
+
+        // Divide pulses into gates
+        int cur_block_id = 0;
+        auto cur_block = linear_blocks[0];
+        int block_pulse_offset = 0;
+        auto sequence_gate = [&] (int gate_id, int pulse_pos) {
+            cur_block->gates.push_back({pulse_pos - block_pulse_offset, gate_id});
+        };
+        auto next_block = [&] (int pulse_idx_start) {
+            cur_block_id += 1;
+            if (cur_block_id >= nblocks)
+                return;
+            cur_block = linear_blocks[cur_block_id];
+            block_pulse_offset = pulse_idx_start;
+        };
+        auto process_range = [&] (int start, int end) {
+            int gate_id = 0;
+            ChannelGen::Gate *cur_gate = nullptr;
+            std::pair<int8_t,int> first_pulse = {-1, 0};
+            auto finish_gate = [&] {
+                if (cur_gate) {
+                    sequence_gate(gate_id, start);
+                    cur_gate = nullptr;
+                    assert(first_pulse.first < 0);
+                }
+                else if (first_pulse.first >= 0) {
+                    auto [it, inserted] = single_gates.insert({first_pulse, 0});
+                    if (inserted) {
+                        auto [gate, gate_id] = new_gate();
+                        gate->nrep = 1;
+                        gate->pulse_ids.push_back(first_pulse);
+                        it->second = gate_id;
+                        sequence_gate(gate_id, start);
+                    }
+                    else {
+                        gen.gates[it->second].nrep += 1;
+                        sequence_gate(it->second, start);
+                    }
+                    first_pulse.first = -1;
+                }
+            };
+            auto push_pulse = [&] (int pulse_id) {
+                std::pair<int8_t,int> new_pulse = {pulse_id & 7, pulse_id >> 3};
+                if (first_pulse.first >= 0) {
+                    std::tie(cur_gate, gate_id) = new_gate();
+                    cur_gate->nrep = 1;
+                    cur_gate->pulse_ids.push_back(first_pulse);
+                    first_pulse.first = -1;
+                }
+                else if (!cur_gate) {
+                    first_pulse = new_pulse;
+                    return;
+                }
+                cur_gate->pulse_ids.push_back(new_pulse);
+            };
+            for (auto pulse_idx = start; pulse_idx < end; pulse_idx++) {
+                auto p = pulse_str[pulse_idx];
+                if (p <= nblocks) {
+                    finish_gate();
+                    start = pulse_idx + 1;
+                    next_block(start);
+                    continue;
+                }
+                push_pulse(p - (nblocks + 1));
+            }
+            finish_gate();
+        };
+
+        int next_pulse = 0;
+        for (auto [str_idx, substr_info]: substr_map) {
+            assert(str_idx >= next_pulse);
+            if (str_idx > next_pulse)
+                process_range(next_pulse, str_idx);
+            auto [max_len, gate_id] = substr_info;
+            sequence_gate(gate_id, str_idx);
+            next_pulse = str_idx + max_len;
+        }
+        if (npulses > next_pulse)
+            process_range(next_pulse, npulses);
+
+        substr_map.clear();
+        pulse_str.clear();
+    }
+    void even_gate_length(ChannelGen::SyncBlock &sblock)
+    {
+        int max_gate_len = 0;
+        int min_gate_len = INT_MAX;
+        for (auto &block: sblock.blocks) {
+            int gate_len = block.gates.size();
+            min_gate_len = std::min(min_gate_len, gate_len);
+            max_gate_len = std::max(max_gate_len, gate_len);
+        }
+        if (max_gate_len == min_gate_len)
+            return;
+        for (auto &block: sblock.blocks) {
+            int gate_len = block.gates.size();
+            if (max_gate_len == gate_len)
+                continue;
+            // First break up subsequences that are only used once
+            for (int i = gate_len - 1; i >= 0 && max_gate_len > gate_len; i--) {
+                auto [pulse_idx, gate_id] = block.gates[i];
+                if (gen.gates[gate_id].nrep != 1)
+                    continue;
+                int gate_sz = gen.gates[gate_id].pulse_ids.size();
+                if (gate_sz <= 1)
+                    continue;
+                auto peel_off = std::min(gate_sz - 1, max_gate_len - gate_len);
+                int new_gate_start = gen.gates.size();
+                gen.gates.resize(new_gate_start + peel_off);
+                block.gates.resize(gate_len + peel_off);
+                memmove(&block.gates[i + 1 + peel_off], &block.gates[i + 1],
+                        (gate_len - i - 1) * sizeof(block.gates[0]));
+                int first_gate_sz = gate_sz - peel_off;
+                auto &orig_gate_pulses = gen.gates[gate_id].pulse_ids;
+                for (int j = 0; j < peel_off; j++) {
+                    block.gates[i + 1 + j] = { pulse_idx + first_gate_sz + j,
+                        new_gate_start + j};
+                    auto &gate = gen.gates[new_gate_start + j];
+                    gate.nrep = 1;
+                    gate.pulse_ids.push_back(orig_gate_pulses[first_gate_sz + j]);
+                }
+                orig_gate_pulses.resize(first_gate_sz);
+                gate_len = gate_len + peel_off;
+            }
+            assert(max_gate_len >= gate_len);
+            if (max_gate_len > gate_len)
+                continue;
+            // Maybe we could split up long constant pulses in the future
+            // Fill with dummy gates for now.
+            block.gates.resize(max_gate_len, { -1, -1 });
+        }
+    }
+    void process_seq()
+    {
+        int nblocks = 0;
+        for (auto &sblock: gen.sblocks) {
+            auto n = sblock.blocks.size();
+            for (int i = 0; i < n; i++) {
+                auto &block = sblock.blocks[i];
+                block.block_id = nblocks + i;
+                linear_blocks.push_back(&block);
+                std::ranges::sort(block.pulse_ids, [] (auto &a, auto &b) {
+                    // Move long pulses and phase pulses to the front
+                    // They are more likely to be different between otherwise similar
+                    // gate sequence.
+                    return (std::tuple(a.time, -a.len, -a.param) <
+                            std::tuple(b.time, -b.len, -b.param));
+                });
+            }
+            nblocks += n;
+        }
+        assert(nblocks > 0);
+        this->nblocks = nblocks;
+
+        discover_gate();
+        for (auto &sblock: gen.sblocks)
+            even_gate_length(sblock);
+    }
+};
+
+}
+
+__attribute__((flatten))
+void ChannelGen::construct_gates()
+{
+    GateConstructor constructor(*this);
+    constructor.process_seq();
+}
+
 namespace {
 
 static constexpr inline uint8_t get_chn_mask(const JaqalInst &inst)

@@ -955,6 +955,56 @@ sequence(uint8_t chn_mask, SeqMode m, uint16_t *gaddrs, int n)
     return inst;
 }
 
+struct ChannelGen {
+    struct Gate {
+        int nrep;
+        std::vector<std::pair<int8_t,int>> pulse_ids;
+    };
+    struct Pulse {
+        int64_t time;
+        int64_t len: 40;
+        int8_t param: 3;
+        int pulse_id;
+    };
+    struct GateRef {
+        int pulse_idx;
+        int gate_id;
+    };
+    struct Block {
+        int block_id;
+        std::vector<Pulse> pulse_ids;
+        std::vector<GateRef> gates;
+    };
+    struct SyncBlock {
+        SyncBlock(int num_block) : blocks(num_block)
+        {
+        }
+        std::vector<Block> blocks;
+    };
+
+    PulseAllocator pulses;
+    std::vector<SyncBlock> sblocks;
+    std::vector<Gate> gates;
+
+    void add_sync_block(int num_block)
+    {
+        sblocks.emplace_back(num_block);
+    }
+    void add_pulse(Block &block, int param, const JaqalInst &inst, int64_t cycle)
+    {
+        int64_t len = (inst >> 40 * 4)[0] & ((int64_t(1) << 40) - 1);
+        block.pulse_ids.push_back({cycle, len, (int8_t)param, pulses.get_addr(inst)});
+    }
+
+    void clear()
+    {
+        pulses.clear();
+        sblocks.clear();
+        gates.clear();
+    }
+    void construct_gates();
+};
+
 } // Jaqal_v1_3
 
 extern PyTypeObject &JaqalInst_v1_Type;
