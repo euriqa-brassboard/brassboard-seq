@@ -761,7 +761,7 @@ struct Jaqal_v1 {
 
         static void pulse(auto &&cb, const JaqalInst &inst, PulseTarget::Type type)
         {
-            uint16_t addr = (inst >> Bits::PLUT_ADDR)[0] & ((1 << 12) - 1);
+            uint16_t addr = (inst >> Bits::PLUT_ADDR)[0] & ((1 << PLUTW) - 1);
             if (type != PulseTarget::PLUT && addr) {
                 invalid(cb, inst, Error::Reserved);
                 return;
