@@ -117,12 +117,9 @@ class MatchPulse:
         assert param is not None
         self.param = param
         self.cycles = cycles
-        assert ispl is None or fspl is None
         if fspl is None:
             assert _rel is None
             assert _abs is None
-        if ispl is None:
-            assert shift is None
         self.ispl = ispl
         self.shift = shift
         self.fspl = fspl
@@ -477,20 +474,14 @@ def test_pulse_inst():
         assert stm_inst.channel == chn
 
         assert inst == MatchParamPulse(param, chn, tone, 'pulse_data', None, cycles,
-                                       trig, sync, enable, ff,
+                                       trig, sync, enable, ff, fspl=(0, 0, 0, 0),
                                        ispl=(0, 0, 0, 0), shift=31)
-        assert inst == MatchParamPulse(param, chn, tone, 'pulse_data', None, cycles,
-                                       trig, sync, enable, ff, fspl=(0, 0, 0, 0))
         assert plut_inst == MatchParamPulse(param, chn, tone, 'plut', addr, cycles,
-                                            trig, sync, enable, ff,
+                                            trig, sync, enable, ff, fspl=(0, 0, 0, 0),
                                             ispl=(0, 0, 0, 0), shift=31)
-        assert plut_inst == MatchParamPulse(param, chn, tone, 'plut', addr, cycles,
-                                            trig, sync, enable, ff, fspl=(0, 0, 0, 0))
         assert stm_inst == MatchParamPulse(param, chn, tone, 'stream', None, cycles,
-                                           trig, sync, enable, ff,
+                                           trig, sync, enable, ff, fspl=(0, 0, 0, 0),
                                            ispl=(0, 0, 0, 0), shift=31)
-        assert stm_inst == MatchParamPulse(param, chn, tone, 'stream', None, cycles,
-                                           trig, sync, enable, ff, fspl=(0, 0, 0, 0))
         assert str(inst) == f'pulse_data.{chn} {param}{tone} <{cycles}> {{0}}{flags}'
         assert repr(inst) == f'pulse_data.{chn} {param}{tone} <{cycles}> {{0}}{flags}'
         assert Jaqal_v1.dump_insts(inst.to_bytes()) == f'invalid(reserved): {vi:0>64x}'
@@ -544,20 +535,14 @@ def test_pulse_inst():
         vi = int(inst)
 
         assert inst == MatchFramePulse(chn, tone, 'pulse_data', None, cycles,
-                                       trig, eof, clr, fwd, inv,
+                                       trig, eof, clr, fwd, inv, fspl=(0, 0, 0, 0),
                                        ispl=(0, 0, 0, 0), shift=31)
-        assert inst == MatchFramePulse(chn, tone, 'pulse_data', None, cycles,
-                                       trig, eof, clr, fwd, inv, fspl=(0, 0, 0, 0))
         assert plut_inst == MatchFramePulse(chn, tone, 'plut', addr, cycles,
-                                            trig, eof, clr, fwd, inv,
+                                            trig, eof, clr, fwd, inv, fspl=(0, 0, 0, 0),
                                             ispl=(0, 0, 0, 0), shift=31)
-        assert plut_inst == MatchFramePulse(chn, tone, 'plut', addr, cycles,
-                                            trig, eof, clr, fwd, inv, fspl=(0, 0, 0, 0))
         assert stm_inst == MatchFramePulse(chn, tone, 'stream', None, cycles,
-                                           trig, eof, clr, fwd, inv,
+                                           trig, eof, clr, fwd, inv, fspl=(0, 0, 0, 0),
                                            ispl=(0, 0, 0, 0), shift=31)
-        assert stm_inst == MatchFramePulse(chn, tone, 'stream', None, cycles,
-                                           trig, eof, clr, fwd, inv, fspl=(0, 0, 0, 0))
         assert str(inst) == f'pulse_data.{chn} frame_rot{tone} <{cycles}> {{0}}{flags}'
         assert repr(inst) == f'pulse_data.{chn} frame_rot{tone} <{cycles}> {{0}}{flags}'
         assert Jaqal_v1.dump_insts(inst.to_bytes()) == f'invalid(reserved): {vi:0>64x}'
@@ -587,73 +572,61 @@ def test_pulse_inst():
 def test_freq_spline():
     inst = Jaqal_v1.freq_pulse(0, 0, (-409.6e6, 0, 0, 0), 1000, False, False, False)
     assert inst == MatchParamPulse('freq', cycles=1000, shift=31,
-                                   ispl=(-0x8000000000,))
-    assert inst == MatchParamPulse('freq', cycles=1000, fspl=(-409.6e6,))
+                                   ispl=(-0x8000000000,), fspl=(-409.6e6,))
 
     inst = Jaqal_v1.freq_pulse(0, 0, (204.8e6, 0, 0, 0), 2100, False, False, False)
     assert inst == MatchParamPulse('freq', cycles=2100, shift=31,
-                                   ispl=(0x4000000000,))
-    assert inst == MatchParamPulse('freq', cycles=2100, fspl=(204.8e6,))
+                                   ispl=(0x4000000000,), fspl=(204.8e6,))
 
     inst = Jaqal_v1.freq_pulse(0, 0, (-204.8e6, 819.2e6, 0, 0), 4, False, False, False)
-    assert inst == MatchParamPulse('freq', cycles=4, shift=0,
+    assert inst == MatchParamPulse('freq', cycles=4, fspl=(-204.8e6, 819.2e6), shift=0,
                                    ispl=(-0x4000000000, 0x4000000000))
-    assert inst == MatchParamPulse('freq', cycles=4, fspl=(-204.8e6, 819.2e6))
 
     inst = Jaqal_v1.freq_pulse(0, 0, (-204.8e6, 819.2e6 * 2, 0, 0), 4, False, False, False)
-    assert inst == MatchParamPulse('freq', cycles=4, shift=0,
+    assert inst == MatchParamPulse('freq', cycles=4, fspl=(-204.8e6, -1638.4e6), shift=0,
                                    ispl=(-0x4000000000, -0x8000000000))
-    assert inst == MatchParamPulse('freq', cycles=4, fspl=(-204.8e6, -1638.4e6))
 
     inst = Jaqal_v1.freq_pulse(0, 0, (-204.8e6, 8.191999999991808e8, 0, 0), 4, False, False, False)
-    assert inst == MatchParamPulse('freq', cycles=4, shift=0,
+    assert inst == MatchParamPulse('freq', cycles=4, fspl=(-204.8e6, 819.2e6), shift=0,
                                    ispl=(-0x4000000000, 0x4000000000))
-    assert inst == MatchParamPulse('freq', cycles=4, fspl=(-204.8e6, 819.2e6))
 
     # Test the exact rounding threshold to make sure we are rounding things correctly.
     inst = Jaqal_v1.freq_pulse(0, 0, (-204.8e6, 8.191999999985099e8, 0, 0), 4, False, False, False)
-    assert inst == MatchParamPulse('freq', cycles=4, shift=0,
+    assert inst == MatchParamPulse('freq', cycles=4, fspl=(-204.8e6, 819.2e6), shift=0,
                                    ispl=(-0x4000000000, 0x4000000000))
-    assert inst == MatchParamPulse('freq', cycles=4, fspl=(-204.8e6, 819.2e6))
 
     inst = Jaqal_v1.freq_pulse(0, 0, (-204.8e6, 8.191999999985098e8, 0, 0), 4, False, False, False)
-    assert inst == MatchParamPulse('freq', cycles=4, shift=1,
-                                   ispl=(-0x4000000000, 0x7fffffffff))
-    assert inst == MatchParamPulse('freq', cycles=4, fspl=(-204.8e6, 819199999.9985099))
+    assert inst == MatchParamPulse('freq', cycles=4, fspl=(-204.8e6, 819199999.9985099),
+                                   shift=1, ispl=(-0x4000000000, 0x7fffffffff))
 
     # Higher orders
     inst = Jaqal_v1.freq_pulse(0, 0, (204.8e6, 0, 819.2e6, 0), 4, False, False, False)
-    assert inst == MatchParamPulse('freq', cycles=4, shift=0,
+    assert inst == MatchParamPulse('freq', cycles=4, fspl=(204.8e6, 0, 819.2e6), shift=0,
                                    ispl=(0x4000000000, 0x1000000000, 0x2000000000))
-    assert inst == MatchParamPulse('freq', cycles=4, fspl=(204.8e6, 0, 819.2e6))
 
     inst = Jaqal_v1.freq_pulse(0, 0, (204.8e6, 0, 1638.4e6, 0), 4, False, False, False)
-    assert inst == MatchParamPulse('freq', cycles=4, shift=0,
+    assert inst == MatchParamPulse('freq', cycles=4, fspl=(204.8e6, 0, 1638.4e6), shift=0,
                                    ispl=(0x4000000000, 0x2000000000, 0x4000000000))
-    assert inst == MatchParamPulse('freq', cycles=4, fspl=(204.8e6, 0, 1638.4e6))
 
     inst = Jaqal_v1.freq_pulse(0, 0, (204.8e6, 0, 409.6e6, 0), 4, False, False, False)
-    assert inst == MatchParamPulse('freq', cycles=4, shift=1,
+    assert inst == MatchParamPulse('freq', cycles=4, fspl=(204.8e6, 0, 409.6e6), shift=1,
                                    ispl=(0x4000000000, 0x1000000000, 0x4000000000))
-    assert inst == MatchParamPulse('freq', cycles=4, fspl=(204.8e6, 0, 409.6e6))
 
     inst = Jaqal_v1.freq_pulse(0, 0, (204.8e6, 0, 0, 819.2e6), 4, False, False, False)
-    assert inst == MatchParamPulse('freq', cycles=4, shift=0,
-                                   ispl=(0x4000000000, 0x400000000,
-                                         0x1800000000, 0x1800000000))
-    assert inst == MatchParamPulse('freq', cycles=4, fspl=(204.8e6, 0, 0, 819.2e6))
+    assert inst == MatchParamPulse('freq', cycles=4, fspl=(204.8e6, 0, 0, 819.2e6),
+                                   shift=0, ispl=(0x4000000000, 0x400000000,
+                                                  0x1800000000, 0x1800000000))
 
     inst = Jaqal_v1.freq_pulse(0, 0, (204.8e6, 0, 0, 409.6e6), 4, False, False, False)
-    assert inst == MatchParamPulse('freq', cycles=4, shift=1,
-                                   ispl=(0x4000000000, 0x400000000,
-                                         0x3000000000, 0x6000000000))
-    assert inst == MatchParamPulse('freq', cycles=4, fspl=(204.8e6, 0, 0, 409.6e6))
+    assert inst == MatchParamPulse('freq', cycles=4, fspl=(204.8e6, 0, 0, 409.6e6),
+                                   shift=1, ispl=(0x4000000000, 0x400000000,
+                                                  0x3000000000, 0x6000000000))
 
     inst = Jaqal_v1.freq_pulse(0, 0, (204.8e6, 0, 0, 409.6e6), 4096,
                                False, False, False)
-    assert inst == MatchParamPulse('freq', cycles=4096, shift=11,
+    assert inst == MatchParamPulse('freq', cycles=4096, fspl=(204.8e6, 0, 0, 409.6e6),
+                                   shift=11,
                                    ispl=(0x4000000000, 0x4000, 0xc000000, 0x6000000000))
-    assert inst == MatchParamPulse('freq', cycles=4096, fspl=(204.8e6, 0, 0, 409.6e6))
 
     for i in range(2000):
         o0 = random.random() * 100e6
@@ -669,69 +642,57 @@ def test_freq_spline():
 def test_amp_spline():
     inst = Jaqal_v1.amp_pulse(0, 0, (1, 0, 0, 0), 1000, False, False, False)
     assert inst == MatchParamPulse('amp', cycles=1000, shift=31,
-                                   ispl=(0x7fff800000,))
-    assert inst == MatchParamPulse('amp', cycles=1000, fspl=(1,))
+                                   ispl=(0x7fff800000,), fspl=(1,))
 
     inst = Jaqal_v1.amp_pulse(0, 0, (-1, 0, 0, 0), 2100, False, False, False)
     assert inst == MatchParamPulse('amp', cycles=2100, shift=31,
-                                   ispl=(-0x7fff800000,))
-    assert inst == MatchParamPulse('amp', cycles=2100, fspl=(-1,))
+                                   ispl=(-0x7fff800000,), fspl=(-1,))
 
     inst = Jaqal_v1.amp_pulse(0, 0, (-1, 2.0000305180437934, 0, 0), 4,
                               False, False, False)
-    assert inst == MatchParamPulse('amp', cycles=4, shift=0,
-                                   ispl=(-0x7fff800000, 0x4000000000))
-    assert inst == MatchParamPulse('amp', cycles=4, fspl=(-1, 2.0000305180437934))
+    assert inst == MatchParamPulse('amp', cycles=4, fspl=(-1, 2.0000305180437934),
+                                   shift=0, ispl=(-0x7fff800000, 0x4000000000))
 
     # Test the exact rounding threshold to make sure we are rounding things correctly.
     inst = Jaqal_v1.amp_pulse(0, 0, (-1, 2.0000000000000004, 0, 0), 4,
                               False, False, False)
-    assert inst == MatchParamPulse('amp', cycles=4, shift=0,
-                                   ispl=(-0x7fff800000, 0x4000000000))
-    assert inst == MatchParamPulse('amp', cycles=4, fspl=(-1, 2.0000305180437934))
+    assert inst == MatchParamPulse('amp', cycles=4, fspl=(-1, 2.0000305180437934),
+                                   shift=0, ispl=(-0x7fff800000, 0x4000000000))
 
     inst = Jaqal_v1.amp_pulse(0, 0, (-1, 2, 0, 0), 4, False, False, False)
-    assert inst == MatchParamPulse('amp', cycles=4, shift=1,
+    assert inst == MatchParamPulse('amp', cycles=4, fspl=(-1, 2), shift=1,
                                    ispl=(-0x7fff800000, 0x7fff800000))
-    assert inst == MatchParamPulse('amp', cycles=4, fspl=(-1, 2))
 
     # Higher orders
     inst = Jaqal_v1.amp_pulse(0, 0, (-1, 0, 2.0000305180437934, 0), 4,
                               False, False, False)
-    assert inst == MatchParamPulse('amp', cycles=4, shift=0,
-                                   ispl=(-0x7fff800000, 0x1000000000,
-                                         0x2000000000))
-    assert inst == MatchParamPulse('amp', cycles=4, fspl=(-1, 0, 2.0000305180437934))
+    assert inst == MatchParamPulse('amp', cycles=4, fspl=(-1, 0, 2.0000305180437934),
+                                   shift=0, ispl=(-0x7fff800000, 0x1000000000,
+                                                  0x2000000000))
 
     inst = Jaqal_v1.amp_pulse(0, 0, (-1, 0, 2.0000305180437934, 0), 1024,
                               False, False, False)
-    assert inst == MatchParamPulse('amp', cycles=1024, shift=8,
-                                   ispl=(-0x7fff800000, 0x10000000,
-                                         0x2000000000))
-    assert inst == MatchParamPulse('amp', cycles=1024, fspl=(-1, 0, 2.0000305180437934))
+    assert inst == MatchParamPulse('amp', cycles=1024, fspl=(-1, 0, 2.0000305180437934),
+                                   shift=8, ispl=(-0x7fff800000, 0x10000000,
+                                                  0x2000000000))
 
     inst = Jaqal_v1.amp_pulse(0, 0, (1, 0, -2.0000305180437934, 0), 1024,
                               False, False, False)
-    assert inst == MatchParamPulse('amp', cycles=1024, shift=8,
-                                   ispl=(0x7fff800000, -0x10000000,
-                                         -0x2000000000))
-    assert inst == MatchParamPulse('amp', cycles=1024, fspl=(1, 0, -2.0000305180437934))
+    assert inst == MatchParamPulse('amp', cycles=1024, fspl=(1, 0, -2.0000305180437934),
+                                   shift=8, ispl=(0x7fff800000, -0x10000000,
+                                                  -0x2000000000))
 
 
     inst = Jaqal_v1.amp_pulse(0, 0, (-1, 0, 0, 2.0000305180437934), 4,
                               False, False, False)
-    assert inst == MatchParamPulse('amp', cycles=4, shift=0,
-                                   ispl=(-0x7fff800000, 0x400000000,
-                                         0x1800000000, 0x1800000000))
-    assert inst == MatchParamPulse('amp', cycles=4,
-                                   fspl=(-1, 0, 0, 2.0000305180437934))
+    assert inst == MatchParamPulse('amp', cycles=4, fspl=(-1, 0, 0, 2.0000305180437934),
+                                   shift=0, ispl=(-0x7fff800000, 0x400000000,
+                                                  0x1800000000, 0x1800000000))
 
     inst = Jaqal_v1.amp_pulse(0, 0, (-1, 0, 0, 2.0000305180437934), 2048,
                               False, False, False)
     assert inst == MatchParamPulse('amp', cycles=2048, shift=9,
-                                   ispl=(-0x7fff800000, 0, 0xc000000,
-                                         0x1800000000))
-    assert inst == MatchParamPulse('amp', cycles=2048,
+                                   ispl=(-0x7fff800000, 0, 0xc000000, 0x1800000000),
                                    fspl=(-1, 0, 0, 2.0000305180437934), abs=5e-7)
 
     for i in range(2000):
@@ -766,67 +727,58 @@ class FrameTester:
 @pytest.mark.parametrize('cls', [PhaseTester, FrameTester])
 def test_phase_spline(cls):
     inst = cls.pulse((-0.5, 0, 0, 0), 1000)
-    assert inst == cls.match(cycles=1000, shift=31, ispl=(-0x8000000000,))
-    assert inst == cls.match(cycles=1000, fspl=(-0.5,))
+    assert inst == cls.match(cycles=1000, shift=31, ispl=(-0x8000000000,), fspl=(-0.5,))
 
     inst = cls.pulse((0.25, 0, 0, 0), 2100)
-    assert inst == cls.match(cycles=2100, shift=31, ispl=(0x4000000000,))
-    assert inst == cls.match(cycles=2100, fspl=(0.25,))
+    assert inst == cls.match(cycles=2100, shift=31, ispl=(0x4000000000,), fspl=(0.25,))
 
     inst = cls.pulse((-0.25, 1, 0, 0), 4)
-    assert inst == cls.match(cycles=4, shift=0, ispl=(-0x4000000000, 0x4000000000))
-    assert inst == cls.match(cycles=4, fspl=(-0.25, 1))
+    assert inst == cls.match(cycles=4, shift=0, ispl=(-0x4000000000, 0x4000000000),
+                             fspl=(-0.25, 1))
 
     inst = cls.pulse((-0.25, 2, 0, 0), 4)
-    assert inst == cls.match(cycles=4, shift=0,
+    assert inst == cls.match(cycles=4, fspl=(-0.25, -2), shift=0,
                              ispl=(-0x4000000000, -0x8000000000))
-    assert inst == cls.match(cycles=4, fspl=(-0.25, -2))
 
     inst = cls.pulse((-0.25, 0.999999999999, 0, 0), 4)
-    assert inst == cls.match(cycles=4, shift=0, ispl=(-0x4000000000, 0x4000000000))
-    assert inst == cls.match(cycles=4, fspl=(-0.25, 1))
+    assert inst == cls.match(cycles=4, shift=0, ispl=(-0x4000000000, 0x4000000000),
+                             fspl=(-0.25, 1))
 
     # Test the exact rounding threshold to make sure we are rounding things correctly.
     inst = cls.pulse((-0.25, 0.9999999999981811, 0, 0), 4)
-    assert inst == cls.match(cycles=4, shift=0, ispl=(-0x4000000000, 0x4000000000))
-    assert inst == cls.match(cycles=4, fspl=(-0.25, 1))
+    assert inst == cls.match(cycles=4, shift=0, ispl=(-0x4000000000, 0x4000000000),
+                             fspl=(-0.25, 1))
 
     inst = cls.pulse((-0.25, 0.999999999998181, 0, 0), 4)
-    assert inst == cls.match(cycles=4, shift=1, ispl=(-0x4000000000, 0x7fffffffff))
-    assert inst == cls.match(cycles=4, fspl=(-0.25, 0.999999999998181))
+    assert inst == cls.match(cycles=4, shift=1, ispl=(-0x4000000000, 0x7fffffffff),
+                             fspl=(-0.25, 0.999999999998181))
 
     # Higher orders
     inst = cls.pulse((0.25, 0, 1, 0), 4)
-    assert inst == cls.match(cycles=4, shift=0,
+    assert inst == cls.match(cycles=4, fspl=(0.25, 0, 1), shift=0,
                              ispl=(0x4000000000, 0x1000000000, 0x2000000000))
-    assert inst == cls.match(cycles=4, fspl=(0.25, 0, 1))
 
     inst = cls.pulse((0.25, 0, 2, 0), 4)
-    assert inst == cls.match(cycles=4, shift=0,
+    assert inst == cls.match(cycles=4, fspl=(0.25, 0, 2), shift=0,
                              ispl=(0x4000000000, 0x2000000000, 0x4000000000))
-    assert inst == cls.match(cycles=4, fspl=(0.25, 0, 2))
 
     inst = cls.pulse((0.25, 0, 0.5, 0), 4)
-    assert inst == cls.match(cycles=4, shift=1,
+    assert inst == cls.match(cycles=4, fspl=(0.25, 0, 0.5), shift=1,
                              ispl=(0x4000000000, 0x1000000000, 0x4000000000))
-    assert inst == cls.match(cycles=4, fspl=(0.25, 0, 0.5))
 
     inst = cls.pulse((0.25, 0, 0, 1), 4)
-    assert inst == cls.match(cycles=4, shift=0,
+    assert inst == cls.match(cycles=4, fspl=(0.25, 0, 0, 1), shift=0,
                              ispl=(0x4000000000, 0x400000000,
                                    0x1800000000, 0x1800000000))
-    assert inst == cls.match(cycles=4, fspl=(0.25, 0, 0, 1))
 
     inst = cls.pulse((0.25, 0, 0, 0.5), 4)
-    assert inst == cls.match(cycles=4, shift=1,
+    assert inst == cls.match(cycles=4, fspl=(0.25, 0, 0, 0.5), shift=1,
                              ispl=(0x4000000000, 0x400000000,
                                    0x3000000000, 0x6000000000))
-    assert inst == cls.match(cycles=4, fspl=(0.25, 0, 0, 0.5))
 
     inst = cls.pulse((0.25, 0, 0, 0.5), 4096)
-    assert inst == cls.match(cycles=4096, shift=11,
+    assert inst == cls.match(cycles=4096, fspl=(0.25, 0, 0, 0.5), shift=11,
                              ispl=(0x4000000000, 0x4000, 0xc000000, 0x6000000000))
-    assert inst == cls.match(cycles=4096, fspl=(0.25, 0, 0, 0.5))
 
     for i in range(2000):
         o0 = random.random() * 0.99 - 0.5
