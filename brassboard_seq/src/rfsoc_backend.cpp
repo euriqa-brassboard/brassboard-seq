@@ -24,7 +24,6 @@
 #include "utils.h"
 
 #include <bitset>
-#include <charconv>
 #include <sstream>
 
 #include <assert.h>
@@ -91,9 +90,7 @@ static void format_double(std::ostream &io, double v)
     // (Not using std::format since GCC 11.1 for artiq-7 nix environment
     //  doesn't have it)
     char buff[64];
-    auto [ptr, ec] = std::to_chars(buff, buff + sizeof(buff), v);
-    if (ec != std::errc())
-        throw std::system_error(std::make_error_code(ec));
+    auto ptr = to_chars(buff, v);
     io.write(buff, ptr - buff);
 }
 

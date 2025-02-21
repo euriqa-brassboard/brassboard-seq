@@ -23,7 +23,6 @@
 #include "assert.h"
 
 #include <array>
-#include <charconv>
 
 namespace brassboard_seq::event_time {
 
@@ -45,10 +44,7 @@ static PyObject *str_time(long long t)
     assert(t >= 0);
 
     std::array<char, 32> str;
-
-    auto [ptr, ec] = std::to_chars(str.data(), str.data() + str.size(), t);
-    if (ec != std::errc())
-        throw std::system_error(std::make_error_code(ec));
+    auto ptr = to_chars(str, t);
     *ptr = 0;
 
     auto s = time_scale;

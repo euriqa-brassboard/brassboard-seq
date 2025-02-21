@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <charconv>
 #include <cmath>
 #include <concepts>
 #include <iostream>
@@ -974,6 +975,15 @@ static void foreach_max_range(std::span<int> value, auto &&cb)
     for (auto [prev_v, prev_idx]: std::ranges::views::reverse(maxv_stack)) {
         cb(prev_idx, N - 1, prev_v);
     }
+}
+
+template<typename T>
+char *to_chars(std::span<char> buf, T &&t)
+{
+    auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), t);
+    if (ec != std::errc())
+        throw std::system_error(std::make_error_code(ec));
+    return ptr;
 }
 
 void init_library();
