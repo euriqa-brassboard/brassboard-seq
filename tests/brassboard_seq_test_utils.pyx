@@ -12,7 +12,10 @@ from libcpp.string cimport string as cppstr
 from libc.stdint cimport *
 
 from cpython cimport PyObject, Py_INCREF, Py_EQ, Py_NE, Py_GT, Py_LT, Py_GE, Py_LE, \
-  PyBytes_GET_SIZE, PyBytes_AS_STRING
+  PyBytes_GET_SIZE, PyBytes_AS_STRING, PyBytes_FromStringAndSize
+
+cdef extern from * namespace "brassboard_seq":
+    char *to_chars(char[], int) except +
 
 cdef extern from *:
     """
@@ -1109,3 +1112,8 @@ cdef class PyBytesStream:
 
     def clear(self):
         self.stm.clear()
+
+def int_to_chars(int i):
+    cdef char buff[5]
+    ptr = to_chars(buff, i)
+    return PyBytes_FromStringAndSize(buff, ptr - buff)
