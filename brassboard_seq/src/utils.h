@@ -978,7 +978,7 @@ static void foreach_max_range(std::span<int> value, auto &&cb)
 }
 
 template<typename T>
-char *to_chars(std::span<char> buf, T &&t)
+static inline char *to_chars(std::span<char> buf, T &&t)
 {
     auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), t);
     if (ec != std::errc())
