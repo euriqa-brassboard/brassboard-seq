@@ -16,6 +16,8 @@ from cpython cimport PyObject, Py_INCREF, Py_EQ, Py_NE, Py_GT, Py_LT, Py_GE, Py_
 
 cdef extern from * namespace "brassboard_seq":
     char *to_chars(char[], int) except +
+    int throw_if_not(int) except +
+    int throw_if(int) except +
 
 cdef extern from *:
     """
@@ -1117,3 +1119,9 @@ def int_to_chars(int i):
     cdef char buff[5]
     ptr = to_chars(buff, i)
     return PyBytes_FromStringAndSize(buff, ptr - buff)
+
+def int_throw_if(int i):
+    return throw_if(i)
+
+def int_throw_if_not(int i):
+    return throw_if_not(i)
