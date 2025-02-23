@@ -53,28 +53,26 @@ static void merge_dict_into(PyObject *tgt, PyObject *src, bool ovr)
     }
 }
 
-static inline PyObject*
+static inline __attribute__((returns_nonnull)) PyObject*
 set_new_dict(PyObject *dict, PyObject *fieldname)
 {
-    py_object new_item(PyDict_New());
-    if (!new_item || PyDict_SetItem(dict, fieldname, new_item.get()) < 0)
-        return nullptr;
+    py_object new_item(pydict_new());
+    throw_if(PyDict_SetItem(dict, fieldname, new_item.get()));
     return new_item.release();
 }
 
-static PyObject *ensure_visited(auto *self)
+static __attribute__((returns_nonnull)) PyObject *ensure_visited(auto *self)
 {
     auto fieldname = self->fieldname;
     auto self_visited = self->visited;
     auto visited = PyDict_GetItemWithError(self_visited, fieldname);
     if (visited)
         return py_newref(visited);
-    if (PyErr_Occurred())
-        return nullptr;
+    throw_if(PyErr_Occurred());
     return set_new_dict(self_visited, fieldname);
 }
 
-static PyObject *ensure_dict(auto *self)
+static __attribute__((returns_nonnull)) PyObject *ensure_dict(auto *self)
 {
     auto fieldname = self->fieldname;
     auto self_values = self->values;
@@ -82,16 +80,15 @@ static PyObject *ensure_dict(auto *self)
     if (values) {
         if (PyDict_Check(values))
             return py_newref(values);
-        return PyErr_Format(PyExc_TypeError,
-                            "Cannot access value as parameter pack.");
+        py_throw_format(PyExc_TypeError, "Cannot access value as parameter pack.");
     }
-    if (PyErr_Occurred())
-        return nullptr;
+    throw_if(PyErr_Occurred());
     return set_new_dict(self_values, fieldname);
 }
 
 // Return borrowed reference
-static PyObject *_ensure_dict_kws(auto *self, PyObject *kws)
+static __attribute__((returns_nonnull)) PyObject*
+_ensure_dict_kws(auto *self, PyObject *kws)
 {
     auto fieldname = self->fieldname;
     auto self_values = self->values;
@@ -106,7 +103,7 @@ static PyObject *_ensure_dict_kws(auto *self, PyObject *kws)
     return kws;
 }
 
-static PyObject *get_value(auto *self)
+static __attribute__((returns_nonnull)) PyObject *get_value(auto *self)
 {
     auto fieldname = self->fieldname;
     auto self_values = self->values;
@@ -115,32 +112,31 @@ static PyObject *get_value(auto *self)
         return PyErr_Format(PyExc_KeyError, "Value is not assigned");
     if (PyDict_Check(values))
         return PyErr_Format(PyExc_TypeError, "Cannot get parameter pack as value");
-    if (PyDict_SetItem(self->visited, fieldname, Py_True) < 0)
-        return nullptr;
+    throw_if(PyDict_SetItem(self->visited, fieldname, Py_True));
     return py_newref(values);
 }
 
-static PyObject *get_value_default(auto *self, PyObject *default_value)
+static __attribute__((returns_nonnull)) PyObject*
+get_value_default(auto *self, PyObject *default_value)
 {
     assert(!PyDict_Check(default_value));
     auto fieldname = self->fieldname;
     auto self_values = self->values;
     auto values = PyDict_GetItemWithError(self_values, fieldname);
     if (!values) {
-        if (PyErr_Occurred() ||
-            PyDict_SetItem(self_values, fieldname, default_value) < 0)
-            return nullptr;
+        throw_if(PyErr_Occurred());
+        throw_if(PyDict_SetItem(self_values, fieldname, default_value));
         values = default_value;
     }
     else if (PyDict_Check(values)) {
-        return PyErr_Format(PyExc_TypeError, "Cannot get parameter pack as value");
+        py_throw_format(PyExc_TypeError, "Cannot get parameter pack as value");
     }
-    if (PyDict_SetItem(self->visited, fieldname, Py_True) < 0)
-        return nullptr;
+    throw_if(PyDict_SetItem(self->visited, fieldname, Py_True));
     return py_newref(values);
 }
 
-static PyObject *parampack_call(auto *self, PyObject *args, PyObject *kwargs)
+static __attribute__((returns_nonnull)) PyObject*
+parampack_call(auto *self, PyObject *args, PyObject *kwargs)
 {
     int nargs = PyTuple_GET_SIZE(args);
     int nkws = PyDict_GET_SIZE(kwargs);
@@ -160,7 +156,7 @@ static PyObject *parampack_call(auto *self, PyObject *args, PyObject *kwargs)
         for (int i = 0; i < nargs; i++) {
             auto arg = PyTuple_GET_ITEM(args, nargs - 1 - i);
             if (!PyDict_Check(arg))
-                return PyErr_Format(
+                py_throw_format(
                     PyExc_TypeError,
                     "Cannot use value as default value for parameter pack");
             merge_dict_into(self_values, arg, true);
@@ -170,7 +166,7 @@ static PyObject *parampack_call(auto *self, PyObject *args, PyObject *kwargs)
         for (int i = 0; i < nargs; i++) {
             auto arg = PyTuple_GET_ITEM(args, i);
             if (!PyDict_Check(arg))
-                return PyErr_Format(
+                py_throw_format(
                     PyExc_TypeError,
                     "Cannot use value as default value for parameter pack");
             merge_dict_into(self_values, arg, false);

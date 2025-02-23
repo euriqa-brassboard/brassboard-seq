@@ -41,10 +41,10 @@ from libcpp.vector cimport vector
 
 cdef extern from "src/scan.cpp" namespace "brassboard_seq::scan":
     void merge_dict_into(object tgt, object src, bint ovr) except +
-    dict ensure_visited(ParamPack self)
-    dict ensure_dict(ParamPack self)
-    object get_value(ParamPack self)
-    object get_value_default(ParamPack self, object)
+    dict ensure_visited(ParamPack self) except +
+    dict ensure_dict(ParamPack self) except +
+    object get_value(ParamPack self) except +
+    object get_value_default(ParamPack self, object) except +
     object parampack_call(ParamPack self, tuple args, dict kwargs) except +
 
 @cython.final
