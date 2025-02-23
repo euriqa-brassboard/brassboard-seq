@@ -14,7 +14,7 @@ def test_stream():
     io.write("abcd")
     io.seek(10)
     io.write("321")
-    io.seek(4)
+    io.seek(4, 'beg')
     io.write("l9876k")
     assert io.get_buf() == b'abcdl9876k321'
 
@@ -26,3 +26,13 @@ def test_stream():
     assert not io.fail()
     assert io.get_buf() == b'aaa'
     assert io.get_buf() == b''
+
+    io.write('aaa')
+    assert not io.fail()
+    io.seek(-2, 'cur')
+    io.write('bbbb')
+    io.seek(-2, 'end')
+    io.seek(-2, 'cur')
+    io.write('c')
+    assert not io.fail()
+    assert io.get_buf() == b'acbbb'

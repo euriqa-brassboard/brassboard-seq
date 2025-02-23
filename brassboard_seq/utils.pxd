@@ -21,11 +21,17 @@ from cpython cimport PyObject, PyTypeObject
 from libc.stdint cimport *
 
 cdef extern from "<ostream>" namespace "std":
+    ctypedef struct seekdir "std::ios_base::seekdir":
+        pass
+    cdef seekdir seekdir_beg "std::ios_base::beg"
+    cdef seekdir seekdir_end "std::ios_base::end"
+    cdef seekdir seekdir_cur "std::ios_base::cur"
     cdef cppclass ostream:
         ostream &operator<<[T](const T&)
         ostream &put(char)
         ostream &write(const char*, size_t)
         ostream &seekp(ssize_t)
+        ostream &seekp2 "seekp"(ssize_t, seekdir)
         ostream &flush()
         bint fail() const
         void clear()

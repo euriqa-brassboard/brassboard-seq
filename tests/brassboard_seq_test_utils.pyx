@@ -1100,8 +1100,20 @@ cdef class PyBytesStream:
         b = <bytes>s.encode()
         self.stm.write(PyBytes_AS_STRING(b), PyBytes_GET_SIZE(b))
 
-    def seek(self, ssize_t p):
-        self.stm.seekp(p)
+    def seek(self, ssize_t p, _dir=None):
+        if _dir is None:
+            self.stm.seekp(p)
+            return
+        cdef utils.seekdir dir
+        if _dir == 'beg':
+            dir = utils.seekdir_beg
+        elif _dir == 'end':
+            dir = utils.seekdir_end
+        elif _dir == 'cur':
+            dir = utils.seekdir_cur
+        else:
+            raise ValueError(f"Invalid seek direction {_dir}")
+        self.stm.seekp2(p, dir)
 
     def flush(self):
         self.stm.flush()
