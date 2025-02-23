@@ -36,3 +36,9 @@ def test_stream():
     io.write('c')
     assert not io.fail()
     assert io.get_buf() == b'acbbb'
+
+def test_istream():
+    assert test_utils.test_istream_seek(0)
+    assert test_utils.test_istream_seek(0, 'beg')
+    assert test_utils.test_istream_seek(0, 'end')
+    assert test_utils.test_istream_seek(0, 'cur')

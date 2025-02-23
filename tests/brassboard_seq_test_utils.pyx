@@ -128,6 +128,15 @@ cdef extern from *:
         io << v;
         return io.str();
     }
+
+    class test_istream : public std::istream {
+    public:
+        test_istream() : std::istream(&m_buf)
+        {}
+
+    private:
+        brassboard_seq::pybytes_streambuf m_buf;
+    };
     """
     vector[int] _get_suffix_array(vector[int])
     vector[int] _get_height_array(vector[int], vector[int])
@@ -201,6 +210,10 @@ cdef extern from *:
     object bits_to_pylong[T](const T&)
     object bits_to_pybytes[T](const T&)
     cppstr bits_to_str[T](const T&, bint)
+    cppclass test_istream:
+        test_istream &seekg(ssize_t)
+        test_istream &seekg2 "seekg"(ssize_t, utils.seekdir)
+        bint fail() const
 
 def new_invalid_rtval():
     # This should only happen if something really wrong happens.
@@ -1137,3 +1150,20 @@ def int_throw_if(int i):
 
 def int_throw_if_not(int i):
     return throw_if_not(i)
+
+def test_istream_seek(ssize_t p, _dir=None):
+    cdef test_istream stm
+    if _dir is None:
+        stm.seekg(p)
+        return stm.fail()
+    cdef utils.seekdir dir
+    if _dir == 'beg':
+        dir = utils.seekdir_beg
+    elif _dir == 'end':
+        dir = utils.seekdir_end
+    elif _dir == 'cur':
+        dir = utils.seekdir_cur
+    else:
+        raise ValueError(f"Invalid seek direction {_dir}")
+    stm.seekg2(p, dir)
+    return stm.fail()
