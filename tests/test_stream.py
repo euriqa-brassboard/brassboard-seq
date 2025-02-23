@@ -24,6 +24,16 @@ def test_stream():
     assert io.fail()
     io.clear()
     assert not io.fail()
+    io.seek(0, 'cur')
+    assert not io.fail()
+    io.seek(-1, 'beg')
+    assert io.fail()
+    io.clear()
+    assert not io.fail()
+    io.seek(1, 'end')
+    assert io.fail()
+    io.clear()
+    assert not io.fail()
     assert io.get_buf() == b'aaa'
     assert io.get_buf() == b''
 
