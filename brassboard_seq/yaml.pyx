@@ -71,8 +71,12 @@ cdef str print_single_field_dict(obj, int indent, int cur_indent, str prefix_nam
         s = name + ' ' + strfield
     else:
         s = name + strfield
-    if indent < cur_indent:
-        return '\n' + ' ' * indent + s
+    # `indent < cur_indent` can only happen if `print_generic` is called with
+    # this condition following the call chain:
+    # `print_generic -> print_scalar -> print_dict` which in turns can only happen in
+    # `print_dict_field` or `print_single_field_dict` where the object cannot be
+    # a single field dict.
+    assert indent >= cur_indent
     return s
 
 cdef str print_dict_field(k, v, int indent):
