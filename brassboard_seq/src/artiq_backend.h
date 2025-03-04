@@ -218,10 +218,12 @@ struct TimeChecker {
     int64_t max_key;
 };
 
+static constexpr int coarse_time_mu = 8;
+
 static inline int64_t seq_time_to_mu(long long time)
 {
     // Hard code for now.
-    return (time + 500) / 1000;
+    return (time + 1000 * coarse_time_mu / 2) / (1000 * coarse_time_mu) * coarse_time_mu;
 }
 
 static inline uint32_t dds_amp_to_mu(double amp)

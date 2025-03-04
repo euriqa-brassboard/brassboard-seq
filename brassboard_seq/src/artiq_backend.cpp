@@ -599,14 +599,14 @@ void UrukulBus::add_io_update(auto &add_action, int64_t time_mu,
                               int aid, bool exact_time)
 {
     // Round to the nearest 8 cycles.
-    time_mu = (time_mu + 4) & ~int64_t(7);
+    time_mu = (time_mu + coarse_time_mu / 2) & ~int64_t(coarse_time_mu - 1);
     bb_debug("add_io_update: aid=%d, bus@%" PRId64 ", io_upd@%" PRId64 ", "
              "time=%" PRId64 ", exact_time=%d, chn=%d\n",
              aid, last_bus_mu, last_io_update_mu, time_mu, exact_time, channel);
     auto t1 = add_action(io_update_target, 1, aid, time_mu,
                          std::max(last_bus_mu, last_io_update_mu), exact_time);
-    auto t2 = add_action(io_update_target, 0, aid, t1 + 8,
-                         t1 + 8, false);
+    auto t2 = add_action(io_update_target, 0, aid, t1 + coarse_time_mu,
+                         t1 + coarse_time_mu, false);
     last_io_update_mu = t2;
 }
 
@@ -735,7 +735,7 @@ inline void TTLChannel::flush_output(auto &add_action, int64_t cur_time_mu,
     // Now do the output
     cur_val = new_val;
     last_time_mu = add_action(target, new_val, aid, time_mu,
-                              last_time_mu, exact_time) + 8;
+                              last_time_mu, exact_time) + coarse_time_mu;
 }
 
 inline void TTLChannel::add_output(auto &add_action, const ArtiqAction &action)
@@ -770,7 +770,7 @@ inline void TTLChannel::add_output(auto &add_action, const ArtiqAction &action)
         cur_val = val;
         new_val = val;
         last_time_mu = add_action(target, val, action.aid, action.time_mu,
-                                  last_time_mu, action.exact_time) + 8;
+                                  last_time_mu, action.exact_time) + coarse_time_mu;
         return;
     }
 
@@ -779,7 +779,7 @@ inline void TTLChannel::add_output(auto &add_action, const ArtiqAction &action)
         action.time_mu != time_mu) {
         bb_debug("add_ttl: flush pending exact time output\n");
         last_time_mu = add_action(target, new_val, aid, time_mu,
-                                  last_time_mu, true) + 8;
+                                  last_time_mu, true) + coarse_time_mu;
         cur_val = new_val;
     }
 
@@ -809,7 +809,7 @@ inline void TimeChecker::clear()
 
 inline bool TimeChecker::check_and_add_time(int64_t t_mu)
 {
-    auto t_course = t_mu >> 3; // hard code
+    auto t_course = t_mu / coarse_time_mu;
     if (t_course > max_key) {
         max_key = t_course;
         counts[t_course] = 1;
@@ -826,7 +826,7 @@ inline int64_t TimeChecker::find_time(int64_t lb_mu, int64_t t_mu, int64_t ub_mu
 {
     if (check_and_add_time(t_mu))
         return t_mu;
-    int64_t offset = 8;
+    int64_t offset = coarse_time_mu;
     while (true) {
         auto in_lb = t_mu - offset >= lb_mu;
         auto in_ub = t_mu + offset <= ub_mu;
@@ -836,7 +836,7 @@ inline int64_t TimeChecker::find_time(int64_t lb_mu, int64_t t_mu, int64_t ub_mu
             return t_mu + offset;
         if (!in_lb && !in_ub)
             return INT64_MIN;
-        offset += 8;
+        offset += coarse_time_mu;
     }
 }
 
