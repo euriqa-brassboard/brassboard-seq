@@ -903,6 +903,19 @@ private:
     PyObject *m_buf = nullptr;
 };
 
+class pybytearray_streambuf : public buff_streambuf {
+public:
+    pybytearray_streambuf();
+    ~pybytearray_streambuf() override;
+
+    __attribute__((returns_nonnull)) PyObject *get_buf();
+
+private:
+    char *extend(size_t sz) override;
+
+    PyObject *m_buf = nullptr;
+};
+
 class buff_ostream : public std::ostream {
 public:
     buff_ostream(buff_streambuf *buf)
@@ -935,6 +948,21 @@ public:
 
 private:
     pybytes_streambuf m_buf;
+};
+
+class pybytearray_ostream : public buff_ostream {
+public:
+    pybytearray_ostream();
+    ~pybytearray_ostream();
+
+    __attribute__((returns_nonnull)) PyObject *get_buf()
+    {
+        flush();
+        return m_buf.get_buf();
+    }
+
+private:
+    pybytearray_streambuf m_buf;
 };
 
 // Input: S

@@ -74,6 +74,9 @@ cdef extern from "src/utils.h" namespace "brassboard_seq":
     cppclass pybytes_ostream(ostream):
         object get_buf() except +
 
+    cppclass pybytearray_ostream(ostream):
+        object get_buf() except +
+
     void init_library()
 
 # Cython does not declare these in cpython cimport

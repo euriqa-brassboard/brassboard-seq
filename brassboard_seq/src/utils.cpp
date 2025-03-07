@@ -420,6 +420,59 @@ pybytes_ostream::~pybytes_ostream()
 {
 }
 
+pybytearray_streambuf::pybytearray_streambuf()
+{
+    setp(nullptr, nullptr);
+}
+
+pybytearray_streambuf::~pybytearray_streambuf()
+{
+    Py_XDECREF(m_buf);
+}
+
+__attribute__((returns_nonnull)) PyObject *pybytearray_streambuf::get_buf()
+{
+    if (!m_buf)
+        return throw_if_not(PyByteArray_FromStringAndSize(nullptr, 0));
+    auto sz = m_end;
+    auto buf = m_buf;
+    m_buf = nullptr;
+    setp(nullptr, nullptr);
+    m_end = 0;
+    throw_if(PyByteArray_Resize(buf, sz));
+    return buf;
+}
+
+char *pybytearray_streambuf::extend(size_t sz)
+{
+    auto oldbase = pbase();
+    auto oldptr = pptr();
+    auto oldsz = oldptr - oldbase;
+    // overallocate.
+    auto new_sz = (oldsz + sz) * 3 / 2;
+    if (oldbase + new_sz <= epptr())
+        return &PyByteArray_AS_STRING(m_buf)[oldsz];
+    if (!m_buf) {
+        m_buf = throw_if_not(PyByteArray_FromStringAndSize(nullptr, new_sz));
+    }
+    else {
+        throw_if(PyByteArray_Resize(m_buf, new_sz));
+    }
+    auto buf = PyByteArray_AS_STRING(m_buf);
+    setp(buf, &buf[new_sz]);
+    pbump((int)oldsz);
+    return &buf[oldsz];
+}
+
+pybytearray_ostream::pybytearray_ostream()
+    : buff_ostream(&m_buf)
+{
+}
+
+pybytearray_ostream::~pybytearray_ostream()
+{
+}
+
 static void _get_suffix_array(std::span<int> SA, std::span<int> S, std::span<int> ws);
 void get_suffix_array(std::span<int> SA, std::span<int> S, std::span<int> ws)
 {

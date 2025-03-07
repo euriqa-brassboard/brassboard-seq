@@ -137,6 +137,15 @@ cdef extern from *:
     private:
         brassboard_seq::pybytes_streambuf m_buf;
     };
+
+    class test_istream_ba : public std::istream {
+    public:
+        test_istream_ba() : std::istream(&m_buf)
+        {}
+
+    private:
+        brassboard_seq::pybytearray_streambuf m_buf;
+    };
     """
     vector[int] _get_suffix_array(vector[int])
     vector[int] _get_height_array(vector[int], vector[int])
@@ -213,6 +222,10 @@ cdef extern from *:
     cppclass test_istream:
         test_istream &seekg(ssize_t)
         test_istream &seekg2 "seekg"(ssize_t, utils.seekdir)
+        bint fail() const
+    cppclass test_istream_ba:
+        test_istream_ba &seekg(ssize_t)
+        test_istream_ba &seekg2 "seekg"(ssize_t, utils.seekdir)
         bint fail() const
 
 def new_invalid_rtval():
@@ -1140,6 +1153,44 @@ cdef class PyBytesStream:
     def clear(self):
         self.stm.clear()
 
+cdef class PyByteArrayStream:
+    cdef utils.pybytearray_ostream stm
+
+    def put(self, char c):
+        self.stm.put(c)
+
+    def write(self, str s):
+        b = <bytes>s.encode()
+        self.stm.write(PyBytes_AS_STRING(b), PyBytes_GET_SIZE(b))
+
+    def seek(self, ssize_t p, _dir=None):
+        if _dir is None:
+            self.stm.seekp(p)
+            return
+        cdef utils.seekdir dir
+        if _dir == 'beg':
+            dir = utils.seekdir_beg
+        elif _dir == 'end':
+            dir = utils.seekdir_end
+        elif _dir == 'cur':
+            dir = utils.seekdir_cur
+        else:
+            raise ValueError(f"Invalid seek direction {_dir}")
+        self.stm.seekp2(p, dir)
+
+    def flush(self):
+        self.stm.flush()
+
+    def get_buf(self):
+        buf = <bytearray?>self.stm.get_buf()
+        return bytes(buf)
+
+    def fail(self):
+        return self.stm.fail()
+
+    def clear(self):
+        self.stm.clear()
+
 def int_to_chars(int i):
     cdef char buff[5]
     ptr = to_chars(buff, i)
@@ -1153,6 +1204,23 @@ def int_throw_if_not(int i):
 
 def test_istream_seek(ssize_t p, _dir=None):
     cdef test_istream stm
+    if _dir is None:
+        stm.seekg(p)
+        return stm.fail()
+    cdef utils.seekdir dir
+    if _dir == 'beg':
+        dir = utils.seekdir_beg
+    elif _dir == 'end':
+        dir = utils.seekdir_end
+    elif _dir == 'cur':
+        dir = utils.seekdir_cur
+    else:
+        raise ValueError(f"Invalid seek direction {_dir}")
+    stm.seekg2(p, dir)
+    return stm.fail()
+
+def test_istream_ba_seek(ssize_t p, _dir=None):
+    cdef test_istream_ba stm
     if _dir is None:
         stm.seekg(p)
         return stm.fail()

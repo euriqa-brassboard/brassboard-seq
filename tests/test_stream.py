@@ -4,8 +4,18 @@ import brassboard_seq_test_utils as test_utils
 
 import pytest
 
-def test_stream():
-    io = test_utils.PyBytesStream()
+def with_params(*params):
+    def deco(f):
+        def wrapper():
+            for param in params:
+                f(*param)
+        wrapper.__name__ = f.__name__
+        return wrapper
+    return deco
+
+@with_params((test_utils.PyBytesStream,), (test_utils.PyByteArrayStream,))
+def test_stream(streamm_type):
+    io = streamm_type()
     assert io.get_buf() == b''
     io.put(b'c'[0])
     assert io.get_buf() == b'c'
@@ -52,3 +62,8 @@ def test_istream():
     assert test_utils.test_istream_seek(0, 'beg')
     assert test_utils.test_istream_seek(0, 'end')
     assert test_utils.test_istream_seek(0, 'cur')
+
+    assert test_utils.test_istream_ba_seek(0)
+    assert test_utils.test_istream_ba_seek(0, 'beg')
+    assert test_utils.test_istream_ba_seek(0, 'end')
+    assert test_utils.test_istream_ba_seek(0, 'cur')
