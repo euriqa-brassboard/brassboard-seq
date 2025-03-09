@@ -117,6 +117,8 @@ cdef class ArtiqBackend(Backend):
     cdef vector[pair[void*,double]] float_values
     cdef vector[Relocation] relocations
     cdef bint eval_status
+    cdef bint use_dma
+    cdef readonly int64_t total_time_mu
     cdef vector[RTIOAction] rtio_actions
     cdef TimeChecker time_checker
     cdef object rtio_array # ndarray

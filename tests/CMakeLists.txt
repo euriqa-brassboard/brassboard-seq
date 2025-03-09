@@ -21,7 +21,9 @@ python_test("${CMAKE_BINARY_DIR}"
   #
   test_action.py
   test_artiq_backend.py
+  test_artiq_backend_dma.py
   test_artiq_backend_nodax.py
+  test_artiq_backend_dma_nodax.py
   test_backend.py
   test_config.py
   test_event_time.py

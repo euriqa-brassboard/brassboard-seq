@@ -12,7 +12,92 @@ import numpy as np
 global_conf = Config()
 global_conf.add_supported_prefix('artiq')
 global_conf.add_supported_prefix('rfsoc')
-np_rtios = np.ndarray((0,), np.int32)
+
+def bytes_to_int32(i0, i8, i16, i24):
+    return i0 | (i8 << 8) | (i16 << 16) | (i24 << 24)
+
+def bytes_to_int64(i0, i8, i16, i24, i32, i40, i48, i56):
+    return bytes_to_int32(i0, i8, i16, i24) | bytes_to_int32(i32, i40, i48, i56)
+
+class RTIOOutputManager:
+    def __init__(self):
+        self.use_dma = False
+        self.np_rtio = np.ndarray((0,), np.int32)
+        self.dma_buf = bytearray()
+
+    def get_list_bytecode(self, ab):
+        res = list(self.np_rtio)
+        n = len(res)
+        i = 0
+        total_mu = 0
+        while i < n:
+            r = int(res[i])
+            if r < 0:
+                total_mu -= r
+                i += 1
+            else:
+                assert r != 0x80000000
+                i += 2
+        assert total_mu == ab.total_time_mu
+        return res
+
+    def get_list_dma(self, ab):
+        assert len(self.dma_buf) % 64 == 0
+        cur_t = 0
+        res = []
+        def set_cur_time(new_t):
+            nonlocal cur_t
+            wait_t = new_t - cur_t
+            assert wait_t >= 0
+            cur_t = new_t
+            while wait_t > 0x80000000:
+                res.append(np.int32(-0x80000000))
+                wait_t -= 0x80000000
+            if wait_t == 0:
+                return
+            res.append(np.int32(-wait_t))
+        def add_action(t, target, value):
+            set_cur_time(t)
+            res.append(np.int32(target))
+            res.append(np.int32(value))
+        for i in range(0, len(self.dma_buf), 17):
+            if self.dma_buf[i] == 0:
+                assert len(self.dma_buf) - i <= 64
+                for j in range(i + 1, len(self.dma_buf)):
+                    assert self.dma_buf[j] == 0
+                set_cur_time(ab.total_time_mu)
+                return res
+            assert self.dma_buf[i] == 17
+            target = bytes_to_int32(self.dma_buf[i + 12], self.dma_buf[i + 1],
+                                    self.dma_buf[i + 2], self.dma_buf[i + 3])
+            value = bytes_to_int32(self.dma_buf[i + 13], self.dma_buf[i + 14],
+                                   self.dma_buf[i + 15], self.dma_buf[i + 16])
+            t = bytes_to_int64(self.dma_buf[i + 4], self.dma_buf[i + 5],
+                               self.dma_buf[i + 6], self.dma_buf[i + 7],
+                               self.dma_buf[i + 8], self.dma_buf[i + 9],
+                               self.dma_buf[i + 10], self.dma_buf[i + 11])
+            assert t >= 0
+            add_action(t, target, value)
+        assert False
+
+    def get_list(self, ab):
+        if self.use_dma:
+            return self.get_list_dma(ab)
+        return self.get_list_bytecode(ab)
+
+    def set_use_dma(self):
+        self.use_dma = True
+
+    def add_backend(self, comp, sys):
+        if self.use_dma:
+            ab = artiq_backend.ArtiqBackend(sys, self.dma_buf, output_format='dma')
+        else:
+            ab = artiq_backend.ArtiqBackend(sys, self.np_rtio)
+        comp.add_backend('artiq', ab)
+        comp.add_backend('rfsoc', backend.Backend()) # Dummy backend
+        return ab
+
+rtio_mgr = RTIOOutputManager()
 
 def seq_time_to_mu(time):
     return (time + 500) // 1000
@@ -64,12 +149,6 @@ def new_seq_compiler(*args):
     comp = backend.SeqCompiler(s)
     return s, comp
 
-def add_artiq_backend(comp, sys):
-    ab = artiq_backend.ArtiqBackend(sys, np_rtios)
-    comp.add_backend('artiq', ab)
-    comp.add_backend('rfsoc', backend.Backend()) # Dummy backend
-    return ab
-
 def with_params(*params):
     def deco(f):
         def wrapper():
@@ -92,6 +171,10 @@ with_artiq_params = with_params((0,), (5,), (500,))
 def test_constructors():
     with pytest.raises(TypeError):
         artiq_backend.ArtiqBackend()
+    artiq_backend.ArtiqBackend(dummy_artiq.DummyDaxSystem(),
+                               np.ndarray((0,), np.int32))
+    artiq_backend.ArtiqBackend(dummy_artiq.DummyDaxSystem(),
+                               np.ndarray((0,), np.int32), output_format="bytecode")
     with pytest.raises(TypeError):
         artiq_backend.ArtiqBackend(dummy_artiq.DummyDaxSystem(), [])
     with pytest.raises(TypeError, match="RTIO output must be a int32 array"):
@@ -100,6 +183,17 @@ def test_constructors():
     with pytest.raises(ValueError, match="RTIO output must be a 1D array"):
         artiq_backend.ArtiqBackend(dummy_artiq.DummyDaxSystem(),
                                    np.ndarray((2, 2), np.int32))
+    artiq_backend.ArtiqBackend(dummy_artiq.DummyDaxSystem(),
+                               bytearray(), output_format="dma")
+    with pytest.raises(TypeError):
+        artiq_backend.ArtiqBackend(dummy_artiq.DummyDaxSystem(),
+                                   [], output_format="dma")
+    with pytest.raises(TypeError):
+        artiq_backend.ArtiqBackend(dummy_artiq.DummyDaxSystem(),
+                                   np.ndarray((0,), np.int32), output_format="dma")
+    with pytest.raises(ValueError, match="Unknown output type: 'invalid'"):
+        artiq_backend.ArtiqBackend(dummy_artiq.DummyDaxSystem(),
+                                   [], output_format="invalid")
 
 def get_channel_info(ab):
     channels = artiq_utils.get_channel_info(ab)
@@ -227,7 +321,7 @@ def get_compiled_info(ab, s):
 @with_artiq_params
 def test_val_error(max_bt):
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     # This causes a error to be thrown when converting to boolean
     def ajquoeiauhfasd():
         s.set('artiq/ttl0', np.array([1, 2]))
@@ -237,7 +331,7 @@ def test_val_error(max_bt):
     check_bt(exc, max_bt, 'ajquoeiauhfasd')
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     # This causes a error to be thrown when converting to float
     def jaus7hfas9dafs():
         s.set('artiq/urukul3_ch0/freq', [1, 2])
@@ -247,7 +341,7 @@ def test_val_error(max_bt):
     check_bt(exc, max_bt, 'jaus7hfas9dafs')
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     s.set('artiq/ttl0', True)
     s.add_step(0.01) \
       .pulse('artiq/urukul0_ch2/freq', rtval.new_extern(lambda: 1.23)) \
@@ -262,7 +356,7 @@ def test_val_error(max_bt):
     check_bt(exc, max_bt, 'ajquo1827uhfasd')
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     s.set('artiq/ttl0', True)
     s.add_step(0.01) \
       .pulse('artiq/urukul0_ch2/freq', rtval.new_extern(lambda: 1.23)) \
@@ -280,7 +374,7 @@ def test_val_error(max_bt):
         raise ValueError("AAABBBCCC")
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     s.set('artiq/ttl0', True)
     s.add_step(0.01) \
       .pulse('artiq/urukul0_ch2/freq', rtval.new_extern(lambda: 1.23)) \
@@ -294,7 +388,7 @@ def test_val_error(max_bt):
     check_bt(exc, max_bt, 'ajsdf78ah4has9d')
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     s.set('artiq/ttl0', True)
     s.add_step(0.01) \
       .pulse('artiq/urukul0_ch2/freq', rtval.new_extern(lambda: 1.23)) \
@@ -310,7 +404,7 @@ def test_val_error(max_bt):
 @with_artiq_params
 def test_channels(max_bt):
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     assert s.get_channel_id('artiq/ttl0') == 0
     assert s.get_channel_id('artiq/ttl1') == 1
     assert s.get_channel_id('artiq/ttl10_counter') == 2
@@ -334,7 +428,7 @@ def test_channels(max_bt):
     assert not compiled_info.relocations
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.HasEnvironment())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.HasEnvironment())
     assert s.get_channel_id('artiq/ttl0') == 0
     assert s.get_channel_id('artiq/urukul3_ch0/freq') == 1
     assert s.get_channel_id('artiq/ttl1') == 2
@@ -358,43 +452,43 @@ def test_channels(max_bt):
     assert not compiled_info.relocations
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.HasEnvironment())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.HasEnvironment())
     s.get_channel_id('artiq/urukul0_ch0/a/b')
     with pytest.raises(ValueError, match="Invalid channel name artiq/urukul0_ch0/a/b"):
         comp.finalize()
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.HasEnvironment())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.HasEnvironment())
     s.get_channel_id('artiq/urukul0_ch0/aaa')
     with pytest.raises(ValueError, match="Invalid channel name artiq/urukul0_ch0/aaa"):
         comp.finalize()
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.HasEnvironment())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.HasEnvironment())
     s.get_channel_id('artiq/ttl0/a')
     with pytest.raises(ValueError, match="Invalid channel name artiq/ttl0/a"):
         comp.finalize()
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.HasEnvironment())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.HasEnvironment())
     s.get_channel_id('artiq/ttl0_counter/a')
     with pytest.raises(ValueError, match="Invalid channel name artiq/ttl0_counter/a"):
         comp.finalize()
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.HasEnvironment())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.HasEnvironment())
     s.get_channel_id('artiq/something')
     with pytest.raises(Exception):
         comp.finalize()
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.HasEnvironment())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.HasEnvironment())
     s.get_channel_id('artiq')
     with pytest.raises(ValueError, match="Invalid channel name artiq"):
         comp.finalize()
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.HasEnvironment())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.HasEnvironment())
     s.get_channel_id('artiq/dummy_dev')
     with pytest.raises(ValueError, match="Unsupported device: "):
         comp.finalize()
@@ -402,7 +496,7 @@ def test_channels(max_bt):
 @with_artiq_params
 def test_action_kws(max_bt):
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     def ashdfjasldfas2a7sdfds(step):
         step.set('artiq/ttl0', True, arg=123)
     ashdfjasldfas2a7sdfds(s.add_step(0.01))
@@ -411,7 +505,7 @@ def test_action_kws(max_bt):
     check_bt(exc, max_bt, 'ashdfjasldfas2a7sdfds')
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     def asdf89hsdf():
         s.add_step(0.01) \
          .set('artiq/ttl0_counter', True, b=True)
@@ -421,7 +515,7 @@ def test_action_kws(max_bt):
     check_bt(exc, max_bt, 'asdf89hsdf')
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     def ahsd87hfasdf():
         s.add_step(0.01) \
          .set('artiq/urukul0_ch1/freq', 1.2e7, b=True)
@@ -435,7 +529,7 @@ def test_ttl(max_bt):
     v = rtval.new_extern(lambda: True)
     v2 = rtval.new_extern(lambda: 0.2)
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     @s.add_step
     def step(s):
         s.add_step(0.01) \
@@ -455,7 +549,7 @@ def test_ttl(max_bt):
     assert len(compiled_info.all_actions) == 8
 
     comp.runtime_finalize(1)
-    rtio1 = list(np_rtios)
+    rtio1 = rtio_mgr.get_list(ab)
     channels = get_channel_info(ab)
     ttlchns = channels.ttlchns
     assert rtio1 == [
@@ -475,13 +569,13 @@ def test_ttl(max_bt):
     ]
 
     comp.runtime_finalize(2)
-    assert list(np_rtios) == rtio1
+    assert rtio_mgr.get_list(ab) == rtio1
 
 @with_artiq_params
 def test_counter(max_bt):
     v = rtval.new_extern(lambda: True)
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     @s.add_step
     def step(s):
         s.add_step(0.01) \
@@ -507,7 +601,7 @@ def test_counter(max_bt):
     assert len(compiled_info.all_actions) == 9
 
     comp.runtime_finalize(1)
-    rtio1 = list(np_rtios)
+    rtio1 = rtio_mgr.get_list(ab)
     channels = get_channel_info(ab)
     ttlchns = channels.ttlchns
     assert rtio1 == [
@@ -529,10 +623,10 @@ def test_counter(max_bt):
     ]
 
     comp.runtime_finalize(2)
-    assert list(np_rtios) == rtio1
+    assert rtio_mgr.get_list(ab) == rtio1
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     def ahsd87fasdfasf():
         s.add_step(0.01) \
          .set('artiq/ttl0_counter', v)
@@ -542,7 +636,7 @@ def test_counter(max_bt):
     check_bt(exc, max_bt, 'ahsd87fasdfasf')
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     s.conditional(v).add_step(0.01) \
      .set('artiq/ttl0_counter', True)
     s.wait(1e-6)
@@ -559,7 +653,7 @@ def test_dds(max_bt):
     v = rtval.new_extern(lambda: 123e6)
     v2 = rtval.new_extern(lambda: 0.1)
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     @s.add_step
     def step(s):
         s.add_step(0.01) \
@@ -590,7 +684,7 @@ def test_dds(max_bt):
     ttl_tgts = [ttl.target for ttl in channels.ttlchns]
 
     comp.runtime_finalize(1)
-    rtio1 = list(np_rtios)
+    rtio1 = rtio_mgr.get_list(ab)
 
     assert rtio1 == [
         addr_tgts[0], dds_config_addr(css[0]), -dds_config_len,
@@ -664,7 +758,7 @@ def test_dds(max_bt):
     ]
 
     comp.runtime_finalize(2)
-    assert list(np_rtios) == rtio1
+    assert rtio_mgr.get_list(ab) == rtio1
 
 class StaticFunction(action.RampFunction):
     def __init__(self):
@@ -676,7 +770,7 @@ class StaticFunction(action.RampFunction):
 @with_artiq_params
 def test_ramp(max_bt):
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     def sdf67asdf7f8sdf():
         s.add_step(0.01) \
          .set('artiq/ttl0', StaticFunction())
@@ -686,7 +780,7 @@ def test_ramp(max_bt):
     check_bt(exc, max_bt, 'sdf67asdf7f8sdf')
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     def asdf787asd78hte78():
         s.add_step(0.01) \
          .set('artiq/ttl0_counter', StaticFunction())
@@ -696,7 +790,7 @@ def test_ramp(max_bt):
     check_bt(exc, max_bt, 'asdf787asd78hte78')
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     def as8df9sdf8():
         s.add_step(0.01) \
          .set('artiq/urukul0_ch2/amp', StaticFunction())
@@ -708,7 +802,7 @@ def test_ramp(max_bt):
 @with_artiq_params
 def test_start_trigger(max_bt):
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     s.set('artiq/ttl10', True)
     artiq_utils.add_start_trigger(ab, 0xfff1231, 0, 8000, True)
     artiq_utils.add_start_trigger(ab, 0xfff1232, 0, 8000, False)
@@ -725,7 +819,7 @@ def test_start_trigger(max_bt):
     assert triggers[1].time_mu == 0
 
     comp.runtime_finalize(1)
-    rtio1 = list(np_rtios)
+    rtio1 = rtio_mgr.get_list(ab)
 
     channels = get_channel_info(ab)
     ttl_tgts = [ttl.target for ttl in channels.ttlchns]
@@ -739,10 +833,10 @@ def test_start_trigger(max_bt):
     ]
 
     comp.runtime_finalize(2)
-    assert list(np_rtios) == rtio1
+    assert rtio_mgr.get_list(ab) == rtio1
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     s.set('artiq/ttl10', True)
     ab.add_start_trigger('ttl11', 0, 8e-9, True)
     ab.add_start_trigger('ttl12', 0, 8e-9, False)
@@ -759,7 +853,7 @@ def test_start_trigger(max_bt):
     assert triggers[1].time_mu == 0
 
     comp.runtime_finalize(1)
-    rtio1 = list(np_rtios)
+    rtio1 = rtio_mgr.get_list(ab)
 
     channels = get_channel_info(ab)
     ttl_tgts = [ttl.target for ttl in channels.ttlchns]
@@ -773,19 +867,19 @@ def test_start_trigger(max_bt):
     ]
 
     comp.runtime_finalize(2)
-    assert list(np_rtios) == rtio1
+    assert rtio_mgr.get_list(ab) == rtio1
 
 @with_artiq_params
 def test_start_trigger_error(max_bt):
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     with pytest.raises(ValueError, match="Invalid start trigger device: ttl0_counter"):
         ab.add_start_trigger('ttl0_counter', 0, 8e-9, True)
     with pytest.raises(ValueError, match="Invalid start trigger device: urukul1_ch0"):
         ab.add_start_trigger('urukul1_ch0', 0, 8e-9, True)
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     s.set('artiq/ttl10', True)
     for i in range(8):
         artiq_utils.add_start_trigger(ab, 0xfff1231 + i, 0, 8000, True)
@@ -795,7 +889,7 @@ def test_start_trigger_error(max_bt):
         comp.runtime_finalize(1)
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     s.set('artiq/ttl10', True)
     for t in range(200):
         for i in range(7):
@@ -807,7 +901,7 @@ def test_start_trigger_error(max_bt):
         comp.runtime_finalize(1)
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     s.set('artiq/ttl10', True)
     for t in range(200):
         for i in range(7):
@@ -821,7 +915,7 @@ def test_start_trigger_error(max_bt):
 @with_artiq_params
 def test_ttl_time_move(max_bt):
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     for i in range(8):
         s.set(f'artiq/ttl{i}', True)
     comp.finalize()
@@ -830,7 +924,7 @@ def test_ttl_time_move(max_bt):
     ttl_tgts = [ttl.target for ttl in channels.ttlchns]
 
     comp.runtime_finalize(1)
-    rtio1 = list(np_rtios)
+    rtio1 = rtio_mgr.get_list(ab)
     assert rtio1 == [
         -2992,
         ttl_tgts[7], 1,
@@ -845,7 +939,7 @@ def test_ttl_time_move(max_bt):
     ]
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     for i in range(15):
         s.set(f'artiq/ttl{i}', True)
     comp.finalize()
@@ -854,7 +948,7 @@ def test_ttl_time_move(max_bt):
     ttl_tgts = [ttl.target for ttl in channels.ttlchns]
 
     comp.runtime_finalize(1)
-    rtio1 = list(np_rtios)
+    rtio1 = rtio_mgr.get_list(ab)
     assert rtio1 == [
         -2992,
         ttl_tgts[7], 1,
@@ -879,7 +973,7 @@ def test_ttl_time_move(max_bt):
 @with_artiq_params
 def test_ttl_exact_time(max_bt):
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     s.set(f'artiq/ttl0', True, exact_time=True)
     s.wait(8e-9)
     s.set(f'artiq/ttl0', False, exact_time=True)
@@ -889,7 +983,7 @@ def test_ttl_exact_time(max_bt):
     ttl_tgts = [ttl.target for ttl in channels.ttlchns]
 
     comp.runtime_finalize(1)
-    rtio1 = list(np_rtios)
+    rtio1 = rtio_mgr.get_list(ab)
     assert rtio1 == [
         -3000,
         ttl_tgts[0], 1,
@@ -898,7 +992,7 @@ def test_ttl_exact_time(max_bt):
     ]
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     s.set(f'artiq/ttl0', True)
     s.wait(8e-9)
     s.set(f'artiq/ttl0', False, exact_time=True)
@@ -908,14 +1002,14 @@ def test_ttl_exact_time(max_bt):
     ttl_tgts = [ttl.target for ttl in channels.ttlchns]
 
     comp.runtime_finalize(1)
-    rtio1 = list(np_rtios)
+    rtio1 = rtio_mgr.get_list(ab)
     assert rtio1 == [
         -3008,
         ttl_tgts[0], 0,
     ]
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     for i in range(7):
         s.set(f'artiq/ttl{i}', True, exact_time=True)
     comp.finalize()
@@ -924,7 +1018,7 @@ def test_ttl_exact_time(max_bt):
     ttl_tgts = [ttl.target for ttl in channels.ttlchns]
 
     comp.runtime_finalize(1)
-    rtio1 = list(np_rtios)
+    rtio1 = rtio_mgr.get_list(ab)
     assert rtio1 == [
         -3000,
         ttl_tgts[0], 1,
@@ -941,7 +1035,7 @@ def test_dds_merge_value(max_bt):
     v1 = 1e-6
     rv1 = rtval.new_extern(lambda: v1)
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     s.set(f'artiq/urukul0_ch0/amp', 0.1)
     s.set(f'artiq/urukul0_ch0/freq', 1.3e6)
     s.wait(0.1e-3)
@@ -958,7 +1052,7 @@ def test_dds_merge_value(max_bt):
     ttl_tgts = [ttl.target for ttl in channels.ttlchns]
 
     comp.runtime_finalize(1)
-    rtio1 = list(np_rtios)
+    rtio1 = rtio_mgr.get_list(ab)
     assert rtio1 == [
         addr_tgts[0], dds_config_addr(css[0]),
         -dds_config_len,
@@ -980,7 +1074,7 @@ def test_dds_merge_value(max_bt):
 
     v1 = 5e-6
     comp.runtime_finalize(2)
-    rtio2 = list(np_rtios)
+    rtio2 = rtio_mgr.get_list(ab)
     assert rtio2 == [
         addr_tgts[0], dds_config_addr(css[0]),
         -dds_config_len,
@@ -1032,7 +1126,7 @@ def test_dds_merge_value(max_bt):
 @with_artiq_params
 def test_dds_exact_time(max_bt):
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     for i in range(7):
         s.set(f'artiq/urukul{i}_ch{i % 4}/amp', 0.1, exact_time=True)
         s.set(f'artiq/urukul{i}_ch{i % 4}/freq', (12 + i) * 1e6, exact_time=True)
@@ -1046,7 +1140,7 @@ def test_dds_exact_time(max_bt):
     ttl_tgts = [ttl.target for ttl in channels.ttlchns]
 
     comp.runtime_finalize(1)
-    rtio1 = list(np_rtios)
+    rtio1 = rtio_mgr.get_list(ab)
     assert rtio1 == [
         addr_tgts[0], dds_config_addr(css[0]),
         addr_tgts[1], dds_config_addr(css[1]),
@@ -1114,7 +1208,7 @@ def test_dds_exact_time(max_bt):
     ]
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     for i in range(7):
         s.set(f'artiq/urukul{i}_ch{i % 4}/amp', 0.1, exact_time=True)
         s.set(f'artiq/urukul{i}_ch{i % 4}/freq', (12 + i) * 1e6, exact_time=True)
@@ -1131,7 +1225,7 @@ def test_dds_exact_time(max_bt):
     ttl_tgts = [ttl.target for ttl in channels.ttlchns]
 
     comp.runtime_finalize(1)
-    rtio1 = list(np_rtios)
+    rtio1 = rtio_mgr.get_list(ab)
     assert rtio1 == [
         addr_tgts[0], dds_config_addr(css[0]),
         addr_tgts[1], dds_config_addr(css[1]),
@@ -1266,7 +1360,7 @@ def test_dds_exact_time(max_bt):
 @with_artiq_params
 def test_exact_time_error(max_bt):
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     for i in range(7):
         s.set(f'artiq/ttl{i}', True, exact_time=True)
     def adsf78as7dfahsd78f():
@@ -1279,7 +1373,7 @@ def test_exact_time_error(max_bt):
     check_bt(exc, max_bt, 'adsf78as7dfahsd78f')
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     for i in range(7):
         s.set(f'artiq/urukul{i}_ch2/amp', True, exact_time=True)
         s.set(f'artiq/urukul{i}_ch2/freq', (12 + i) * 1e6, exact_time=True)
@@ -1294,7 +1388,7 @@ def test_exact_time_error(max_bt):
     check_bt(exc, max_bt, 'asdh78asdfasdj')
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     s.set(f'artiq/urukul0_ch0/amp', True, exact_time=True)
     s.wait(0.1e-6)
     def ajsdj7jf8asdf():
@@ -1309,7 +1403,7 @@ def test_exact_time_error(max_bt):
 @with_artiq_params
 def test_inexact_time_error(max_bt):
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     def jasdjf78asdfhsd():
         for t in range(2000):
             step = s.add_step(8e-9)
@@ -1323,7 +1417,7 @@ def test_inexact_time_error(max_bt):
     check_bt(exc, max_bt, 'jasdjf78asdfhsd')
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     def asd7923j9fd7():
         for t in range(100):
             step = s.add_step(0.5e-6)
@@ -1339,13 +1433,13 @@ def test_inexact_time_error(max_bt):
 @with_artiq_params
 def test_long_wait(max_bt):
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     s.wait(10)
 
     comp.finalize()
 
     comp.runtime_finalize(1)
-    rtio1 = list(np_rtios)
+    rtio1 = rtio_mgr.get_list(ab)
     assert rtio1 == [
         -2147483648,
         -2147483648,
@@ -1367,7 +1461,7 @@ def test_dyn_seq1(max_bt):
     rv2 = rtval.new_extern(lambda: v2)
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     s.add_step(rv1) \
      .pulse('artiq/ttl0', rc2)
     s.conditional(rc1) \
@@ -1382,7 +1476,7 @@ def test_dyn_seq1(max_bt):
     ttl_tgts = [ttl.target for ttl in channels.ttlchns]
 
     comp.runtime_finalize(1)
-    rtio1 = list(np_rtios)
+    rtio1 = rtio_mgr.get_list(ab)
     assert rtio1 == [
         -3000,
         ttl_tgts[0], 1,
@@ -1400,7 +1494,7 @@ def test_dyn_seq1(max_bt):
     v1 = 0.1
     v2 = 0.2
     comp.runtime_finalize(2)
-    rtio2 = list(np_rtios)
+    rtio2 = rtio_mgr.get_list(ab)
     assert rtio2 == [
         -3000,
         ttl_tgts[0], 1,
@@ -1417,7 +1511,7 @@ def test_dyn_seq1(max_bt):
     v1 = 0.1
     v2 = 0.2
     comp.runtime_finalize(3)
-    rtio3 = list(np_rtios)
+    rtio3 = rtio_mgr.get_list(ab)
     assert rtio3 == [
         -3000,
         ttl_tgts[0], 0,
@@ -1434,7 +1528,7 @@ def test_dyn_seq1(max_bt):
     v1 = 0.1
     v2 = 0.2
     comp.runtime_finalize(4)
-    rtio4 = list(np_rtios)
+    rtio4 = rtio_mgr.get_list(ab)
     assert rtio4 == [
         -3000,
         ttl_tgts[0], 0,
@@ -1449,7 +1543,7 @@ def test_dyn_seq1(max_bt):
     v1 = 0.0
     v2 = 0.2
     comp.runtime_finalize(5)
-    rtio5 = list(np_rtios)
+    rtio5 = rtio_mgr.get_list(ab)
     assert rtio5 == [
         -3000,
         ttl_tgts[0], 0,
@@ -1462,7 +1556,7 @@ def test_dyn_seq1(max_bt):
     v1 = 0.0
     v2 = 0.2
     comp.runtime_finalize(6)
-    rtio6 = list(np_rtios)
+    rtio6 = rtio_mgr.get_list(ab)
     assert rtio6 == [
         -3000,
         ttl_tgts[0], 0,
@@ -1474,7 +1568,7 @@ def test_dyn_seq1(max_bt):
     v1 = 0.0
     v2 = 0.2
     comp.runtime_finalize(7)
-    rtio7 = list(np_rtios)
+    rtio7 = rtio_mgr.get_list(ab)
     assert rtio7 == [
         -3000,
         ttl_tgts[0], 0,
@@ -1487,7 +1581,7 @@ def test_dyn_seq1(max_bt):
     v1 = 0.0
     v2 = 0.2
     comp.runtime_finalize(8)
-    rtio8 = list(np_rtios)
+    rtio8 = rtio_mgr.get_list(ab)
     assert rtio8 == [
         -3000,
         ttl_tgts[0], 0,
@@ -1499,7 +1593,7 @@ def test_dyn_seq1(max_bt):
     v1 = 0.1
     v2 = 0.0
     comp.runtime_finalize(9)
-    rtio9 = list(np_rtios)
+    rtio9 = rtio_mgr.get_list(ab)
     assert rtio9 == [
         -3000,
         ttl_tgts[0], 1,
@@ -1517,7 +1611,7 @@ def test_dyn_seq1(max_bt):
     v1 = 0.1
     v2 = 0.0
     comp.runtime_finalize(10)
-    rtio10 = list(np_rtios)
+    rtio10 = rtio_mgr.get_list(ab)
     assert rtio10 == [
         -3000,
         ttl_tgts[0], 1,
@@ -1530,7 +1624,7 @@ def test_dyn_seq1(max_bt):
     v1 = 0.1
     v2 = 0.0
     comp.runtime_finalize(11)
-    rtio11 = list(np_rtios)
+    rtio11 = rtio_mgr.get_list(ab)
     assert rtio11 == [
         -3000,
         ttl_tgts[0], 0,
@@ -1547,7 +1641,7 @@ def test_dyn_seq1(max_bt):
     v1 = 0.1
     v2 = 0.0
     comp.runtime_finalize(12)
-    rtio12 = list(np_rtios)
+    rtio12 = rtio_mgr.get_list(ab)
     assert rtio12 == [
         -3000,
         ttl_tgts[0], 0,
@@ -1562,7 +1656,7 @@ def test_dyn_seq1(max_bt):
     v1 = 0.0
     v2 = 0.0
     comp.runtime_finalize(13)
-    rtio13 = list(np_rtios)
+    rtio13 = rtio_mgr.get_list(ab)
     assert rtio13 == [
         -3000,
         ttl_tgts[0], 0,
@@ -1575,7 +1669,7 @@ def test_dyn_seq1(max_bt):
     v1 = 0.0
     v2 = 0.0
     comp.runtime_finalize(14)
-    rtio14 = list(np_rtios)
+    rtio14 = rtio_mgr.get_list(ab)
     assert rtio14 == [
         -3000,
         ttl_tgts[0], 0,
@@ -1586,7 +1680,7 @@ def test_dyn_seq1(max_bt):
     v1 = 0.0
     v2 = 0.0
     comp.runtime_finalize(15)
-    rtio15 = list(np_rtios)
+    rtio15 = rtio_mgr.get_list(ab)
     assert rtio15 == [
         -3000,
         ttl_tgts[0], 0,
@@ -1599,7 +1693,7 @@ def test_dyn_seq1(max_bt):
     v1 = 0.0
     v2 = 0.0
     comp.runtime_finalize(16)
-    rtio16 = list(np_rtios)
+    rtio16 = rtio_mgr.get_list(ab)
     assert rtio16 == [
         -3000,
         ttl_tgts[0], 0,
@@ -1615,7 +1709,7 @@ def test_single(max_bt):
     rv1 = rtval.new_extern(lambda: v1)
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     s.wait(rv1)
     s.conditional(rb1).set('artiq/ttl0', rb2)
     comp.finalize()
@@ -1624,7 +1718,7 @@ def test_single(max_bt):
     ttl_tgts = [ttl.target for ttl in channels.ttlchns]
 
     comp.runtime_finalize(1)
-    rtio1 = list(np_rtios)
+    rtio1 = rtio_mgr.get_list(ab)
     assert rtio1 == [
         -1_003_000,
         ttl_tgts[0], 1,
@@ -1634,7 +1728,7 @@ def test_single(max_bt):
     b1 = True
     b2 = False
     comp.runtime_finalize(2)
-    rtio2 = list(np_rtios)
+    rtio2 = rtio_mgr.get_list(ab)
     assert rtio2 == [
         -1_003_000,
         ttl_tgts[0], 0,
@@ -1644,7 +1738,7 @@ def test_single(max_bt):
     b1 = False
     b2 = True
     comp.runtime_finalize(3)
-    rtio3 = list(np_rtios)
+    rtio3 = rtio_mgr.get_list(ab)
     assert rtio3 == [
         -1_003_000,
     ]
@@ -1653,7 +1747,7 @@ def test_single(max_bt):
     b1 = False
     b2 = False
     comp.runtime_finalize(4)
-    rtio4 = list(np_rtios)
+    rtio4 = rtio_mgr.get_list(ab)
     assert rtio4 == [
         -1_003_000,
     ]
@@ -1662,7 +1756,7 @@ def test_single(max_bt):
     b1 = True
     b2 = True
     comp.runtime_finalize(5)
-    rtio5 = list(np_rtios)
+    rtio5 = rtio_mgr.get_list(ab)
     assert rtio5 == [
         -10_003_000,
         ttl_tgts[0], 1,
@@ -1672,7 +1766,7 @@ def test_single(max_bt):
     b1 = True
     b2 = False
     comp.runtime_finalize(6)
-    rtio6 = list(np_rtios)
+    rtio6 = rtio_mgr.get_list(ab)
     assert rtio6 == [
         -10_003_000,
         ttl_tgts[0], 0,
@@ -1682,7 +1776,7 @@ def test_single(max_bt):
     b1 = False
     b2 = True
     comp.runtime_finalize(7)
-    rtio7 = list(np_rtios)
+    rtio7 = rtio_mgr.get_list(ab)
     assert rtio7 == [
         -10_003_000,
     ]
@@ -1691,7 +1785,7 @@ def test_single(max_bt):
     b1 = False
     b2 = False
     comp.runtime_finalize(8)
-    rtio8 = list(np_rtios)
+    rtio8 = rtio_mgr.get_list(ab)
     assert rtio8 == [
         -10_003_000,
     ]
@@ -1699,7 +1793,7 @@ def test_single(max_bt):
 @with_artiq_params
 def test_same_time_output(max_bt):
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     st1 = s.add_step(10e-6)
     st2 = s.add_step(10e-6)
     st1.pulse('artiq/ttl0', True)
@@ -1710,7 +1804,7 @@ def test_same_time_output(max_bt):
     ttl_tgts = [ttl.target for ttl in channels.ttlchns]
 
     comp.runtime_finalize(1)
-    rtio1 = list(np_rtios)
+    rtio1 = rtio_mgr.get_list(ab)
     assert rtio1 == [
         -3000,
         ttl_tgts[0], 1,
@@ -1719,7 +1813,7 @@ def test_same_time_output(max_bt):
     ]
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     st1 = s.add_step(10e-6)
     st2 = s.add_step(10e-6)
     st2.pulse('artiq/ttl0', True)
@@ -1730,7 +1824,7 @@ def test_same_time_output(max_bt):
     ttl_tgts = [ttl.target for ttl in channels.ttlchns]
 
     comp.runtime_finalize(1)
-    rtio1 = list(np_rtios)
+    rtio1 = rtio_mgr.get_list(ab)
     assert rtio1 == [
         -3000,
         ttl_tgts[0], 1,
@@ -1741,7 +1835,7 @@ def test_same_time_output(max_bt):
 @with_artiq_params
 def test_device_delay_rt_error(max_bt):
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     ab.set_device_delay("ttl0", rtval.new_extern(lambda: -0.001))
     s.set('artiq/ttl0', True)
     comp.finalize()
@@ -1750,7 +1844,7 @@ def test_device_delay_rt_error(max_bt):
         comp.runtime_finalize(1)
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     ab.set_device_delay("urukul0_ch2", rtval.new_extern(lambda: 1.2))
     s.set('artiq/urukul0_ch2/amp', True)
     comp.finalize()
@@ -1759,7 +1853,7 @@ def test_device_delay_rt_error(max_bt):
         comp.runtime_finalize(1)
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     ab.set_device_delay("ttl0", rtval.new_extern(lambda: []))
     s.set('artiq/ttl0', True)
     comp.finalize()
@@ -1770,7 +1864,7 @@ def test_device_delay_rt_error(max_bt):
         raise ValueError("AAABBBCCC")
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     ab.set_device_delay("ttl0", rtval.new_extern(error_callback))
     s.set('artiq/ttl0', True)
     comp.finalize()
@@ -1788,7 +1882,7 @@ def check_device_delay(max_bt, use_rt):
             return rtval.new_extern(lambda: v)
         return v
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     with pytest.raises(ValueError,
                        match="Device time offset -0.001 cannot be negative."):
         ab.set_device_delay("ttl0", -0.001)
@@ -1797,7 +1891,7 @@ def check_device_delay(max_bt, use_rt):
         ab.set_device_delay("urukul0_ch1", 1)
 
     s, comp = new_seq_compiler(max_bt)
-    ab = add_artiq_backend(comp, dummy_artiq.DummyDaxSystem())
+    ab = rtio_mgr.add_backend(comp, dummy_artiq.DummyDaxSystem())
     ab.set_device_delay("ttl1", wrap_value(1e-3))
     ab.set_device_delay("ttl2_counter", wrap_value(2e-3))
     ab.set_device_delay("urukul0_ch0", wrap_value(3e-3))
@@ -1821,7 +1915,7 @@ def check_device_delay(max_bt, use_rt):
     ttl_tgts = [ttl.target for ttl in channels.ttlchns]
 
     comp.runtime_finalize(1)
-    rtio1 = list(np_rtios)
+    rtio1 = rtio_mgr.get_list(ab)
     assert rtio1 == [
         addr_tgts[0], dds_config_addr(css[1]),
         -dds_config_len,

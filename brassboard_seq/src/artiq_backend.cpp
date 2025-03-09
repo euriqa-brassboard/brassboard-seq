@@ -378,12 +378,13 @@ void generate_rtios(auto *ab, unsigned age, py_object &pyage)
         });
     }
 
+    auto &rtio_actions = ab->rtio_actions;
     ScopeExit cleanup([&] {
         ab->time_checker.clear();
-        ab->rtio_actions.clear();
+        rtio_actions.clear();
     });
     assert(ab->time_checker.empty());
-    assert(ab->rtio_actions.empty());
+    assert(rtio_actions.empty());
 
     auto add_action = [&] (uint32_t target, uint32_t value, int aid,
                            int64_t request_time_mu, int64_t lb_mu,
@@ -397,7 +398,7 @@ void generate_rtios(auto *ab, unsigned age, py_object &pyage)
                 bb_throw_format(PyExc_ValueError, action_key(aid),
                                 "Too many outputs at the same time");
             }
-            ab->rtio_actions.push_back({target, value, request_time_mu});
+            rtio_actions.push_back({target, value, request_time_mu});
             return request_time_mu;
         }
         // hard code a 10 us bound.
@@ -416,7 +417,7 @@ void generate_rtios(auto *ab, unsigned age, py_object &pyage)
         if (time_mu == INT64_MIN)
             bb_throw_format(PyExc_ValueError, action_key(aid),
                             "Too many outputs at the same time");
-        ab->rtio_actions.push_back({target, value, time_mu});
+        rtio_actions.push_back({target, value, time_mu});
         return time_mu;
     };
 
@@ -429,7 +430,7 @@ void generate_rtios(auto *ab, unsigned age, py_object &pyage)
         if (!ab->time_checker.check_and_add_time(time_mu))
             py_throw_format(PyExc_ValueError,
                             "Too many start triggers at the same time");
-        ab->rtio_actions.push_back({start_trigger.target,
+        rtio_actions.push_back({start_trigger.target,
                 start_trigger.raising_edge, time_mu});
     }
     for (auto start_trigger: ab->start_triggers) {
@@ -442,7 +443,7 @@ void generate_rtios(auto *ab, unsigned age, py_object &pyage)
             if (end_mu == INT64_MIN)
                 py_throw_format(PyExc_ValueError,
                                 "Too many start triggers at the same time");
-            ab->rtio_actions.push_back({start_trigger.target, 0, end_mu});
+            rtio_actions.push_back({start_trigger.target, 0, end_mu});
         }
         else {
             auto raise_mu = time_mu - start_trigger.min_time_mu;
@@ -450,7 +451,7 @@ void generate_rtios(auto *ab, unsigned age, py_object &pyage)
             if (raise_mu == INT64_MIN)
                 py_throw_format(PyExc_ValueError,
                                 "Too many start triggers at the same time");
-            ab->rtio_actions.push_back({start_trigger.target, 1, raise_mu});
+            rtio_actions.push_back({start_trigger.target, 1, raise_mu});
             start_mu = std::min(raise_mu, start_mu);
         }
     }
@@ -501,60 +502,103 @@ void generate_rtios(auto *ab, unsigned age, py_object &pyage)
         bus.flush_output(add_action, 0, true);
 
 
-    std::ranges::stable_sort(ab->rtio_actions, [] (auto &a1, auto &a2) {
+    std::ranges::stable_sort(rtio_actions, [] (auto &a1, auto &a2) {
         return a1.time_mu < a2.time_mu;
     });
 
-    auto rtio_array = (PyArrayObject*)ab->rtio_array;
-
-    npy_intp rtio_alloc = (npy_intp)PyArray_SIZE(rtio_array);
-    PyArray_Dims pydims{&rtio_alloc, 1};
-    npy_intp rtio_len = 0;
-    uint32_t *rtio_array_data = (uint32_t*)PyArray_DATA(rtio_array);
-    auto resize_rtio = [&] (npy_intp sz) {
-        rtio_alloc = sz;
-        throw_if_not(PyArray_Resize(rtio_array, &pydims, 0, NPY_CORDER));
-    };
-
-    auto alloc_space = [&] (int n) -> uint32_t* {
-        auto old_len = rtio_len;
-        auto new_len = old_len + n;
-        if (new_len > rtio_alloc) {
-            resize_rtio(new_len * 2 + 2);
-            rtio_array_data = (uint32_t*)PyArray_DATA(rtio_array);
-        }
-        rtio_len = new_len;
-        return &rtio_array_data[old_len];
-    };
-
-    auto add_wait = [&] (int64_t t_mu) {
-        const int64_t max_wait = 0x80000000;
-        if (t_mu > max_wait) {
-            auto nwait_eles = t_mu / max_wait;
-            t_mu = t_mu % max_wait;
-            auto wait_cmds = alloc_space(nwait_eles);
-            for (int i = 0; i < nwait_eles; i++) {
-                wait_cmds[i] = uint32_t(max_wait);
-            }
-        }
-        if (t_mu > 0) {
-            auto wait_cmd = alloc_space(1);
-            wait_cmd[0] = uint32_t(-t_mu);
-        }
-    };
-
-    int64_t time_mu = start_mu;
     auto total_time_mu = seq_time_to_mu(ab->__pyx_base.seq->total_time + max_delay);
-    for (auto action: ab->rtio_actions) {
-        add_wait(action.time_mu - time_mu);
-        time_mu = action.time_mu;
-        auto cmd = alloc_space(2);
-        cmd[0] = action.target;
-        cmd[1] = action.value;
+    if (ab->use_dma) {
+        auto rtio_array = ab->rtio_array;
+        auto nactions = rtio_actions.size();
+        // Note that the size calculated below is at least `nactions * 17 + 1`
+        // which is what we need.
+        auto alloc_size = (nactions * 17 / 64 + 1) * 64;
+        PyByteArray_Resize(rtio_array, alloc_size);
+        auto output_ptr = (uint8_t*)PyByteArray_AS_STRING(rtio_array);
+        for (size_t i = 0; i < nactions; i++) {
+            auto &action = rtio_actions[i];
+            auto ptr = &output_ptr[i * 17];
+            auto time_mu = action.time_mu - start_mu;
+            auto target = action.target;
+            auto value = action.value;
+            ptr[0] = 17;
+            ptr[1] = (target >> 8) & 0xff;
+            ptr[2] = (target >> 16) & 0xff;
+            ptr[3] = (target >> 24) & 0xff;
+            ptr[4] = (time_mu >> 0) & 0xff;
+            ptr[5] = (time_mu >> 8) & 0xff;
+            ptr[6] = (time_mu >> 16) & 0xff;
+            ptr[7] = (time_mu >> 24) & 0xff;
+            ptr[8] = (time_mu >> 32) & 0xff;
+            ptr[9] = (time_mu >> 40) & 0xff;
+            ptr[10] = (time_mu >> 48) & 0xff;
+            ptr[11] = (time_mu >> 56) & 0xff;
+            ptr[12] = (target >> 0) & 0xff;
+            ptr[13] = (value >> 0) & 0xff;
+            ptr[14] = (value >> 8) & 0xff;
+            ptr[15] = (value >> 16) & 0xff;
+            ptr[16] = (value >> 24) & 0xff;
+        }
+        if (nactions)
+            total_time_mu = std::max(rtio_actions.back().time_mu, total_time_mu);
+        memset(&output_ptr[nactions * 17], 0, alloc_size - nactions * 17);
     }
-    if (total_time_mu > time_mu)
-        add_wait(total_time_mu - time_mu);
-    resize_rtio(rtio_len);
+    else {
+        auto rtio_array = (PyArrayObject*)ab->rtio_array;
+
+        npy_intp rtio_alloc = (npy_intp)PyArray_SIZE(rtio_array);
+        PyArray_Dims pydims{&rtio_alloc, 1};
+        npy_intp rtio_len = 0;
+        uint32_t *rtio_array_data = (uint32_t*)PyArray_DATA(rtio_array);
+        auto resize_rtio = [&] (npy_intp sz) {
+            rtio_alloc = sz;
+            throw_if_not(PyArray_Resize(rtio_array, &pydims, 0, NPY_CORDER));
+        };
+
+        auto alloc_space = [&] (int n) -> uint32_t* {
+            auto old_len = rtio_len;
+            auto new_len = old_len + n;
+            if (new_len > rtio_alloc) {
+                resize_rtio(new_len * 2 + 2);
+                rtio_array_data = (uint32_t*)PyArray_DATA(rtio_array);
+            }
+            rtio_len = new_len;
+            return &rtio_array_data[old_len];
+        };
+
+        auto add_wait = [&] (int64_t t_mu) {
+            const int64_t max_wait = 0x80000000;
+            if (t_mu > max_wait) {
+                auto nwait_eles = t_mu / max_wait;
+                t_mu = t_mu % max_wait;
+                auto wait_cmds = alloc_space(nwait_eles);
+                for (int i = 0; i < nwait_eles; i++) {
+                    wait_cmds[i] = uint32_t(max_wait);
+                }
+            }
+            if (t_mu > 0) {
+                auto wait_cmd = alloc_space(1);
+                wait_cmd[0] = uint32_t(-t_mu);
+            }
+        };
+
+        int64_t time_mu = start_mu;
+        for (auto action: rtio_actions) {
+            add_wait(action.time_mu - time_mu);
+            time_mu = action.time_mu;
+            auto cmd = alloc_space(2);
+            cmd[0] = action.target;
+            cmd[1] = action.value;
+        }
+        if (total_time_mu > time_mu) {
+            add_wait(total_time_mu - time_mu);
+        }
+        else {
+            total_time_mu = time_mu;
+        }
+        resize_rtio(rtio_len);
+    }
+    ab->total_time_mu = total_time_mu - start_mu;
 
     bb_debug("generate_rtios: finish\n");
     return;

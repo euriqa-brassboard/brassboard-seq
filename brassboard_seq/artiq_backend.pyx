@@ -182,15 +182,25 @@ cdef int collect_channels(ChannelsInfo *self, str prefix, sys, Seq seq,
 @cython.auto_pickle(False)
 @cython.final
 cdef class ArtiqBackend:
-    def __init__(self, sys, cnpy.ndarray rtio_array, /):
+    def __init__(self, sys, object rtio_array, /, *,
+                 str output_format='bytecode'):
         self.sys = sys
         self.eval_status = False
-        if rtio_array.ndim != 1:
-            PyErr_Format(PyExc_ValueError, "RTIO output must be a 1D array")
-        if cnpy.PyArray_TYPE(rtio_array) != cnpy.NPY_INT32:
-            PyErr_Format(PyExc_TypeError, "RTIO output must be a int32 array")
         self.rtio_array = rtio_array
         self.device_delay = {}
+        if output_format == 'bytecode':
+            _rtio_array = <cnpy.ndarray?>rtio_array
+            if _rtio_array.ndim != 1:
+                PyErr_Format(PyExc_ValueError, "RTIO output must be a 1D array")
+            if cnpy.PyArray_TYPE(_rtio_array) != cnpy.NPY_INT32:
+                PyErr_Format(PyExc_TypeError, "RTIO output must be a int32 array")
+            self.use_dma = False
+        elif output_format == 'dma':
+            <bytearray?>rtio_array
+            self.use_dma = True
+        else:
+            PyErr_Format(PyExc_ValueError, "Unknown output type: '%U'",
+                         <PyObject*>output_format)
 
     cdef int add_start_trigger_ttl(self, uint32_t tgt, long long time,
                                    int min_time, bint raising_edge) except -1:
