@@ -94,6 +94,36 @@ static void format_double(std::ostream &io, double v)
     io.write(buff, ptr - buff);
 }
 
+// Find the longest ranges that are at least min_val.
+static void foreach_max_range_min_val(std::span<int> value, int min_val, auto &&cb)
+{
+    int N = value.size();
+    int start_idx = -1;
+    int start_val = 0;
+    for (int i = 0; i < N; i++) {
+        auto v = value[i];
+        if (start_idx < 0) {
+            // No start marked. Check if we should start a range.
+            if (v >= min_val) {
+                start_idx = i;
+                start_val = v;
+            }
+            continue;
+        }
+        // We are above the start value, nothing to do
+        if (v >= min_val) {
+            if (v < start_val)
+                start_val = v;
+            continue;
+        }
+        cb(start_idx, i - 1, start_val);
+        start_idx = -1;
+    }
+    if (start_idx >= 0) {
+        cb(start_idx, N - 1, start_val);
+    }
+}
+
 }
 
 static PyTypeObject *rampfunction_type;
@@ -1333,10 +1363,8 @@ struct Jaqal_v1 {
             };
             // Sort substrings according to repetition and length
             std::map<std::pair<int,int>,SubStrInfos> substrs;
-            foreach_max_range(pulse_height, [&] (int i0, int i1, int str_len) {
-                // Simple heuristic to avoid creating too many short gates
-                if (str_len < 4)
-                    return;
+            // Simple heuristic to avoid creating too many short gates
+            foreach_max_range_min_val(pulse_height, 4, [&] (int i0, int i1, int str_len) {
                 auto sa_begin = i0 + 1;
                 auto nrep = i1 - i0 + 2;
                 substrs[{nrep, str_len}].sas.push_back({ sa_begin });
