@@ -473,7 +473,7 @@ struct Jaqal_v1 {
         metadata |= uint64_t(sync) << (Bits::SYNC_FLAG - Bits::METADATA);
         return metadata;
     }
-    static constexpr inline auto
+    static constexpr inline __attribute__((always_inline,flatten)) auto
     freq_pulse(int channel, int tone, cubic_spline_t sp, int64_t cycles, bool waittrig,
                bool sync, bool fb_enable)
     {
@@ -485,7 +485,7 @@ struct Jaqal_v1 {
                                            sync, false, fb_enable);
         return pulse(metadata, isp, cycles);
     }
-    static constexpr inline auto
+    static constexpr inline __attribute__((always_inline,flatten)) auto
     amp_pulse(int channel, int tone, cubic_spline_t sp, int64_t cycles, bool waittrig,
               bool sync=false, bool fb_enable=false)
     {
@@ -497,7 +497,7 @@ struct Jaqal_v1 {
                                            sync, false, fb_enable);
         return pulse(metadata, isp, cycles);
     }
-    static constexpr inline auto
+    static constexpr inline __attribute__((always_inline,flatten)) auto
     phase_pulse(int channel, int tone, cubic_spline_t sp, int64_t cycles, bool waittrig,
                 bool sync=false, bool fb_enable=false)
     {
@@ -526,7 +526,7 @@ struct Jaqal_v1 {
         metadata |= uint64_t(inv_frame_mask) << (Bits::INV_FRM - Bits::METADATA);
         return metadata;
     }
-    static constexpr inline auto
+    static constexpr inline __attribute__((always_inline,flatten)) auto
     frame_pulse(int channel, int tone, cubic_spline_t sp, int64_t cycles,
                 bool waittrig, bool apply_at_end, bool rst_frame,
                 int fwd_frame_mask, int inv_frame_mask)
