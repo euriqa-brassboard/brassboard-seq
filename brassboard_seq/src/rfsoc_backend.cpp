@@ -1905,7 +1905,7 @@ PyObject *JaqalPulseCompilerGen::BoardGen::get_sequence() const
         assert(gate_ids.size() != 0);
         int blksize = std::min(Jaqal_v1::GSEQ_MAXCNT, (int)gate_ids.size());
         for (int i = 0; i < blksize; i++)
-            gaddrs[i] = gate_ids[i].first;
+            gaddrs[i] = gate_ids[i].second;
         auto inst = Jaqal_v1::sequence(chn, Jaqal_v1::SeqMode::GATE, gaddrs, blksize);
         io.write((char*)&inst, sizeof(inst));
         gate_ids = gate_ids.subspan(blksize);
