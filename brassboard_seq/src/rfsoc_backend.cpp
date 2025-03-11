@@ -124,6 +124,16 @@ static void foreach_max_range_min_val(std::span<int> value, int min_val, auto &&
     }
 }
 
+static inline cubic_spline_t
+spline_resample_cycle(cubic_spline_t sp, int64_t start, int64_t end,
+                      int64_t cycle1, int64_t cycle2)
+{
+    if (cycle1 == start && cycle2 == end)
+        return sp;
+    return spline_resample(sp, double(cycle1 - start) / double(end - start),
+                           double(cycle2 - start) / double(end - start));
+}
+
 }
 
 static PyTypeObject *rampfunction_type;
@@ -1830,6 +1840,24 @@ Generator *new_jaqal_pulse_compiler_generator()
     return new JaqalPulseCompilerGen;
 }
 
+static inline void chn_add_tone_data(auto &channel_gen, int channel, int tone,
+                                     int64_t duration_cycles,
+                                     cubic_spline_t freq, cubic_spline_t amp,
+                                     cubic_spline_t phase, output_flags_t flags,
+                                     int64_t cur_cycle)
+{
+    channel_gen.add_pulse(Jaqal_v1::freq_pulse(channel, tone, freq, duration_cycles,
+                                               flags.wait_trigger, flags.sync,
+                                               flags.feedback_enable), cur_cycle);
+    channel_gen.add_pulse(Jaqal_v1::amp_pulse(channel, tone, amp, duration_cycles,
+                                              flags.wait_trigger), cur_cycle);
+    channel_gen.add_pulse(Jaqal_v1::phase_pulse(channel, tone, phase, duration_cycles,
+                                                flags.wait_trigger), cur_cycle);
+    channel_gen.add_pulse(Jaqal_v1::frame_pulse(channel, tone, {0, 0, 0, 0},
+                                                duration_cycles, flags.wait_trigger,
+                                                false, false, 0, 0), cur_cycle);
+}
+
 void JaqalPulseCompilerGen::add_tone_data(int chn, int64_t duration_cycles,
                                           cubic_spline_t freq, cubic_spline_t amp,
                                           cubic_spline_t phase, output_flags_t flags,
@@ -1841,16 +1869,38 @@ void JaqalPulseCompilerGen::add_tone_data(int chn, int64_t duration_cycles,
     auto channel = (chn >> 1) & 7;
     auto tone = chn & 1;
     auto &channel_gen = board_gen.channels[channel];
-    channel_gen.add_pulse(Jaqal_v1::freq_pulse(channel, tone, freq, duration_cycles,
-                                               flags.wait_trigger, flags.sync,
-                                               flags.feedback_enable), cur_cycle);
-    channel_gen.add_pulse(Jaqal_v1::amp_pulse(channel, tone, amp, duration_cycles,
-                                              flags.wait_trigger), cur_cycle);
-    channel_gen.add_pulse(Jaqal_v1::phase_pulse(channel, tone, phase, duration_cycles,
-                                                flags.wait_trigger), cur_cycle);
-    channel_gen.add_pulse(Jaqal_v1::frame_pulse(channel, tone, {0, 0, 0, 0},
-                                                duration_cycles, flags.wait_trigger,
-                                                false, false, 0, 0), cur_cycle);
+    int64_t max_cycles = (int64_t(1) << 40) - 1;
+    if (duration_cycles > max_cycles) [[unlikely]] {
+        int64_t tstart = 0;
+        auto resample = [&] (auto spline, int64_t tstart, int64_t tend) {
+            return spline_resample_cycle(spline, 0, duration_cycles, tstart, tend);
+        };
+        while ((duration_cycles - tstart) > max_cycles * 2) {
+            int64_t tend = tstart + max_cycles;
+            chn_add_tone_data(channel_gen, channel, tone, max_cycles,
+                              resample(freq, tstart, tend),
+                              resample(amp, tstart, tend),
+                              resample(phase, tstart, tend),
+                              flags, cur_cycle + tstart);
+            flags.wait_trigger = false;
+            tstart = tend;
+        }
+        int64_t tmid = (duration_cycles - tstart) / 2 + tstart;
+        chn_add_tone_data(channel_gen, channel, tone, tmid - tstart,
+                          resample(freq, tstart, tmid),
+                          resample(amp, tstart, tmid),
+                          resample(phase, tstart, tmid),
+                          flags, cur_cycle + tstart);
+        flags.wait_trigger = false;
+        chn_add_tone_data(channel_gen, channel, tone, duration_cycles - tmid,
+                          resample(freq, tmid, duration_cycles),
+                          resample(amp, tmid, duration_cycles),
+                          resample(phase, tmid, duration_cycles),
+                          flags, cur_cycle + tmid);
+        return;
+    }
+    chn_add_tone_data(channel_gen, channel, tone, duration_cycles,
+                      freq, amp, phase, flags, cur_cycle);
 }
 
 PyObject *JaqalPulseCompilerGen::BoardGen::get_prefix() const
@@ -2383,16 +2433,6 @@ void generate_splines(auto &eval_cb, auto &add_sample, double len, double thresh
         buff.v[i] = eval_cb(t);
     }
     _generate_splines(eval_cb, add_sample, buff, threshold);
-}
-
-static inline cubic_spline_t
-spline_resample_cycle(cubic_spline_t sp, int64_t start, int64_t end,
-                      int64_t cycle1, int64_t cycle2)
-{
-    if (cycle1 == start && cycle2 == end)
-        return sp;
-    return spline_resample(sp, double(cycle1 - start) / double(end - start),
-                           double(cycle2 - start) / double(end - start));
 }
 
 inline void

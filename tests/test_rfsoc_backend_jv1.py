@@ -2449,3 +2449,84 @@ def test_use_all_channels(max_bt):
         'phase': [Pulse(2056)]
     }
     check_output({})
+
+@with_rfsoc_params
+def test_long_wait(max_bt):
+    s, comp = new_seq_compiler(max_bt)
+    rb = add_rfsoc_backend(comp)
+    s.add_step(5000) \
+      .set('rfsoc/dds0/1/freq', 100e6) \
+      .set('rfsoc/dds0/1/amp', 0.2)
+    comp.finalize()
+
+    comp.runtime_finalize(1)
+    check_output({
+        0: {
+          'freq': [Pulse(1024000000004), Pulse(1024000000004)],
+          'amp': [Pulse(1024000000004), Pulse(1024000000004)],
+          'phase': [Pulse(1024000000004), Pulse(1024000000004)]
+        },
+        1: {
+          'freq': [Pulse(1024000000004, Spline(100e6)),
+                   Pulse(1024000000004, Spline(100e6))],
+          'amp': [Pulse(1024000000004, Spline(0.2)),
+                  Pulse(1024000000004, Spline(0.2))],
+          'phase': [Pulse(1024000000004), Pulse(1024000000004)]
+        },
+    })
+
+    s, comp = new_seq_compiler(max_bt)
+    rb = add_rfsoc_backend(comp)
+    s.add_step(5000) \
+      .set('rfsoc/dds0/1/freq', LinearRamp(50e6, 100e6)) \
+      .set('rfsoc/dds0/1/amp', 0.2)
+    comp.finalize()
+
+    comp.runtime_finalize(1)
+    check_output({
+        0: {
+          'freq': [Pulse(1024000000004), Pulse(1024000000004)],
+          'amp': [Pulse(1024000000004), Pulse(1024000000004)],
+          'phase': [Pulse(1024000000004), Pulse(1024000000004)]
+        },
+        1: {
+          'freq': [Pulse(1024000000000, pytest.approx(Spline(50e6, 25e6), abs=0.1)),
+                   Pulse(1024000000000, pytest.approx(Spline(75e6, 25e6), abs=0.1)),
+                   Pulse(8, Spline(100e6))],
+          'amp': [Pulse(1024000000000, Spline(0.2)),
+                  Pulse(1024000000000, Spline(0.2)),
+                  Pulse(8, Spline(0.2))],
+          'phase': [Pulse(1024000000000), Pulse(1024000000000), Pulse(8)]
+        },
+    })
+
+    s, comp = new_seq_compiler(max_bt)
+    rb = add_rfsoc_backend(comp)
+    s.add_step(10000) \
+      .set('rfsoc/dds0/1/freq', 100e6) \
+      .set('rfsoc/dds0/1/amp', 0.2)
+    comp.finalize()
+
+    comp.runtime_finalize(1)
+    check_output({
+        0: {
+          'freq': [Pulse(1099511627775), Pulse(1099511627775),
+                   Pulse(948488372229), Pulse(948488372229)],
+          'amp': [Pulse(1099511627775), Pulse(1099511627775),
+                  Pulse(948488372229), Pulse(948488372229)],
+          'phase': [Pulse(1099511627775), Pulse(1099511627775),
+                    Pulse(948488372229), Pulse(948488372229)]
+        },
+        1: {
+          'freq': [Pulse(1099511627775, Spline(100e6)),
+                   Pulse(1099511627775, Spline(100e6)),
+                   Pulse(948488372229, Spline(100e6)),
+                   Pulse(948488372229, Spline(100e6))],
+          'amp': [Pulse(1099511627775, Spline(0.2)),
+                  Pulse(1099511627775, Spline(0.2)),
+                  Pulse(948488372229, Spline(0.2)),
+                  Pulse(948488372229, Spline(0.2))],
+          'phase': [Pulse(1099511627775), Pulse(1099511627775),
+                    Pulse(948488372229), Pulse(948488372229)]
+        },
+    })
