@@ -25,6 +25,7 @@
 
 #include <bitset>
 #include <sstream>
+#include <utility>
 
 #include <assert.h>
 
@@ -133,6 +134,14 @@ spline_resample_cycle(cubic_spline_t sp, int64_t start, int64_t end,
     return spline_resample(sp, double(cycle1 - start) / double(end - start),
                            double(cycle2 - start) / double(end - start));
 }
+
+struct IsFirst {
+    bool first{true};
+    bool get()
+    {
+        return std::exchange(first, false);
+    }
+};
 
 }
 
@@ -2000,12 +2009,7 @@ void JaqalPulseCompilerGen::BoardGen::end()
 void SyncChannelGen::process_channel(ToneBuffer &tone_buffer, int chn,
                                      int64_t total_cycle)
 {
-    bool first_output = true;
-    auto get_trigger = [&] {
-        auto v = first_output;
-        first_output = false;
-        return v;
-    };
+    IsFirst trig;
     assert(!tone_buffer.params[0].empty());
     assert(!tone_buffer.params[1].empty());
     assert(!tone_buffer.params[2].empty());
@@ -2086,7 +2090,7 @@ void SyncChannelGen::process_channel(ToneBuffer &tone_buffer, int chn,
                           resample_action_spline(freq_action, freq_cycle),
                           resample_action_spline(amp_action, amp_cycle),
                           resample_action_spline(phase_action, phase_cycle),
-                          { get_trigger(), sync, ff_action.ff }, cur_cycle);
+                          { trig.get(), sync, ff_action.ff }, cur_cycle);
             cur_cycle = action_end_cycle;
         }
         else {
@@ -2184,7 +2188,7 @@ void SyncChannelGen::process_channel(ToneBuffer &tone_buffer, int chn,
             }
             add_tone_data(chn, 4, approximate_spline(freqs),
                           approximate_spline(amps), approximate_spline(phases),
-                          { get_trigger(), sync, ff_action.ff }, cur_cycle);
+                          { trig.get(), sync, ff_action.ff }, cur_cycle);
             cur_cycle += 4;
             if (cur_cycle != action_end_cycle) {
                 // We've only outputted 4 cycles (instead of outputting
