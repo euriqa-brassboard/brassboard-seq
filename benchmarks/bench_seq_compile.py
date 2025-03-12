@@ -52,8 +52,8 @@ def test(n):
     ch2 = s.get_channel_id('artiq/ttl2')
 
     for i in range(n):
-        s.add_step(.1).set(ch1, True).set('rfsoc/dds0/1/amp', Blackman(0.8))
-        s.add_step(.1).pulse(ch2, True).set('rfsoc/dds0/1/freq', 100e6 + 30e6 / n)
+        s.add_step(1).set(ch1, True).set('rfsoc/dds0/1/amp', Blackman(0.8))
+        s.add_step(1).pulse(ch2, True).set('rfsoc/dds0/1/freq', 100e6 + 30e6 / n)
 
     comp.finalize()
     comp.runtime_finalize(1)
@@ -62,4 +62,4 @@ def test2(n, m):
     for i in range(m):
         test(n)
 
-test2(1000, 100)
+test2(1000, 1000)
