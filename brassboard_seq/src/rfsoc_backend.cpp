@@ -3476,6 +3476,343 @@ void SyncChannelGen::process_channel(ToneBuffer &tone_buffer, int chn,
     }
 }
 
+struct Jaqalv1_3Generator: Generator {
+    virtual void add_inst(const JaqalInst &inst, int board, int board_chn,
+                          Jaqal_v1_3::ModType mod, int64_t cycle) = 0;
+private:
+    struct ChnInfo {
+        uint16_t board;
+        uint8_t board_chn;
+        uint8_t tone;
+        ChnInfo(int chn)
+            : board(chn / 16),
+              board_chn((chn / 2) % 8),
+              tone(chn % 2)
+        {
+        }
+    };
+    static inline int64_t limit_cycles(int64_t cur, int64_t end)
+    {
+        int64_t max_cycles = (int64_t(1) << 40) - 1;
+        int64_t len = end - cur;
+        if (len <= max_cycles)
+            return end;
+        if (len > max_cycles * 2)
+            return cur + max_cycles;
+        return cur + len / 2;
+    }
+    void process_freq(std::span<DDSParamAction> freq, std::span<DDSFFAction> ff,
+                      ChnInfo chn, int64_t total_cycle);
+    template<typename P>
+    void process_param(std::span<DDSParamAction> param, ChnInfo chn,
+                       int64_t total_cycle, Jaqal_v1_3::ModType modtype, P &&pulsef);
+    void process_frame(ChnInfo chn, int64_t total_cycle, Jaqal_v1_3::ModType modtype);
+    void process_channel(ToneBuffer &tone_buffer, int chn, int64_t total_cycle) override;
+};
+
+inline __attribute__((always_inline))
+void Jaqalv1_3Generator::process_freq(std::span<DDSParamAction> freq_actions,
+                                      std::span<DDSFFAction> ff_actions,
+                                      ChnInfo chn, int64_t total_cycle)
+{
+    IsFirst trig;
+    Jaqal_v1_3::ModType modtype =
+        chn.tone == 0 ? Jaqal_v1_3::FRQMOD0 : Jaqal_v1_3::FRQMOD1;
+
+    int64_t cur_cycle = 0;
+
+    int64_t freq_cycle = 0;
+    int freq_idx = 0;
+    auto freq_action = freq_actions[freq_idx];
+    int64_t freq_end_cycle = freq_cycle + freq_action.cycle_len;
+
+    int64_t ff_cycle = 0;
+    int ff_idx = 0;
+    auto ff_action = ff_actions[ff_idx];
+    int64_t ff_end_cycle = ff_cycle + ff_action.cycle_len;
+
+    while (true) {
+        // First figure out if we are starting a new action
+        // and how long the current/new action last.
+        bool sync = freq_cycle == cur_cycle && freq_action.sync;
+        int64_t action_end_cycle =
+            limit_cycles(cur_cycle, std::min({ freq_end_cycle, ff_end_cycle }));
+        bb_debug("find continuous range [%" PRId64 ", %" PRId64
+                 "] for freq on board %d, chn %d, tone %d\n",
+                 cur_cycle, action_end_cycle, chn.board, chn.board_chn, chn.tone);
+
+        auto forward_freq = [&] {
+            assert(freq_idx + 1 < freq_actions.size());
+            freq_cycle = freq_end_cycle;
+            freq_idx += 1;
+            freq_action = freq_actions[freq_idx];
+            freq_end_cycle = freq_cycle + freq_action.cycle_len;
+        };
+        auto forward_ff = [&] {
+            assert(ff_idx + 1 < ff_actions.size());
+            ff_cycle = ff_end_cycle;
+            ff_idx += 1;
+            ff_action = ff_actions[ff_idx];
+            ff_end_cycle = ff_cycle + ff_action.cycle_len;
+        };
+
+        if (action_end_cycle >= cur_cycle + 4) {
+            // There's enough space to output a full tone data.
+            auto resample_action_spline = [&] (auto action, int64_t action_cycle) {
+                auto t1 = double(cur_cycle - action_cycle) / action.cycle_len;
+                auto t2 = double(action_end_cycle - action_cycle) / action.cycle_len;
+                return spline_resample(action.spline, t1, t2);
+            };
+
+            bb_debug("continuous range long enough for normal freq output\n");
+            add_inst(Jaqal_v1_3::freq_pulse(resample_action_spline(freq_action,
+                                                                   freq_cycle),
+                                            action_end_cycle - cur_cycle, trig.get(),
+                                            sync, ff_action.ff),
+                     chn.board, chn.board_chn, modtype, cur_cycle);
+            cur_cycle = action_end_cycle;
+        }
+        else {
+            // The last action is at least 8 cycles long and we eat up at most
+            // 4 cycles from it to handle pending sync so we should have at least
+            // 4 cycles if we are hitting the end.
+            assert(action_end_cycle != total_cycle);
+            assert(cur_cycle + 4 <= total_cycle);
+            bb_debug("continuous range too short for freq\n");
+
+            auto eval_param = [&] (auto &param, int64_t cycle, int64_t cycle_start) {
+                auto dt = cycle - cycle_start;
+                auto len = param.cycle_len;
+                if (len == 0) {
+                    assert(dt == 0);
+                    return param.spline.order0;
+                }
+                return spline_eval(param.spline, double(dt) / len);
+            };
+
+            // Now we don't have enough time to do a tone data
+            // based on the segmentation given to us. We'll manually iterate over
+            // the next 4 cycles and compute a 4 cycle tone data that approximate
+            // the action we need the closest.
+
+            // This is the frequency we should sync at.
+            // We need to record this exactly.
+            // It's even more important than the frequency we left the channel at
+            // since getting this wrong could mean a huge phase shift.
+            double sync_freq = freq_action.spline.order0;
+            double freqs[5];
+            while (true) {
+                auto min_cycle = (int)std::max(freq_cycle - cur_cycle, int64_t(0));
+                auto max_cycle = (int)std::min(freq_end_cycle - cur_cycle, int64_t(4));
+                for (int cycle = min_cycle; cycle <= max_cycle; cycle++)
+                    freqs[cycle] = eval_param(freq_action, cur_cycle + cycle,
+                                              freq_cycle);
+                if (freq_end_cycle >= cur_cycle + 4)
+                    break;
+                forward_freq();
+                if (freq_action.sync) {
+                    sync = true;
+                    sync_freq = freq_action.spline.order0;
+                }
+            }
+            action_end_cycle = freq_end_cycle;
+            while (true) {
+                if (ff_end_cycle >= cur_cycle + 4)
+                    break;
+                forward_ff();
+            }
+            action_end_cycle = std::min(action_end_cycle, ff_end_cycle);
+
+            bb_debug("freq: {%f, %f, %f, %f, %f}\n",
+                     freqs[0], freqs[1], freqs[2], freqs[3], freqs[4]);
+            bb_debug("cur_cycle=%" PRId64 ", end_cycle=%" PRId64 "\n",
+                     cur_cycle, action_end_cycle);
+
+            // We can only sync at the start of the tone data so the start frequency
+            // must be the sync frequency.
+            if (sync) {
+                freqs[0] = sync_freq;
+                bb_debug("sync at %f\n", freqs[0]);
+            }
+            else {
+                bb_debug("no sync\n");
+            }
+            add_inst(Jaqal_v1_3::freq_pulse(approximate_spline(freqs),
+                                            4, trig.get(), sync, ff_action.ff),
+                     chn.board, chn.board_chn, modtype, cur_cycle);
+            cur_cycle += 4;
+            if (cur_cycle != action_end_cycle) {
+                // We've only outputted 4 cycles (instead of outputting
+                // to the end of an action) so in general there may not be anything
+                // to post-process. However, if we happen to be hitting the end
+                // of an action on the 4 cycle mark, we need to do the post-processing
+                // to maintain the invariance that we are not at the end
+                // of the sequence.
+                assert(cur_cycle < action_end_cycle);
+                continue;
+            }
+        }
+        if (action_end_cycle == total_cycle)
+            break;
+        if (action_end_cycle == freq_end_cycle)
+            forward_freq();
+        if (action_end_cycle == ff_end_cycle)
+            forward_ff();
+    }
+}
+
+template<typename P>
+inline __attribute__((always_inline))
+void Jaqalv1_3Generator::process_param(std::span<DDSParamAction> actions, ChnInfo chn,
+                                       int64_t total_cycle, Jaqal_v1_3::ModType modtype,
+                                       P &&pulsef)
+{
+    IsFirst trig;
+    int64_t cur_cycle = 0;
+
+    int64_t action_cycle = 0;
+    int action_idx = 0;
+    auto action = actions[action_idx];
+    int64_t action_end_cycle = action_cycle + action.cycle_len;
+
+    while (true) {
+        // First figure out if we are starting a new action
+        // and how long the current/new action last.
+        int64_t block_end_cycle = limit_cycles(cur_cycle, action_end_cycle);
+
+        bb_debug("find continuous range [%" PRId64 ", %" PRId64
+                 "] for %d on board %d, chn %d, tone %d\n",
+                 cur_cycle, block_end_cycle, int(modtype),
+                 chn.board, chn.board_chn, chn.tone);
+
+        auto forward = [&] {
+            assert(action_idx + 1 < actions.size());
+            action_cycle = block_end_cycle;
+            action_idx += 1;
+            action = actions[action_idx];
+            action_end_cycle = action_cycle + action.cycle_len;
+        };
+
+        if (block_end_cycle >= cur_cycle + 4) {
+            // There's enough space to output a full tone data.
+            auto resample_action_spline = [&] (auto action, int64_t action_cycle) {
+                auto t1 = double(cur_cycle - action_cycle) / action.cycle_len;
+                auto t2 = double(block_end_cycle - action_cycle) / action.cycle_len;
+                return spline_resample(action.spline, t1, t2);
+            };
+
+            bb_debug("continuous range long enough for normal output\n");
+            add_inst(pulsef(resample_action_spline(action, action_cycle),
+                            block_end_cycle - cur_cycle, trig.get(), false, false),
+                     chn.board, chn.board_chn, modtype, cur_cycle);
+            cur_cycle = block_end_cycle;
+        }
+        else {
+            // The last action is at least 8 cycles long and we eat up at most
+            // 4 cycles from it to handle pending sync so we should have at least
+            // 4 cycles if we are hitting the end.
+            assert(block_end_cycle != total_cycle);
+            assert(cur_cycle + 4 <= total_cycle);
+            bb_debug("continuous range too short\n");
+
+            auto eval_param = [&] (auto &param, int64_t cycle, int64_t cycle_start) {
+                auto dt = cycle - cycle_start;
+                auto len = param.cycle_len;
+                if (len == 0) {
+                    assert(dt == 0);
+                    return param.spline.order0;
+                }
+                return spline_eval(param.spline, double(dt) / len);
+            };
+
+            // Now we don't have enough time to do a tone data
+            // based on the segmentation given to us. We'll manually iterate over
+            // the next 4 cycles and compute a 4 cycle tone data that approximate
+            // the action we need the closest.
+
+            double params[5];
+            while (true) {
+                auto min_cycle = (int)std::max(action_cycle - cur_cycle, int64_t(0));
+                auto max_cycle = (int)std::min(action_end_cycle - cur_cycle, int64_t(4));
+                for (int cycle = min_cycle; cycle <= max_cycle; cycle++)
+                    params[cycle] = eval_param(action, cur_cycle + cycle, action_cycle);
+                if (action_end_cycle >= cur_cycle + 4)
+                    break;
+                forward();
+            }
+            block_end_cycle = action_end_cycle;
+
+            bb_debug("param: {%f, %f, %f, %f, %f}\n",
+                     params[0], params[1], params[2], params[3], params[4]);
+            bb_debug("cur_cycle=%" PRId64 ", end_cycle=%" PRId64 "\n",
+                     cur_cycle, block_end_cycle);
+
+            add_inst(pulsef(approximate_spline(params), 4, trig.get(), false, false),
+                     chn.board, chn.board_chn, modtype, cur_cycle);
+            cur_cycle += 4;
+            if (cur_cycle != block_end_cycle) {
+                // We've only outputted 4 cycles (instead of outputting
+                // to the end of an action) so in general there may not be anything
+                // to post-process. However, if we happen to be hitting the end
+                // of an action on the 4 cycle mark, we need to do the post-processing
+                // to maintain the invariance that we are not at the end
+                // of the sequence.
+                assert(cur_cycle < block_end_cycle);
+                continue;
+            }
+        }
+        if (block_end_cycle == total_cycle)
+            break;
+        if (block_end_cycle == action_end_cycle)
+            forward();
+    }
+}
+
+inline __attribute__((always_inline))
+void Jaqalv1_3Generator::process_frame(ChnInfo chn, int64_t total_cycle,
+                                       Jaqal_v1_3::ModType modtype)
+{
+    IsFirst trig;
+    int64_t cur_cycle = 0;
+
+    while (cur_cycle < total_cycle) {
+        int64_t block_end_cycle = limit_cycles(cur_cycle, total_cycle);
+
+        bb_debug("Add frame rotation for range [%" PRId64 ", %" PRId64
+                 "] for %d on board %d, chn %d, tone %d\n",
+                 cur_cycle, block_end_cycle, int(modtype),
+                 chn.board, chn.board_chn, chn.tone);
+
+        assert(block_end_cycle >= cur_cycle + 4);
+
+        add_inst(Jaqal_v1_3::frame_pulse({0, 0, 0, 0}, block_end_cycle - cur_cycle,
+                                         trig.get(), false, false, 0, 0),
+                 chn.board, chn.board_chn, modtype, cur_cycle);
+        cur_cycle = block_end_cycle;
+    }
+}
+
+void Jaqalv1_3Generator::process_channel(ToneBuffer &tone_buffer, int chn,
+                                         int64_t total_cycle)
+{
+    bb_debug("Start outputting jaqal v1.3 insts for channel %d\n", chn);
+    assert(!tone_buffer.params[0].empty());
+    assert(!tone_buffer.params[1].empty());
+    assert(!tone_buffer.params[2].empty());
+
+    ChnInfo chninfo{chn};
+    process_freq(tone_buffer.params[(int)ToneFreq], tone_buffer.ff,
+                 chninfo, total_cycle);
+    process_param(tone_buffer.params[(int)ToneAmp], chninfo, total_cycle,
+                  chninfo.tone == 0 ? Jaqal_v1_3::AMPMOD0 : Jaqal_v1_3::AMPMOD1,
+                  Jaqal_v1_3::amp_pulse);
+    process_param(tone_buffer.params[(int)TonePhase], chninfo, total_cycle,
+                  chninfo.tone == 0 ? Jaqal_v1_3::PHSMOD0 : Jaqal_v1_3::PHSMOD1,
+                  Jaqal_v1_3::phase_pulse);
+    process_frame(chninfo, total_cycle,
+                  chninfo.tone == 0 ? Jaqal_v1_3::FRMROT0 : Jaqal_v1_3::FRMROT1);
+}
+
 inline int ChannelInfo::add_tone_channel(int chn)
 {
     int chn_idx = (int)channels.size();
