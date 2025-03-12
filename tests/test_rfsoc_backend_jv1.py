@@ -20,19 +20,6 @@ global_conf = Config()
 global_conf.add_supported_prefix('artiq')
 global_conf.add_supported_prefix('rfsoc')
 
-def new_seq_compiler(*args):
-    s = seq.Seq(global_conf, *args)
-    comp = backend.SeqCompiler(s)
-    return s, comp
-
-global_gen = Jaqalv1Generator()
-
-def add_rfsoc_backend(comp):
-    rb = RFSOCBackend(global_gen)
-    comp.add_backend('rfsoc', rb)
-    comp.add_backend('artiq', backend.Backend()) # Dummy backend
-    return rb
-
 class ParamPulses:
     def __init__(self):
         self.cycles = 0
@@ -89,46 +76,69 @@ class TonePulses:
     def to_dict(self):
         return dict(freq=self.freq.pulses, amp=self.amp.pulses, phase=self.phase.pulses)
 
+class CompilerTester:
+    def __init__(self):
+        self.gen = Jaqalv1Generator()
+    def new_env(self, *args):
+        s = seq.Seq(global_conf, *args)
+        comp = backend.SeqCompiler(s)
+        rb = RFSOCBackend(self.gen)
+        comp.add_backend('rfsoc', rb)
+        comp.add_backend('artiq', backend.Backend()) # Dummy backend
+        return s, comp, rb
+
+    def get_output(self):
+        pulses = [TonePulses() for _ in range(64)]
+        for board_id in range(4):
+            prefix = self.gen.get_prefix(board_id)
+            sequence = self.gen.get_sequence(board_id)
+            for inst in Jaqal_v1.extract_pulses(prefix + sequence):
+                d = inst.to_dict()
+                assert d['type'] == 'pulse_data'
+                chn = d['channel']
+                tone = d['tone']
+                assert chn >= 0 and chn < 8
+                assert tone == 0 or tone == 1
+                chn_pulses = pulses[(board_id * 8 + chn) * 2 + tone]
+                chn_pulses.add(d)
+
+        stripped_pulses = {}
+        total_cycles = 0
+        for chn in range(32):
+            chn_pulses1 = pulses[chn * 2]
+            chn_pulses2 = pulses[chn * 2 + 1]
+
+            chn_cycles1 = chn_pulses1.get_cycles()
+            chn_cycles2 = chn_pulses2.get_cycles()
+            assert chn_cycles1 == chn_cycles2
+            if chn_cycles1 == 0:
+                continue
+            if total_cycles == 0:
+                total_cycles = chn_cycles1
+            else:
+                assert total_cycles == chn_cycles1
+            stripped_pulses[chn * 2] = chn_pulses1.to_dict()
+            stripped_pulses[chn * 2 + 1] = chn_pulses2.to_dict()
+
+        return stripped_pulses
+
+    def check_output(self, expected):
+        pulses = self.get_output()
+        new_expected = {}
+        for (k, v) in expected.items():
+            newv = {}
+            new_expected[k] = newv
+            for (param, ps) in v.items():
+                newv[param] = approx_pulses(param, ps)
+        assert pulses == new_expected
+
+gentest = CompilerTester()
+
 def Spline(order0=0.0, order1=0.0, order2=0.0, order3=0.0):
     return [order0, order1, order2, order3]
 
 def Pulse(cycles, spline=Spline(), sync=False, ff=False):
     return dict(cycles=cycles, spline=spline, sync=sync, ff=ff)
-
-def get_output():
-    pulses = [TonePulses() for _ in range(64)]
-    for board_id in range(4):
-        prefix = global_gen.get_prefix(board_id)
-        sequence = global_gen.get_sequence(board_id)
-        for inst in Jaqal_v1.extract_pulses(prefix + sequence):
-            d = inst.to_dict()
-            assert d['type'] == 'pulse_data'
-            chn = d['channel']
-            tone = d['tone']
-            assert chn >= 0 and chn < 8
-            assert tone == 0 or tone == 1
-            chn_pulses = pulses[(board_id * 8 + chn) * 2 + tone]
-            chn_pulses.add(d)
-
-    stripped_pulses = {}
-    total_cycles = 0
-    for chn in range(32):
-        chn_pulses1 = pulses[chn * 2]
-        chn_pulses2 = pulses[chn * 2 + 1]
-
-        chn_cycles1 = chn_pulses1.get_cycles()
-        chn_cycles2 = chn_pulses2.get_cycles()
-        assert chn_cycles1 == chn_cycles2
-        if chn_cycles1 == 0:
-            continue
-        if total_cycles == 0:
-            total_cycles = chn_cycles1
-        else:
-            assert total_cycles == chn_cycles1
-        stripped_pulses[chn * 2] = chn_pulses1.to_dict()
-        stripped_pulses[chn * 2 + 1] = chn_pulses2.to_dict()
-
-    return stripped_pulses
 
 def approx_pulses(param, ps):
     if param == 'freq':
@@ -144,16 +154,6 @@ def approx_pulses(param, ps):
         p['spline'] = pytest.approx(p['spline'], abs=_abs, rel=1e-9)
         return p
     return [approx_pulse(p) for p in ps]
-
-def check_output(expected):
-    pulses = get_output()
-    new_expected = {}
-    for (k, v) in expected.items():
-        newv = {}
-        new_expected[k] = newv
-        for (param, ps) in v.items():
-            newv[param] = approx_pulses(param, ps)
-    assert pulses == new_expected
 
 def check_bt(exc, max_bt, *names):
     fnames = [tb.name for tb in exc.traceback]
@@ -346,14 +346,12 @@ class DivLengthFunction(RampFunction):
 
 @with_rfsoc_params
 def test_channels(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     assert not rb.has_output
     comp.finalize()
     assert not rb.has_output
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     assert s.get_channel_id('artiq/ttl0') == 0
     assert s.get_channel_id('rfsoc/dds1/0/amp') == 1
     assert s.get_channel_id('rfsoc/dds1/1/freq') == 2
@@ -375,14 +373,14 @@ def test_channels(max_bt):
                                 8: (3, 'freq')}
     comp.runtime_finalize(1)
     with pytest.raises(IndexError, match="Board index should be in \\[0, 3\\]"):
-        global_gen.get_prefix(-1)
+        gentest.gen.get_prefix(-1)
     with pytest.raises(IndexError, match="Board index should be in \\[0, 3\\]"):
-        global_gen.get_prefix(4)
+        gentest.gen.get_prefix(4)
     with pytest.raises(IndexError, match="Board index should be in \\[0, 3\\]"):
-        global_gen.get_sequence(-1)
+        gentest.gen.get_sequence(-1)
     with pytest.raises(IndexError, match="Board index should be in \\[0, 3\\]"):
-        global_gen.get_sequence(4)
-    check_output({
+        gentest.gen.get_sequence(4)
+    gentest.check_output({
         0: {
           'freq': [Pulse(8)],
           'amp': [Pulse(8)],
@@ -415,46 +413,39 @@ def test_channels(max_bt):
         },
     })
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     assert s.get_channel_id('rfsoc/dds0/0') == 0
     with pytest.raises(ValueError, match='Invalid channel name rfsoc/dds0/0'):
         comp.finalize()
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     assert s.get_channel_id('rfsoc/dds0/0/freq/a') == 0
     with pytest.raises(ValueError, match='Invalid channel name rfsoc/dds0/0/freq/a'):
         comp.finalize()
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     assert s.get_channel_id('rfsoc/ch0/0/freq') == 0
     with pytest.raises(ValueError, match='Invalid channel name rfsoc/ch0/0/freq'):
         comp.finalize()
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     assert s.get_channel_id('rfsoc/dds50/0/freq') == 0
     with pytest.raises(ValueError, match='Invalid channel name rfsoc/dds50/0/freq'):
         comp.finalize()
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     assert s.get_channel_id('rfsoc/dds10/2/freq') == 0
     with pytest.raises(ValueError, match='Invalid channel name rfsoc/dds10/2/freq'):
         comp.finalize()
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     assert s.get_channel_id('rfsoc/dds10/0/param') == 0
     with pytest.raises(ValueError, match='Invalid channel name rfsoc/dds10/0/param'):
         comp.finalize()
 
 @with_rfsoc_params
 def test_output1(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     s.add_step(0.01) \
       .pulse('rfsoc/dds0/1/amp', 0.2) \
       .set('rfsoc/dds0/1/freq', 100e6) \
@@ -521,7 +512,7 @@ def test_output1(max_bt):
     assert action.bool_value
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(4096008)],
           'amp': [Pulse(4096008)],
@@ -538,8 +529,7 @@ def test_output1(max_bt):
 @with_rfsoc_params
 def test_output2(max_bt):
     b1 = True
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     s.conditional(rtval.new_extern(lambda: b1)) \
       .add_step(rtval.new_extern(lambda: 0.01)) \
       .pulse('rfsoc/dds0/1/amp', rtval.new_extern(lambda: 0.2)) \
@@ -596,7 +586,7 @@ def test_output2(max_bt):
     assert action.seq_time == 0
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(4096008)],
           'amp': [Pulse(4096008)],
@@ -612,7 +602,7 @@ def test_output2(max_bt):
 
     b1 = False
     comp.runtime_finalize(2)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(8)],
           'amp': [Pulse(8)],
@@ -627,8 +617,7 @@ def test_output2(max_bt):
 
 @with_rfsoc_params
 def test_output3(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     s.conditional(False) \
       .add_step(rtval.new_extern(lambda: 0.01)) \
       .pulse('rfsoc/dds0/1/amp', rtval.new_extern(lambda: 0.2)) \
@@ -646,7 +635,7 @@ def test_output3(max_bt):
     assert len(channels.channels[0].actions[3]) == 0 # ff
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(8)],
           'amp': [Pulse(8)],
@@ -661,8 +650,7 @@ def test_output3(max_bt):
 
 @with_rfsoc_params
 def test_ramp_output1(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     ramp1 = StaticFunction()
     ramp2 = StaticFunction()
     s.add_step(0.01) \
@@ -721,7 +709,7 @@ def test_ramp_output1(max_bt):
     assert len(channels.channels[0].actions[3]) == 0 # ff
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(4096008)],
           'amp': [Pulse(4096008)],
@@ -740,8 +728,7 @@ def test_ramp_output1(max_bt):
 
 @with_rfsoc_params
 def test_ramp_output2(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     ramp1 = StaticFunction()
     ramp2 = StaticFunction()
     s.add_step(rtval.new_extern(lambda: 0.01)) \
@@ -794,7 +781,7 @@ def test_ramp_output2(max_bt):
     assert len(channels.channels[0].actions[3]) == 0 # ff
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(4096008)],
           'amp': [Pulse(4096008)],
@@ -813,8 +800,7 @@ def test_ramp_output2(max_bt):
 
 @with_rfsoc_params
 def test_ramp_output3(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     ramp1 = LinearRampNoSeg(0.1, 0.2)
     ramp2 = LinearRamp(0.1, 0.2)
     ramp3 = SeqCubicSpline(0.2, 0.1, 0.9, 0.3)
@@ -826,7 +812,7 @@ def test_ramp_output3(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(2048008)],
           'amp': [Pulse(2048008)],
@@ -864,8 +850,7 @@ def test_ramp_output3(max_bt):
 
 @with_rfsoc_params
 def test_ramp_output4(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     ramp1 = LinearRampNoSeg(0.1, 0.2)
     ramp2 = SeqCubicSpline(0.2, 0.1, 0.9, 0.3)
     s.add_step(5e-3) \
@@ -876,7 +861,7 @@ def test_ramp_output4(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(2048008)],
           'amp': [Pulse(2048008)],
@@ -904,8 +889,7 @@ def test_ramp_output4(max_bt):
 
 @with_rfsoc_params
 def test_ramp_output5(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     s.set('rfsoc/dds0/1/amp', 0.2)
     s.set('rfsoc/dds2/0/freq', 80e6)
     s.set('rfsoc/dds0/1/phase', 0.9)
@@ -918,7 +902,7 @@ def test_ramp_output5(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(2048008)],
           'amp': [Pulse(2048008, Spline(0.2))],
@@ -951,8 +935,7 @@ def test_ramp_output5(max_bt):
 
 @with_rfsoc_params
 def test_ramp_output6(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     @s.add_background
     def amp_step(s):
         s.add_step(4e-3) \
@@ -984,7 +967,7 @@ def test_ramp_output6(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [
             Pulse(409600),
@@ -1068,15 +1051,14 @@ def test_ramp_output6(max_bt):
 
 @with_rfsoc_params
 def test_ramp_output7(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     s.add_step(1) \
       .set('rfsoc/dds0/0/amp', Blackman(1.0)) \
       .set('rfsoc/dds0/1/amp', 1.0)
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [
             Pulse(25600000),
@@ -1161,8 +1143,7 @@ def test_ramp_output7(max_bt):
 
 @with_rfsoc_params
 def test_short_ramp_output1(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     ramp1 = StaticFunction()
     ramp2 = StaticFunction()
     s.add_step(200e-9) \
@@ -1221,7 +1202,7 @@ def test_short_ramp_output1(max_bt):
     assert len(channels.channels[0].actions[3]) == 0 # ff
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(90)],
           'amp': [Pulse(90)],
@@ -1240,8 +1221,7 @@ def test_short_ramp_output1(max_bt):
 
 @with_rfsoc_params
 def test_short_ramp_output2(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     ramp1 = LinearRampNoSeg(0.1, 0.2)
     ramp2 = LinearRamp(0.1, 0.2)
     s.add_step(5e-9) \
@@ -1251,7 +1231,7 @@ def test_short_ramp_output2(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(10)],
           'amp': [Pulse(10)],
@@ -1276,8 +1256,7 @@ def test_short_ramp_output2(max_bt):
 
 @with_rfsoc_params
 def test_arg_error(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     st = s.add_step(0.01)
     def jasd89jfkalsdfasd():
         st.pulse('rfsoc/dds0/1/amp', 0.2, sth=0.1)
@@ -1289,8 +1268,7 @@ def test_arg_error(max_bt):
 
 @with_rfsoc_params
 def test_ff_ramp(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     st = s.add_step(0.01)
     def ja98fas923ncf():
         st.pulse('rfsoc/dds0/1/ff', StaticFunction())
@@ -1302,8 +1280,7 @@ def test_ff_ramp(max_bt):
 
 @with_rfsoc_params
 def test_rampfunc_error(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     st = s.add_step(0.01)
     def jiasd9f89asd():
         st.pulse('rfsoc/dds0/1/freq', ErrorSegment())
@@ -1313,8 +1290,7 @@ def test_rampfunc_error(max_bt):
         comp.runtime_finalize(1)
     check_bt(exc, max_bt, 'jiasd9f89asd')
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     st = s.add_step(0.01)
     def j98asdf():
         st.pulse('rfsoc/dds0/1/freq', ErrorEval())
@@ -1323,8 +1299,7 @@ def test_rampfunc_error(max_bt):
         comp.finalize()
     check_bt(exc, max_bt, 'j98asdf')
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     st = s.add_step(0.01)
     def j89asdf():
         st.pulse('rfsoc/dds0/1/freq', CustomSegment((-0.1,)))
@@ -1334,8 +1309,7 @@ def test_rampfunc_error(max_bt):
         comp.runtime_finalize(1)
     check_bt(exc, max_bt, 'j89asdf')
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     st = s.add_step(0.01)
     def ajs89dfjasvsrsdsfa():
         st.pulse('rfsoc/dds0/1/freq', CustomSegment((0,)))
@@ -1346,8 +1320,7 @@ def test_rampfunc_error(max_bt):
         comp.runtime_finalize(1)
     check_bt(exc, max_bt, 'ajs89dfjasvsrsdsfa')
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     st = s.add_step(0.01)
     def ajs89dfjasvsrsdsf2():
         st.pulse('rfsoc/dds0/1/freq', CustomSegment((0.005, 0.002)))
@@ -1358,8 +1331,7 @@ def test_rampfunc_error(max_bt):
         comp.runtime_finalize(1)
     check_bt(exc, max_bt, 'ajs89dfjasvsrsdsf2')
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     st = s.add_step(0.01)
     def jas8faslj34ajsdfa8s9():
         st.pulse('rfsoc/dds0/1/freq', CustomSegment((0.005, 0.01)))
@@ -1370,8 +1342,7 @@ def test_rampfunc_error(max_bt):
         comp.runtime_finalize(1)
     check_bt(exc, max_bt, 'jas8faslj34ajsdfa8s9')
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     st = s.add_step(0.01)
     def jaksdjf8a9sdfjas():
         st.pulse('rfsoc/dds0/1/freq', CustomSegment(([],)))
@@ -1383,8 +1354,7 @@ def test_rampfunc_error(max_bt):
 
 @with_rfsoc_params
 def test_val_error(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     # This causes a error to be thrown when converting to boolean
     def j893ajjaks988394():
         s.set('rfsoc/dds0/0/ff', np.array([1, 2]))
@@ -1393,8 +1363,7 @@ def test_val_error(max_bt):
         comp.finalize()
     check_bt(exc, max_bt, 'j893ajjaks988394')
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     # This causes a error to be thrown when converting to float
     def a88f2398fasd():
         s.set('rfsoc/dds3/0/freq', [1, 2])
@@ -1403,8 +1372,7 @@ def test_val_error(max_bt):
         comp.finalize()
     check_bt(exc, max_bt, 'a88f2398fasd')
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     s.set('rfsoc/dds0/0/ff', True)
     s.add_step(0.01) \
       .pulse('rfsoc/dds1/1/freq', rtval.new_extern(lambda: 1.23)) \
@@ -1418,8 +1386,7 @@ def test_val_error(max_bt):
         comp.runtime_finalize(1)
     check_bt(exc, max_bt, 'js89j308joro82qwe')
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     s.set('rfsoc/dds0/0/ff', True)
     s.add_step(0.01) \
       .pulse('rfsoc/dds1/1/freq', rtval.new_extern(lambda: 1.23)) \
@@ -1436,8 +1403,7 @@ def test_val_error(max_bt):
     def error_callback():
         raise ValueError("AAABBBCCC")
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     s.set('rfsoc/dds0/0/ff', True)
     s.add_step(0.01) \
       .pulse('rfsoc/dds1/1/freq', rtval.new_extern(lambda: 1.23)) \
@@ -1450,8 +1416,7 @@ def test_val_error(max_bt):
         comp.runtime_finalize(1)
     check_bt(exc, max_bt, 'oqo8we9813fasd')
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     s.set('rfsoc/dds0/0/ff', True)
     s.add_step(0.01) \
       .pulse('rfsoc/dds1/1/freq', rtval.new_extern(lambda: 1.23)) \
@@ -1466,8 +1431,7 @@ def test_val_error(max_bt):
 
 @with_rfsoc_params
 def test_ff_output(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
 
     s.add_step(1e-3) \
       .set('rfsoc/dds0/0/ff', False)
@@ -1478,7 +1442,7 @@ def test_ff_output(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(409600), Pulse(819208, ff=True)],
           'amp': [Pulse(409600), Pulse(819208)],
@@ -1491,8 +1455,7 @@ def test_ff_output(max_bt):
         },
     })
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
 
     s.add_step(1e-3) \
       .set('rfsoc/dds0/0/ff', False)
@@ -1503,7 +1466,7 @@ def test_ff_output(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(409600), Pulse(409600, ff=True),
                    Pulse(409608, sync=True, ff=True)],
@@ -1519,8 +1482,7 @@ def test_ff_output(max_bt):
 
 @with_rfsoc_params
 def test_param_output(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
 
     s.add_step(1e-3) \
       .set('rfsoc/dds0/0/amp', 0)
@@ -1531,7 +1493,7 @@ def test_param_output(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(409600), Pulse(819208)],
           'amp': [Pulse(409600), Pulse(819208, Spline(0.2))],
@@ -1544,8 +1506,7 @@ def test_param_output(max_bt):
         },
     })
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
 
     s.add_step(1e-3) \
       .set('rfsoc/dds0/0/amp', 0)
@@ -1556,7 +1517,7 @@ def test_param_output(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(409600), Pulse(409600), Pulse(409608, sync=True)],
           'amp': [Pulse(409600), Pulse(409600, Spline(0.2)),
@@ -1572,8 +1533,7 @@ def test_param_output(max_bt):
 
 @with_rfsoc_params
 def test_sync_merge(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
 
     s.set('rfsoc/dds0/0/freq', 100e6, sync=True)
     s.wait(0)
@@ -1581,7 +1541,7 @@ def test_sync_merge(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(8, Spline(120e6), sync=True)],
           'amp': [Pulse(8)],
@@ -1594,8 +1554,7 @@ def test_sync_merge(max_bt):
         },
     })
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
 
     s.set('rfsoc/dds0/0/freq', 100e6, sync=True)
     s.wait(100e-12)
@@ -1603,7 +1562,7 @@ def test_sync_merge(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(8, Spline(120e6), sync=True)],
           'amp': [Pulse(8)],
@@ -1616,8 +1575,7 @@ def test_sync_merge(max_bt):
         },
     })
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
 
     s.set('rfsoc/dds0/0/freq', 100e6, sync=True)
     s.wait(2e-9)
@@ -1625,7 +1583,7 @@ def test_sync_merge(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(4, Spline(120e6), sync=True), Pulse(5, Spline(120e6))],
           'amp': [Pulse(4), Pulse(5)],
@@ -1638,8 +1596,7 @@ def test_sync_merge(max_bt):
         },
     })
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
 
     s.set('rfsoc/dds0/0/freq', 100e6, sync=True)
     s.wait(0)
@@ -1647,7 +1604,7 @@ def test_sync_merge(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(4, Spline(100e6, 110e6, -180e6, 90e6), sync=True),
                    Pulse(4, Spline(120e6))],
@@ -1661,8 +1618,7 @@ def test_sync_merge(max_bt):
         },
     })
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
 
     s.set('rfsoc/dds0/0/freq', 100e6, sync=True)
     s.wait(100e-12)
@@ -1670,7 +1626,7 @@ def test_sync_merge(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(4, Spline(100e6, 110e6, -180e6, 90e6), sync=True),
                    Pulse(4, Spline(120e6))],
@@ -1684,8 +1640,7 @@ def test_sync_merge(max_bt):
         },
     })
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
 
     s.set('rfsoc/dds0/0/freq', 100e6, sync=True)
     s.wait(2e-9)
@@ -1693,7 +1648,7 @@ def test_sync_merge(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(4, Spline(100e6, 110e6, -180e6, 90e6), sync=True),
                    Pulse(5, Spline(120e6))],
@@ -1712,8 +1667,7 @@ def test_dyn_seq1(max_bt):
     b1 = True
     v1 = 0.001
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     s.add_step(0.0005) \
       .pulse('rfsoc/dds0/0/amp', 0.2)
     s.conditional(rtval.new_extern(lambda: b1)) \
@@ -1724,7 +1678,7 @@ def test_dyn_seq1(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(204800), Pulse(409600), Pulse(8)],
           'amp': [Pulse(204800, Spline(0.2)),
@@ -1742,7 +1696,7 @@ def test_dyn_seq1(max_bt):
     b1 = False
     v1 = 0.001
     comp.runtime_finalize(2)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(204800), Pulse(8)],
           'amp': [Pulse(204800, Spline(0.2)), Pulse(8, Spline(0.5))],
@@ -1758,7 +1712,7 @@ def test_dyn_seq1(max_bt):
     b1 = True
     v1 = 0
     comp.runtime_finalize(3)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(204800), Pulse(8)],
           'amp': [Pulse(204800, Spline(0.2)), Pulse(8, Spline(0.5))],
@@ -1774,7 +1728,7 @@ def test_dyn_seq1(max_bt):
     b1 = False
     v1 = 0
     comp.runtime_finalize(4)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(204800), Pulse(8)],
           'amp': [Pulse(204800, Spline(0.2)), Pulse(8, Spline(0.5))],
@@ -1789,8 +1743,7 @@ def test_dyn_seq1(max_bt):
 
 @with_rfsoc_params
 def test_tight_output1(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     s.add_step(2.441e-9) \
       .pulse('rfsoc/dds0/1/amp', 0.1) \
       .set('rfsoc/dds0/1/phase', 0.2) \
@@ -1816,7 +1769,7 @@ def test_tight_output1(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(12)],
           'amp': [Pulse(12)],
@@ -1844,8 +1797,7 @@ def test_tight_output1(max_bt):
 
 @with_rfsoc_params
 def test_tight_output2(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     s.add_step(2.441e-9) \
       .pulse('rfsoc/dds0/1/amp', 0.1, sync=True) \
       .set('rfsoc/dds0/1/phase', 0.2) \
@@ -1871,7 +1823,7 @@ def test_tight_output2(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(12)],
           'amp': [Pulse(12)],
@@ -1899,8 +1851,7 @@ def test_tight_output2(max_bt):
 
 @with_rfsoc_params
 def test_tight_output3(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     s.add_step(2.441e-9) \
       .pulse('rfsoc/dds0/1/amp', 0.1) \
       .set('rfsoc/dds0/1/phase', 0.2) \
@@ -1926,7 +1877,7 @@ def test_tight_output3(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(12)],
           'amp': [Pulse(12)],
@@ -1953,8 +1904,7 @@ def test_tight_output3(max_bt):
 
 @with_rfsoc_params
 def test_tight_output4(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     s.add_step(2.441e-9) \
       .pulse('rfsoc/dds0/1/amp', 0.1) \
       .set('rfsoc/dds0/1/phase', 0.2) \
@@ -1980,7 +1930,7 @@ def test_tight_output4(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(12)],
           'amp': [Pulse(12)],
@@ -2008,8 +1958,7 @@ def test_tight_output4(max_bt):
 
 @with_rfsoc_params
 def test_tight_output5(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     s.add_step(2.441e-9) \
       .pulse('rfsoc/dds0/1/amp', 0.1) \
       .set('rfsoc/dds0/1/phase', 0.2) \
@@ -2035,7 +1984,7 @@ def test_tight_output5(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(12)],
           'amp': [Pulse(12)],
@@ -2064,15 +2013,13 @@ def test_tight_output5(max_bt):
 
 @with_rfsoc_params
 def test_dds_delay_rt_error(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     rb.set_dds_delay(0, rtval.new_extern(lambda: -0.001))
     comp.finalize()
     with pytest.raises(ValueError, match="DDS time offset -0.001 cannot be negative."):
         comp.runtime_finalize(1)
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     rb.set_dds_delay(1, rtval.new_extern(lambda: 1))
     comp.finalize()
     with pytest.raises(ValueError,
@@ -2089,8 +2036,7 @@ def check_dds_delay(max_bt, use_rt):
         if use_rt:
             return rtval.new_extern(lambda: v)
         return v
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     with pytest.raises(ValueError, match="DDS time offset -0.001 cannot be negative."):
         rb.set_dds_delay(0, -0.001)
     with pytest.raises(ValueError,
@@ -2120,7 +2066,7 @@ def check_dds_delay(max_bt, use_rt):
             0: 1000_000,
             1: 1000_000_000
         }
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(410), Pulse(409600), Pulse(409198)],
           'amp': [Pulse(410), Pulse(409600, Spline(0.1)), Pulse(409198)],
@@ -2155,16 +2101,14 @@ def check_dds_delay(max_bt, use_rt):
 
 @with_rfsoc_params
 def test_cond_ramp_error(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     s.conditional(False).add_step(1) \
       .set('rfsoc/dds0/0/amp', ErrorEval()) \
       .pulse('rfsoc/dds0/1/amp', ErrorEval())
     comp.finalize()
     comp.runtime_finalize(1)
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     s.conditional(rtval.new_extern(lambda: False)) \
       .add_step(rtval.new_extern(lambda: 0)) \
       .set('rfsoc/dds0/0/amp', DivLengthFunction()) \
@@ -2172,8 +2116,7 @@ def test_cond_ramp_error(max_bt):
     comp.finalize()
     comp.runtime_finalize(1)
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     s.add_step(0) \
       .set('rfsoc/dds0/0/amp', Blackman(1)) \
       .pulse('rfsoc/dds0/1/amp', Blackman(1)) \
@@ -2182,8 +2125,7 @@ def test_cond_ramp_error(max_bt):
     comp.finalize()
     comp.runtime_finalize(1)
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     s.add_step(rtval.new_extern(lambda: 0)) \
       .set('rfsoc/dds0/0/amp', Blackman(1)) \
       .pulse('rfsoc/dds0/1/amp', Blackman(1)) \
@@ -2194,8 +2136,7 @@ def test_cond_ramp_error(max_bt):
 
 @with_rfsoc_params
 def test_cross_channel_sync1(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     @s.add_background
     def other_step(s):
         s.wait(2.5e-3)
@@ -2209,7 +2150,7 @@ def test_cross_channel_sync1(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(4096008)],
           'amp': [Pulse(4096008)],
@@ -2222,8 +2163,7 @@ def test_cross_channel_sync1(max_bt):
         },
     })
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     @s.add_background
     def other_step(s):
         s.wait(2.5e-3)
@@ -2237,7 +2177,7 @@ def test_cross_channel_sync1(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(4096008)],
           'amp': [Pulse(4096008)],
@@ -2258,8 +2198,7 @@ def test_cross_channel_sync1(max_bt):
 
 @with_rfsoc_params
 def test_cross_channel_sync2(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     @s.add_background
     def amp_step(s):
         s.wait(5e-6)
@@ -2273,7 +2212,7 @@ def test_cross_channel_sync2(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(4104)],
           'amp': [Pulse(4104)],
@@ -2286,8 +2225,7 @@ def test_cross_channel_sync2(max_bt):
         },
     })
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     @s.add_step
     def freq_step(s):
         s.wait(5e-6)
@@ -2298,7 +2236,7 @@ def test_cross_channel_sync2(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(4104)],
           'amp': [Pulse(4104)],
@@ -2311,8 +2249,7 @@ def test_cross_channel_sync2(max_bt):
         },
     })
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     @s.add_step
     def freq_step(s):
         s.wait(5e-6)
@@ -2323,7 +2260,7 @@ def test_cross_channel_sync2(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(4104)],
           'amp': [Pulse(4104)],
@@ -2340,8 +2277,7 @@ def test_cross_channel_sync2(max_bt):
 
 @with_rfsoc_params
 def test_use_all_channels(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     assert not rb.use_all_channels
     rb.use_all_channels = True
     s.add_step(5e-6) \
@@ -2355,7 +2291,7 @@ def test_use_all_channels(max_bt):
         'amp': [Pulse(2056)],
         'phase': [Pulse(2056)]
     }
-    check_output({
+    gentest.check_output({
         0: unused,
         1: {
           'freq': [Pulse(2056, Spline(100e6))],
@@ -2425,8 +2361,7 @@ def test_use_all_channels(max_bt):
         62: unused,
         63: unused,
     })
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     assert not rb.use_all_channels
     rb.use_all_channels = True
     s.wait(5e-6)
@@ -2438,19 +2373,18 @@ def test_use_all_channels(max_bt):
         'amp': [Pulse(2056)],
         'phase': [Pulse(2056)]
     }
-    check_output({})
+    gentest.check_output({})
 
 @with_rfsoc_params
 def test_long_wait(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     s.add_step(5000) \
       .set('rfsoc/dds0/1/freq', 100e6) \
       .set('rfsoc/dds0/1/amp', 0.2)
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(1024000000004), Pulse(1024000000004)],
           'amp': [Pulse(1024000000004), Pulse(1024000000004)],
@@ -2465,15 +2399,14 @@ def test_long_wait(max_bt):
         },
     })
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     s.add_step(5000) \
       .set('rfsoc/dds0/1/freq', LinearRamp(50e6, 100e6), sync=True) \
       .set('rfsoc/dds0/1/amp', 0.2)
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(1024000000004), Pulse(1024000000004)],
           'amp': [Pulse(1024000000004), Pulse(1024000000004)],
@@ -2491,15 +2424,14 @@ def test_long_wait(max_bt):
         },
     })
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    s, comp, rb = gentest.new_env(max_bt)
     s.add_step(10000) \
       .set('rfsoc/dds0/1/freq', 100e6) \
       .set('rfsoc/dds0/1/amp', 0.2)
     comp.finalize()
 
     comp.runtime_finalize(1)
-    check_output({
+    gentest.check_output({
         0: {
           'freq': [Pulse(1099511627775), Pulse(1099511627775),
                    Pulse(948488372229), Pulse(948488372229)],
