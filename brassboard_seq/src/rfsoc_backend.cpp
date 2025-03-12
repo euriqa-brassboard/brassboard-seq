@@ -1840,6 +1840,7 @@ Generator *new_jaqal_pulse_compiler_generator()
     return new JaqalPulseCompilerGen;
 }
 
+__attribute__((flatten))
 static inline void chn_add_tone_data(auto &channel_gen, int channel, int tone,
                                      int64_t duration_cycles,
                                      cubic_spline_t freq, cubic_spline_t amp,
