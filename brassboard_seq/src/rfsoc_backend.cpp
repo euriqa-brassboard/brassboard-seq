@@ -1876,6 +1876,10 @@ void JaqalPulseCompilerGen::add_tone_data(int chn, int64_t duration_cycles,
     auto tone = chn & 1;
     auto &channel_gen = board_gen.channels[channel];
     int64_t max_cycles = (int64_t(1) << 40) - 1;
+    auto clear_edge_flags = [] (auto &flags) {
+        flags.wait_trigger = false;
+        flags.sync = false;
+    };
     if (duration_cycles > max_cycles) [[unlikely]] {
         int64_t tstart = 0;
         auto resample = [&] (auto spline, int64_t tstart, int64_t tend) {
@@ -1888,7 +1892,7 @@ void JaqalPulseCompilerGen::add_tone_data(int chn, int64_t duration_cycles,
                               resample(amp, tstart, tend),
                               resample(phase, tstart, tend),
                               flags, cur_cycle + tstart);
-            flags.wait_trigger = false;
+            clear_edge_flags(flags);
             tstart = tend;
         }
         int64_t tmid = (duration_cycles - tstart) / 2 + tstart;
@@ -1897,7 +1901,7 @@ void JaqalPulseCompilerGen::add_tone_data(int chn, int64_t duration_cycles,
                           resample(amp, tstart, tmid),
                           resample(phase, tstart, tmid),
                           flags, cur_cycle + tstart);
-        flags.wait_trigger = false;
+        clear_edge_flags(flags);
         chn_add_tone_data(channel_gen, channel, tone, duration_cycles - tmid,
                           resample(freq, tmid, duration_cycles),
                           resample(amp, tmid, duration_cycles),

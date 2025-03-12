@@ -2478,7 +2478,7 @@ def test_long_wait(max_bt):
     s, comp = new_seq_compiler(max_bt)
     rb = add_rfsoc_backend(comp)
     s.add_step(5000) \
-      .set('rfsoc/dds0/1/freq', LinearRamp(50e6, 100e6)) \
+      .set('rfsoc/dds0/1/freq', LinearRamp(50e6, 100e6), sync=True) \
       .set('rfsoc/dds0/1/amp', 0.2)
     comp.finalize()
 
@@ -2490,7 +2490,8 @@ def test_long_wait(max_bt):
           'phase': [Pulse(1024000000004), Pulse(1024000000004)]
         },
         1: {
-          'freq': [Pulse(1024000000000, pytest.approx(Spline(50e6, 25e6), abs=0.1)),
+          'freq': [Pulse(1024000000000, pytest.approx(Spline(50e6, 25e6), abs=0.1),
+                         sync=True),
                    Pulse(1024000000000, pytest.approx(Spline(75e6, 25e6), abs=0.1)),
                    Pulse(8, Spline(100e6))],
           'amp': [Pulse(1024000000000, Spline(0.2)),
