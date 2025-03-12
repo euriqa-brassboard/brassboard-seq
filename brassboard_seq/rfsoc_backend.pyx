@@ -52,6 +52,11 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
         object get_prefix(int n) except +
         object get_sequence(int n) except +
 
+    Generator *new_jaqalv1_3_stream_generator() except +
+    cppclass Jaqalv1_3StreamGen(Generator):
+        object get_prefix(int n) except +
+        object get_sequence(int n) except +
+
     struct TimedID:
         int64_t time
         int16_t id
@@ -216,6 +221,18 @@ cdef class Jaqalv1Generator(RFSOCGenerator):
 
     def get_sequence(self, n):
         return (<JaqalPulseCompilerGen*>self.gen.get()).get_sequence(n)
+
+@cython.auto_pickle(False)
+@cython.final
+cdef class Jaqalv1_3Generator(RFSOCGenerator):
+    def __cinit__(self):
+        self.gen.reset(new_jaqalv1_3_stream_generator())
+
+    def get_prefix(self, n):
+        return (<Jaqalv1_3StreamGen*>self.gen.get()).get_prefix(n)
+
+    def get_sequence(self, n):
+        return (<Jaqalv1_3StreamGen*>self.gen.get()).get_sequence(n)
 
 cdef PyObject *raise_invalid_channel(tuple path) except NULL:
     name = '/'.join(path)

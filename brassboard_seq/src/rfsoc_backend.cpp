@@ -359,6 +359,11 @@ convert_pdq_spline_phase(std::array<double,4> sp, int64_t cycles)
 
 using JaqalInst = Bits<int64_t,4>;
 
+struct TimedInst {
+    int64_t time;
+    JaqalInst inst;
+};
+
 struct PulseAllocator {
     std::map<JaqalInst,int> pulses;
 
@@ -3687,7 +3692,7 @@ void Jaqalv1_3Generator::process_param(std::span<DDSParamAction> actions, ChnInf
 
         auto forward = [&] {
             assert(action_idx + 1 < actions.size());
-            action_cycle = block_end_cycle;
+            action_cycle = action_end_cycle;
             action_idx += 1;
             action = actions[action_idx];
             action_end_cycle = action_cycle + action.cycle_len;
@@ -3811,6 +3816,61 @@ void Jaqalv1_3Generator::process_channel(ToneBuffer &tone_buffer, int chn,
                   Jaqal_v1_3::phase_pulse);
     process_frame(chninfo, total_cycle,
                   chninfo.tone == 0 ? Jaqal_v1_3::FRMROT0 : Jaqal_v1_3::FRMROT1);
+}
+
+struct Jaqalv1_3StreamGen: Jaqalv1_3Generator {
+    __attribute__((returns_nonnull)) PyObject *get_prefix(int n) const
+    {
+        if (n < 0 || n >= 4)
+            throw std::out_of_range("Board index should be in [0, 3]");
+        static auto empty_bytes = throw_if_not(PyBytes_FromStringAndSize(nullptr, 0));
+        return py_newref(empty_bytes);
+    }
+
+    __attribute__((returns_nonnull)) PyObject *get_sequence(int n) const
+    {
+        if (n < 0 || n >= 4)
+            throw std::out_of_range("Board index should be in [0, 3]");
+        auto &insts = board_insts[n];
+        auto ninsts = insts.size();
+        static constexpr auto instsz = sizeof(JaqalInst);
+        py_object res(throw_if_not(PyBytes_FromStringAndSize(nullptr, ninsts * instsz)));
+        auto ptr = PyBytes_AS_STRING(res.get());
+        for (size_t i = 0; i < ninsts; i++)
+            memcpy(&ptr[i * instsz], &insts[i].inst, instsz);
+        return res.release();
+    }
+private:
+    std::vector<TimedInst> board_insts[4];
+    void add_inst(const JaqalInst &inst, int board, int board_chn,
+                  Jaqal_v1_3::ModType mod, int64_t cycle) override
+    {
+        assert(board >= 0 && board < 4);
+        auto &insts = board_insts[board];
+        auto real_inst = Jaqal_v1_3::apply_channel_mask(inst, 1 << board_chn);
+        real_inst = Jaqal_v1_3::apply_modtype_mask(real_inst,
+                                                   Jaqal_v1_3::ModTypeMask(1 << mod));
+        insts.push_back({ cycle, Jaqal_v1_3::stream(real_inst) });
+    }
+    void start() override
+    {
+        for (auto &insts: board_insts) {
+            insts.clear();
+        }
+    }
+    void end() override
+    {
+        for (auto &insts: board_insts) {
+            std::ranges::stable_sort(insts, [] (auto &a, auto &b) {
+                return a.time < b.time;
+            });
+        }
+    }
+};
+
+Generator *new_jaqalv1_3_stream_generator()
+{
+    return new Jaqalv1_3StreamGen;
 }
 
 inline int ChannelInfo::add_tone_channel(int chn)
