@@ -155,15 +155,6 @@ def check_output(expected):
             newv[param] = approx_pulses(param, ps)
     assert pulses == new_expected
 
-def with_params(*params):
-    def deco(f):
-        def wrapper():
-            for param in params:
-                f(*param)
-        wrapper.__name__ = f.__name__
-        return wrapper
-    return deco
-
 def check_bt(exc, max_bt, *names):
     fnames = [tb.name for tb in exc.traceback]
     for name in names:
@@ -172,7 +163,7 @@ def check_bt(exc, max_bt, *names):
         else:
             assert name in fnames
 
-with_rfsoc_params = with_params((0,), (5,), (500,))
+with_rfsoc_params = pytest.mark.parametrize("max_bt", [0, 5, 500])
 
 def get_channel_info(rb, s):
     channels = rfsoc_utils.get_channel_info(rb)

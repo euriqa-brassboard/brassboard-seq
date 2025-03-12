@@ -11,15 +11,6 @@ global_conf.add_supported_prefix('artiq')
 def new_seq(*args):
     return seq.Seq(global_conf, *args)
 
-def with_params(*params):
-    def deco(f):
-        def wrapper():
-            for param in params:
-                f(*param)
-        wrapper.__name__ = f.__name__
-        return wrapper
-    return deco
-
 def check_bt(exc, max_bt, *names):
     fnames = [tb.name for tb in exc.traceback]
     for name in names:
@@ -28,7 +19,7 @@ def check_bt(exc, max_bt, *names):
         else:
             assert name in fnames
 
-with_seq_params = with_params((0,), (5,), (500,))
+with_seq_params = pytest.mark.parametrize("max_bt", [0, 5, 500])
 
 @with_seq_params
 def test_cond_order1(max_bt):

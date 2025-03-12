@@ -4,16 +4,8 @@ import brassboard_seq_test_utils as test_utils
 
 import pytest
 
-def with_params(*params):
-    def deco(f):
-        def wrapper():
-            for param in params:
-                f(*param)
-        wrapper.__name__ = f.__name__
-        return wrapper
-    return deco
-
-@with_params((test_utils.PyBytesStream,), (test_utils.PyByteArrayStream,))
+@pytest.mark.parametrize("streamm_type",
+                         [test_utils.PyBytesStream, test_utils.PyByteArrayStream])
 def test_stream(streamm_type):
     io = streamm_type()
     assert io.get_buf() == b''

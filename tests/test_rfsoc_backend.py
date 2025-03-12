@@ -93,15 +93,6 @@ def get_output():
 
     return stripped_output
 
-def with_params(*params):
-    def deco(f):
-        def wrapper():
-            for param in params:
-                f(*param)
-        wrapper.__name__ = f.__name__
-        return wrapper
-    return deco
-
 def check_bt(exc, max_bt, *names):
     fnames = [tb.name for tb in exc.traceback]
     for name in names:
@@ -293,7 +284,7 @@ def get_channel_info(rb, s):
 
     return channels
 
-with_rfsoc_params = with_params((0,), (5,), (500,))
+with_rfsoc_params = pytest.mark.parametrize("max_bt", [0, 5, 500])
 
 @with_rfsoc_params
 def test_channels(max_bt):

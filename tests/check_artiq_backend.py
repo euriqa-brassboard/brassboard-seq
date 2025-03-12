@@ -85,9 +85,6 @@ class RTIOOutputManager:
             return self.get_list_dma(ab)
         return self.get_list_bytecode(ab)
 
-    def set_use_dma(self):
-        self.use_dma = True
-
     def add_backend(self, comp, sys):
         if self.use_dma:
             ab = artiq_backend.ArtiqBackend(sys, self.dma_buf, output_format='dma')
@@ -149,15 +146,6 @@ def new_seq_compiler(*args):
     comp = backend.SeqCompiler(s)
     return s, comp
 
-def with_params(*params):
-    def deco(f):
-        def wrapper():
-            for param in params:
-                f(*param)
-        wrapper.__name__ = f.__name__
-        return wrapper
-    return deco
-
 def check_bt(exc, max_bt, *names):
     fnames = [tb.name for tb in exc.traceback]
     for name in names:
@@ -166,7 +154,24 @@ def check_bt(exc, max_bt, *names):
         else:
             assert name in fnames
 
-with_artiq_params = with_params((0,), (5,), (500,))
+def with_dma_param(f):
+    import inspect
+    old_sig = inspect.signature(f)
+    params = [inspect.Parameter('use_dma', inspect.Parameter.POSITIONAL_OR_KEYWORD)]
+    params.extend(old_sig.parameters.values())
+    new_sig = inspect.Signature(params)
+    def cb(use_dma, *args, **kws):
+        rtio_mgr.use_dma = use_dma
+        return f(*args, **kws)
+    cb.__name__ = f.__name__
+    if hasattr(f, 'pytestmark'):
+        cb.pytestmark = f.pytestmark
+    cb.__signature__ = new_sig
+    return pytest.mark.parametrize("use_dma", [False, True])(cb)
+
+def with_artiq_params(f):
+    f = pytest.mark.parametrize("max_bt", [0, 5, 500])(f)
+    return with_dma_param(f)
 
 def test_constructors():
     with pytest.raises(TypeError):
@@ -1872,11 +1877,8 @@ def test_device_delay_rt_error(max_bt):
         comp.runtime_finalize(1)
 
 @with_artiq_params
-def test_device_delay(max_bt):
-    check_device_delay(max_bt, False)
-    check_device_delay(max_bt, True)
-
-def check_device_delay(max_bt, use_rt):
+@pytest.mark.parametrize('use_rt', [False, True])
+def test_device_delay(max_bt, use_rt):
     def wrap_value(v):
         if use_rt:
             return rtval.new_extern(lambda: v)
