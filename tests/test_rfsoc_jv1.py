@@ -409,6 +409,8 @@ def test_pulse_inst():
         Jaqal_v1.freq_pulse(4, 2, (0, 0, 0, 0), 100, False, False, False)
     with pytest.raises(TypeError, match=f"Invalid spline type '{int}'"):
         Jaqal_v1.freq_pulse(0, 1, 0, 100, False, False, False)
+    with pytest.raises(ValueError, match="Invalid cycle count '1099511627776'"):
+        Jaqal_v1.freq_pulse(0, 1, (0, 0, 0, 0), 2**40, False, False, False)
 
     with pytest.raises(ValueError, match="Invalid channel number '-1'"):
         Jaqal_v1.amp_pulse(-1, 0, (0, 0, 0, 0), 100, False, False, False)
@@ -420,6 +422,8 @@ def test_pulse_inst():
         Jaqal_v1.amp_pulse(4, 2, (0, 0, 0, 0), 100, False, False, False)
     with pytest.raises(TypeError, match=f"Invalid spline type '{int}'"):
         Jaqal_v1.amp_pulse(0, 1, 0, 100, False, False, False)
+    with pytest.raises(ValueError, match="Invalid cycle count '1099511627776'"):
+        Jaqal_v1.amp_pulse(0, 1, (0, 0, 0, 0), 2**40, False, False, False)
 
     with pytest.raises(ValueError, match="Invalid channel number '-1'"):
         Jaqal_v1.phase_pulse(-1, 0, (0, 0, 0, 0), 100, False, False, False)
@@ -431,6 +435,8 @@ def test_pulse_inst():
         Jaqal_v1.phase_pulse(4, 2, (0, 0, 0, 0), 100, False, False, False)
     with pytest.raises(TypeError, match=f"Invalid spline type '{int}'"):
         Jaqal_v1.phase_pulse(0, 1, 0, 100, False, False, False)
+    with pytest.raises(ValueError, match="Invalid cycle count '1099511627776'"):
+        Jaqal_v1.phase_pulse(0, 1, (0, 0, 0, 0), 2**40, False, False, False)
 
     with pytest.raises(ValueError, match="Invalid channel number '-1'"):
         Jaqal_v1.frame_pulse(-1, 0, (0, 0, 0, 0), 100, False, False, False, 0, 0)
@@ -442,6 +448,8 @@ def test_pulse_inst():
         Jaqal_v1.frame_pulse(4, 2, (0, 0, 0, 0), 100, False, False, False, 0, 0)
     with pytest.raises(TypeError, match=f"Invalid spline type '{int}'"):
         Jaqal_v1.frame_pulse(0, 1, 0, 100, False, False, False, 0, 0)
+    with pytest.raises(ValueError, match="Invalid cycle count '1099511627776'"):
+        Jaqal_v1.frame_pulse(0, 1, (0, 0, 0, 0), 2**40, False, False, False, 0, 0)
 
     metadatas = itertools.product(('freq', 'amp', 'phase'), range(8), (0, 1),
                                   (False, True), (False, True), (False, True),

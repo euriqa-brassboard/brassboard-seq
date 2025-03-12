@@ -255,6 +255,10 @@ cdef inline int _check_chn_tone(int chn, int tone) except -1:
     if tone < 0 or tone > 1:
         PyErr_Format(PyExc_ValueError, "Invalid tone number '%d'", tone)
 
+cdef inline int _check_inst_cycles(int64_t cycles) except -1:
+    if (cycles >> 40) != 0:
+        PyErr_Format(PyExc_ValueError, "Invalid cycle count '%lld'", <long long>cycles)
+
 # Debugging/testing tool
 @cython.auto_pickle(False)
 @cython.no_gc
@@ -317,6 +321,7 @@ cdef class Jaqal_v1:
     def freq_pulse(int chn, int tone, spline, int64_t cycles, bint waittrig,
                    bint sync, bint fb_enable):
         _check_chn_tone(chn, tone)
+        _check_inst_cycles(cycles)
         return new_inst_v1(_Jaqal_v1.freq_pulse(chn, tone, _to_spline(spline), cycles,
                                                 waittrig, sync, fb_enable))
 
@@ -324,6 +329,7 @@ cdef class Jaqal_v1:
     def amp_pulse(int chn, int tone, spline, int64_t cycles, bint waittrig,
                   bint sync, bint fb_enable):
         _check_chn_tone(chn, tone)
+        _check_inst_cycles(cycles)
         return new_inst_v1(_Jaqal_v1.amp_pulse(chn, tone, _to_spline(spline), cycles,
                                                waittrig, sync, fb_enable))
 
@@ -331,6 +337,7 @@ cdef class Jaqal_v1:
     def phase_pulse(int chn, int tone, spline, int64_t cycles, bint waittrig,
                     bint sync, bint fb_enable):
         _check_chn_tone(chn, tone)
+        _check_inst_cycles(cycles)
         return new_inst_v1(_Jaqal_v1.phase_pulse(chn, tone, _to_spline(spline), cycles,
                                                  waittrig, sync, fb_enable))
 
@@ -339,6 +346,7 @@ cdef class Jaqal_v1:
                     bint waittrig, bint apply_at_end, bint rst_frame,
                     int fwd_frame_mask, int inv_frame_mask):
         _check_chn_tone(chn, tone)
+        _check_inst_cycles(cycles)
         return new_inst_v1(_Jaqal_v1.frame_pulse(chn, tone, _to_spline(spline),
                                                  cycles, waittrig, apply_at_end,
                                                  rst_frame, fwd_frame_mask,
