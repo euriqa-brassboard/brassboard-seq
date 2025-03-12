@@ -304,7 +304,6 @@ cdef class JaqalInst_v1(JaqalInstBase):
         _Jaqal_v1.print_inst(io, self.inst, False)
         return io.get_buf().decode()
 
-@staticmethod
 cdef JaqalInst_v1 new_inst_v1(JaqalInst inst):
     self = <JaqalInst_v1>JaqalInst_v1.__new__(JaqalInst_v1)
     self.inst = inst
