@@ -4,8 +4,7 @@ from brassboard_seq.action import Blackman, BlackmanSquare, LinearRamp, \
      RampFunction, SeqCubicSpline
 from brassboard_seq.config import Config
 from brassboard_seq import backend, rtval, seq
-from brassboard_seq.rfsoc_backend import Jaqal_v1, JaqalInst_v1, JaqalChannelGen_v1, \
-     Jaqalv1Generator, RFSOCBackend
+from brassboard_seq.rfsoc_backend import Jaqal_v1, Jaqalv1Generator, RFSOCBackend
 
 import brassboard_seq_test_utils as test_utils
 import brassboard_seq_rfsoc_backend_utils as rfsoc_utils
