@@ -136,6 +136,11 @@ spline_resample_cycle(cubic_spline_t sp, int64_t start, int64_t end,
 
 }
 
+struct TimedID {
+    int64_t time;
+    int16_t id;
+};
+
 static PyTypeObject *rampfunction_type;
 static PyTypeObject *seqcubicspline_type;
 
@@ -1282,17 +1287,17 @@ struct Jaqal_v1 {
 
     struct ChannelGen {
         PulseAllocator pulses;
-        std::vector<std::pair<int64_t,int16_t>> pulse_ids;
+        std::vector<TimedID> pulse_ids;
         std::vector<int16_t> slut;
         std::vector<std::pair<int16_t,int16_t>> glut;
-        std::vector<std::pair<int64_t,int16_t>> gate_ids;
+        std::vector<TimedID> gate_ids;
 
         void add_pulse(const JaqalInst &inst, int64_t cycle)
         {
             auto idx = pulses.get_addr(inst);
             if (idx >> PLUTW)
                 throw std::length_error("Too many pulses in sequence.");
-            pulse_ids.push_back({ cycle, int16_t(idx) });
+            pulse_ids.push_back({ .time = cycle, .id = int16_t(idx) });
         }
 
         void clear()
@@ -1322,18 +1327,18 @@ struct Jaqal_v1 {
             return old_slut_len;
         }
 
-        int16_t add_gate(std::span<std::pair<int64_t,int16_t>> pulses)
+        int16_t add_gate(std::span<TimedID> pulses)
         {
             auto npulses = (int)pulses.size();
             auto old_slut_len = add_slut(npulses);
             for (size_t i = 0; i < npulses; i++)
-                slut[old_slut_len + i] = pulses[i].second;
+                slut[old_slut_len + i] = pulses[i].id;
             return add_glut(int16_t(old_slut_len), int16_t(old_slut_len + npulses - 1));
         }
 
         void sequence_gate(int16_t gid, int first_pid)
         {
-            gate_ids.push_back({ pulse_ids[first_pid].first, gid });
+            gate_ids.push_back({ .time = pulse_ids[first_pid].time, .id = gid });
         }
 
         void end()
@@ -1342,7 +1347,7 @@ struct Jaqal_v1 {
             // These currently belongs to the same tonedata
             // and there's a higher chance we have some reusable subsequences
             std::ranges::stable_sort(pulse_ids, [] (auto &a, auto &b) {
-                return a.first < b.first;
+                return a.time < b.time;
             });
             int npulse = pulse_ids.size();
             if (!npulse)
@@ -1352,12 +1357,12 @@ struct Jaqal_v1 {
             std::vector<int> pulse_rk(npulse + 1);
             std::vector<int> pulse_height(npulse - 1);
             for (int i = 0; i < npulse; i++)
-                pulse_str[i] = pulse_ids[i].second + 1;
+                pulse_str[i] = pulse_ids[i].id + 1;
             pulse_str[npulse] = 0;
             get_suffix_array(pulse_sa, pulse_str, pulse_rk);
             order_to_rank(pulse_rk, pulse_sa);
             for (int i = 0; i < npulse; i++)
-                pulse_str[i] = pulse_ids[i].second + 1;
+                pulse_str[i] = pulse_ids[i].id + 1;
             pulse_str[npulse] = 0;
             get_height_array(pulse_height, pulse_str, pulse_sa, pulse_rk);
 
@@ -1469,7 +1474,7 @@ struct Jaqal_v1 {
                     if (str_idx == next_pulse + 1) {
                         // Special de-dup handling for single pulse gate
                         has_single_pulse = true;
-                        gate_id = -int(pulse_ids[next_pulse].second) - 1;
+                        gate_id = -int(pulse_ids[next_pulse].id) - 1;
                     }
                     else {
                         gate_id = add_gate(std::span(pulse_ids)
@@ -1486,7 +1491,7 @@ struct Jaqal_v1 {
                 if (npulse == next_pulse + 1) {
                     // Special de-dup handling for single pulse gate
                     has_single_pulse = true;
-                    gate_id = -int(pulse_ids[next_pulse].second) - 1;
+                    gate_id = -int(pulse_ids[next_pulse].id) - 1;
                 }
                 else {
                     gate_id = add_gate(std::span(pulse_ids)
@@ -1514,12 +1519,12 @@ struct Jaqal_v1 {
                     }
                     return gid;
                 };
-                for (auto &[t, gid]: gate_ids) {
-                    if (gid >= 0)
+                for (auto &gid: gate_ids) {
+                    if (gid.id >= 0)
                         continue;
-                    auto pid = -(gid + 1);
+                    auto pid = -(gid.id + 1);
                     assert((pid >> 15) == 0);
-                    gid = get_single_gate_id(int16_t(pid));
+                    gid.id = get_single_gate_id(int16_t(pid));
                 }
             }
         }
@@ -1947,7 +1952,7 @@ PyObject *JaqalPulseCompilerGen::BoardGen::get_prefix() const
 PyObject *JaqalPulseCompilerGen::BoardGen::get_sequence() const
 {
     pybytes_ostream io;
-    std::span<const std::pair<int64_t,int16_t>> chn_gate_ids[8];
+    std::span<const TimedID> chn_gate_ids[8];
     for (int chn = 0; chn < 8; chn++)
         chn_gate_ids[chn] = std::span(channels[chn].gate_ids);
     auto output_channel = [&] (int chn) {
@@ -1956,7 +1961,7 @@ PyObject *JaqalPulseCompilerGen::BoardGen::get_sequence() const
         assert(gate_ids.size() != 0);
         int blksize = std::min(Jaqal_v1::GSEQ_MAXCNT, (int)gate_ids.size());
         for (int i = 0; i < blksize; i++)
-            gaddrs[i] = gate_ids[i].second;
+            gaddrs[i] = gate_ids[i].id;
         auto inst = Jaqal_v1::sequence(chn, Jaqal_v1::SeqMode::GATE, gaddrs, blksize);
         io.write((char*)&inst, sizeof(inst));
         gate_ids = gate_ids.subspan(blksize);
@@ -1968,7 +1973,7 @@ PyObject *JaqalPulseCompilerGen::BoardGen::get_sequence() const
             auto &gate_ids = chn_gate_ids[chn];
             if (gate_ids.size() == 0)
                 continue;
-            auto first_time = gate_ids[0].first;
+            auto first_time = gate_ids[0].time;
             if (first_time < out_time) {
                 out_chn = chn;
                 out_time = first_time;

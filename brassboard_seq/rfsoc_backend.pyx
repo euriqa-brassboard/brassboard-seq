@@ -50,6 +50,10 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
         object get_prefix(int n) except +
         object get_sequence(int n) except +
 
+    struct TimedID:
+        int64_t time
+        int16_t id
+
     cppclass JaqalInst:
         bytes to_pybytes() except +
         object to_pylong() except +
@@ -112,7 +116,7 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
             PulseAllocator pulses
             vector[int16_t] slut
             vector[pair[int16_t,int16_t]] glut
-            vector[pair[int64_t,int16_t]] gate_ids
+            vector[TimedID] gate_ids
             void add_pulse(const JaqalInst &inst, int64_t cycle) except +
             void clear()
             void end() except +
@@ -469,7 +473,7 @@ cdef class JaqalChannelGen_v1:
         cdef list res = PyList_New(sz)
         for i in range(sz):
             gate = self.chn_gen.gate_ids[i]
-            v = (pylong_from_longlong(gate.first), pylong_from_long(gate.second))
+            v = (pylong_from_longlong(gate.time), pylong_from_long(gate.id))
             Py_INCREF(v)
             PyList_SET_ITEM(res, i, v)
         return res
