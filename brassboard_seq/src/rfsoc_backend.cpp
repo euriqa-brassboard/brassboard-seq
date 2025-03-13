@@ -113,8 +113,7 @@ static void foreach_max_range_min_val(std::span<int> value, int min_val, auto &&
         }
         // We are above the start value, nothing to do
         if (v >= min_val) {
-            if (v < start_val)
-                start_val = v;
+            start_val = std::min(start_val, v);
             continue;
         }
         cb(start_idx, i - 1, start_val);
