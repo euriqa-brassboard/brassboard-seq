@@ -1715,7 +1715,7 @@ struct PulseCompilerGen: SyncChannelGen {
         PyDict_Clear(output);
         last_chn = -1;
     }
-    ~PulseCompilerGen() override
+    void end() override
     {}
 
     py_object output;
@@ -1830,8 +1830,6 @@ struct JaqalPulseCompilerGen: SyncChannelGen {
             board.end();
         }
     }
-    ~JaqalPulseCompilerGen() override
-    {}
 
     __attribute__((returns_nonnull)) PyObject *get_prefix(int n) const
     {

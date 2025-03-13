@@ -199,16 +199,11 @@ struct ToneBuffer {
 };
 
 struct Generator {
-    virtual void start()
-    {
-    }
+    virtual void start() = 0;
     virtual void process_channel(ToneBuffer &tone_buffer, int chn,
                                  int64_t total_cycle) = 0;
-    virtual void end()
-    {
-    }
-    virtual ~Generator()
-    {}
+    virtual void end() = 0;
+    virtual ~Generator() = default;
 };
 
 static inline int64_t seq_time_to_cycle(long long time)
