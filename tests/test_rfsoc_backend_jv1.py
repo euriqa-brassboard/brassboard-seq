@@ -2027,11 +2027,8 @@ def test_dds_delay_rt_error(max_bt):
         comp.runtime_finalize(1)
 
 @with_rfsoc_params
-def test_dds_delay(max_bt):
-    check_dds_delay(max_bt, False)
-    check_dds_delay(max_bt, True)
-
-def check_dds_delay(max_bt, use_rt):
+@pytest.mark.parametrize('use_rt', [False, True])
+def test_dds_delay(max_bt, use_rt):
     def wrap_value(v):
         if use_rt:
             return rtval.new_extern(lambda: v)
