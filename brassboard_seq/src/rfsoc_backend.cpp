@@ -461,8 +461,6 @@ struct Jaqal_v1 {
     static constexpr inline auto
     pulse(uint64_t metadata, const std::array<int64_t,4> &isp, int64_t cycles)
     {
-        JaqalInst pulse;
-        pulse |= JaqalInst(metadata) << Bits::METADATA;
         assert((isp[0] >> 40) == 0);
         assert((isp[1] >> 40) == 0);
         assert((isp[2] >> 40) == 0);
@@ -473,12 +471,14 @@ struct Jaqal_v1 {
         assume((isp[2] >> 40) == 0);
         assume((isp[3] >> 40) == 0);
         assume((cycles >> 40) == 0);
-        pulse |= JaqalInst(isp[0]) << 40 * 0;
-        pulse |= JaqalInst(isp[1]) << 40 * 1;
-        pulse |= JaqalInst(isp[2]) << 40 * 2;
-        pulse |= JaqalInst(isp[3]) << 40 * 3;
-        pulse |= JaqalInst(cycles) << 40 * 4;
-        return pulse;
+
+        std::array<int64_t,4> data{
+            isp[0] | (isp[1] << 40),
+            (isp[1] >> (64 - 40)) | (isp[2] << (80 - 64)) | (isp[3] << (120 - 64)),
+            (isp[3] >> (128 - 120)) | (cycles << (160 - 128)),
+            (cycles >> (192 - 160)) | int64_t(metadata << (200 - 192)),
+        };
+        return JaqalInst(data);
     }
 
     static constexpr inline uint64_t raw_param_metadata(
