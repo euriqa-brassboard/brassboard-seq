@@ -80,8 +80,7 @@ cdef extern from "src/rfsoc_backend.h" namespace "brassboard_seq::rfsoc_backend"
         pass
 
     cppclass Generator:
-        void start() except +
-        void end() except +
+        pass
 
 cdef class RFSOCGenerator:
     cdef unique_ptr[Generator] gen

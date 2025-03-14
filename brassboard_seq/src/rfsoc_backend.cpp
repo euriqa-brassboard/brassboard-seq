@@ -2664,6 +2664,7 @@ void gen_rfsoc_data(auto *rb, RampFunction*, SeqCubicSpline*)
     };
 
     auto gen = rb->generator->gen.get();
+    gen->start();
 
     // Add extra cycles to be able to handle the requirement of minimum 4 cycles.
     auto total_cycle = seq_time_to_cycle(rb->__pyx_base.seq->total_time + max_delay) + 8;
@@ -2873,6 +2874,7 @@ void gen_rfsoc_data(auto *rb, RampFunction*, SeqCubicSpline*)
         }
         gen->process_channel(rb->tone_buffer, channel.chn, total_cycle);
     }
+    gen->end();
     bb_debug("gen_rfsoc_data: finish\n");
 }
 

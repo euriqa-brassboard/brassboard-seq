@@ -237,11 +237,7 @@ cdef class RFSOCBackend:
         for dds, delay in self.rt_dds_delay.items():
             rt_eval_throw(<RuntimeValue>delay, age, pyage)
             set_dds_delay(self, dds, rtval_cache(<RuntimeValue>delay).get[double]())
-        self.generator.gen.get().start()
-        try:
-            gen_rfsoc_data(self, None, None)
-        finally:
-            self.generator.gen.get().end()
+        gen_rfsoc_data(self, None, None)
 
 cdef cubic_spline_t _to_spline(spline):
     if isinstance(spline, tuple):
