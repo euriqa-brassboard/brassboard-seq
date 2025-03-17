@@ -34,11 +34,6 @@ cdef extern from "src/rfsoc_backend.h" namespace "brassboard_seq::rfsoc_backend"
         double order2
         double order3
 
-    struct output_flags_t:
-        bint wait_trigger
-        bint sync
-        bint feedback_enable
-
     enum ToneParam:
         ToneFreq
         TonePhase
