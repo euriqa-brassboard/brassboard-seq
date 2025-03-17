@@ -34,6 +34,7 @@
 #include <ranges>
 #include <span>
 #include <vector>
+#include <utility>
 
 #include <stdint.h>
 #include <stdio.h>
@@ -198,8 +199,7 @@ struct BacktraceTracker {
         GlobalRestorer &operator=(const GlobalRestorer&) = delete;
         GlobalRestorer &operator=(GlobalRestorer &&other)
         {
-            oldval = other.oldval;
-            other.oldval = (BacktraceTracker*)intptr_t(-1);
+            oldval = std::exchange(other.oldval, (BacktraceTracker*)intptr_t(-1));
             return *this;
         }
         ~GlobalRestorer()
@@ -219,9 +219,8 @@ struct BacktraceTracker {
 static inline BacktraceTracker::GlobalRestorer
 set_global_tracker(BacktraceTracker *tracker)
 {
-    auto oldval = BacktraceTracker::global_tracker;
-    BacktraceTracker::global_tracker = tracker;
-    return BacktraceTracker::GlobalRestorer(oldval);
+    return BacktraceTracker::GlobalRestorer(
+        std::exchange(BacktraceTracker::global_tracker, tracker));
 }
 
 static inline __attribute__((always_inline,pure))
@@ -347,9 +346,7 @@ extern PyObject *pyfloat_1;
 
 static inline void pyassign(auto *&field, auto *v)
 {
-    auto oldval = field;
-    field = py_newref(v);
-    Py_DECREF((PyObject*)oldval);
+    Py_DECREF((PyObject*)std::exchange(field, py_newref(v)));
 }
 
 __attribute__((returns_nonnull)) static inline PyObject*
