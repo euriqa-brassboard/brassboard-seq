@@ -707,7 +707,7 @@ def test_ramp_output3(max_bt):
         8: [Tone(2048008, Spline(0.0), Spline(0.0), Spline(0.0), False, False)],
         9: [Tone(2048000, Spline(0.0), Spline(0.2, 0.1, 0.9, 0.3),
                  Spline(0.0), False, False),
-            Tone(8, Spline(0.0), Spline(1.5), Spline(0.0), False, False)],
+            Tone(8, Spline(0.0), pytest.approx(Spline(1.5)), Spline(0.0), False, False)],
     }
 
 @with_rfsoc_params
@@ -735,7 +735,7 @@ def test_ramp_output4(max_bt):
         5: [Tone(2048000, Spline(0.0), Spline(0.0),
                  pytest.approx(Spline(0.4 * np.pi, 0.2 * np.pi, 1.8 * np.pi, 0.6 * np.pi)),
                  False, False),
-            Tone(8, Spline(0.0), Spline(0.0), Spline(3 * np.pi), False, False)],
+            Tone(8, Spline(0.0), Spline(0.0), pytest.approx(Spline(3 * np.pi)), False, False)],
     }
 
 @with_rfsoc_params

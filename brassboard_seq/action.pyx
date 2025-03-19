@@ -136,6 +136,8 @@ cdef class SeqCubicSpline(RampFunction):
         self.order3 = order3
 
     cdef eval(self, t, length, oldval):
+        if t is length:
+            return self._spline_segments + self._fvalue + self.order2 + self.order3
         t = t / length
         return self._spline_segments + (self._fvalue + (self.order2 + self.order3 * t) * t) * t
 
@@ -186,12 +188,11 @@ cdef class Blackman(RampFunction):
         self._fvalue = offset
 
     cdef eval(self, t, length, oldval):
-        if not is_rtval(length) and length == 0:
-            val = 0.0
-        else:
-            cost = np_cos(t * (m_2pi / length))
-            val = self._spline_segments * (0.34 - cost * (0.5 - 0.16 * cost))
-            val = ifelse(length == 0, 0.0, val)
+        if t is length or (not is_rtval(length) and not length):
+            return self._fvalue
+        cost = np_cos(t * (m_2pi / length))
+        val = self._spline_segments * (0.34 - cost * (0.5 - 0.16 * cost))
+        val = ifelse(length == 0, 0.0, val)
         return val + self._fvalue
 
     cdef spline_segments(self, double length, double oldval):
@@ -234,13 +235,12 @@ cdef class BlackmanSquare(RampFunction):
         self._fvalue = offset
 
     cdef eval(self, t, length, oldval):
-        if not is_rtval(length) and length == 0:
-            val = 0.0
-        else:
-            cost = np_cos(t * (m_2pi / length))
-            val = 0.34 - cost * (0.5 - 0.16 * cost)
-            val = self._spline_segments * val * val
-            val = ifelse(length == 0, 0.0, val)
+        if t is length or (not is_rtval(length) and not length):
+            return self._fvalue
+        cost = np_cos(t * (m_2pi / length))
+        val = 0.34 - cost * (0.5 - 0.16 * cost)
+        val = self._spline_segments * val * val
+        val = ifelse(length == 0, 0.0, val)
         return val + self._fvalue
 
     cdef spline_segments(self, double length, double oldval):
@@ -284,6 +284,8 @@ cdef class LinearRamp(RampFunction):
         self._fvalue = end
 
     cdef eval(self, t, length, oldval):
+        if t is length:
+            return self._fvalue
         t = t / length
         return self._spline_segments * (1 - t) + self._fvalue * t
 
