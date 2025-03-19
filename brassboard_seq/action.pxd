@@ -66,4 +66,4 @@ cdef class SeqCubicSpline(RampFunction):
     cdef double f_order1
     cdef double f_order2
     cdef double f_order3
-    cdef double f_length
+    cdef double f_inv_length

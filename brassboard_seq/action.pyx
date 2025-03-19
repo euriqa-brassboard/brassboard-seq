@@ -120,7 +120,7 @@ cdef class RampFunction:
         return self.interp_func.get().call()
 
 @cython.final
-cdef class SeqCubicSpline:
+cdef class SeqCubicSpline(RampFunction):
     @property
     def order0(self):
         return self._spline_segments
@@ -145,16 +145,17 @@ cdef class SeqCubicSpline:
     cdef int set_compile_params(self, length, oldval) except -1:
         self._eval = length
 
+    @cython.cdivision(True)
     cdef int set_runtime_params(self, unsigned age, py_object &pyage) except -1:
         self.f_order0 = get_value_f64(self._spline_segments, age, pyage)
         self.f_order1 = get_value_f64(self._fvalue, age, pyage)
         self.f_order2 = get_value_f64(self.order2, age, pyage)
         self.f_order3 = get_value_f64(self.order3, age, pyage)
-        self.f_length = get_value_f64(self._eval, age, pyage)
+        self.f_inv_length = 1 / get_value_f64(self._eval, age, pyage)
 
     @cython.cdivision(True)
     cdef TagVal runtime_eval(self, double t) noexcept:
-        t = t / self.f_length
+        t = t * self.f_inv_length
         return TagVal(self.f_order0 + (self.f_order1 +
                                        (self.f_order2 + self.f_order3 * t) * t) * t)
 
@@ -179,7 +180,7 @@ cdef class Blackman(RampFunction):
 
     cdef double f_amp
     cdef double f_offset
-    cdef double f_length
+    cdef double f_t_scale
     def __init__(self, amp, offset=0):
         self._spline_segments = amp
         self._fvalue = offset
@@ -188,9 +189,8 @@ cdef class Blackman(RampFunction):
         if not is_rtval(length) and length == 0:
             val = 0.0
         else:
-            theta = t * (m_2pi / length) - m_pi
-            cost = np_cos(theta)
-            val = self._spline_segments * (0.34 + cost * (0.5 + 0.16 * cost))
+            cost = np_cos(t * (m_2pi / length))
+            val = self._spline_segments * (0.34 - cost * (0.5 - 0.16 * cost))
             val = ifelse(length == 0, 0.0, val)
         return val + self._fvalue
 
@@ -200,18 +200,17 @@ cdef class Blackman(RampFunction):
     cdef int set_compile_params(self, length, oldval) except -1:
         self._eval = length
 
+    @cython.cdivision(True)
     cdef int set_runtime_params(self, unsigned age, py_object &pyage) except -1:
-        self.f_length = get_value_f64(self._eval, age, pyage)
+        cdef double f_len = get_value_f64(self._eval, age, pyage)
+        self.f_t_scale = 0.0 if f_len == 0 else cmath.pi * 2 / f_len
         self.f_amp = get_value_f64(self._spline_segments, age, pyage)
         self.f_offset = get_value_f64(self._fvalue, age, pyage)
 
     @cython.cdivision(True)
     cdef TagVal runtime_eval(self, double t) noexcept:
-        if self.f_length == 0:
-            return TagVal(self.f_offset)
-        theta = t * (cmath.pi * 2 / self.f_length) - cmath.pi
-        cost = cmath.cos(theta)
-        val = self.f_amp * (0.34 + cost * (0.5 + 0.16 * cost))
+        cost = cmath.cos(t * self.f_t_scale)
+        val = self.f_amp * (0.34 - cost * (0.5 - 0.16 * cost))
         return TagVal(val + self.f_offset)
 
 @cython.final
@@ -229,7 +228,7 @@ cdef class BlackmanSquare(RampFunction):
 
     cdef double f_amp
     cdef double f_offset
-    cdef double f_length
+    cdef double f_t_scale
     def __init__(self, amp, offset=0):
         self._spline_segments = amp
         self._fvalue = offset
@@ -238,9 +237,8 @@ cdef class BlackmanSquare(RampFunction):
         if not is_rtval(length) and length == 0:
             val = 0.0
         else:
-            theta = t * (m_2pi / length) - m_pi
-            cost = np_cos(theta)
-            val = 0.34 + cost * (0.5 + 0.16 * cost)
+            cost = np_cos(t * (m_2pi / length))
+            val = 0.34 - cost * (0.5 - 0.16 * cost)
             val = self._spline_segments * val * val
             val = ifelse(length == 0, 0.0, val)
         return val + self._fvalue
@@ -251,18 +249,17 @@ cdef class BlackmanSquare(RampFunction):
     cdef int set_compile_params(self, length, oldval) except -1:
         self._eval = length
 
+    @cython.cdivision(True)
     cdef int set_runtime_params(self, unsigned age, py_object &pyage) except -1:
-        self.f_length = get_value_f64(self._eval, age, pyage)
+        cdef double f_len = get_value_f64(self._eval, age, pyage)
+        self.f_t_scale = 0.0 if f_len == 0 else cmath.pi * 2 / f_len
         self.f_amp = get_value_f64(self._spline_segments, age, pyage)
         self.f_offset = get_value_f64(self._fvalue, age, pyage)
 
     @cython.cdivision(True)
     cdef TagVal runtime_eval(self, double t) noexcept:
-        if self.f_length == 0:
-            return TagVal(self.f_offset)
-        theta = t * (cmath.pi * 2 / self.f_length) - cmath.pi
-        cost = cmath.cos(theta)
-        cdef double val = 0.34 + cost * (0.5 + 0.16 * cost)
+        cost = cmath.cos(t * self.f_t_scale)
+        cdef double val = 0.34 - cost * (0.5 - 0.16 * cost)
         val = self.f_amp * val * val
         return TagVal(val + self.f_offset)
 
@@ -281,7 +278,7 @@ cdef class LinearRamp(RampFunction):
 
     cdef double f_start
     cdef double f_end
-    cdef double f_length
+    cdef double f_inv_length
     def __init__(self, start, end):
         self._spline_segments = start
         self._fvalue = end
@@ -296,12 +293,13 @@ cdef class LinearRamp(RampFunction):
     cdef int set_compile_params(self, length, oldval) except -1:
         self._eval = length
 
+    @cython.cdivision(True)
     cdef int set_runtime_params(self, unsigned age, py_object &pyage) except -1:
-        self.f_length = get_value_f64(self._eval, age, pyage)
+        self.f_inv_length = 1 / get_value_f64(self._eval, age, pyage)
         self.f_start = get_value_f64(self._spline_segments, age, pyage)
         self.f_end = get_value_f64(self._fvalue, age, pyage)
 
     @cython.cdivision(True)
     cdef TagVal runtime_eval(self, double t) noexcept:
-        t = t / self.f_length
+        t = t * self.f_inv_length
         return TagVal(self.f_start * (1 - t) + self.f_end * t)
