@@ -634,8 +634,7 @@ static inline void seq_finalize(Seq *self, TimeStep*, RampFunction*)
                         auto vt = rampf->__pyx_vtab;
                         throw_if(vt->set_compile_params(rampf, length, value),
                                  action_key(action->aid));
-                        new_value.reset(throw_if_not(vt->eval(rampf, length, length,
-                                                              value),
+                        new_value.reset(throw_if_not(vt->eval_end(rampf, length, value),
                                                      action_key(action->aid)));
                     }
                     else {

@@ -74,9 +74,9 @@ def test_ramp_eval():
     sold = str(rold)
 
     test = test_utils.RampTest(StaticFunction(), rlen, rold)
-    rv = test.eval_compile(rt)
-    assert str(rv) == f'({st} / 2 + {sold}) - {slen}'
-    assert rtval.get_value(rv, 0) == 1 / 2 + -0.2 - 2
+    rv = test.eval_compile_end()
+    assert str(rv) == f'({slen} / 2 + {sold}) - {slen}'
+    assert rtval.get_value(rv, 0) == 2 / 2 + -0.2 - 2
 
     ts = np.linspace(-1, 1, 1000)
     vs = test.eval_runtime(0, ts)
@@ -96,9 +96,9 @@ def test_ramp_eval():
     samp = str(ramp)
     sfreq = str(rfreq)
     test = test_utils.RampTest(SinFunction(ramp, rfreq, rphase), rlen, rold)
-    rv = test.eval_compile(rt)
-    assert str(rv) == f'{sold} + {samp} * sin(2.3 + {sfreq} * {st})'
-    assert rtval.get_value(rv, 0) == -0.2 + 2 * np.sin(2.3 + 1.2 * 1)
+    rv = test.eval_compile_end()
+    assert str(rv) == f'{sold} + {samp} * sin(2.3 + {sfreq} * {slen})'
+    assert rtval.get_value(rv, 0) == -0.2 + 2 * np.sin(2.3 + 1.2 * 2)
 
     ts = np.linspace(-1, 1, 1000)
     vs = test.eval_runtime(0, ts)
@@ -117,7 +117,7 @@ def test_ramp_eval():
         test_utils.RampTest(wtfunc, rlen, rold)
     wtfunc.res = 1
     test = test_utils.RampTest(wtfunc, rlen, rold)
-    assert test.eval_compile(0) == 1
+    assert test.eval_compile_end() == 1
     assert test.eval_runtime(0, [1, 2, 3]) == [1, 1, 1]
     wtfunc.res = np.empty((2, 2))
     with pytest.raises(TypeError):
@@ -162,18 +162,10 @@ def test_spline():
         test_seq = test_utils.RampTest(sp_seq, 1, 0.2)
         test_py = test_utils.RampTest(sp_py, 1, 0.2)
 
-        v0_seq = test_seq.eval_compile(0)
-        v05_seq = test_seq.eval_compile(0.5)
-        v1_seq = test_seq.eval_compile(1)
-        assert rtval.get_value(v0_seq, 1) == 0.1
-        assert rtval.get_value(v05_seq, 1) == pytest.approx(0.4875)
+        v1_seq = test_seq.eval_compile_end()
         assert rtval.get_value(v1_seq, 1) == 1.6
 
-        v0_py = test_py.eval_compile(0)
-        v05_py = test_py.eval_compile(0.5)
-        v1_py = test_py.eval_compile(1)
-        assert rtval.get_value(v0_py, 1) == 0.1
-        assert rtval.get_value(v05_py, 1) == pytest.approx(0.4875)
+        v1_py = test_py.eval_compile_end()
         assert rtval.get_value(v1_py, 1) == 1.6
 
         assert list(test_seq.eval_runtime(2, [0, 0.5, 1])) == pytest.approx([0.1, 0.4875, 1.6])

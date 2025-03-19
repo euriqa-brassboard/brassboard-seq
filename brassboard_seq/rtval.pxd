@@ -154,8 +154,6 @@ cpdef inline RuntimeValue new_extern(cb, ty=float):
 cpdef inline RuntimeValue new_extern_age(cb, ty=float):
     return new_cb_arg2(ValueType.ExternAge, cb, ty, None)
 
-cpdef ifelse(b, v1, v2)
-
 cdef inline double get_value_f64(v, unsigned age, py_object &pyage) except? -1:
     if is_rtval(v):
         rt_eval_throw(<RuntimeValue>v, age, pyage)

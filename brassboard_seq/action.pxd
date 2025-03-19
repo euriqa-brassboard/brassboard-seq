@@ -50,7 +50,7 @@ cdef class RampFunction:
     cdef object _fvalue
     cdef unique_ptr[InterpFunction] interp_func
 
-    cdef eval(self, t, length, oldval)
+    cdef eval_end(self, length, oldval)
     cdef spline_segments(self, double length, double oldval)
     cdef int set_compile_params(self, length, oldval) except -1
     cdef int set_runtime_params(self, unsigned age, py_object &pyage) except -1

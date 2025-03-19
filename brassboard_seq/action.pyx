@@ -17,16 +17,13 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.rtval cimport get_value_f64, ifelse, is_rtval, \
+from brassboard_seq.rtval cimport get_value_f64, is_rtval, \
   new_arg, new_const, new_expr2, ValueType, DataType, RuntimeValue
 from brassboard_seq.utils cimport _PyObject_Vectorcall, pyfloat_from_double
 
 cimport cython
 from cython.operator cimport dereference as deref
 from cpython cimport PyFloat_AS_DOUBLE
-
-cdef np # hide import
-import numpy as np
 
 from libc cimport math as cmath
 from libcpp.vector cimport vector
@@ -56,22 +53,25 @@ cdef RuntimeValue arg0 = new_arg(0)
 cdef RuntimeValue const0 = new_const(0.0, <RuntimeValue>None)
 cdef dummy_spline_segments = []
 
+cdef rampfunction_eval(RampFunction self, t, length, oldval):
+    cdef PyObject *_eval = <PyObject*>self._eval
+    if <object>_eval is None:
+        self._eval = type(self).eval
+        _eval = <PyObject*>self._eval
+    cdef PyObject *args[4]
+    args[0] = <PyObject*>self
+    args[1] = <PyObject*>t
+    args[2] = <PyObject*>length
+    args[3] = <PyObject*>oldval
+    return _PyObject_Vectorcall(_eval, args, 4, NULL)
+
 cdef class RampFunction:
     def __init__(self, *, **params):
         for (name, value) in params.items():
             setattr(self, name, value)
 
-    cdef eval(self, t, length, oldval):
-        cdef PyObject *_eval = <PyObject*>self._eval
-        if <object>_eval is None:
-            self._eval = type(self).eval
-            _eval = <PyObject*>self._eval
-        cdef PyObject *args[4]
-        args[0] = <PyObject*>self
-        args[1] = <PyObject*>t
-        args[2] = <PyObject*>length
-        args[3] = <PyObject*>oldval
-        return _PyObject_Vectorcall(_eval, args, 4, NULL)
+    cdef eval_end(self, length, oldval):
+        return rampfunction_eval(self, length, length, oldval)
 
     cdef spline_segments(self, double length, double oldval):
         cdef PyObject *_spline_segments = <PyObject*>self._spline_segments
@@ -92,7 +92,7 @@ cdef class RampFunction:
         return _PyObject_Vectorcall(_spline_segments, args, 3, NULL)
 
     cdef int set_compile_params(self, length, oldval) except -1:
-        fvalue = self.eval(arg0, length, oldval)
+        fvalue = rampfunction_eval(self, arg0, length, oldval)
         cdef vector[DataType] args
         cdef unique_ptr[InterpFunction] interp_func
         if is_rtval(fvalue):
@@ -135,11 +135,8 @@ cdef class SeqCubicSpline(RampFunction):
         self.order2 = order2
         self.order3 = order3
 
-    cdef eval(self, t, length, oldval):
-        if t is length:
-            return self._spline_segments + self._fvalue + self.order2 + self.order3
-        t = t / length
-        return self._spline_segments + (self._fvalue + (self.order2 + self.order3 * t) * t) * t
+    cdef eval_end(self, length, oldval):
+        return self._spline_segments + self._fvalue + self.order2 + self.order3
 
     cdef spline_segments(self, double length, double oldval):
         return ()
@@ -161,12 +158,8 @@ cdef class SeqCubicSpline(RampFunction):
         return TagVal(self.f_order0 + (self.f_order1 +
                                        (self.f_order2 + self.f_order3 * t) * t) * t)
 
-# These can be implemented in python code but are provided here
+# These ramp functions can be implemented in python code but are provided here
 # to be slightly more efficient.
-cdef np_cos = np.cos
-cdef m_pi = cmath.pi
-cdef m_2pi = cmath.pi * 2
-
 @cython.final
 cdef class Blackman(RampFunction):
     # _eval -> length
@@ -187,13 +180,8 @@ cdef class Blackman(RampFunction):
         self._spline_segments = amp
         self._fvalue = offset
 
-    cdef eval(self, t, length, oldval):
-        if t is length or (not is_rtval(length) and not length):
-            return self._fvalue
-        cost = np_cos(t * (m_2pi / length))
-        val = self._spline_segments * (0.34 - cost * (0.5 - 0.16 * cost))
-        val = ifelse(length == 0, 0.0, val)
-        return val + self._fvalue
+    cdef eval_end(self, length, oldval):
+        return self._fvalue
 
     cdef spline_segments(self, double length, double oldval):
         pass
@@ -234,14 +222,8 @@ cdef class BlackmanSquare(RampFunction):
         self._spline_segments = amp
         self._fvalue = offset
 
-    cdef eval(self, t, length, oldval):
-        if t is length or (not is_rtval(length) and not length):
-            return self._fvalue
-        cost = np_cos(t * (m_2pi / length))
-        val = 0.34 - cost * (0.5 - 0.16 * cost)
-        val = self._spline_segments * val * val
-        val = ifelse(length == 0, 0.0, val)
-        return val + self._fvalue
+    cdef eval_end(self, length, oldval):
+        return self._fvalue
 
     cdef spline_segments(self, double length, double oldval):
         pass
@@ -283,11 +265,8 @@ cdef class LinearRamp(RampFunction):
         self._spline_segments = start
         self._fvalue = end
 
-    cdef eval(self, t, length, oldval):
-        if t is length:
-            return self._fvalue
-        t = t / length
-        return self._spline_segments * (1 - t) + self._fvalue * t
+    cdef eval_end(self, length, oldval):
+        return self._fvalue
 
     cdef spline_segments(self, double length, double oldval):
         return ()

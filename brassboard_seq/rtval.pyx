@@ -538,7 +538,7 @@ def round_int64(_v, /):
         return cmath.llrint(PyFloat_AS_DOUBLE(_v))
     return round(_v)
 
-cpdef ifelse(b, v1, v2):
+def ifelse(b, v1, v2):
     if (isinstance(b, cnpy.ndarray) or isinstance(v1, cnpy.ndarray) or
         isinstance(v2, cnpy.ndarray)):
         return cnpy.PyArray_Where(b, v1, v2)

@@ -323,8 +323,8 @@ cdef class RampTest:
         self.oldval = oldval
         self.func.set_compile_params(length, oldval)
 
-    def eval_compile(self, t):
-        return self.func.eval(t, self.length, self.oldval)
+    def eval_compile_end(self):
+        return self.func.eval_end(self.length, self.oldval)
 
     def eval_runtime(self, age, ts):
         cdef utils.py_object pyage
