@@ -323,19 +323,13 @@ class ErrorSegment(RampFunction):
 class CustomSegment(RampFunction):
     def __init__(self, seg):
         self.seg = seg
+        super().__init__()
 
     def eval(self, t, length, oldval):
         return t
 
     def spline_segments(self, length, oldval):
         return self.seg
-
-class ErrorEval(RampFunction):
-    def __init__(self):
-        super().__init__()
-
-    def eval(self, t, length, oldval):
-        raise ValueError("XXXJJFSJkdfFDSDF")
 
 class DivLengthFunction(RampFunction):
     def __init__(self):
@@ -1142,6 +1136,250 @@ def test_ramp_output7(max_bt):
     })
 
 @with_rfsoc_params
+def test_ramp_reuse_spline(max_bt):
+    s, comp, rb = gentest.new_env(max_bt)
+    r = SeqCubicSpline(0.1, 0.4, -0.2, 0.1)
+    s.add_step(5e-3) \
+      .set('rfsoc/dds0/0/amp', r)
+    s.add_step(10e-3) \
+      .set('rfsoc/dds0/0/amp', r)
+    comp.finalize()
+
+    comp.runtime_finalize(1)
+    gentest.check_output({
+        0: {
+            'freq': [Pulse(2048000), Pulse(4096000), Pulse(8)],
+            'amp': [Pulse(2048000, Spline(0.1, 0.4, -0.2, 0.1)),
+                    Pulse(4096000, Spline(0.1, 0.4, -0.2, 0.1)),
+                    Pulse(8, Spline(0.4))],
+            'phase': [Pulse(2048000), Pulse(4096000), Pulse(8)],
+        },
+        1: {
+            'freq': [Pulse(6144008)],
+            'amp': [Pulse(6144008)],
+            'phase': [Pulse(6144008)],
+        },
+    })
+
+@with_rfsoc_params
+def test_ramp_reuse_oldval(max_bt):
+    s, comp, rb = gentest.new_env(max_bt)
+    r = RampUpAndDown(0.5, 0.9)
+    s.add_step(5e-3) \
+      .set('rfsoc/dds0/0/amp', r)
+    s.set('rfsoc/dds0/0/amp', 0.3)
+    s.add_step(10e-3) \
+      .set('rfsoc/dds0/0/amp', r)
+    comp.finalize()
+
+    comp.runtime_finalize(1)
+    gentest.check_output({
+        0: {
+            'freq': [Pulse(1024000), Pulse(1024000), Pulse(2048000),
+                     Pulse(2048000), Pulse(8)],
+            'amp': [Pulse(1024000, Spline(0, 0.9)), Pulse(1024000, Spline(0.9, -0.9)),
+                    Pulse(2048000, Spline(0.3, 0.6)), Pulse(2048000, Spline(0.9, -0.6)),
+                    Pulse(8, Spline(0.3))],
+            'phase': [Pulse(1024000), Pulse(1024000), Pulse(2048000),
+                     Pulse(2048000), Pulse(8)],
+        },
+        1: {
+            'freq': [Pulse(6144008)],
+            'amp': [Pulse(6144008)],
+            'phase': [Pulse(6144008)],
+        },
+    })
+
+@with_rfsoc_params
+def test_ramp_reuse_linear(max_bt):
+    s, comp, rb = gentest.new_env(max_bt)
+    r = LinearRamp(0.1, 0.9)
+    r2 = LinearRampNoSeg(0.1, 0.9)
+    s.add_step(5e-3) \
+      .set('rfsoc/dds0/0/amp', r) \
+      .set('rfsoc/dds0/1/amp', r2)
+    s.add_step(10e-3) \
+      .set('rfsoc/dds0/0/amp', r2) \
+      .set('rfsoc/dds0/1/amp', r)
+    comp.finalize()
+
+    comp.runtime_finalize(1)
+    gentest.check_output({
+        0: {
+            'freq': [Pulse(2048000), Pulse(2048000), Pulse(2048000), Pulse(8)],
+            'amp': [Pulse(2048000, Spline(0.1, 0.8)), Pulse(2048000, Spline(0.1, 0.4)),
+                    Pulse(2048000, Spline(0.5, 0.4)), Pulse(8, Spline(0.9))],
+            'phase': [Pulse(2048000), Pulse(2048000), Pulse(2048000), Pulse(8)],
+        },
+        1: {
+            'freq': [Pulse(1024000), Pulse(1024000), Pulse(4096000), Pulse(8)],
+            'amp': [Pulse(1024000, Spline(0.1, 0.4)), Pulse(1024000, Spline(0.5, 0.4)),
+                    Pulse(4096000, Spline(0.1, 0.8)), Pulse(8, Spline(0.9))],
+            'phase': [Pulse(1024000), Pulse(1024000), Pulse(4096000), Pulse(8)],
+        },
+    })
+
+@with_rfsoc_params
+def test_ramp_reuse_blackman(max_bt):
+    s, comp, rb = gentest.new_env(max_bt)
+    r = Blackman(1.0)
+    s.add_step(1) \
+      .set('rfsoc/dds0/0/amp', r) \
+      .set('rfsoc/dds0/1/amp', 1.0)
+    s.add_step(2) \
+      .set('rfsoc/dds0/0/amp', r) \
+      .set('rfsoc/dds0/1/amp', 1.0)
+    comp.finalize()
+
+    comp.runtime_finalize(1)
+    gentest.check_output({
+        0: {
+          'freq': [
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(8)
+          ],
+          'amp': [
+            Pulse(25600000, Spline(0.0, 0.00015745877326822644,
+                                   0.01300285490625988, 0.001468462559752276)),
+            Pulse(25600000, Spline(0.014628776239280439, 0.03074418247908131,
+                                   0.01795439872470489, 0.003119251963659586)),
+            Pulse(25600000, Spline(0.06644660940672625, 0.07585724657247933,
+                                   0.028056006241789055, 0.0017298791015365467)),
+            Pulse(25600000, Spline(0.17208974132253135, 0.13669965899911896,
+                                   0.033698736281407626, -0.002488136603058244)),
+            Pulse(25600000, Spline(0.34, 0.19610073763144964,
+                                   0.026062367723541868, -0.007389931667371563)),
+            Pulse(25600000, Spline(0.5547731736876211, 0.22576257627864393,
+                                   0.003121741649712906, -0.010104101022703649)),
+            Pulse(25600000, Spline(0.7735533905932739, 0.20184724575694735,
+                                   -0.028177599439071166, -0.008714728160579277)),
+            Pulse(25600000, Spline(0.9385083087505672, 0.11992457534234635,
+                                   -0.05499955158835057, -0.0034333325045636798)),
+            Pulse(25600000, Spline(1.0, 0.00037452534804338633,
+                                   -0.06529954910203895, 0.003433332504564568)),
+            Pulse(25600000, Spline(0.9385083087505672, -0.11934786239705719,
+                                   -0.05432178392081566, 0.008714728160582386)),
+            Pulse(25600000, Spline(0.7735533905932739, -0.2016937565099568,
+                                   -0.027190561418399817, 0.010104101022704093)),
+            Pulse(25600000, Spline(0.5547731736876214, -0.22605567807641802,
+                                   0.0038925727214200734, 0.007389931667376892)),
+            Pulse(25600000, Spline(0.34, -0.19663272175275923,
+                                   0.026234326472228675, 0.002488136603061575)),
+            Pulse(25600000, Spline(0.17208974132253121, -0.13715889636066686,
+                                   0.03324564354639803, -0.0017298791015359916)),
+            Pulse(25600000, Spline(0.06644660940672625, -0.07601073581946988,
+                                   0.02731215461568337, -0.0031192519636593086)),
+            Pulse(25600000, Spline(0.014628776239280494, -0.03056855626504512,
+                                   0.01740824258551721, -0.0014684625597525258)),
+            Pulse(51200000, Spline(0.0, 0.00015745877326822644,
+                                   0.01300285490625988, 0.001468462559752276)),
+            Pulse(51200000, Spline(0.014628776239280439, 0.03074418247908131,
+                                   0.01795439872470489, 0.003119251963659586)),
+            Pulse(51200000, Spline(0.06644660940672625, 0.07585724657247933,
+                                   0.028056006241789055, 0.0017298791015365467)),
+            Pulse(51200000, Spline(0.17208974132253135, 0.13669965899911896,
+                                   0.033698736281407626, -0.002488136603058244)),
+            Pulse(51200000, Spline(0.34, 0.19610073763144964,
+                                   0.026062367723541868, -0.007389931667371563)),
+            Pulse(51200000, Spline(0.5547731736876211, 0.22576257627864393,
+                                   0.003121741649712906, -0.010104101022703649)),
+            Pulse(51200000, Spline(0.7735533905932739, 0.20184724575694735,
+                                   -0.028177599439071166, -0.008714728160579277)),
+            Pulse(51200000, Spline(0.9385083087505672, 0.11992457534234635,
+                                   -0.05499955158835057, -0.0034333325045636798)),
+            Pulse(51200000, Spline(1.0, 0.00037452534804338633,
+                                   -0.06529954910203895, 0.003433332504564568)),
+            Pulse(51200000, Spline(0.9385083087505672, -0.11934786239705719,
+                                   -0.05432178392081566, 0.008714728160582386)),
+            Pulse(51200000, Spline(0.7735533905932739, -0.2016937565099568,
+                                   -0.027190561418399817, 0.010104101022704093)),
+            Pulse(51200000, Spline(0.5547731736876214, -0.22605567807641802,
+                                   0.0038925727214200734, 0.007389931667376892)),
+            Pulse(51200000, Spline(0.34, -0.19663272175275923,
+                                   0.026234326472228675, 0.002488136603061575)),
+            Pulse(51200000, Spline(0.17208974132253121, -0.13715889636066686,
+                                   0.03324564354639803, -0.0017298791015359916)),
+            Pulse(51200000, Spline(0.06644660940672625, -0.07601073581946988,
+                                   0.02731215461568337, -0.0031192519636593086)),
+            Pulse(51200000, Spline(0.014628776239280494, -0.03056855626504512,
+                                   0.01740824258551721, -0.0014684625597525258)),
+            Pulse(8)
+          ],
+          'phase': [
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(25600000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(51200000),
+            Pulse(8)
+          ]
+        },
+        1: {
+          'freq': [Pulse(1228800008)],
+          'amp': [Pulse(1228800008, Spline(1.0))],
+          'phase': [Pulse(1228800008)]
+        }
+    })
+
+@with_rfsoc_params
 def test_short_ramp_output1(max_bt):
     s, comp, rb = gentest.new_env(max_bt)
     ramp1 = StaticFunction()
@@ -1289,15 +1527,6 @@ def test_rampfunc_error(max_bt):
     with pytest.raises(ValueError, match="JJJLLL---DFFDAFD") as exc:
         comp.runtime_finalize(1)
     check_bt(exc, max_bt, 'jiasd9f89asd')
-
-    s, comp, rb = gentest.new_env(max_bt)
-    st = s.add_step(0.01)
-    def j98asdf():
-        st.pulse('rfsoc/dds0/1/freq', ErrorEval())
-    j98asdf()
-    with pytest.raises(ValueError, match="XXXJJFSJkdfFDSDF") as exc:
-        comp.finalize()
-    check_bt(exc, max_bt, 'j98asdf')
 
     s, comp, rb = gentest.new_env(max_bt)
     st = s.add_step(0.01)
@@ -2098,13 +2327,6 @@ def test_dds_delay(max_bt, use_rt):
 
 @with_rfsoc_params
 def test_cond_ramp_error(max_bt):
-    s, comp, rb = gentest.new_env(max_bt)
-    s.conditional(False).add_step(1) \
-      .set('rfsoc/dds0/0/amp', ErrorEval()) \
-      .pulse('rfsoc/dds0/1/amp', ErrorEval())
-    comp.finalize()
-    comp.runtime_finalize(1)
-
     s, comp, rb = gentest.new_env(max_bt)
     s.conditional(rtval.new_extern(lambda: False)) \
       .add_step(rtval.new_extern(lambda: 0)) \

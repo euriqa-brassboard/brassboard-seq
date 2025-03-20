@@ -51,16 +51,20 @@ cdef class RampFunction:
     cdef unique_ptr[InterpFunction] interp_func
 
     cdef eval_end(self, length, oldval)
+    # Currently this function is also used to pass the runtime length and oldval
+    # info to the ramp function to be used in subsequent runtime_eval calls.
+    # This may be moved into a different function if/when we have a caller
+    # that only need one of the effects of this function.
+    # Also note that this API mutates the object and currently means
+    # we cannot compute multiple ramps concurrently.
     cdef spline_segments(self, double length, double oldval)
-    cdef int set_compile_params(self, length, oldval) except -1
     cdef int set_runtime_params(self, unsigned age, py_object &pyage) except -1
     cdef TagVal runtime_eval(self, double t) noexcept
 
 cdef class SeqCubicSpline(RampFunction):
-    # _eval -> length
     # _spline_segments -> order0
     # _fvalue -> order1
-    cdef readonly object order2
+    # _eval -> order2
     cdef readonly object order3
     cdef double f_order0
     cdef double f_order1

@@ -25,4 +25,10 @@ static inline void rampfunc_set_time(auto *self, double t)
     self->interp_func->data[0].f64_val = t;
 }
 
+static inline void rampfunc_set_context(auto *self, double length, double oldval)
+{
+    self->interp_func->data[1].f64_val = length;
+    self->interp_func->data[2].f64_val = oldval;
+}
+
 }

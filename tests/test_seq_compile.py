@@ -599,40 +599,6 @@ def test_ramp_order1(max_bt):
                      600_000_000_000]
     assert total_time == 600_000_000_000
 
-class ErrorFunction(action.RampFunction):
-    def __init__(self, err):
-        action.RampFunction.__init__(self)
-        self.err = err
-
-    def eval(self, t, length, oldval):
-        raise self.err
-
-@with_seq_params
-def test_ramp_eval_error1(max_bt):
-    s = new_seq(max_bt)
-
-    f1 = ErrorFunction(RuntimeError("AAAA-BBBB.CCCC"))
-    s.add_step(0.1).pulse('artiq/analog', 0.1)
-    s.wait(0.2)
-    def asd7f8ashdfasd():
-        s.add_step(0.1).set('artiq/analog', f1)
-    asd7f8ashdfasd()
-
-    assert str(s) == f"""Seq - T[3]
- T[0]: 0 ps
- T[1]: T[0] + 100 ms
- T[2]: T[1] + 200 ms
- T[3]: T[2] + 100 ms
-  TimeStep(0.1)@T[0]
-    artiq/analog: Pulse(0.1)
-  TimeStep(0.1)@T[2]
-    artiq/analog: Set({f1})
-"""
-
-    with pytest.raises(RuntimeError, match="AAAA-BBBB.CCCC") as exc:
-        test_utils.seq_finalize(s)
-    check_bt(exc, max_bt, 'asd7f8ashdfasd')
-
 @with_seq_params
 def test_rt_assert(max_bt):
     s = new_seq(max_bt)
@@ -694,13 +660,6 @@ class DivLengthFunction(action.RampFunction):
 @with_seq_params
 def test_cond_ramp_error(max_bt):
     s = new_seq(max_bt)
-    s.conditional(False).add_step(1) \
-      .set('artiq/urukul0_ch0/amp', ErrorFunction(RuntimeError(""))) \
-      .pulse('artiq/urukul0_ch1/amp', ErrorFunction(RuntimeError("")))
-    test_utils.seq_finalize(s)
-    test_utils.seq_runtime_finalize(s, 1)
-
-    s = new_seq(max_bt)
     s.conditional(rtval.new_extern(lambda: False)) \
       .add_step(rtval.new_extern(lambda: 0)) \
       .set('artiq/urukul0_ch0/amp', DivLengthFunction()) \
@@ -725,3 +684,22 @@ def test_cond_ramp_error(max_bt):
       .pulse('artiq/urukul1_ch1/amp', action.BlackmanSquare(1))
     test_utils.seq_finalize(s)
     test_utils.seq_runtime_finalize(s, 1)
+
+class MissingInit(action.RampFunction):
+    def __init__(self):
+        pass
+
+    def eval(self, t, length, oldval):
+        return t / length
+
+@with_seq_params
+def test_ramp_noinit_error(max_bt):
+    s = new_seq(max_bt)
+    def jaksdjfpoiasdnqeurfsda8u2jadf():
+        s.add_step(2) \
+          .set('artiq/urukul0_ch0/amp', MissingInit())
+    jaksdjfpoiasdnqeurfsda8u2jadf()
+    test_utils.seq_finalize(s)
+    with pytest.raises(RuntimeError, match="RampFunction.__init__ not called") as exc:
+        test_utils.seq_runtime_finalize(s, 1)
+    check_bt(exc, max_bt, 'jaksdjfpoiasdnqeurfsda8u2jadf')

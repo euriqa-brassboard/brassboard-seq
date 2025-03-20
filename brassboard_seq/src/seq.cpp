@@ -632,8 +632,6 @@ static inline void seq_finalize(Seq *self, TimeStep*, RampFunction*)
                         auto rampf = (RampFunction*)action_value;
                         auto length = action->length;
                         auto vt = rampf->__pyx_vtab;
-                        throw_if(vt->set_compile_params(rampf, length, value),
-                                 action_key(action->aid));
                         new_value.reset(throw_if_not(vt->eval_end(rampf, length, value),
                                                      action_key(action->aid)));
                     }
@@ -650,12 +648,6 @@ static inline void seq_finalize(Seq *self, TimeStep*, RampFunction*)
                         value.reset((PyObject*)endval);
                     }
                 }
-            }
-            else if (cond != Py_False && isramp) {
-                auto rampf = (RampFunction*)action_value;
-                throw_if(rampf->__pyx_vtab->set_compile_params(rampf, action->length,
-                                                               value),
-                         action_key(action->aid));
             }
             last_time = last_is_start ? start_time : get_time(action->end_tid);
             action->end_val.reset(py_newref(value.get()));

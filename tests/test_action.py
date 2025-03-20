@@ -42,16 +42,16 @@ class SinFunction(action.RampFunction):
 
 class ValueFunction(action.RampFunction):
     def __init__(self, res):
-        action.RampFunction.__init__(self)
         self.res = res
+        action.RampFunction.__init__(self)
 
     def eval(self, t, length, oldval):
         return self.res
 
 class ErrorFunction(action.RampFunction):
     def __init__(self, err):
-        action.RampFunction.__init__(self)
         self.err = err
+        action.RampFunction.__init__(self)
 
     def eval(self, t, length, oldval):
         raise self.err
@@ -112,29 +112,23 @@ def test_ramp_eval():
     vs = test.eval_runtime(0, ts)
     assert (vs == -0.2 + 2 * np.sin(2.3 + 1.2 * ts)).all()
 
-    wtfunc = ValueFunction([])
     with pytest.raises(TypeError):
-        test_utils.RampTest(wtfunc, rlen, rold)
-    wtfunc.res = 1
+        ValueFunction([])
+    wtfunc = ValueFunction(1)
     test = test_utils.RampTest(wtfunc, rlen, rold)
     assert test.eval_compile_end() == 1
     assert test.eval_runtime(0, [1, 2, 3]) == [1, 1, 1]
-    wtfunc.res = np.empty((2, 2))
     with pytest.raises(TypeError):
-        test_utils.RampTest(wtfunc, rlen, rold)
-    wtfunc.res = test_utils.new_arg(1)
-    with pytest.raises(IndexError, match="Argument index out of bound: 1."):
-        test_utils.RampTest(wtfunc, rlen, rold)
-    wtfunc.res = test_utils.new_arg([])
+        ValueFunction(np.empty((2, 2)))
+    with pytest.raises(IndexError, match="Argument index out of bound: 3."):
+        ValueFunction(test_utils.new_arg(3))
     with pytest.raises(TypeError):
-        test_utils.RampTest(wtfunc, rlen, rold)
-    wtfunc.res = test_utils.new_invalid_rtval()
+        ValueFunction(test_utils.new_arg([]))
     with pytest.raises(ValueError, match="Unknown value type"):
-        test_utils.RampTest(wtfunc, rlen, rold)
+        ValueFunction(test_utils.new_invalid_rtval())
 
-    efunc = ErrorFunction(ValueError("AAAAA"))
     with pytest.raises(ValueError, match="^AAAAA$"):
-        test_utils.RampTest(efunc, rlen, rold)
+        ErrorFunction(ValueError("AAAAA"))
 
 def test_spline():
     assert test_utils.ramp_get_spline_segments(SinFunction(1.0, 2.0, 0.1), 1, 0) is None
@@ -248,6 +242,7 @@ def test_const():
 class FuncAction(action.RampFunction):
     def __init__(self, cb):
         self.cb = cb
+        super().__init__()
 
     def eval(self, t, l, o):
         return self.cb(t, l, o)
