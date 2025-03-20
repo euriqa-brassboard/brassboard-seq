@@ -43,7 +43,7 @@ struct ArtiqConsts {
 
 static ArtiqConsts artiq_consts;
 
-static PyTypeObject *rampfunction_type;
+static PyTypeObject *rampfunctionbase_type;
 
 inline int ChannelsInfo::add_bus_channel(int bus_channel, uint32_t io_update_target,
                                          uint8_t ref_period_mu)
@@ -226,7 +226,7 @@ void collect_actions(auto *ab, EventTime*)
                                 "Invalid output keyword argument %S",
                                 action->kws.get());
             auto value = action->value.get();
-            if (py_issubtype_nontrivial(Py_TYPE(value), rampfunction_type))
+            if (py_issubtype_nontrivial(Py_TYPE(value), rampfunctionbase_type))
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "TTL Channel cannot be ramped");
             if (action->cond.get() == Py_False)
@@ -243,7 +243,7 @@ void collect_actions(auto *ab, EventTime*)
                                 "Invalid output keyword argument %S",
                                 action->kws.get());
             auto value = action->value.get();
-            if (py_issubtype_nontrivial(Py_TYPE(value), rampfunction_type))
+            if (py_issubtype_nontrivial(Py_TYPE(value), rampfunctionbase_type))
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "DDS Channel cannot be ramped");
             if (action->cond.get() == Py_False)

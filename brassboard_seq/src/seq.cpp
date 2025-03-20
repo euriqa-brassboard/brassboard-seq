@@ -29,7 +29,7 @@ static PyTypeObject *event_time_type;
 static PyTypeObject *timestep_type;
 static PyTypeObject *subseq_type;
 static PyTypeObject *condwrapper_type;
-static PyTypeObject *rampfunction_type;
+static PyTypeObject *rampfunctionbase_type;
 static PyObject *rt_time_scale;
 
 using namespace rtval;
@@ -571,8 +571,8 @@ static void collect_actions(SubSeq *self, std::vector<action::Action*> *actions)
     }
 }
 
-template<typename TimeStep, typename RampFunction, typename Seq>
-static inline void seq_finalize(Seq *self, TimeStep*, RampFunction*)
+template<typename TimeStep, typename _RampFunctionBase, typename Seq>
+static inline void seq_finalize(Seq *self, TimeStep*, _RampFunctionBase*)
 {
     using EventTime = std::remove_reference_t<decltype(*self->__pyx_base.__pyx_base.start_time)>;
     auto seqinfo = self->__pyx_base.__pyx_base.seqinfo;
@@ -621,7 +621,7 @@ static inline void seq_finalize(Seq *self, TimeStep*, RampFunction*)
             }
             auto action_value = action->value.get();
             auto isramp = py_issubtype_nontrivial(Py_TYPE(action_value),
-                                                  rampfunction_type);
+                                                  rampfunctionbase_type);
             auto cond = action->cond.get();
             last_is_start = false;
             if (!action->is_pulse) {
@@ -629,7 +629,7 @@ static inline void seq_finalize(Seq *self, TimeStep*, RampFunction*)
                 if (cond != Py_False) {
                     py_object new_value;
                     if (isramp) {
-                        auto rampf = (RampFunction*)action_value;
+                        auto rampf = (_RampFunctionBase*)action_value;
                         auto length = action->length;
                         auto vt = rampf->__pyx_vtab;
                         new_value.reset(throw_if_not(vt->eval_end(rampf, length, value),
@@ -655,9 +655,9 @@ static inline void seq_finalize(Seq *self, TimeStep*, RampFunction*)
     }
 }
 
-template<typename RampFunction, typename Seq>
+template<typename _RampFunctionBase, typename Seq>
 static inline void seq_runtime_finalize(Seq *self, unsigned age, py_object &pyage,
-                                        RampFunction*)
+                                        _RampFunctionBase*)
 {
     auto seqinfo = self->__pyx_base.__pyx_base.seqinfo;
     auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);
@@ -700,9 +700,9 @@ static inline void seq_runtime_finalize(Seq *self, unsigned age, py_object &pyag
                 continue;
             auto action_value = action->value.get();
             auto isramp = py_issubtype_nontrivial(Py_TYPE(action_value),
-                                                  rampfunction_type);
+                                                  rampfunctionbase_type);
             if (isramp) {
-                auto rampf = (RampFunction*)action_value;
+                auto rampf = (_RampFunctionBase*)action_value;
                 throw_if(rampf->__pyx_vtab->set_runtime_params(rampf, age, pyage),
                          action_key(action->aid));
             }

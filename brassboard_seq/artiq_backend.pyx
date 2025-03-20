@@ -17,7 +17,7 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.action cimport RampFunction
+from brassboard_seq.action cimport _RampFunctionBase
 from brassboard_seq.event_time cimport EventTime, round_time_int
 from brassboard_seq.rtval cimport ExternCallback, is_rtval, new_extern
 from brassboard_seq.seq cimport Seq
@@ -67,7 +67,7 @@ cdef extern from "src/artiq_backend.cpp" namespace "brassboard_seq::artiq_backen
         int SPI_DATA_ADDR
 
     ArtiqConsts artiq_consts
-    PyTypeObject *rampfunction_type
+    PyTypeObject *rampfunctionbase_type
 
     void collect_actions(ArtiqBackend ab, EventTime) except +
 
@@ -82,7 +82,7 @@ artiq_consts.URUKUL_SPIT_DDS_WR = <int?>urukul.SPIT_DDS_WR
 artiq_consts.URUKUL_DEFAULT_PROFILE = urukul.DEFAULT_PROFILE if hasattr(urukul, 'DEFAULT_PROFILE') else 0
 artiq_consts.SPI_DATA_ADDR = <int?>spi2.SPI_DATA_ADDR
 artiq_consts.SPI_CONFIG_ADDR = <int?>spi2.SPI_CONFIG_ADDR
-rampfunction_type = <PyTypeObject*>RampFunction
+rampfunctionbase_type = <PyTypeObject*>_RampFunctionBase
 
 cdef PyObject *raise_invalid_channel(tuple path) except NULL:
     name = '/'.join(path)

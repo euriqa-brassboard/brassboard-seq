@@ -245,7 +245,7 @@ struct TimedID {
     int16_t id;
 };
 
-static PyTypeObject *rampfunction_type;
+static PyTypeObject *rampfunctionbase_type;
 static PyTypeObject *seqcubicspline_type;
 
 // order of the coefficient is order0, order1, order2, order3
@@ -2384,7 +2384,7 @@ void collect_actions(auto *rb, EventTime*)
         for (auto action: seq->all_actions[seq_chn]) {
             auto sync = parse_action_kws(action->kws.get(), action->aid);
             auto value = action->value.get();
-            auto is_ramp = py_issubtype_nontrivial(Py_TYPE(value), rampfunction_type);
+            auto is_ramp = py_issubtype_nontrivial(Py_TYPE(value), rampfunctionbase_type);
             if (is_ff && is_ramp)
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "Feed forward control cannot be ramped");
@@ -2668,9 +2668,9 @@ SyncTimeMgr::add_action(std::vector<DDSParamAction> &actions, int64_t start_cycl
     }
 }
 
-template<typename RampFunction, typename SeqCubicSpline>
+template<typename _RampFunctionBase, typename SeqCubicSpline>
 static __attribute__((always_inline)) inline
-void gen_rfsoc_data(auto *rb, RampFunction*, SeqCubicSpline*)
+void gen_rfsoc_data(auto *rb, _RampFunctionBase*, SeqCubicSpline*)
 {
     bb_debug("gen_rfsoc_data: start\n");
     auto seq = rb->__pyx_base.seq;
@@ -2852,7 +2852,7 @@ void gen_rfsoc_data(auto *rb, RampFunction*, SeqCubicSpline*)
                     continue;
                 }
                 auto len = action.float_value;
-                auto ramp_func = (RampFunction*)action.ramp;
+                auto ramp_func = (_RampFunctionBase*)action.ramp;
                 bb_debug("processing ramp on %s: @%" PRId64 ", len=%f, func=%p\n",
                          param_name(param), cur_cycle, len, ramp_func);
                 double sp_time;

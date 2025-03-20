@@ -1,7 +1,7 @@
 #
 
 from brassboard_seq.action import Blackman, BlackmanSquare, LinearRamp, \
-     RampFunction, SeqCubicSpline
+     RampFunction, _RampFunctionBase, SeqCubicSpline
 from brassboard_seq.config import Config
 from brassboard_seq import backend, rtval, seq
 from brassboard_seq.rfsoc_backend import Jaqal_v1, Jaqalv1Generator, RFSOCBackend
@@ -224,7 +224,7 @@ def get_channel_info(rb, s):
                     assert static_time == rfsoc_action.seq_time
 
                 action_value = test_utils.action_get_value(action)
-                isramp = isinstance(action_value, RampFunction)
+                isramp = isinstance(action_value, _RampFunctionBase)
                 if rfsoc_action.tid == action_info['tid']:
                     assert not seen[0]
                     seen[0] = True
@@ -233,7 +233,7 @@ def get_channel_info(rb, s):
                 else:
                     assert rfsoc_action.tid == action_info['end_tid']
                     isramp = isinstance(test_utils.action_get_value(action),
-                                        RampFunction)
+                                        _RampFunctionBase)
                     assert test_utils.action_get_is_pulse(action) or isramp
                     assert not seen[1]
                     seen[1] = True
@@ -267,7 +267,7 @@ def get_channel_info(rb, s):
     for chn, action, seen in all_actions.values():
         assert seen[0]
         action_value = test_utils.action_get_value(action)
-        isramp = isinstance(action_value, RampFunction)
+        isramp = isinstance(action_value, _RampFunctionBase)
         if test_utils.action_get_is_pulse(action) or isramp:
             assert seen[1]
         else:

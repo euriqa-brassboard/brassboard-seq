@@ -313,7 +313,7 @@ cdef double tagval_to_float(rtval.TagVal tv):
     return tv.val.f64_val
 
 cdef class RampTest:
-    cdef action.RampFunction func
+    cdef action._RampFunctionBase func
     cdef object length
     cdef object oldval
 
@@ -332,8 +332,11 @@ cdef class RampTest:
                                   rtval.get_value_f64(self.oldval, age, pyage))
         return [tagval_to_float(self.func.runtime_eval(t)) for t in ts]
 
-def ramp_get_spline_segments(action.RampFunction self, length, oldval):
+def ramp_get_spline_segments(action._RampFunctionBase self, length, oldval):
     return self.spline_segments(length, oldval)
+
+def ramp_runtime_eval(action._RampFunctionBase self, t):
+    return tagval_to_float(self.runtime_eval(t))
 
 def round_time(v):
     if rtval.is_rtval(v):

@@ -17,7 +17,7 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.action cimport RampFunction, SeqCubicSpline
+from brassboard_seq.action cimport _RampFunctionBase, SeqCubicSpline
 from brassboard_seq.event_time cimport EventTime, round_time_f64
 from brassboard_seq.rtval cimport is_rtval, rtval_cache, rt_eval_throw, RuntimeValue
 from brassboard_seq.utils cimport set_global_tracker, \
@@ -36,10 +36,10 @@ cdef re # hide import
 import re
 
 cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backend":
-    PyTypeObject *rampfunction_type
+    PyTypeObject *rampfunctionbase_type
     PyTypeObject *seqcubicspline_type
     void collect_actions(RFSOCBackend ab, EventTime) except+
-    void gen_rfsoc_data(RFSOCBackend ab, RampFunction, SeqCubicSpline) except +
+    void gen_rfsoc_data(RFSOCBackend ab, _RampFunctionBase, SeqCubicSpline) except +
 
     Generator *new_pulse_compiler_generator() except +
     cppclass PulseCompilerGen(Generator):
@@ -121,7 +121,7 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
             void clear()
             void end() except +
 
-rampfunction_type = <PyTypeObject*>RampFunction
+rampfunctionbase_type = <PyTypeObject*>_RampFunctionBase
 seqcubicspline_type = <PyTypeObject*>SeqCubicSpline
 
 cdef class RFSOCGenerator:

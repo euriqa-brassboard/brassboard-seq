@@ -44,12 +44,7 @@ cdef extern from "src/action.h" namespace "brassboard_seq::action":
 
 cdef str action_str(Action*)
 
-cdef class RampFunction:
-    cdef object _eval
-    cdef object _spline_segments
-    cdef object _fvalue
-    cdef unique_ptr[InterpFunction] interp_func
-
+cdef class _RampFunctionBase:
     cdef eval_end(self, length, oldval)
     # Currently this function is also used to pass the runtime length and oldval
     # info to the ramp function to be used in subsequent runtime_eval calls.
@@ -61,10 +56,16 @@ cdef class RampFunction:
     cdef int set_runtime_params(self, unsigned age, py_object &pyage) except -1
     cdef TagVal runtime_eval(self, double t) noexcept
 
-cdef class SeqCubicSpline(RampFunction):
-    # _spline_segments -> order0
-    # _fvalue -> order1
-    # _eval -> order2
+cdef class RampFunction(_RampFunctionBase):
+    cdef object _eval
+    cdef object _spline_segments
+    cdef object _fvalue
+    cdef unique_ptr[InterpFunction] interp_func
+
+cdef class SeqCubicSpline(_RampFunctionBase):
+    cdef readonly object order0
+    cdef readonly object order1
+    cdef readonly object order2
     cdef readonly object order3
     cdef double f_order0
     cdef double f_order1

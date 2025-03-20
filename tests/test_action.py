@@ -65,6 +65,17 @@ class PyCubicSpline(action.RampFunction):
     def spline_segments(self, length, oldval):
         return ()
 
+def test_ramp_base():
+    r = action._RampFunctionBase()
+    test = test_utils.RampTest(r, 1, 0)
+    with pytest.raises(NotImplementedError):
+        test.eval_compile_end()
+    with pytest.raises(NotImplementedError):
+        test.eval_runtime(1, [1, 2, 3])
+    with pytest.raises(NotImplementedError):
+        test_utils.ramp_get_spline_segments(r, 1, 0)
+    assert test_utils.ramp_runtime_eval(r, 1) == 0
+
 def test_ramp_eval():
     rt = rtval.new_extern(lambda: 1)
     rlen = rtval.new_extern(lambda: 2)

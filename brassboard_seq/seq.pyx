@@ -17,7 +17,7 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.action cimport RampFunction, action_str
+from brassboard_seq.action cimport _RampFunctionBase, action_str
 from brassboard_seq.config cimport translate_channel
 from brassboard_seq.event_time cimport round_time_int, round_time_rt, \
   set_base_int, set_base_rt, rt_time_scale, new_time_manager
@@ -37,23 +37,23 @@ cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
     PyTypeObject *timestep_type
     PyTypeObject *subseq_type
     PyTypeObject *condwrapper_type
-    PyTypeObject *rampfunction_type
+    PyTypeObject *rampfunctionbase_type
     PyObject *_rt_time_scale "brassboard_seq::seq::rt_time_scale"
     void update_timestep(TimeStep) except +
     void update_subseq(SubSeq, ConditionalWrapper, TimeSeq, TimeStep) except +
     void update_conditional(ConditionalWrapper, TimeSeq, TimeStep) except +
     object combine_cond(object cond1, object new_cond) except +
     SubSeq add_custom_step(SubSeq, object cond, EventTime, object) except +
-    void seq_finalize(Seq, TimeStep, RampFunction) except +
+    void seq_finalize(Seq, TimeStep, _RampFunctionBase) except +
     void seq_runtime_finalize(Seq, unsigned age, py_object &pyage,
-                              RampFunction) except +
+                              _RampFunctionBase) except +
 
 
 event_time_type = <PyTypeObject*>EventTime
 timestep_type = <PyTypeObject*>TimeStep
 subseq_type = <PyTypeObject*>SubSeq
 condwrapper_type = <PyTypeObject*>ConditionalWrapper
-rampfunction_type = <PyTypeObject*>RampFunction
+rampfunctionbase_type = <PyTypeObject*>_RampFunctionBase
 _rt_time_scale = <PyObject*>rt_time_scale
 
 update_timestep(None)
