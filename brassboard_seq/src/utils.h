@@ -60,10 +60,11 @@ static inline constexpr auto _call_cb_pyx_base(auto *p, auto cb)
 
 }
 
-#define pyx_fld(p, fld)                                         \
-    (*::_call_cb_pyx_base(p, []<typename T>(T *p) constexpr     \
-                          requires requires (T *p) { p->fld; }  \
-                          { return &p->fld; }))
+#define pyx_find_base(p, fld)                                  \
+    (::_call_cb_pyx_base(p, []<typename T>(T *p) constexpr     \
+                         requires requires (T *p) { p->fld; }  \
+                         { return p; }))
+#define pyx_fld(p, fld) pyx_find_base(p, fld)->fld
 
 namespace brassboard_seq {
 

@@ -568,7 +568,7 @@ static inline void seq_finalize(Seq *self, TimeStep*, _RampFunctionBase*)
     auto nchn = (int)PyList_GET_SIZE(seqinfo->channel_paths);
     auto all_actions = new std::vector<action::Action*>[nchn];
     self->all_actions.reset(all_actions);
-    collect_actions<TimeStep>(&self->__pyx_base, all_actions);
+    collect_actions<TimeStep>(pyx_find_base(self, sub_seqs), all_actions);
     auto get_time = [event_times=time_mgr->event_times] (int tid) {
         return (EventTime*)PyList_GET_ITEM(event_times, tid);
     };
