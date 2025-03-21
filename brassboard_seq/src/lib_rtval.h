@@ -19,6 +19,8 @@
 #ifndef BRASSBOARD_SEQ_SRC_LIB_RTVAL_H
 #define BRASSBOARD_SEQ_SRC_LIB_RTVAL_H
 
+#include <concepts>
+
 #include "utils.h"
 
 namespace brassboard_seq::rtval {
@@ -225,13 +227,13 @@ struct TagVal {
         : type(DataType::Bool),
           val{ .b_val = b }
     {}
-    template<typename T>
-    TagVal(T i, std::enable_if_t<std::is_integral_v<T>>* = nullptr)
+    template<std::integral T>
+    TagVal(T i)
         : type(DataType::Int64),
           val{ .i64_val = int64_t(i) }
     {}
-    template<typename T>
-    TagVal(T f, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr)
+    template<std::floating_point T>
+    TagVal(T f)
         : type(DataType::Float64),
           val{ .f64_val = double(f) }
     {}
