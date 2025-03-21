@@ -2367,12 +2367,12 @@ template<typename EventTime>
 static __attribute__((always_inline)) inline
 void collect_actions(auto *rb, EventTime*)
 {
-    auto seq = rb->__pyx_base.seq;
+    auto seq = pyx_fld(rb, seq);
 
     ValueIndexer<int> bool_values;
     ValueIndexer<double> float_values;
     std::vector<Relocation> &relocations = rb->relocations;
-    auto event_times = seq->__pyx_base.__pyx_base.seqinfo->time_mgr->event_times;
+    auto event_times = pyx_fld(seq, seqinfo)->time_mgr->event_times;
 
     rb->channels.ensure_unused_tones(rb->use_all_channels);
 
@@ -2673,7 +2673,7 @@ static __attribute__((always_inline)) inline
 void gen_rfsoc_data(auto *rb, _RampFunctionBase*, SeqCubicSpline*)
 {
     bb_debug("gen_rfsoc_data: start\n");
-    auto seq = rb->__pyx_base.seq;
+    auto seq = pyx_fld(rb, seq);
     for (size_t i = 0, nreloc = rb->bool_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = rb->bool_values[i];
         val = !rtval::rtval_cache((rtval::_RuntimeValue*)rtval).is_zero();
@@ -2682,7 +2682,7 @@ void gen_rfsoc_data(auto *rb, _RampFunctionBase*, SeqCubicSpline*)
         auto &[rtval, val] = rb->float_values[i];
         val = rtval::rtval_cache((rtval::_RuntimeValue*)rtval).template get<double>();
     }
-    auto &time_values = seq->__pyx_base.__pyx_base.seqinfo->time_mgr->time_values;
+    auto &time_values = pyx_fld(seq, seqinfo)->time_mgr->time_values;
     auto reloc_action = [rb, &time_values] (const RFSOCAction &action,
                                             ToneParam param) {
         auto reloc = rb->relocations[action.reloc_id];
@@ -2763,7 +2763,7 @@ void gen_rfsoc_data(auto *rb, _RampFunctionBase*, SeqCubicSpline*)
     gen->start();
 
     // Add extra cycles to be able to handle the requirement of minimum 4 cycles.
-    auto total_cycle = seq_time_to_cycle(rb->__pyx_base.seq->total_time + max_delay) + 8;
+    auto total_cycle = seq_time_to_cycle(pyx_fld(rb, seq)->total_time + max_delay) + 8;
     for (auto &channel: rb->channels.channels) {
         ScopeExit cleanup([&] {
             rb->tone_buffer.clear();

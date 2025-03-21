@@ -102,14 +102,14 @@ template<typename EventTime>
 static __attribute__((always_inline)) inline
 void collect_actions(auto *ab, EventTime*)
 {
-    auto seq = ab->__pyx_base.seq;
+    auto seq = pyx_fld(ab, seq);
     std::vector<ArtiqAction> &artiq_actions = ab->all_actions;
 
     ValueIndexer<int> bool_values;
     ValueIndexer<double> float_values;
     std::vector<Relocation> &relocations = ab->relocations;
 
-    auto event_times = seq->__pyx_base.__pyx_base.seqinfo->time_mgr->event_times;
+    auto event_times = pyx_fld(seq, seqinfo)->time_mgr->event_times;
 
     auto add_single_action = [&] (auto *action, ChannelType type, int chn_idx,
                                   int tid, PyObject *value, int cond_reloc,
@@ -260,7 +260,7 @@ static __attribute__((always_inline)) inline
 void generate_rtios(auto *ab, unsigned age, py_object &pyage)
 {
     bb_debug("generate_rtios: start\n");
-    auto seq = ab->__pyx_base.seq;
+    auto seq = pyx_fld(ab, seq);
     for (size_t i = 0, nreloc = ab->bool_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = ab->bool_values[i];
         val = !rtval::rtval_cache((rtval::_RuntimeValue*)rtval).is_zero();
@@ -296,7 +296,7 @@ void generate_rtios(auto *ab, unsigned age, py_object &pyage)
         relocate_delay(ddschn.delay, (rtval::_RuntimeValue*)ddschn.rt_delay);
         max_delay = std::max(max_delay, ddschn.delay);
     }
-    auto &time_values = seq->__pyx_base.__pyx_base.seqinfo->time_mgr->time_values;
+    auto &time_values = pyx_fld(seq, seqinfo)->time_mgr->time_values;
 
     auto reloc_action = [ab, &time_values] (const ArtiqAction &action) {
         auto reloc = ab->relocations[action.reloc_id];
@@ -506,7 +506,7 @@ void generate_rtios(auto *ab, unsigned age, py_object &pyage)
         return a1.time_mu < a2.time_mu;
     });
 
-    auto total_time_mu = seq_time_to_mu(ab->__pyx_base.seq->total_time + max_delay);
+    auto total_time_mu = seq_time_to_mu(pyx_fld(ab, seq)->total_time + max_delay);
     if (ab->use_dma) {
         auto rtio_array = ab->rtio_array;
         auto nactions = rtio_actions.size();

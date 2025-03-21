@@ -96,19 +96,18 @@ template<typename TimeStep, typename SubSeq, typename EventTime>
 static inline __attribute__((returns_nonnull)) TimeStep*
 add_time_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *length)
 {
-    auto seqinfo = self->__pyx_base.seqinfo;
+    auto seqinfo = pyx_fld(self, seqinfo);
     py_object end_time((PyObject*)new_round_time(seqinfo->time_mgr, start_time, length,
                                                  cond, (EventTime*)Py_None));
     py_object o(pytype_genericalloc(timestep_type));
     auto step = (TimeStep*)o.get();
-    auto seq = &step->__pyx_base;
     new (&step->actions) std::vector<py_object>();
-    seq->seqinfo = py_newref(seqinfo);
-    seq->start_time = py_newref(start_time);
-    seq->end_time = (EventTime*)end_time.release();
-    seq->cond = py_newref(cond);
-    step->length = py_newref(length);
-    seqinfo->bt_tracker.record(event_time_key(seq->end_time));
+    pyx_fld(step, seqinfo) = py_newref(seqinfo);
+    pyx_fld(step, start_time) = py_newref(start_time);
+    pyx_fld(step, end_time) = (EventTime*)end_time.release();
+    pyx_fld(step, cond) = py_newref(cond);
+    pyx_fld(step, length) = py_newref(length);
+    seqinfo->bt_tracker.record(event_time_key(pyx_fld(step, end_time)));
     pylist_append(self->sub_seqs, o);
     return (TimeStep*)o.release();
 }
@@ -119,15 +118,14 @@ add_custom_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *c
                 size_t nargs=0, PyObject *const *args=nullptr, PyObject *kwargs=nullptr)
 {
     py_object sub_seqs(pylist_new(0));
-    auto seqinfo = self->__pyx_base.seqinfo;
+    auto seqinfo = pyx_fld(self, seqinfo);
     py_object o(pytype_genericalloc(subseq_type));
     auto subseq = (SubSeq*)o.get();
-    auto seq = &subseq->__pyx_base;
-    seq->seqinfo = py_newref(seqinfo);
-    seq->start_time = py_newref(start_time);
-    seq->end_time = py_newref(start_time);
-    seq->cond = py_newref(cond);
-    subseq->sub_seqs = sub_seqs.release();
+    pyx_fld(subseq, seqinfo) = py_newref(seqinfo);
+    pyx_fld(subseq, start_time) = py_newref(start_time);
+    pyx_fld(subseq, end_time) = py_newref(start_time);
+    pyx_fld(subseq, cond) = py_newref(cond);
+    pyx_fld(subseq, sub_seqs) = sub_seqs.release();
     subseq->dummy_step = (decltype(subseq->dummy_step))py_immref(Py_None);
     if (nargs || kwargs) {
         py_object full_args(pytuple_new(nargs + 1));
@@ -238,17 +236,6 @@ static inline auto condseq_get_subseq(auto *self)
     }
 }
 
-template<bool is_cond>
-static inline auto condseq_get_cond(auto *self)
-{
-    if constexpr (is_cond) {
-        return self->cond;
-    }
-    else {
-        return self->__pyx_base.cond;
-    }
-}
-
 enum class AddStepType {
     Step,
     Background,
@@ -277,19 +264,19 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
 {
     auto self = (CondSeq*)py_self;
     auto subseq = condseq_get_subseq<is_cond>(self);
-    auto cond = condseq_get_cond<is_cond>(self);
+    auto cond = pyx_fld(self, cond);
     auto nargs_min = type == AddStepType::At ? 2 : 1;
     if (nargs < nargs_min)
         raise_too_few_args(add_step_name(type), false, nargs_min, nargs);
 
     auto first_arg = args[nargs_min - 1];
-    using EventTime = std::remove_reference_t<decltype(*subseq->__pyx_base.end_time)>;
+    using EventTime = std::remove_reference_t<decltype(*pyx_fld(subseq, end_time))>;
     py_object start_time;
     if (type == AddStepType::Background) {
-        start_time.reset(py_newref((PyObject*)subseq->__pyx_base.end_time));
+        start_time.reset(py_newref((PyObject*)pyx_fld(subseq, end_time)));
     }
     else if (type == AddStepType::Floating) {
-        auto time_mgr = subseq->__pyx_base.seqinfo->time_mgr;
+        auto time_mgr = pyx_fld(subseq, seqinfo)->time_mgr;
         auto new_time = event_time::_new_time_int(time_mgr, (PyObject*)event_time_type,
                                                   (EventTime*)Py_None, 0, true, cond,
                                                   (EventTime*)Py_None);
@@ -304,7 +291,7 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
     }
     else {
         assert(type == AddStepType::Step);
-        start_time.reset(py_newref((PyObject*)subseq->__pyx_base.end_time));
+        start_time.reset(py_newref((PyObject*)pyx_fld(subseq, end_time)));
     }
 
     auto tuple_nargs = nargs - nargs_min;
@@ -351,7 +338,7 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
                             arg_tuple.get());
     }
     if (type == AddStepType::Step)
-        pyassign(subseq->__pyx_base.end_time, ((TimeSeq*)res)->end_time);
+        pyassign(pyx_fld(subseq, end_time), ((TimeSeq*)res)->end_time);
     return res;
 }
 catch (...) {
@@ -370,7 +357,7 @@ static inline void
 timestep_set(auto *self, PyObject *chn, PyObject *value, PyObject *cond,
              bool is_pulse, bool exact_time, py_object &&kws)
 {
-    auto seqinfo = self->__pyx_base.seqinfo;
+    auto seqinfo = pyx_fld(self, seqinfo);
     int cid;
     if (Py_TYPE(chn) == &PyLong_Type) {
         auto lcid = PyLong_AsLong(chn);
@@ -406,16 +393,16 @@ subseq_set(auto *self, PyObject *chn, PyObject *value, PyObject *cond,
 {
     auto *step = self->dummy_step;
     using TimeStep = std::remove_reference_t<decltype(*step)>;
-    auto *start_time = self->__pyx_base.end_time;
-    if ((PyObject*)step == Py_None || step->__pyx_base.end_time != start_time) {
-        step = add_time_step<TimeStep>(self, self->__pyx_base.cond,
+    auto *start_time = pyx_fld(self, end_time);
+    if ((PyObject*)step == Py_None || pyx_fld(step, end_time) != start_time) {
+        step = add_time_step<TimeStep>(self, pyx_fld(self, cond),
                                        start_time, pylong_cached(0));
         Py_DECREF(self->dummy_step);
         self->dummy_step = step;
         // Update the current time so that a normal step added later
         // this is treated as ordered after this set event
         // rather than at the same time.
-        pyassign(self->__pyx_base.end_time, step->__pyx_base.end_time);
+        pyassign(pyx_fld(self, end_time), pyx_fld(step, end_time));
     }
     timestep_set(step, chn, value, cond, false, exact_time, std::move(kws));
 }
@@ -427,7 +414,7 @@ static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
     seq_set_params params(args, nargs, kwnames, is_pulse);
     auto self = (CondSeq*)py_self;
     auto subseq = condseq_get_subseq<is_cond>(self);
-    auto cond = condseq_get_cond<is_cond>(self);
+    auto cond = pyx_fld(self, cond);
     CondCombiner cc(cond, params.cond);
     if constexpr (is_step)
         timestep_set(subseq, params.chn, params.value, cc.cond, is_pulse,
@@ -449,7 +436,7 @@ static PyObject *condseq_conditional(PyObject *py_self, PyObject *const *args,
         raise_too_few_args("conditional", true, 1, nargs);
     auto self = (CondSeq*)py_self;
     auto subseq = condseq_get_subseq<is_cond>(self);
-    auto cond = condseq_get_cond<is_cond>(self);
+    auto cond = pyx_fld(self, cond);
     CondCombiner cc(cond, args[0]);
     auto o = pytype_genericalloc(condwrapper_type);
     auto wrapper = (ConditionalWrapper*)o;
@@ -557,8 +544,8 @@ static void collect_actions(SubSeq *self, std::vector<action::Action*> *actions)
             continue;
         }
         auto step = (TimeStep*)subseq;
-        auto tid = step->__pyx_base.start_time->data.id;
-        auto end_tid = step->__pyx_base.end_time->data.id;
+        auto tid = pyx_fld(step, start_time)->data.id;
+        auto end_tid = pyx_fld(step, end_time)->data.id;
         int nactions = step->actions.size();
         for (int chn = 0; chn < nactions; chn++) {
             auto action = step->actions[chn];
@@ -574,8 +561,8 @@ static void collect_actions(SubSeq *self, std::vector<action::Action*> *actions)
 template<typename TimeStep, typename _RampFunctionBase, typename Seq>
 static inline void seq_finalize(Seq *self, TimeStep*, _RampFunctionBase*)
 {
-    using EventTime = std::remove_reference_t<decltype(*self->__pyx_base.__pyx_base.start_time)>;
-    auto seqinfo = self->__pyx_base.__pyx_base.seqinfo;
+    using EventTime = std::remove_reference_t<decltype(*pyx_fld(self, end_time))>;
+    auto seqinfo = pyx_fld(self, seqinfo);
     auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);
     auto time_mgr = seqinfo->time_mgr;
     time_mgr->__pyx_vtab->finalize(time_mgr);
@@ -659,7 +646,7 @@ template<typename _RampFunctionBase, typename Seq>
 static inline void seq_runtime_finalize(Seq *self, unsigned age, py_object &pyage,
                                         _RampFunctionBase*)
 {
-    auto seqinfo = self->__pyx_base.__pyx_base.seqinfo;
+    auto seqinfo = pyx_fld(self, seqinfo);
     auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);
     auto time_mgr = seqinfo->time_mgr;
     self->total_time = time_mgr->__pyx_vtab->compute_all_times(time_mgr, age, pyage);

@@ -45,6 +45,31 @@
 #  define bb_has_builtin(x) 0
 #endif
 
+namespace {
+
+template<typename T, typename Cb>
+__attribute__((always_inline, flatten))
+static inline constexpr auto _call_cb_pyx_base(T *p, Cb cb)
+    requires requires (T *p, Cb cb) { cb(p); }
+{
+    return cb(p);
+}
+
+template<typename T, typename Cb>
+__attribute__((always_inline, flatten))
+static inline constexpr auto _call_cb_pyx_base(T *p, Cb cb)
+    requires (requires (T *p) { p->__pyx_base; } && !requires (T *p, Cb cb) { cb(p); })
+{
+    return _call_cb_pyx_base(&p->__pyx_base, cb);
+}
+
+}
+
+#define pyx_fld(p, fld)                                         \
+    (*::_call_cb_pyx_base(p, []<typename T>(T *p) constexpr     \
+                          requires requires (T *p) { p->fld; }  \
+                          { return &p->fld; }))
+
 namespace brassboard_seq {
 
 // Replace with C++23 [[assume()]];
