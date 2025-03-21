@@ -48,22 +48,20 @@
 namespace {
 
 __attribute__((always_inline, flatten))
-static inline constexpr auto _call_cb_pyx_base(auto *p, auto cb)
+static inline constexpr auto _pyx_find_base(auto *p, auto cb)
 {
     if constexpr (requires { cb(p); }) {
-        return cb(p);
+        return p;
     }
     else {
-        return _call_cb_pyx_base(&p->__pyx_base, cb);
+        return _pyx_find_base(&p->__pyx_base, cb);
     }
 }
 
 }
 
-#define pyx_find_base(p, fld)                                  \
-    (::_call_cb_pyx_base(p, []<typename T>(T *p) constexpr     \
-                         requires requires (T *p) { p->fld; }  \
-                         { return p; }))
+#define pyx_find_base(p, fld)                                           \
+    (::_pyx_find_base(p, [] (auto p) constexpr requires requires { p->fld; } {}))
 #define pyx_fld(p, fld) pyx_find_base(p, fld)->fld
 
 namespace brassboard_seq {
