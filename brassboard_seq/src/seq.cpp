@@ -225,10 +225,9 @@ struct CondCombiner {
     }
 };
 
-template<bool is_cond>
 static inline auto condseq_get_subseq(auto *self)
 {
-    if constexpr (is_cond) {
+    if constexpr (requires { self->seq; }) {
         return self->seq;
     }
     else {
@@ -257,13 +256,12 @@ const char *add_step_name(AddStepType type)
 
 static auto empty_tuple = PyTuple_New(0);
 
-template<typename CondSeq, typename TimeSeq, typename TimeStep,
-         bool is_cond, AddStepType type>
+template<typename CondSeq, typename TimeSeq, typename TimeStep, AddStepType type>
 static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
                                Py_ssize_t nargs, PyObject *kwnames) try
 {
     auto self = (CondSeq*)py_self;
-    auto subseq = condseq_get_subseq<is_cond>(self);
+    auto subseq = condseq_get_subseq(self);
     auto cond = pyx_fld(self, cond);
     auto nargs_min = type == AddStepType::At ? 2 : 1;
     if (nargs < nargs_min)
@@ -407,13 +405,13 @@ subseq_set(auto *self, PyObject *chn, PyObject *value, PyObject *cond,
     timestep_set(step, chn, value, cond, false, exact_time, std::move(kws));
 }
 
-template<typename CondSeq, bool is_cond, bool is_step=false, bool is_pulse=false>
+template<typename CondSeq, bool is_step=false, bool is_pulse=false>
 static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
                              Py_ssize_t nargs, PyObject *kwnames) try
 {
     seq_set_params params(args, nargs, kwnames, is_pulse);
     auto self = (CondSeq*)py_self;
-    auto subseq = condseq_get_subseq<is_cond>(self);
+    auto subseq = condseq_get_subseq(self);
     auto cond = pyx_fld(self, cond);
     CondCombiner cc(cond, params.cond);
     if constexpr (is_step)
@@ -428,14 +426,14 @@ catch (...) {
     return nullptr;
 }
 
-template<typename CondSeq, typename ConditionalWrapper, bool is_cond>
+template<typename CondSeq, typename ConditionalWrapper>
 static PyObject *condseq_conditional(PyObject *py_self, PyObject *const *args,
                                      Py_ssize_t nargs) try
 {
     if (nargs != 1)
         raise_too_few_args("conditional", true, 1, nargs);
     auto self = (CondSeq*)py_self;
-    auto subseq = condseq_get_subseq<is_cond>(self);
+    auto subseq = condseq_get_subseq(self);
     auto cond = pyx_fld(self, cond);
     CondCombiner cc(cond, args[0]);
     auto o = pytype_genericalloc(condwrapper_type);
@@ -452,10 +450,10 @@ template<typename TimeStep>
 static inline void update_timestep(TimeStep*)
 {
     static PyMethodDef timestep_set_method = {
-        "set", (PyCFunction)(void*)condseq_set<TimeStep,false,true,false>,
+        "set", (PyCFunction)(void*)condseq_set<TimeStep,true,false>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef timestep_pulse_method = {
-        "pulse", (PyCFunction)(void*)condseq_set<TimeStep,false,true,true>,
+        "pulse", (PyCFunction)(void*)condseq_set<TimeStep,true,true>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     type_add_method(timestep_type, &timestep_set_method);
     type_add_method(timestep_type, &timestep_pulse_method);
@@ -467,26 +465,26 @@ template<typename SubSeq, typename ConditionalWrapper, typename TimeSeq,
 static inline void update_subseq(SubSeq*, ConditionalWrapper*, TimeSeq*, TimeStep*)
 {
     static PyMethodDef subseq_conditional_method = {
-        "conditional", (PyCFunction)(void*)condseq_conditional<SubSeq,ConditionalWrapper,false>,
+        "conditional", (PyCFunction)(void*)condseq_conditional<SubSeq,ConditionalWrapper>,
         METH_FASTCALL, 0};
     static PyMethodDef subseq_set_method = {
-        "set", (PyCFunction)(void*)condseq_set<SubSeq,false>,
+        "set", (PyCFunction)(void*)condseq_set<SubSeq>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef subseq_add_step_method = {
         "add_step",
-        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,TimeStep,false,AddStepType::Step>,
+        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,TimeStep,AddStepType::Step>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef subseq_add_background_method = {
         "add_background",
-        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,TimeStep,false,AddStepType::Background>,
+        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,TimeStep,AddStepType::Background>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef subseq_add_floating_method = {
         "add_floating",
-        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,TimeStep,false,AddStepType::Floating>,
+        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,TimeStep,AddStepType::Floating>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef subseq_add_at_method = {
         "add_at",
-        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,TimeStep,false,AddStepType::At>,
+        (PyCFunction)(void*)add_step_real<SubSeq,TimeSeq,TimeStep,AddStepType::At>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     type_add_method(subseq_type, &subseq_conditional_method);
     type_add_method(subseq_type, &subseq_set_method);
@@ -502,26 +500,26 @@ static inline void
 update_conditional(ConditionalWrapper*, TimeSeq*, TimeStep*)
 {
     static PyMethodDef conditional_conditional_method = {
-        "conditional", (PyCFunction)(void*)condseq_conditional<ConditionalWrapper,ConditionalWrapper,true>,
+        "conditional", (PyCFunction)(void*)condseq_conditional<ConditionalWrapper,ConditionalWrapper>,
         METH_FASTCALL, 0};
     static PyMethodDef conditional_set_method = {
-        "set", (PyCFunction)(void*)condseq_set<ConditionalWrapper,true>,
+        "set", (PyCFunction)(void*)condseq_set<ConditionalWrapper>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef conditional_add_step_method = {
         "add_step",
-        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,TimeStep,true,AddStepType::Step>,
+        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,TimeStep,AddStepType::Step>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef conditional_add_background_method = {
         "add_background",
-        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,TimeStep,true,AddStepType::Background>,
+        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,TimeStep,AddStepType::Background>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef conditional_add_floating_method = {
         "add_floating",
-        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,TimeStep,true,AddStepType::Floating>,
+        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,TimeStep,AddStepType::Floating>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     static PyMethodDef conditional_add_at_method = {
         "add_at",
-        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,TimeStep,true,AddStepType::At>,
+        (PyCFunction)(void*)add_step_real<ConditionalWrapper,TimeSeq,TimeStep,AddStepType::At>,
         METH_FASTCALL|METH_KEYWORDS, 0};
     type_add_method(condwrapper_type, &conditional_conditional_method);
     type_add_method(condwrapper_type, &conditional_set_method);
