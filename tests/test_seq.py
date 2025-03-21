@@ -1376,3 +1376,121 @@ def test_seq_C():
 
     c = s.conditional(False)
     assert c.C is s.C
+
+def test_invalid_branch():
+    conf = Config()
+    conf.add_supported_prefix('artiq')
+
+    s = seq.Seq(conf)
+    s2 = seq.Seq(conf)
+    with pytest.raises(ValueError,
+                       match="Cannot branch to basic seq from a different sequence"):
+        s.add_branch(s2)
+
+    s = seq.Seq(conf)
+    bs1 = s.new_basic_seq()
+    s.add_branch(bs1)
+    with pytest.raises(ValueError, match="Branch already added"):
+        s.add_branch(bs1)
+
+def test_branch():
+    conf = Config()
+    conf.add_supported_prefix('artiq')
+
+    s = seq.Seq(conf)
+    s.add_step(2) \
+      .set('artiq/ttl1', True) \
+      .set('artiq/analog1', 2.3)
+    s.wait(1)
+    assert s.may_terminate
+
+    bs1 = s.new_basic_seq()
+    s.add_branch(bs1)
+    assert not s.may_terminate
+    assert bs1.may_terminate
+
+    s.may_terminate = True
+    assert s.may_terminate
+    s.may_terminate = False
+    assert not s.may_terminate
+    bs1.add_step(0.1) \
+      .pulse('artiq/ttl2', False) \
+      .set('artiq/analog3', 0.2)
+    bs1.wait(0.01)
+    bs1.wait(0.02)
+
+    assert str(bs1) == f"""BasicSeq[1] - T[3]
+ T[0]: 0 ps
+ T[1]: T[0] + 100 ms
+ T[2]: T[1] + 10 ms
+ T[3]: T[2] + 20 ms
+  TimeStep(0.1)@T[0]
+    artiq/ttl2: Pulse(False)
+    artiq/analog3: Set(0.2)
+"""
+    assert str(bs1) == repr(bs1)
+
+    assert str(s) == f"""Seq - T[2]
+ branches: [1]
+ T[0]: 0 ps
+ T[1]: T[0] + 2 s
+ T[2]: T[1] + 1 s
+  TimeStep(2)@T[0]
+    artiq/ttl1: Set(True)
+    artiq/analog1: Set(2.3)
+
+ BasicSeq[1] - T[3]
+  T[0]: 0 ps
+  T[1]: T[0] + 100 ms
+  T[2]: T[1] + 10 ms
+  T[3]: T[2] + 20 ms
+   TimeStep(0.1)@T[0]
+     artiq/ttl2: Pulse(False)
+     artiq/analog3: Set(0.2)
+"""
+
+    s.may_terminate = True
+
+    assert str(s) == f"""Seq - T[2]
+ branches: [1] may terminate
+ T[0]: 0 ps
+ T[1]: T[0] + 2 s
+ T[2]: T[1] + 1 s
+  TimeStep(2)@T[0]
+    artiq/ttl1: Set(True)
+    artiq/analog1: Set(2.3)
+
+ BasicSeq[1] - T[3]
+  T[0]: 0 ps
+  T[1]: T[0] + 100 ms
+  T[2]: T[1] + 10 ms
+  T[3]: T[2] + 20 ms
+   TimeStep(0.1)@T[0]
+     artiq/ttl2: Pulse(False)
+     artiq/analog3: Set(0.2)
+"""
+
+    bs2 = s.new_basic_seq()
+    s.add_branch(bs2)
+
+    assert str(s) == f"""Seq - T[2]
+ branches: [1 2] may terminate
+ T[0]: 0 ps
+ T[1]: T[0] + 2 s
+ T[2]: T[1] + 1 s
+  TimeStep(2)@T[0]
+    artiq/ttl1: Set(True)
+    artiq/analog1: Set(2.3)
+
+ BasicSeq[1] - T[3]
+  T[0]: 0 ps
+  T[1]: T[0] + 100 ms
+  T[2]: T[1] + 10 ms
+  T[3]: T[2] + 20 ms
+   TimeStep(0.1)@T[0]
+     artiq/ttl2: Pulse(False)
+     artiq/analog3: Set(0.2)
+
+ BasicSeq[2] - T[0]
+  T[0]: 0 ps
+"""

@@ -32,6 +32,19 @@ using namespace rtval;
 using event_time::EventTime;
 using event_time::time_ref;
 
+enum class TerminateStatus : uint8_t {
+    Default,
+    MayTerm,
+    MayNotTerm,
+};
+
+struct CInfo {
+    // Backtrace collection
+    BacktraceTracker bt_tracker;
+    action::ActionAllocator action_alloc;
+    int action_counter{0};
+};
+
 struct SeqInfo : PyObject {
     // EventTime manager
     py::ref<event_time::TimeManager> time_mgr;
@@ -39,15 +52,12 @@ struct SeqInfo : PyObject {
     py::list_ref assertions;
     // Global config object
     py::ref<config::Config> config;
-    // Backtrace collection
-    BacktraceTracker bt_tracker;
     // Name<->channel ID mapping
     py::dict_ref channel_name_map;
     py::dict_ref channel_path_map;
     py::list_ref channel_paths;
     py::ref<scan::ParamPack> C;
-    action::ActionAllocator action_alloc;
-    int action_counter;
+    std::shared_ptr<CInfo> cinfo;
 
     int get_channel_id(py::str name);
     py::str_ref channel_name_from_id(int cid)
@@ -134,7 +144,34 @@ struct ConditionalWrapper : PyObject {
     constexpr static str_literal ClsName = "ConditionalWrapper";
 };
 
-struct Seq : SubSeq {
+struct BasicSeq : SubSeq {
+    std::vector<int> next_bseq;
+    int bseq_id;
+    TerminateStatus term_status;
+    py::list_ref basic_seqs;
+
+    bool may_terminate() const
+    {
+        switch (term_status) {
+        case TerminateStatus::MayTerm:
+            return true;
+        case TerminateStatus::MayNotTerm:
+            return false;
+        default:
+            return next_bseq.empty();
+        }
+    }
+    void add_branch(py::ptr<BasicSeq> bseq);
+    void show_times(py::stringio &io, int indent) const;
+    void show_next(py::stringio &io, int indent) const;
+    void show(py::stringio &io, int indent) const;
+
+    static PyTypeObject Type;
+    constexpr static str_literal ClsName = "BasicSeq";
+    using fields = field_pack<SubSeq::fields,&BasicSeq::basic_seqs>;
+};
+
+struct Seq : BasicSeq {
     void show(py::stringio &io, int indent) const;
 
     static PyTypeObject Type;
