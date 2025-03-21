@@ -2381,7 +2381,7 @@ void collect_actions(auto *rb, EventTime*)
         auto is_ff = param == ToneFF;
         auto &channel = rb->channels.channels[chn_idx];
         auto &rfsoc_actions = channel.actions[(int)param];
-        for (auto action: seq->all_actions[seq_chn]) {
+        for (auto action: pyx_fld(seq, all_actions)[seq_chn]) {
             auto sync = parse_action_kws(action->kws.get(), action->aid);
             auto value = action->value.get();
             auto is_ramp = py_issubtype_nontrivial(Py_TYPE(value), rampfunctionbase_type);
@@ -2763,7 +2763,7 @@ void gen_rfsoc_data(auto *rb, _RampFunctionBase*, SeqCubicSpline*)
     gen->start();
 
     // Add extra cycles to be able to handle the requirement of minimum 4 cycles.
-    auto total_cycle = seq_time_to_cycle(pyx_fld(rb, seq)->total_time + max_delay) + 8;
+    auto total_cycle = seq_time_to_cycle(pyx_fld(seq, total_time) + max_delay) + 8;
     for (auto &channel: rb->channels.channels) {
         ScopeExit cleanup([&] {
             rb->tone_buffer.clear();

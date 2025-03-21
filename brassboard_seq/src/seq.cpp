@@ -567,7 +567,7 @@ static inline void seq_finalize(Seq *self, TimeStep*, _RampFunctionBase*)
     pyassign(seqinfo->channel_name_map, Py_None); // Free up memory
     auto nchn = (int)PyList_GET_SIZE(seqinfo->channel_paths);
     auto all_actions = new std::vector<action::Action*>[nchn];
-    self->all_actions.reset(all_actions);
+    pyx_fld(self, all_actions).reset(all_actions);
     collect_actions<TimeStep>(pyx_find_base(self, sub_seqs), all_actions);
     auto get_time = [event_times=time_mgr->event_times] (int tid) {
         return (EventTime*)PyList_GET_ITEM(event_times, tid);
@@ -647,7 +647,7 @@ static inline void seq_runtime_finalize(Seq *self, unsigned age, py_object &pyag
     auto seqinfo = pyx_fld(self, seqinfo);
     auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);
     auto time_mgr = seqinfo->time_mgr;
-    self->total_time = time_mgr->__pyx_vtab->compute_all_times(time_mgr, age, pyage);
+    pyx_fld(self, total_time) = time_mgr->__pyx_vtab->compute_all_times(time_mgr, age, pyage);
     auto assertions = seqinfo->assertions;
     int nassert = PyList_GET_SIZE(assertions);
     for (int assert_id = 0; assert_id < nassert; assert_id++) {
@@ -676,7 +676,7 @@ static inline void seq_runtime_finalize(Seq *self, unsigned age, py_object &pyag
     };
     auto nchn = (int)PyList_GET_SIZE(seqinfo->channel_paths);
     for (int cid = 0; cid < nchn; cid++) {
-        auto &actions = self->all_actions[cid];
+        auto &actions = pyx_fld(self, all_actions)[cid];
         long long prev_time = 0;
         for (auto action: actions) {
             bool cond_val = get_condval(action);
