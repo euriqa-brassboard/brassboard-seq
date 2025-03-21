@@ -60,7 +60,7 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
     auto seq = comp->seq;
     using EventTime = std::remove_reference_t<decltype(*pyx_fld(seq, end_time))>;
     auto seqinfo = pyx_fld(seq, seqinfo);
-    auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);
+    auto bt_guard = set_global_tracker(&seqinfo->cinfo->bt_tracker);
     auto nchn = (int)PyList_GET_SIZE(seqinfo->channel_paths);
     for (auto [i, path]: pylist_iter(seqinfo->channel_paths)) {
         auto prefix = PyTuple_GET_ITEM(path, 0);
@@ -172,7 +172,7 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
     throw_if(age == (unsigned)-1 && PyErr_Occurred());
     auto seq = comp->seq;
     auto seqinfo = pyx_fld(seq, seqinfo);
-    auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);
+    auto bt_guard = set_global_tracker(&seqinfo->cinfo->bt_tracker);
     auto time_mgr = seqinfo->time_mgr;
     comp->cseq.total_time = time_mgr->__pyx_vtab->compute_all_times(time_mgr, age);
     for (auto [assert_id, a]: pylist_iter(seqinfo->assertions)) {

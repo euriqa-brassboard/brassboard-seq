@@ -25,6 +25,12 @@ from brassboard_seq.action cimport Action, ActionAllocator
 
 from libcpp.vector cimport vector
 
+cdef extern from "src/seq.h" namespace "brassboard_seq::seq":
+    enum class TerminateStatus:
+        Default
+        MayTerm
+        MayNotTerm
+
 cdef class TimeSeq:
     # Toplevel parent sequence
     cdef SeqInfo seqinfo
@@ -61,6 +67,20 @@ cdef class SubSeq(TimeSeq):
     cdef TimeStep dummy_step
 
 
+cdef class BasicSeq(SubSeq):
+    cdef vector[int] next_bseq
+    cdef int bseq_id
+    cdef TerminateStatus term_status
+    cdef list basic_seqs
+
+
+cdef class CInfo:
+    # Backtrace collection
+    cdef BacktraceTracker bt_tracker
+    cdef ActionAllocator action_alloc
+    cdef int action_counter
+
+
 cdef class SeqInfo:
     # EventTime manager
     cdef TimeManager time_mgr
@@ -68,15 +88,12 @@ cdef class SeqInfo:
     cdef list assertions
     # Global config object
     cdef Config config
-    # Backtrace collection
-    cdef BacktraceTracker bt_tracker
     # Name<->channel ID mapping
     cdef dict channel_name_map
     cdef dict channel_path_map
     cdef list channel_paths
     cdef ParamPack C
-    cdef ActionAllocator action_alloc
-    cdef int action_counter
+    cdef CInfo cinfo
 
-cdef class Seq(SubSeq):
+cdef class Seq(BasicSeq):
     pass

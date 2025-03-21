@@ -130,7 +130,7 @@ add_time_step(auto self, PyObject *cond, EventTime *start_time, PyObject *length
     pyx_fld(step, end_time) = (EventTime*)end_time.release();
     pyx_fld(step, cond) = py_newref(cond);
     pyx_fld(step, length) = py_newref(length);
-    seqinfo->bt_tracker.record(event_time_key(pyx_fld(step, end_time)));
+    seqinfo->cinfo->bt_tracker.record(event_time_key(pyx_fld(step, end_time)));
     pylist_append(self->sub_seqs, o);
     return (TimeStep*)o.release();
 }
@@ -158,6 +158,31 @@ add_custom_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *c
     }
     pylist_append(self->sub_seqs, o);
     return (SubSeq*)o.release();
+}
+
+static inline void basicseq_add_branch(auto self, auto bseq)
+{
+    if (pyx_fld(self, seqinfo)->cinfo != pyx_fld(bseq, seqinfo)->cinfo)
+        py_throw_format(PyExc_ValueError,
+                        "Cannot branch to basic seq from a different sequence");
+    auto bseq_id = pyx_fld(bseq, bseq_id);
+    auto &next_bseq = pyx_fld(self, next_bseq);
+    if (std::ranges::find(next_bseq, bseq_id) != next_bseq.end())
+        py_throw_format(PyExc_ValueError, "Branch already added");
+    next_bseq.push_back(bseq_id);
+}
+
+static inline bool basicseq_may_terminate(auto self)
+{
+    auto term_status = pyx_fld(self, term_status);
+    switch (term_status) {
+    case TerminateStatus::MayTerm:
+        return true;
+    case TerminateStatus::MayNotTerm:
+        return false;
+    default:
+        return pyx_fld(self, next_bseq).empty();
+    }
 }
 
 struct CondCombiner {
@@ -322,12 +347,13 @@ timestep_set(auto *self, PyObject *chn, PyObject *value, PyObject *cond,
                         "Multiple actions added for the same channel "
                         "at the same time on %U.", channel_name_from_id(seqinfo, cid).get());
     }
-    auto aid = seqinfo->action_counter;
-    auto action = seqinfo->action_alloc.alloc(value, cond, is_pulse, exact_time,
-                                              std::move(kws), aid);
+    auto cinfo = seqinfo->cinfo;
+    auto aid = cinfo->action_counter;
+    auto action = cinfo->action_alloc.alloc(value, cond, is_pulse, exact_time,
+                                            std::move(kws), aid);
     action->length = self->length;
-    seqinfo->bt_tracker.record(action_key(aid));
-    seqinfo->action_counter = aid + 1;
+    cinfo->bt_tracker.record(action_key(aid));
+    cinfo->action_counter = aid + 1;
     self->actions[cid] = action;
 }
 
