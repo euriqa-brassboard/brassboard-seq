@@ -23,6 +23,12 @@
 
 namespace brassboard_seq::seq {
 
+enum class TerminateStatus : uint8_t {
+    Default,
+    MayTerm,
+    MayNotTerm,
+};
+
 static py_object channel_name_from_id(auto *seqinfo, int cid)
 {
     return channel_name_from_path(PyList_GET_ITEM(seqinfo->channel_paths, cid));
