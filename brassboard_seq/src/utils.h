@@ -47,20 +47,15 @@
 
 namespace {
 
-template<typename T, typename Cb>
 __attribute__((always_inline, flatten))
-static inline constexpr auto _call_cb_pyx_base(T *p, Cb cb)
-    requires requires (T *p, Cb cb) { cb(p); }
+static inline constexpr auto _call_cb_pyx_base(auto *p, auto cb)
 {
-    return cb(p);
-}
-
-template<typename T, typename Cb>
-__attribute__((always_inline, flatten))
-static inline constexpr auto _call_cb_pyx_base(T *p, Cb cb)
-    requires (requires (T *p) { p->__pyx_base; } && !requires (T *p, Cb cb) { cb(p); })
-{
-    return _call_cb_pyx_base(&p->__pyx_base, cb);
+    if constexpr (requires { cb(p); }) {
+        return cb(p);
+    }
+    else {
+        return _call_cb_pyx_base(&p->__pyx_base, cb);
+    }
 }
 
 }
