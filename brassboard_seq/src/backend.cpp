@@ -54,8 +54,10 @@ template<typename Backend>
 static inline void compiler_finalize(auto comp, Backend*)
 {
     auto seq = comp->seq;
+    if (seq->basic_seqs.size() != 1)
+        py_throw_format(PyExc_ValueError, "Branch not yet supported");
     py::ptr seqinfo = seq->seqinfo;
-    auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);
+    auto bt_guard = set_global_tracker(&seqinfo->cinfo->bt_tracker);
     auto nchn = seqinfo->channel_paths.size();
     for (auto [i, path]: py::list_iter<py::tuple>(seqinfo->channel_paths)) {
         auto prefix = path.get(0);
@@ -164,7 +166,7 @@ static inline void compiler_runtime_finalize(auto comp, py::ptr<> _age, Backend*
     unsigned age = _age.as_int();
     auto seq = comp->seq;
     py::ptr seqinfo = seq->seqinfo;
-    auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);
+    auto bt_guard = set_global_tracker(&seqinfo->cinfo->bt_tracker);
     py::ptr time_mgr = seqinfo->time_mgr;
     comp->cseq.total_time = time_mgr->compute_all_times(age);
     for (auto [assert_id, a]: py::list_iter<py::tuple>(seqinfo->assertions)) {

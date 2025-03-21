@@ -317,7 +317,7 @@ static void set_time(py::ptr<TimeSeq> self, PyObject *const *args,
         self->start_time->set_base_rt(time, event_time::round_time_rt(offset));
     else
         self->start_time->set_base_int(time, event_time::round_time_int(offset));
-    self->seqinfo->bt_tracker.record(event_time_key(self->start_time));
+    self->seqinfo->cinfo->bt_tracker.record(event_time_key(self->start_time));
 }
 
 static void rt_assert(py::ptr<TimeSeq> self, PyObject *const *args,
@@ -331,7 +331,7 @@ static void rt_assert(py::ptr<TimeSeq> self, PyObject *const *args,
         msg = "Assertion failed"_py;
     if (is_rtval(c)) {
         py::ptr seqinfo = self->seqinfo;
-        seqinfo->bt_tracker.record(assert_key(seqinfo->assertions.size()));
+        seqinfo->cinfo->bt_tracker.record(assert_key(seqinfo->assertions.size()));
         seqinfo->assertions.append(py::new_tuple(c, msg));
     }
     else if (!c.as_bool()) {
@@ -383,12 +383,13 @@ inline void TimeStep::set(py::ptr<> chn, py::ptr<> value, py::ptr<> cond,
                         "Multiple actions added for the same channel "
                         "at the same time on %U.", seqinfo->channel_name_from_id(cid));
     }
-    auto aid = seqinfo->action_counter;
-    auto action = seqinfo->action_alloc.alloc(value, cond, is_pulse, exact_time,
-                                              std::move(kws), aid);
+    auto cinfo = seqinfo->cinfo.get();
+    auto aid = cinfo->action_counter;
+    auto action = cinfo->action_alloc.alloc(value, cond, is_pulse, exact_time,
+                                            std::move(kws), aid);
     action->length = length;
-    seqinfo->bt_tracker.record(action_key(aid));
-    seqinfo->action_counter = aid + 1;
+    cinfo->bt_tracker.record(action_key(aid));
+    cinfo->action_counter = aid + 1;
     actions[cid] = action;
 }
 
@@ -478,7 +479,7 @@ __attribute__((visibility("internal")))
 inline void SubSeq::wait_cond(py::ptr<> length, py::ptr<> cond)
 {
     auto new_time = seqinfo->time_mgr->new_round(end_time, length, cond, Py_None);
-    seqinfo->bt_tracker.record(event_time_key(new_time));
+    seqinfo->cinfo->bt_tracker.record(event_time_key(new_time));
     end_time.assign(std::move(new_time));
 }
 
@@ -489,7 +490,7 @@ inline void SubSeq::wait_for_cond(py::ptr<> _tp0, py::ptr<> offset, py::ptr<> co
     if (!tp0)
         tp0 = py::arg_cast<TimeSeq>(_tp0, "time_point")->end_time;
     auto new_time = seqinfo->time_mgr->new_round(end_time, offset, cond, tp0);
-    seqinfo->bt_tracker.record(event_time_key(new_time));
+    seqinfo->cinfo->bt_tracker.record(event_time_key(new_time));
     end_time.assign(std::move(new_time));
 }
 
@@ -525,7 +526,7 @@ SubSeq::add_time_step(py::ptr<> cond, py::ptr<EventTime> start_time, py::ptr<> l
     call_constructor(&step->end_time, std::move(end_time));
     call_constructor(&step->cond, py::newref(cond));
     call_constructor(&step->length, py::newref(length));
-    seqinfo->bt_tracker.record(event_time_key(step->end_time));
+    seqinfo->cinfo->bt_tracker.record(event_time_key(step->end_time));
     sub_seqs.append(step);
     return step;
 }
@@ -599,21 +600,135 @@ PyTypeObject ConditionalWrapper::Type = {
 };
 
 __attribute__((visibility("internal")))
-inline void Seq::show(py::stringio &io, int indent) const
+inline void BasicSeq::add_branch(py::ptr<BasicSeq> bseq)
 {
+    if (seqinfo->cinfo != bseq->seqinfo->cinfo)
+        py_throw_format(PyExc_ValueError,
+                        "Cannot branch to basic seq from a different sequence");
+    if (std::ranges::find(next_bseq, bseq->bseq_id) != next_bseq.end())
+        py_throw_format(PyExc_ValueError, "Branch already added");
+    next_bseq.push_back(bseq->bseq_id);
+}
+
+__attribute__((visibility("internal")))
+inline void BasicSeq::show_next(py::stringio &io, int indent) const
+{
+    if (next_bseq.empty())
+        return;
     io.write_rep_ascii(indent, " ");
-    io.write_ascii("Seq - T[");
-    io.write_cxx<32>(end_time->data.id);
-    io.write_ascii("]\n");
+    io.write_ascii("branches: [");
+    for (int i = 0, n = next_bseq.size(); i < n; i++) {
+        if (i != 0)
+            io.write_ascii(" ");
+        io.write_cxx<32>(next_bseq[i]);
+    }
+    io.write_ascii("]");
+    if (may_terminate())
+        io.write_ascii(" may terminate");
+    io.write_ascii("\n");
+}
+
+__attribute__((visibility("internal")))
+inline void BasicSeq::show_times(py::stringio &io, int indent) const
+{
     for (auto [i, t]: py::list_iter(seqinfo->time_mgr->event_times)) {
-        io.write_rep_ascii(indent + 1, " ");
+        io.write_rep_ascii(indent, " ");
         io.write_ascii("T[");
         io.write_cxx<32>(i);
         io.write_ascii("]: ");
         io.write_str(t);
         io.write_ascii("\n");
     }
+}
+
+__attribute__((visibility("internal")))
+inline void BasicSeq::show(py::stringio &io, int indent) const
+{
+    io.write_rep_ascii(indent, " ");
+    io.write_ascii("BasicSeq[");
+    io.write_cxx<32>(bseq_id);
+    io.write_ascii("] - T[");
+    io.write_cxx<32>(end_time->data.id);
+    io.write_ascii("]\n");
+    show_next(io, indent + 1);
+    show_times(io, indent + 1);
     show_subseqs(io, indent + 2);
+}
+
+__attribute__((visibility("protected")))
+PyTypeObject BasicSeq::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.seq.BasicSeq",
+    .tp_basicsize = sizeof(BasicSeq),
+    .tp_dealloc = seq_dealloc<BasicSeq>,
+    .tp_repr = seq_str<BasicSeq>,
+    .tp_str = seq_str<BasicSeq>,
+    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
+    .tp_traverse = seq_traverse<BasicSeq>,
+    .tp_clear = seq_clear<BasicSeq>,
+    .tp_methods = (
+        py::meth_table<
+        py::meth_noargs<"new_basic_seq",[] (py::ptr<BasicSeq> self) {
+            auto new_bseq = py::generic_alloc<BasicSeq>();
+            new_bseq->bseq_id = self->basic_seqs.size();
+            new_bseq->term_status = TerminateStatus::Default;
+            call_constructor(&new_bseq->basic_seqs, self->basic_seqs.ref());
+            call_constructor(&new_bseq->start_time, py::new_none());
+            call_constructor(&new_bseq->cond, py::new_true());
+            call_constructor(&new_bseq->sub_seqs, py::new_list(0));
+            call_constructor(&new_bseq->dummy_step, py::new_none());
+
+            py::ptr seqinfo = self->seqinfo;
+            auto new_seqinfo = py::generic_alloc<SeqInfo>();
+            call_constructor(&new_seqinfo->cinfo, seqinfo->cinfo);
+            call_constructor(&new_seqinfo->config, seqinfo->config.ref());
+            call_constructor(&new_seqinfo->time_mgr, event_time::TimeManager::alloc());
+            call_constructor(&new_seqinfo->assertions, seqinfo->assertions.ref());
+            call_constructor(&new_seqinfo->channel_name_map,
+                             seqinfo->channel_name_map.ref());
+            call_constructor(&new_seqinfo->channel_path_map,
+                             seqinfo->channel_path_map.ref());
+            call_constructor(&new_seqinfo->channel_paths, seqinfo->channel_paths.ref());
+            call_constructor(&new_seqinfo->C, seqinfo->C.ref());
+            call_constructor(&new_bseq->end_time,
+                             new_seqinfo->time_mgr->new_int(Py_None, 0, false,
+                                                            Py_True, Py_None));
+            call_constructor(&new_bseq->seqinfo, std::move(new_seqinfo));
+            seqinfo->cinfo->bt_tracker.record(event_time_key(new_bseq->end_time));
+            self->basic_seqs.append(new_bseq);
+            return new_bseq;
+        }>,
+        py::meth_o<"add_branch",[] (py::ptr<BasicSeq> self, py::ptr<> _bseq) {
+            self->add_branch(py::arg_cast<BasicSeq>(_bseq, "bseq"));
+        }>>),
+    .tp_getset = (py::getset_table<
+                  py::getset_def<"may_terminate",[] (py::ptr<BasicSeq> self) {
+                      return py::new_bool(self->may_terminate());
+                  },[] (py::ptr<BasicSeq> self, py::ptr<> _term) {
+                      auto term = py::arg_cast<py::bool_,true>(_term, "may_terminate");
+                      self->term_status = (term.as_bool() ? TerminateStatus::MayTerm :
+                                           TerminateStatus::MayNotTerm);
+                  }>>),
+    .tp_base = &SubSeq::Type,
+};
+
+__attribute__((visibility("internal")))
+inline void Seq::show(py::stringio &io, int indent) const
+{
+    io.write_rep_ascii(indent, " ");
+    io.write_ascii("Seq - T[");
+    io.write_cxx<32>(end_time->data.id);
+    io.write_ascii("]\n");
+    if (basic_seqs.size() > 1)
+        show_next(io, indent + 1);
+    show_times(io, indent + 1);
+    show_subseqs(io, indent + 2);
+    for (auto [i, bseq]: py::list_iter<BasicSeq>(basic_seqs)) {
+        if (i == 0)
+            continue;
+        io.write_ascii("\n");
+        bseq->show(io, indent + 1);
+    }
 }
 
 __attribute__((visibility("protected")))
@@ -627,7 +742,7 @@ PyTypeObject Seq::Type = {
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = seq_traverse<Seq>,
     .tp_clear = seq_clear<Seq>,
-    .tp_base = &SubSeq::Type,
+    .tp_base = &BasicSeq::Type,
     .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg("Seq.__init__", nargs, 1, 2);
@@ -642,15 +757,16 @@ PyTypeObject Seq::Type = {
             }
         }
         auto self = py::generic_alloc<Seq>();
+        self->bseq_id = 0;
+        self->term_status = TerminateStatus::Default;
+        call_constructor(&self->basic_seqs, py::new_list(self));
         call_constructor(&self->start_time, py::new_none());
         call_constructor(&self->cond, py::new_true());
         call_constructor(&self->sub_seqs, py::new_list(0));
         call_constructor(&self->dummy_step, py::new_none());
         auto seqinfo = py::generic_alloc<SeqInfo>();
-        call_constructor(&seqinfo->bt_tracker);
-        seqinfo->bt_tracker.max_frame = max_frame;
-        call_constructor(&seqinfo->action_alloc);
-        seqinfo->action_counter = 0;
+        call_constructor(&seqinfo->cinfo, new CInfo);
+        seqinfo->cinfo->bt_tracker.max_frame = max_frame;
         call_constructor(&seqinfo->config, py::newref(py::arg_cast<config::Config>(args[0], "config")));
         call_constructor(&seqinfo->time_mgr, event_time::TimeManager::alloc());
         call_constructor(&seqinfo->assertions, py::new_list(0));
@@ -661,7 +777,7 @@ PyTypeObject Seq::Type = {
         call_constructor(&self->end_time,
                          seqinfo->time_mgr->new_int(Py_None, 0, false,
                                                     Py_True, Py_None));
-        seqinfo->bt_tracker.record(event_time_key(self->end_time));
+        seqinfo->cinfo->bt_tracker.record(event_time_key(self->end_time));
         call_constructor(&self->seqinfo, std::move(seqinfo));
         return self;
     }>,
@@ -675,6 +791,7 @@ void init()
     throw_if(PyType_Ready(&TimeStep::Type) < 0);
     throw_if(PyType_Ready(&SubSeq::Type) < 0);
     throw_if(PyType_Ready(&ConditionalWrapper::Type) < 0);
+    throw_if(PyType_Ready(&BasicSeq::Type) < 0);
     throw_if(PyType_Ready(&Seq::Type) < 0);
 }
 
