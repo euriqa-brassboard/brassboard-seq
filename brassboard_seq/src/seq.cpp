@@ -73,9 +73,9 @@ combine_cond(PyObject *cond1, PyObject *new_cond)
     return res;
 }
 
-template<typename TimeManager, typename EventTime>
+template<typename EventTime>
 static inline __attribute__((returns_nonnull)) EventTime*
-new_round_time(TimeManager *self, EventTime *prev, PyObject *offset, PyObject *cond,
+new_round_time(auto self, EventTime *prev, PyObject *offset, PyObject *cond,
                EventTime *wait_for)
 {
     if (is_rtval(offset)) {
@@ -92,9 +92,9 @@ new_round_time(TimeManager *self, EventTime *prev, PyObject *offset, PyObject *c
     }
 }
 
-template<typename TimeStep, typename SubSeq, typename EventTime>
+template<typename TimeStep, typename EventTime>
 static inline __attribute__((returns_nonnull)) TimeStep*
-add_time_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *length)
+add_time_step(auto self, PyObject *cond, EventTime *start_time, PyObject *length)
 {
     auto seqinfo = pyx_fld(self, seqinfo);
     py_object end_time((PyObject*)new_round_time(seqinfo->time_mgr, start_time, length,
@@ -556,8 +556,8 @@ static void collect_actions(SubSeq *self, std::vector<action::Action*> *actions)
     }
 }
 
-template<typename TimeStep, typename _RampFunctionBase, typename Seq>
-static inline void seq_finalize(Seq *self, TimeStep*, _RampFunctionBase*)
+template<typename TimeStep, typename _RampFunctionBase>
+static inline void seq_finalize(auto self, TimeStep*, _RampFunctionBase*)
 {
     using EventTime = std::remove_reference_t<decltype(*pyx_fld(self, end_time))>;
     auto seqinfo = pyx_fld(self, seqinfo);
@@ -640,8 +640,8 @@ static inline void seq_finalize(Seq *self, TimeStep*, _RampFunctionBase*)
     }
 }
 
-template<typename _RampFunctionBase, typename Seq>
-static inline void seq_runtime_finalize(Seq *self, unsigned age, py_object &pyage,
+template<typename _RampFunctionBase>
+static inline void seq_runtime_finalize(auto self, unsigned age, py_object &pyage,
                                         _RampFunctionBase*)
 {
     auto seqinfo = pyx_fld(self, seqinfo);
