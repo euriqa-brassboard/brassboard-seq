@@ -419,9 +419,6 @@ def seq_get_cond(s):
         return (<seq.ConditionalWrapper>s).cond
     return (<seq.TimeSeq?>s).cond
 
-def seq_finalize(seq.Seq s):
-    s.finalize()
-
 def seq_get_all_actions(seq.Seq s):
     cdef int nchn = len(s.seqinfo.channel_paths)
     all_actions = <vector[action.Action*]*>s.all_actions.get()
@@ -430,10 +427,6 @@ def seq_get_all_actions(seq.Seq s):
         actions = all_actions[cid]
         res.append([_ref_action(action, s) for action in actions])
     return res
-
-def seq_runtime_finalize(seq.Seq s, unsigned age):
-    cdef utils.py_object pyage
-    s.runtime_finalize(age, pyage)
 
 def seq_get_all_times(seq.Seq s):
     time_mgr = s.seqinfo.time_mgr
