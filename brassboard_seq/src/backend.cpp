@@ -156,6 +156,23 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
     });
 }
 
+static inline auto action_get_condval(auto action, unsigned age, py_object &pyage)
+{
+    auto cond = action->cond.get();
+    if (cond == Py_True)
+        return true;
+    if (cond == Py_False)
+        return false;
+    assert(is_rtval(cond));
+    try {
+        rt_eval_throw((_RuntimeValue*)cond, age, pyage);
+        return !rtval_cache((_RuntimeValue*)cond).is_zero();
+    }
+    catch (...) {
+        bb_rethrow(action_key(action->aid));
+    }
+}
+
 template<typename _RampFunctionBase, typename Backend>
 static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
                                              _RampFunctionBase*, Backend*)
@@ -181,27 +198,12 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
                             "%U", PyTuple_GET_ITEM(a, 1));
         }
     }
-    auto get_condval = [&] (auto *action) {
-        auto cond = action->cond.get();
-        if (cond == Py_True)
-            return true;
-        if (cond == Py_False)
-            return false;
-        assert(is_rtval(cond));
-        try {
-            rt_eval_throw((_RuntimeValue*)cond, age, pyage);
-            return !rtval_cache((_RuntimeValue*)cond).is_zero();
-        }
-        catch (...) {
-            bb_rethrow(action_key(action->aid));
-        }
-    };
     auto nchn = (int)PyList_GET_SIZE(seqinfo->channel_paths);
     for (int cid = 0; cid < nchn; cid++) {
         auto &actions = pyx_fld(seq, all_actions)[cid];
         long long prev_time = 0;
         for (auto action: actions) {
-            bool cond_val = get_condval(action);
+            bool cond_val = action_get_condval(action, age, pyage);
             action->cond_val = cond_val;
             if (!cond_val)
                 continue;
