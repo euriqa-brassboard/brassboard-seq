@@ -155,6 +155,117 @@ _new_select(_RuntimeValue *arg0, PyObject *arg1, PyObject *arg2)
     return self;
 }
 
+static inline bool tagval_equal(const TagVal &v1, const TagVal &v2)
+{
+    return !CmpEQ_op::generic_eval(v1, v2).is_zero();
+}
+
+static inline bool _rt_equal_val(_RuntimeValue *rtval, PyObject *pyval)
+{
+    if (rtval->type_ != Const)
+        return false;
+    return tagval_equal(rtval_cache(rtval), TagVal::from_py(pyval));
+}
+
+static bool _rt_same_value(_RuntimeValue *v1, _RuntimeValue *v2)
+{
+    if (v1 == v2)
+        return true;
+    if (v1->type_ != v2->type_)
+        return false;
+    switch (v1->type_) {
+    case Arg: {
+        auto i1 = PyLong_AsLong(v1->cb_arg2);
+        auto i2 = PyLong_AsLong(v2->cb_arg2);
+        // There may or may not be a python error raised
+        // but the caller will clear it anyway.
+        throw_if(i1 < 0 || i2 < 0);
+        return i1 == i2;
+    }
+    case Const:
+        return tagval_equal(rtval_cache(v1), rtval_cache(v2));
+    default:
+    case Extern:
+    case ExternAge:
+        return false;
+    case Not:
+    case Bool:
+    case Abs:
+    case Ceil:
+    case Floor:
+    case Exp:
+    case Expm1:
+    case Log:
+    case Log1p:
+    case Log2:
+    case Log10:
+    case Sqrt:
+    case Asin:
+    case Acos:
+    case Atan:
+    case Asinh:
+    case Acosh:
+    case Atanh:
+    case Sin:
+    case Cos:
+    case Tan:
+    case Sinh:
+    case Cosh:
+    case Tanh:
+    case Rint:
+    case Int64:
+        return _rt_same_value(v1->arg0, v2->arg0);
+    case Select:
+        return (_rt_same_value(v1->arg0, v2->arg0) &&
+                _rt_same_value(v1->arg1, v2->arg1) &&
+                _rt_same_value((_RuntimeValue*)v1->cb_arg2, (_RuntimeValue*)v2->cb_arg2));
+    case Sub:
+    case Div:
+    case Pow:
+    case Mod:
+    case CmpLT:
+    case CmpGT:
+    case CmpLE:
+    case CmpGE:
+    case Atan2:
+        return (_rt_same_value(v1->arg0, v2->arg0) &&
+                _rt_same_value(v1->arg1, v2->arg1));
+    case Add:
+    case Mul:
+    case And:
+    case Or:
+    case Xor:
+    case CmpNE:
+    case CmpEQ:
+    case Hypot:
+    case Max:
+    case Min:
+        return ((_rt_same_value(v1->arg0, v2->arg0) &&
+                _rt_same_value(v1->arg1, v2->arg1)) ||
+                (_rt_same_value(v1->arg0, v2->arg1) &&
+                 _rt_same_value(v1->arg1, v2->arg0)));
+    }
+}
+
+bool rt_same_value(PyObject *v1, PyObject *v2) try {
+    if (!is_rtval(v1)) {
+        if (!is_rtval(v2)) {
+            int res = PyObject_RichCompareBool(v1, v2, Py_EQ);
+            throw_if(res < 0);
+            return res;
+        }
+        return _rt_equal_val((_RuntimeValue*)v2, v1);
+    }
+    else if (!is_rtval(v2)) {
+        return _rt_equal_val((_RuntimeValue*)v1, v2);
+    }
+    return _rt_same_value((_RuntimeValue*)v1, (_RuntimeValue*)v2);
+}
+catch (...) {
+    PyErr_Clear();
+    return false;
+}
+
 __attribute__((visibility("hidden")))
 void init()
 {

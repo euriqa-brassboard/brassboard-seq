@@ -1036,6 +1036,8 @@ static inline __attribute__((always_inline)) TagVal rtval_cache(RuntimeValue *rt
     return cache;
 }
 
+bool rt_same_value(PyObject *v1, PyObject *v2);
+
 void _rt_eval_cache(_RuntimeValue *self, unsigned age, py_object &pyage);
 
 template<typename RuntimeValue>

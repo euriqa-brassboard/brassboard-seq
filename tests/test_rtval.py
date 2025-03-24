@@ -89,6 +89,53 @@ def test_rtval():
     assert rtval.same_value(1, 1)
     assert rtval.same_value(1, 1.0)
     assert not rtval.same_value(1, 0)
+    assert rtval.same_value(1.2, test_utils.new_const(1.2))
+    assert rtval.same_value(test_utils.new_const(True), 1.0)
+    assert rtval.same_value(test_utils.new_const(10), test_utils.new_const(10.0))
+    assert not rtval.same_value(1.2, test_utils.new_const(0.2))
+    assert not rtval.same_value(test_utils.new_const(False), 1.0)
+    assert not rtval.same_value(test_utils.new_const(10), test_utils.new_const(10.5))
+
+    assert rtval.same_value(test_utils.new_arg(0), test_utils.new_arg(0))
+    assert not rtval.same_value(test_utils.new_arg(0), test_utils.new_arg(1))
+    assert not rtval.same_value(rtval.new_extern(lambda: 1), rtval.new_extern(lambda: 1))
+    assert not rtval.same_value(rtval.new_extern_age(lambda age: 1),
+                                rtval.new_extern_age(lambda age: 1))
+
+    assert rtval.same_value(v1 + v2, v2 + v1)
+    assert rtval.same_value(v1 + v2, v2 + v1)
+    assert rtval.same_value(-v1, -v1)
+
+    for uop in [rtval.inv, rtval.convert_bool, abs, math.ceil, math.floor,
+                np.exp, np.expm1, np.log, np.log1p, np.log2, np.log10, np.sqrt,
+                np.arcsin, np.arccos, np.arctan, np.sin, np.cos, np.tan,
+                np.sinh, np.cosh, np.tanh, np.rint, round]:
+        assert rtval.same_value(uop(v1), uop(v1))
+        assert rtval.same_value(uop(v2), uop(v2))
+        assert not rtval.same_value(uop(v1), uop(v2))
+
+    for bop in [operator.sub, operator.truediv, operator.pow, operator.mod,
+                operator.lt, operator.gt, operator.le, operator.ge, np.arctan2]:
+        assert rtval.same_value(bop(v1, v1), bop(v1, v1))
+        assert rtval.same_value(bop(v2, v2), bop(v2, v2))
+        assert rtval.same_value(bop(v1, v2), bop(v1, v2))
+        assert not rtval.same_value(bop(v1, v2), bop(v2, v1))
+
+    for bop in [operator.add, operator.mul, operator.and_, operator.or_, operator.xor,
+                operator.ne, operator.eq, np.hypot, np.fmin, np.fmax]:
+        assert rtval.same_value(bop(v1, v1), bop(v1, v1))
+        assert rtval.same_value(bop(v2, v2), bop(v2, v2))
+        assert rtval.same_value(bop(v1, v2), bop(v1, v2))
+        assert rtval.same_value(bop(v1, v2), bop(v2, v1))
+        if bop not in (operator.ne, operator.eq):
+            assert not rtval.same_value(bop(v1, v1), bop(v2, v2))
+        assert not rtval.same_value(bop(v1, v2), bop(v1, v1))
+        assert not rtval.same_value(bop(v1, v2), bop(v1, 3))
+
+    assert rtval.same_value(rtval.ifelse(v1, v2, 1), rtval.ifelse(v1, v2, 1.0))
+    assert not rtval.same_value(rtval.ifelse(v1, v2, 1), rtval.ifelse(v2, v2, 1.0))
+    assert not rtval.same_value(rtval.ifelse(v1, v2, 1), rtval.ifelse(v1, v2, 2.0))
+    assert not rtval.same_value(rtval.ifelse(v1, v2, 1), rtval.ifelse(v2, v2, 1.0))
 
     assert not (v1 != v1)
     assert v2 == v2

@@ -116,6 +116,7 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
     TagVal rtval_cache(RuntimeValue)
 
     bint is_rtval(object)
+    bint rt_same_value(object, object)
 
     RuntimeValue new_cb_arg2(ValueType, object, object ty, RuntimeValue) except +
     RuntimeValue new_expr1(ValueType, RuntimeValue) except +

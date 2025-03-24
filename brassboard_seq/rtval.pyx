@@ -542,21 +542,14 @@ def ifelse(b, v1, v2):
     if (isinstance(b, cnpy.ndarray) or isinstance(v1, cnpy.ndarray) or
         isinstance(v2, cnpy.ndarray)):
         return cnpy.PyArray_Where(b, v1, v2)
-    if same_value(v1, v2):
+    if rt_same_value(v1, v2):
         return v1
     if is_rtval(b):
         return new_select(<RuntimeValue>b, v1, v2)
     return v1 if b else v2
 
-cpdef inline bint same_value(v1, v2) noexcept:
-    if is_rtval(v1):
-        return v1 is v2
-    if is_rtval(v2):
-        return False
-    try:
-        return v1 == v2
-    except:
-        return False
+def same_value(v1, v2):
+    return rt_same_value(v1, v2)
 
 @cython.auto_pickle(False)
 cdef class ExternCallback:
