@@ -2358,7 +2358,7 @@ static inline bool parse_action_kws(PyObject *kws, int aid)
 
 template<typename EventTime>
 static __attribute__((always_inline)) inline
-void collect_actions(auto *rb, EventTime*)
+void collect_actions(auto *rb, backend::CompiledSeq &cseq, EventTime*)
 {
     auto seq = pyx_fld(rb, seq);
 
@@ -2374,7 +2374,7 @@ void collect_actions(auto *rb, EventTime*)
         auto is_ff = param == ToneFF;
         auto &channel = rb->channels.channels[chn_idx];
         auto &rfsoc_actions = channel.actions[(int)param];
-        for (auto action: pyx_fld(seq, all_actions)[seq_chn]) {
+        for (auto action: cseq.all_actions[seq_chn]) {
             auto sync = parse_action_kws(action->kws.get(), action->aid);
             auto value = action->value.get();
             auto is_ramp = py_issubtype_nontrivial(Py_TYPE(value), rampfunctionbase_type);
@@ -2663,7 +2663,8 @@ SyncTimeMgr::add_action(std::vector<DDSParamAction> &actions, int64_t start_cycl
 
 template<typename _RampFunctionBase, typename SeqCubicSpline>
 static __attribute__((always_inline)) inline
-void gen_rfsoc_data(auto *rb, _RampFunctionBase*, SeqCubicSpline*)
+void gen_rfsoc_data(auto *rb, backend::CompiledSeq &cseq,
+                    _RampFunctionBase*, SeqCubicSpline*)
 {
     bb_debug("gen_rfsoc_data: start\n");
     auto seq = pyx_fld(rb, seq);
@@ -2756,7 +2757,7 @@ void gen_rfsoc_data(auto *rb, _RampFunctionBase*, SeqCubicSpline*)
     gen->start();
 
     // Add extra cycles to be able to handle the requirement of minimum 4 cycles.
-    auto total_cycle = seq_time_to_cycle(pyx_fld(seq, total_time) + max_delay) + 8;
+    auto total_cycle = seq_time_to_cycle(cseq.total_time + max_delay) + 8;
     for (auto &channel: rb->channels.channels) {
         ScopeExit cleanup([&] {
             rb->tone_buffer.clear();

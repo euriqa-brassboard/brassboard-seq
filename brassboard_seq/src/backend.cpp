@@ -79,7 +79,7 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
     time_mgr->__pyx_vtab->finalize(time_mgr);
     pyassign(seqinfo->channel_name_map, Py_None); // Free up memory
     auto all_actions = new std::vector<action::Action*>[nchn];
-    pyx_fld(seq, all_actions).reset(all_actions);
+    comp->cseq.all_actions.reset(all_actions);
     collect_actions<TimeStep>(pyx_find_base(seq, sub_seqs), all_actions);
     auto get_time = [event_times=time_mgr->event_times] (int tid) {
         return (EventTime*)PyList_GET_ITEM(event_times, tid);
@@ -150,9 +150,9 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
             action->end_val.reset(py_newref(value.get()));
         }
     }
-    foreach_pydict(comp->backends, [] (auto name, auto _backend) {
+    foreach_pydict(comp->backends, [&] (auto name, auto _backend) {
         auto backend = (Backend*)_backend;
-        throw_if(backend->__pyx_vtab->finalize(backend) < 0);
+        throw_if(backend->__pyx_vtab->finalize(backend, comp->cseq) < 0);
     });
 }
 
@@ -186,7 +186,7 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
     auto seqinfo = pyx_fld(seq, seqinfo);
     auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);
     auto time_mgr = seqinfo->time_mgr;
-    pyx_fld(seq, total_time) = time_mgr->__pyx_vtab->compute_all_times(time_mgr, age, pyage);
+    comp->cseq.total_time = time_mgr->__pyx_vtab->compute_all_times(time_mgr, age, pyage);
     auto assertions = seqinfo->assertions;
     int nassert = PyList_GET_SIZE(assertions);
     for (int assert_id = 0; assert_id < nassert; assert_id++) {
@@ -200,7 +200,7 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
     }
     auto nchn = (int)PyList_GET_SIZE(seqinfo->channel_paths);
     for (int cid = 0; cid < nchn; cid++) {
-        auto &actions = pyx_fld(seq, all_actions)[cid];
+        auto &actions = comp->cseq.all_actions[cid];
         long long prev_time = 0;
         for (auto action: actions) {
             bool cond_val = action_get_condval(action, age, pyage);
@@ -236,7 +236,7 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
     }
     foreach_pydict(comp->backends, [&] (auto name, auto _backend) {
         auto backend = (Backend*)_backend;
-        throw_if(backend->__pyx_vtab->runtime_finalize(backend, age, pyage) < 0);
+        throw_if(backend->__pyx_vtab->runtime_finalize(backend, comp->cseq, age, pyage) < 0);
     });
 }
 

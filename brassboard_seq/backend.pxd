@@ -20,13 +20,18 @@
 from brassboard_seq.seq cimport Seq
 from brassboard_seq.utils cimport py_object
 
+cdef extern from "src/backend.h" namespace "brassboard_seq::backend":
+    cppclass CompiledSeq:
+        pass
+
 cdef class Backend:
     cdef Seq seq
     cdef str prefix
 
-    cdef int finalize(self) except -1
-    cdef int runtime_finalize(self, unsigned age, py_object &pyage) except -1
+    cdef int finalize(self, CompiledSeq&) except -1
+    cdef int runtime_finalize(self, CompiledSeq&, unsigned age, py_object &pyage) except -1
 
 cdef class SeqCompiler:
     cdef readonly Seq seq
+    cdef CompiledSeq cseq
     cdef dict backends

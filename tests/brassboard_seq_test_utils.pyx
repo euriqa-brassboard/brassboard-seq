@@ -1,6 +1,6 @@
 # cython: language_level=3
 
-from brassboard_seq cimport action, event_time, rtval, seq, utils
+from brassboard_seq cimport action, backend, event_time, rtval, seq, utils
 
 import numpy as np
 
@@ -146,6 +146,14 @@ cdef extern from *:
     private:
         brassboard_seq::pybytearray_streambuf m_buf;
     };
+    auto compiledseq_get_all_actions(brassboard_seq::backend::CompiledSeq &cseq)
+    {
+        return cseq.all_actions.get();
+    }
+    auto compiledseq_get_total_time(brassboard_seq::backend::CompiledSeq &cseq)
+    {
+        return cseq.total_time;
+    }
     """
     vector[int] _get_suffix_array(vector[int])
     vector[int] _get_height_array(vector[int], vector[int])
@@ -227,6 +235,8 @@ cdef extern from *:
         test_istream_ba &seekg(ssize_t)
         test_istream_ba &seekg2 "seekg"(ssize_t, utils.seekdir)
         bint fail() const
+    vector[action.Action*] *compiledseq_get_all_actions(backend.CompiledSeq &cseq)
+    int64_t compiledseq_get_total_time(backend.CompiledSeq &cseq)
 
 def new_invalid_rtval():
     # This should only happen if something really wrong happens.
@@ -419,22 +429,24 @@ def seq_get_cond(s):
         return (<seq.ConditionalWrapper>s).cond
     return (<seq.TimeSeq?>s).cond
 
-def seq_get_all_actions(seq.Seq s):
+def compiler_get_all_actions(backend.SeqCompiler comp):
+    s = comp.seq
     cdef int nchn = len(s.seqinfo.channel_paths)
-    all_actions = <vector[action.Action*]*>s.all_actions.get()
+    all_actions = compiledseq_get_all_actions(comp.cseq)
     res = []
     for cid in range(nchn):
         actions = all_actions[cid]
         res.append([_ref_action(action, s) for action in actions])
     return res
 
-def seq_get_all_times(seq.Seq s):
+def compiler_get_all_times(backend.SeqCompiler comp):
+    s = comp.seq
     time_mgr = s.seqinfo.time_mgr
     ntimes = time_mgr.time_values.size()
     values = []
     for i in range(ntimes):
         values.append(time_mgr.time_values[i])
-    return s.total_time, values
+    return compiledseq_get_total_time(comp.cseq), values
 
 def get_suffix_array(ary):
     return _get_suffix_array(ary)

@@ -18,6 +18,7 @@
 
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.action cimport _RampFunctionBase, SeqCubicSpline
+from brassboard_seq.backend cimport CompiledSeq
 from brassboard_seq.event_time cimport EventTime, round_time_f64
 from brassboard_seq.rtval cimport is_rtval, rtval_cache, rt_eval_throw, RuntimeValue
 from brassboard_seq.utils cimport set_global_tracker, \
@@ -38,8 +39,8 @@ import re
 cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backend":
     PyTypeObject *rampfunctionbase_type
     PyTypeObject *seqcubicspline_type
-    void collect_actions(RFSOCBackend ab, EventTime) except+
-    void gen_rfsoc_data(RFSOCBackend ab, _RampFunctionBase, SeqCubicSpline) except +
+    void collect_actions(RFSOCBackend ab, CompiledSeq&, EventTime) except+
+    void gen_rfsoc_data(RFSOCBackend ab, CompiledSeq&, _RampFunctionBase, SeqCubicSpline) except +
 
     Generator *new_pulse_compiler_generator() except +
     cppclass PulseCompilerGen(Generator):
@@ -185,7 +186,7 @@ cdef class RFSOCBackend:
             return
         set_dds_delay(self, dds, <double>delay)
 
-    cdef int finalize(self) except -1:
+    cdef int finalize(self, CompiledSeq &cseq) except -1:
         # Channel name format: rfsoc/dds<chn>/<tone>/<param>
         cdef cppmap[int, int] chn_idx_map
         cdef int idx = -1
@@ -229,13 +230,14 @@ cdef class RFSOCBackend:
                 param_enum = ToneFF
                 raise_invalid_channel(path)
             self.channels.add_seq_channel(idx, chn_idx, param_enum)
-        collect_actions(self, None)
+        collect_actions(self, cseq, None)
 
-    cdef int runtime_finalize(self, unsigned age, py_object &pyage) except -1:
+    cdef int runtime_finalize(self, CompiledSeq &cseq,
+                              unsigned age, py_object &pyage) except -1:
         for dds, delay in self.rt_dds_delay.items():
             rt_eval_throw(<RuntimeValue>delay, age, pyage)
             set_dds_delay(self, dds, rtval_cache(<RuntimeValue>delay).get[double]())
-        gen_rfsoc_data(self, None, None)
+        gen_rfsoc_data(self, cseq, None, None)
 
 cdef cubic_spline_t _to_spline(spline):
     if isinstance(spline, tuple):

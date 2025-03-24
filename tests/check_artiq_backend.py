@@ -217,11 +217,12 @@ def get_channel_info(ab):
     assert sum(len(cs) for cs in all_chip_selects.values()) == len(channels.ddschns)
     return channels
 
-def get_compiled_info(ab, s):
+def get_compiled_info(ab, comp):
+    s = comp.seq
     compiled_info = artiq_utils.get_compiled_info(ab)
     channels = artiq_utils.get_channel_info(ab)
     all_actions = {}
-    for (chn, actions) in enumerate(test_utils.seq_get_all_actions(s)):
+    for (chn, actions) in enumerate(test_utils.compiler_get_all_actions(comp)):
         for action in actions:
             if test_utils.action_get_cond(action) is False:
                 continue
@@ -426,7 +427,7 @@ def test_channels(max_bt):
     assert not channels.ttlchns[1].iscounter
     assert channels.ttlchns[2].iscounter
     assert channels.dds_param_chn_map == {4: (0, 0), 5: (0, 1), 6: (1, 2)}
-    compiled_info = get_compiled_info(ab, s)
+    compiled_info = get_compiled_info(ab, comp)
     assert not compiled_info.all_actions
     assert not compiled_info.bool_values
     assert not compiled_info.float_values
@@ -450,7 +451,7 @@ def test_channels(max_bt):
     assert not channels.ttlchns[1].iscounter
     assert channels.ttlchns[2].iscounter
     assert channels.dds_param_chn_map == {1: (0, 0), 3: (0, 1), 5: (1, 2)}
-    compiled_info = get_compiled_info(ab, s)
+    compiled_info = get_compiled_info(ab, comp)
     assert not compiled_info.all_actions
     assert not compiled_info.bool_values
     assert not compiled_info.float_values
@@ -550,7 +551,7 @@ def test_ttl(max_bt):
          .set('artiq/ttl1', v)
     s.conditional(False).add_step(0.1).set('artiq/ttl3', True)
     comp.finalize()
-    compiled_info = get_compiled_info(ab, s)
+    compiled_info = get_compiled_info(ab, comp)
     assert len(compiled_info.all_actions) == 8
 
     comp.runtime_finalize(1)
@@ -602,7 +603,7 @@ def test_counter(max_bt):
          .set('artiq/ttl0_counter', False) \
          .set('artiq/ttl1_counter', True)
     comp.finalize()
-    compiled_info = get_compiled_info(ab, s)
+    compiled_info = get_compiled_info(ab, comp)
     assert len(compiled_info.all_actions) == 9
 
     comp.runtime_finalize(1)
@@ -678,7 +679,7 @@ def test_dds(max_bt):
          .set('artiq/urukul0_ch0/phase', 1.2)
     s.conditional(False).add_step(0.1).set('artiq/urukul0_ch2/freq', 100e6)
     comp.finalize()
-    compiled_info = get_compiled_info(ab, s)
+    compiled_info = get_compiled_info(ab, comp)
     assert len(compiled_info.all_actions) == 14
 
     channels = get_channel_info(ab)

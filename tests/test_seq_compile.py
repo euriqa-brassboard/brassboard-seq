@@ -72,7 +72,7 @@ def test_cond_order1(max_bt):
       artiq/ttl1: Set(False)
 """
 
-    actions = test_utils.seq_get_all_actions(s)
+    actions = test_utils.compiler_get_all_actions(comp)
     assert len(actions) == 1
     assert len(actions[0]) == 2
     action1 = actions[0][0]
@@ -94,7 +94,7 @@ def test_cond_order1(max_bt):
     comp.runtime_finalize(1)
     assert test_utils.action_get_cond_val(action1) is True
     assert test_utils.action_get_cond_val(action2) is True
-    total_time, times = test_utils.seq_get_all_times(s)
+    total_time, times = test_utils.compiler_get_all_times(comp)
 
     assert times == [0,
                      100_000_000_000,
@@ -107,7 +107,7 @@ def test_cond_order1(max_bt):
     comp.runtime_finalize(2)
     assert test_utils.action_get_cond_val(action1) is c1val
     assert test_utils.action_get_cond_val(action2) is True
-    total_time, times = test_utils.seq_get_all_times(s)
+    total_time, times = test_utils.compiler_get_all_times(comp)
 
     assert times == [0,
                      100_000_000_000,
@@ -120,7 +120,7 @@ def test_cond_order1(max_bt):
     comp.runtime_finalize(3)
     assert test_utils.action_get_cond_val(action1) is c1val
     assert test_utils.action_get_cond_val(action2) is True
-    total_time, times = test_utils.seq_get_all_times(s)
+    total_time, times = test_utils.compiler_get_all_times(comp)
 
     assert times == [0,
                      100_000_000_000,
@@ -185,7 +185,7 @@ def test_cond_order2(max_bt):
       artiq/ttl1: Set(True, cond=bool({c1}))
 """
 
-    actions = test_utils.seq_get_all_actions(s)
+    actions = test_utils.compiler_get_all_actions(comp)
     assert len(actions) == 1
     assert len(actions[0]) == 2
     action1 = actions[0][0]
@@ -207,7 +207,7 @@ def test_cond_order2(max_bt):
     comp.runtime_finalize(1)
     assert test_utils.action_get_cond_val(action1) is True
     assert test_utils.action_get_cond_val(action2) is True
-    total_time, times = test_utils.seq_get_all_times(s)
+    total_time, times = test_utils.compiler_get_all_times(comp)
 
     assert times == [0,
                      100_000_000_000,
@@ -221,7 +221,7 @@ def test_cond_order2(max_bt):
     comp.runtime_finalize(2)
     assert test_utils.action_get_cond_val(action1) is c1val
     assert test_utils.action_get_cond_val(action2) is True
-    total_time, times = test_utils.seq_get_all_times(s)
+    total_time, times = test_utils.compiler_get_all_times(comp)
 
     assert times == [0,
                      100_000_000_000,
@@ -235,7 +235,7 @@ def test_cond_order2(max_bt):
     comp.runtime_finalize(3)
     assert test_utils.action_get_cond_val(action1) is c1val
     assert test_utils.action_get_cond_val(action2) is True
-    total_time, times = test_utils.seq_get_all_times(s)
+    total_time, times = test_utils.compiler_get_all_times(comp)
 
     assert times == [0,
                      100_000_000_000,
@@ -348,7 +348,7 @@ def test_order_error3(max_bt):
     artiq/ttl1: Set(False)
 """
 
-    actions = test_utils.seq_get_all_actions(s)
+    actions = test_utils.compiler_get_all_actions(comp)
     assert len(actions) == 1
     assert len(actions[0]) == 2
     action1 = actions[0][0]
@@ -397,7 +397,7 @@ def test_order_error3(max_bt):
     artiq/ttl1: Pulse(False)
 """
 
-    actions = test_utils.seq_get_all_actions(s)
+    actions = test_utils.compiler_get_all_actions(comp)
     assert len(actions) == 1
     assert len(actions[0]) == 2
     action1 = actions[0][0]
@@ -419,7 +419,7 @@ def test_order_error3(max_bt):
     comp.runtime_finalize(1)
     assert test_utils.action_get_cond_val(action1) is True
     assert test_utils.action_get_cond_val(action2) is True
-    total_time, times = test_utils.seq_get_all_times(s)
+    total_time, times = test_utils.compiler_get_all_times(comp)
 
     assert times == [0,
                      100_000_000_000,
@@ -546,7 +546,7 @@ def test_ramp_order1(max_bt):
 
     comp.finalize()
 
-    actions = test_utils.seq_get_all_actions(s)
+    actions = test_utils.compiler_get_all_actions(comp)
     assert len(actions) == 1
     assert len(actions[0]) == 3
     action1 = actions[0][0]
@@ -577,7 +577,7 @@ def test_ramp_order1(max_bt):
     assert test_utils.action_get_cond_val(action1) is True
     assert test_utils.action_get_cond_val(action2) is True
     assert test_utils.action_get_cond_val(action3) is True
-    total_time, times = test_utils.seq_get_all_times(s)
+    total_time, times = test_utils.compiler_get_all_times(comp)
 
     assert times == [0,
                      0,
@@ -592,7 +592,7 @@ def test_ramp_order1(max_bt):
     assert test_utils.action_get_cond_val(action1) is True
     assert test_utils.action_get_cond_val(action2) is True
     assert test_utils.action_get_cond_val(action3) is True
-    total_time, times = test_utils.seq_get_all_times(s)
+    total_time, times = test_utils.compiler_get_all_times(comp)
 
     assert times == [0,
                      0,

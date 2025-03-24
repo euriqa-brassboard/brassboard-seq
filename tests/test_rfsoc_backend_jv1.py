@@ -165,7 +165,8 @@ def check_bt(exc, max_bt, *names):
 
 with_rfsoc_params = pytest.mark.parametrize("max_bt", [0, 5, 500])
 
-def get_channel_info(rb, s):
+def get_channel_info(rb, comp):
+    s = comp.seq
     channels = rfsoc_utils.get_channel_info(rb)
     compiled_info = rfsoc_utils.get_compiled_info(rb)
     chn_ids = set(tone_chn.chn for tone_chn in channels.channels)
@@ -179,7 +180,7 @@ def get_channel_info(rb, s):
         chn_params.add((chn_idx, param))
 
     all_actions = {}
-    for (chn, actions) in enumerate(test_utils.seq_get_all_actions(s)):
+    for (chn, actions) in enumerate(test_utils.compiler_get_all_actions(comp)):
         for action in actions:
             if test_utils.action_get_cond(action) is False:
                 continue
@@ -358,7 +359,7 @@ def test_channels(max_bt):
     assert not rb.has_output
     comp.finalize()
     assert rb.has_output
-    channels = get_channel_info(rb, s)
+    channels = get_channel_info(rb, comp)
     chn_ids = [tone_chn.chn for tone_chn in channels.channels]
     assert chn_ids == [2, 3, 4, 0, 1, 5]
     assert channels.chn_map == {1: (0, 'amp'), 2: (1, 'freq'),
@@ -446,7 +447,7 @@ def test_output1(max_bt):
       .set('rfsoc/dds0/1/phase', 0.1) \
       .set('rfsoc/dds0/1/ff', True)
     comp.finalize()
-    channels = get_channel_info(rb, s)
+    channels = get_channel_info(rb, comp)
     assert len(channels.channels) == 2
     assert channels.channels[0].chn == 1
     assert channels.channels[1].chn == 0
@@ -531,7 +532,7 @@ def test_output2(max_bt):
       .set('rfsoc/dds0/1/phase', rtval.new_extern(lambda: 0.1)) \
       .set('rfsoc/dds0/1/ff', rtval.new_extern(lambda: True), sync=False)
     comp.finalize()
-    channels = get_channel_info(rb, s)
+    channels = get_channel_info(rb, comp)
     assert len(channels.channels) == 2
     assert channels.channels[0].chn == 1
     assert channels.channels[1].chn == 0
@@ -619,7 +620,7 @@ def test_output3(max_bt):
       .set('rfsoc/dds0/1/phase', rtval.new_extern(lambda: 0.1)) \
       .set('rfsoc/dds0/1/ff', rtval.new_extern(lambda: True), sync=False)
     comp.finalize()
-    channels = get_channel_info(rb, s)
+    channels = get_channel_info(rb, comp)
     assert len(channels.channels) == 2
     assert channels.channels[0].chn == 1
     assert channels.channels[1].chn == 0
@@ -651,7 +652,7 @@ def test_ramp_output1(max_bt):
       .pulse('rfsoc/dds0/1/amp', ramp1) \
       .set('rfsoc/dds0/1/phase', ramp2)
     comp.finalize()
-    channels = get_channel_info(rb, s)
+    channels = get_channel_info(rb, comp)
     assert len(channels.channels) == 2
     assert channels.channels[0].chn == 1
     assert channels.channels[1].chn == 0
@@ -729,7 +730,7 @@ def test_ramp_output2(max_bt):
       .pulse('rfsoc/dds0/1/amp', ramp1) \
       .set('rfsoc/dds0/1/phase', ramp2)
     comp.finalize()
-    channels = get_channel_info(rb, s)
+    channels = get_channel_info(rb, comp)
     assert len(channels.channels) == 2
     assert channels.channels[0].chn == 1
     assert channels.channels[1].chn == 0
@@ -1388,7 +1389,7 @@ def test_short_ramp_output1(max_bt):
       .pulse('rfsoc/dds0/1/amp', ramp1) \
       .set('rfsoc/dds0/1/phase', ramp2)
     comp.finalize()
-    channels = get_channel_info(rb, s)
+    channels = get_channel_info(rb, comp)
     assert len(channels.channels) == 2
     assert channels.channels[0].chn == 1
     assert channels.channels[1].chn == 0
@@ -2279,7 +2280,7 @@ def test_dds_delay(max_bt, use_rt):
     comp.finalize()
 
     if not use_rt:
-        channels = get_channel_info(rb, s)
+        channels = get_channel_info(rb, comp)
         assert channels.dds_delay == {
             0: 1000_000,
             1: 1000_000_000
@@ -2287,7 +2288,7 @@ def test_dds_delay(max_bt, use_rt):
 
     comp.runtime_finalize(1)
     if use_rt:
-        channels = get_channel_info(rb, s)
+        channels = get_channel_info(rb, comp)
         assert channels.dds_delay == {
             0: 1000_000,
             1: 1000_000_000

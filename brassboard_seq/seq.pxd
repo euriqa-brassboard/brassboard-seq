@@ -24,7 +24,6 @@ from brassboard_seq.scan cimport ParamPack
 from brassboard_seq.action cimport Action, ActionAllocator
 
 from libcpp.vector cimport vector
-from libcpp.memory cimport unique_ptr
 
 cdef class TimeSeq:
     # Toplevel parent sequence
@@ -79,9 +78,5 @@ cdef class SeqInfo:
     cdef ActionAllocator action_alloc
     cdef int action_counter
 
-ctypedef vector[Action*] _action_vector
-
 cdef class Seq(SubSeq):
-    cdef unique_ptr[_action_vector[]] all_actions
-
-    cdef long long total_time
+    pass

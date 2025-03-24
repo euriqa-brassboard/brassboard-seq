@@ -18,6 +18,7 @@
 
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.action cimport _RampFunctionBase
+from brassboard_seq.backend cimport CompiledSeq
 from brassboard_seq.event_time cimport EventTime, round_time_int
 from brassboard_seq.rtval cimport ExternCallback, is_rtval, new_extern
 from brassboard_seq.seq cimport Seq
@@ -69,9 +70,9 @@ cdef extern from "src/artiq_backend.cpp" namespace "brassboard_seq::artiq_backen
     ArtiqConsts artiq_consts
     PyTypeObject *rampfunctionbase_type
 
-    void collect_actions(ArtiqBackend ab, EventTime) except +
+    void collect_actions(ArtiqBackend ab, CompiledSeq&, EventTime) except +
 
-    void generate_rtios(ArtiqBackend ab, unsigned age, py_object&) except +
+    void generate_rtios(ArtiqBackend ab, CompiledSeq&, unsigned age, py_object&) except +
 
 artiq_consts.COUNTER_ENABLE = <int?>edge_counter.CONFIG_COUNT_RISING | <int?>edge_counter.CONFIG_RESET_TO_ZERO
 artiq_consts.COUNTER_DISABLE = <int?>edge_counter.CONFIG_SEND_COUNT_EVENT
@@ -233,13 +234,14 @@ cdef class ArtiqBackend:
                          <PyObject*>delay)
         self.device_delay[name] = round_time_int(delay)
 
-    cdef int finalize(self) except -1:
+    cdef int finalize(self, CompiledSeq &cseq) except -1:
         collect_channels(&self.channels, self.prefix, self.sys, self.seq,
                          self.device_delay)
-        collect_actions(self, None)
+        collect_actions(self, cseq, None)
 
-    cdef int runtime_finalize(self, unsigned age, py_object &pyage) except -1:
-        generate_rtios(self, age, pyage)
+    cdef int runtime_finalize(self, CompiledSeq &cseq,
+                              unsigned age, py_object &pyage) except -1:
+        generate_rtios(self, cseq, age, pyage)
 
 @cython.internal
 @cython.auto_pickle(False)
