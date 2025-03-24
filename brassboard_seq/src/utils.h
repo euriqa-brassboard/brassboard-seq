@@ -440,6 +440,8 @@ pyunicode_from_string(const char *str)
     return throw_if_not(PyUnicode_FromString(str));
 }
 
+py_object channel_name_from_path(PyObject *path);
+
 template<typename T>
 struct ValueIndexer {
     int get_id(void *p)

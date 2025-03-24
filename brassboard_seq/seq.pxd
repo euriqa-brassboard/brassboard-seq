@@ -85,7 +85,3 @@ cdef class Seq(SubSeq):
     cdef unique_ptr[_action_vector[]] all_actions
 
     cdef long long total_time
-
-    cdef int finalize(self) except -1
-
-    cdef int runtime_finalize(self, unsigned age, py_object &pyage) except -1

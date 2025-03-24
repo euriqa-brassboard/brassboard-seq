@@ -15,6 +15,7 @@ install(FILES
   src/event_time.h
   src/lib_rtval.h
   src/scan.h
+  src/seq.h
   src/rfsoc_backend.h
   src/rtval.h
   src/utils.h

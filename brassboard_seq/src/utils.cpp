@@ -262,6 +262,12 @@ PyObject *pydict_deepcopy(PyObject *d)
     return _pydict_deepcopy(d);
 }
 
+static PyObject *py_slash = pyunicode_from_string("/");
+py_object channel_name_from_path(PyObject *path)
+{
+    return py_object(throw_if_not(PyUnicode_Join(py_slash, path)));
+}
+
 std::streamsize buff_streambuf::xsputn(const char *s, std::streamsize count)
 {
     auto p = extend(count);

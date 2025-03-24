@@ -17,10 +17,22 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
+from brassboard_seq.action cimport _RampFunctionBase
+from brassboard_seq.seq cimport TimeStep
 from brassboard_seq.utils cimport PyErr_Format, PyExc_ValueError
 
 cimport cython
-from cpython cimport PyObject
+from cpython cimport PyObject, PyTypeObject
+
+cdef extern from "src/backend.cpp" namespace "brassboard_seq::backend":
+    PyTypeObject *timestep_type
+    PyTypeObject *rampfunctionbase_type
+    void seq_finalize(Seq, TimeStep, _RampFunctionBase) except +
+    void seq_runtime_finalize(Seq, unsigned age, py_object &pyage,
+                              _RampFunctionBase) except +
+
+timestep_type = <PyTypeObject*>TimeStep
+rampfunctionbase_type = <PyTypeObject*>_RampFunctionBase
 
 @cython.auto_pickle(False)
 cdef class Backend:
@@ -49,17 +61,15 @@ cdef class SeqCompiler:
             if path[0] not in self.backends:
                 name = '/'.join(path)
                 PyErr_Format(PyExc_ValueError, 'Unhandled channel: %U', <PyObject*>name)
-        self.seq.finalize()
+        seq_finalize(self.seq, None, None)
         for backend in self.backends.values():
             (<Backend>backend).finalize()
 
-    def runtime_finalize(self, age, /):
+    def runtime_finalize(self, _age, /):
         cdef py_object pyage
-        if isinstance(age, int):
-            pyage.set_obj(age)
-        runtime_finalize(self, age, pyage)
-
-cdef int runtime_finalize(SeqCompiler self, unsigned age, py_object &pyage):
-    self.seq.runtime_finalize(age, pyage)
-    for backend in self.backends.values():
-        (<Backend>backend).runtime_finalize(age, pyage)
+        if isinstance(_age, int):
+            pyage.set_obj(_age)
+        cdef unsigned age = _age
+        seq_runtime_finalize(self.seq, age, pyage, None)
+        for backend in self.backends.values():
+            (<Backend>backend).runtime_finalize(age, pyage)
