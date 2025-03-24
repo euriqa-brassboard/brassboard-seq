@@ -240,18 +240,14 @@ PyObject *pytuple_append1(PyObject *tuple, PyObject *obj)
 static PyObject *_pydict_deepcopy(PyObject *d)
 {
     py_object res(pydict_new());
-
-    PyObject *key;
-    PyObject *value;
-    Py_ssize_t pos = 0;
-    while (PyDict_Next(d, &pos, &key, &value)) {
+    foreach_pydict(d, [&] (auto key, auto value) {
         if (!PyDict_Check(value)) {
             throw_if(PyDict_SetItem(res.get(), key, value));
-            continue;
+            return;
         }
         py_object new_value(_pydict_deepcopy(value));
         throw_if(PyDict_SetItem(res.get(), key, new_value.get()));
-    }
+    });
     return res.release();
 }
 

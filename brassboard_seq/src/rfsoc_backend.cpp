@@ -1878,22 +1878,17 @@ PulseCompilerGen::Info::Info()
         throw_if_not(_PyObject_Vectorcall(ToneData, py_nums, 6, nullptr)));
     throw_if(PyObject_SetAttrString(ToneData, "__post_init__", orig_post_init));
     py_object td_dict(throw_if_not(PyObject_GenericGetDict(dummy_tonedata, nullptr)));
-
-    PyObject *key, *value;
-    Py_ssize_t pos = 0;
-    while (PyDict_Next(td_dict, &pos, &key, &value)) {
+    foreach_pydict(td_dict, [&] (auto key, auto value) {
         for (auto name: {"channel", "tone", "duration_cycles", "frequency_hz",
                 "amplitude", "phase_rad", "frame_rotation_rad", "wait_trigger",
                 "sync", "output_enable", "feedback_enable",
                 "bypass_lookup_tables"}) {
             if (PyUnicode_CompareWithASCIIString(key, name) == 0) {
-                goto skip_field;
+                return;
             }
         }
         tonedata_fields.push_back({ { py_newref(key) } , py_newref(value) });
-    skip_field:
-        ;
-    }
+    });
 }
 
 struct JaqalPulseCompilerGen: SyncChannelGen {
@@ -2350,16 +2345,14 @@ static inline bool parse_action_kws(PyObject *kws, int aid)
     if (!kws)
         return false;
     bool sync = false;
-    PyObject *key, *value;
-    Py_ssize_t pos = 0;
-    while (PyDict_Next(kws, &pos, &key, &value)) {
+    foreach_pydict(kws, [&] (auto key, auto value) {
         if (PyUnicode_CompareWithASCIIString(key, "sync") == 0) {
             sync = get_value_bool(value, action_key(aid));
-            continue;
+            return;
         }
         bb_throw_format(PyExc_ValueError, action_key(aid),
                         "Invalid output keyword argument %S", kws);
-    }
+    });
     return sync;
 }
 

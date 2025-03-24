@@ -22,10 +22,7 @@ namespace brassboard_seq::scan {
 
 static void merge_dict_into(PyObject *tgt, PyObject *src, bool ovr)
 {
-    PyObject *key;
-    PyObject *value;
-    Py_ssize_t pos = 0;
-    while (PyDict_Next(src, &pos, &key, &value)) {
+    foreach_pydict(src, [&] (auto key, auto value) {
         auto oldv = PyDict_GetItemWithError(tgt, key);
         if (oldv) {
             bool is_dict = PyDict_Check(value);
@@ -50,7 +47,7 @@ static void merge_dict_into(PyObject *tgt, PyObject *src, bool ovr)
             py_object copied(pydict_deepcopy(value));
             throw_if(PyDict_SetItem(tgt, key, copied.get()));
         }
-    }
+    });
 }
 
 static inline __attribute__((returns_nonnull)) PyObject*

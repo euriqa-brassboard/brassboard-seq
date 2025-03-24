@@ -442,6 +442,15 @@ pyunicode_from_string(const char *str)
 
 py_object channel_name_from_path(PyObject *path);
 
+static inline void foreach_pydict(PyObject *dict, auto &&cb)
+{
+    PyObject *key, *value;
+    Py_ssize_t pos = 0;
+    while (PyDict_Next(dict, &pos, &key, &value)) {
+        cb(key, value);
+    }
+}
+
 template<typename T>
 struct ValueIndexer {
     int get_id(void *p)
