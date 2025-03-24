@@ -27,9 +27,9 @@ from cpython cimport PyObject, PyTypeObject
 cdef extern from "src/backend.cpp" namespace "brassboard_seq::backend":
     PyTypeObject *timestep_type
     PyTypeObject *rampfunctionbase_type
-    void seq_finalize(Seq, TimeStep, _RampFunctionBase) except +
-    void seq_runtime_finalize(Seq, unsigned age, py_object &pyage,
-                              _RampFunctionBase) except +
+    void compiler_finalize(SeqCompiler, TimeStep, _RampFunctionBase, Backend) except +
+    void compiler_runtime_finalize(SeqCompiler, object age,
+                                   _RampFunctionBase, Backend) except +
 
 timestep_type = <PyTypeObject*>TimeStep
 rampfunctionbase_type = <PyTypeObject*>_RampFunctionBase
@@ -56,20 +56,7 @@ cdef class SeqCompiler:
         backend.prefix = name
 
     def finalize(self, /):
-        for _path in self.seq.seqinfo.channel_paths:
-            path = <tuple>_path
-            if path[0] not in self.backends:
-                name = '/'.join(path)
-                PyErr_Format(PyExc_ValueError, 'Unhandled channel: %U', <PyObject*>name)
-        seq_finalize(self.seq, None, None)
-        for backend in self.backends.values():
-            (<Backend>backend).finalize()
+        compiler_finalize(self, None, None, None)
 
-    def runtime_finalize(self, _age, /):
-        cdef py_object pyage
-        if isinstance(_age, int):
-            pyage.set_obj(_age)
-        cdef unsigned age = _age
-        seq_runtime_finalize(self.seq, age, pyage, None)
-        for backend in self.backends.values():
-            (<Backend>backend).runtime_finalize(age, pyage)
+    def runtime_finalize(self, age, /):
+        compiler_runtime_finalize(self, age, None, None)

@@ -57,19 +57,30 @@ static void collect_actions(SubSeq *self, std::vector<action::Action*> *actions)
     }
 }
 
-template<typename TimeStep, typename _RampFunctionBase>
-static inline void seq_finalize(auto self, TimeStep*, _RampFunctionBase*)
+template<typename TimeStep, typename _RampFunctionBase, typename Backend>
+static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, Backend*)
 {
-    using EventTime = std::remove_reference_t<decltype(*pyx_fld(self, end_time))>;
-    auto seqinfo = pyx_fld(self, seqinfo);
+    auto seq = comp->seq;
+    using EventTime = std::remove_reference_t<decltype(*pyx_fld(seq, end_time))>;
+    auto seqinfo = pyx_fld(seq, seqinfo);
     auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);
+    auto nchn = (int)PyList_GET_SIZE(seqinfo->channel_paths);
+    for (int i = 0; i < nchn; i++) {
+        auto path = PyList_GET_ITEM(seqinfo->channel_paths, i);
+        auto prefix = PyTuple_GET_ITEM(path, 0);
+        auto res = PyDict_Contains(comp->backends, prefix);
+        if (res > 0) [[likely]]
+            continue;
+        throw_if(res < 0);
+        auto name = channel_name_from_path(path);
+        py_throw_format(PyExc_ValueError, "Unhandled channel: %U", name.get());
+    }
     auto time_mgr = seqinfo->time_mgr;
     time_mgr->__pyx_vtab->finalize(time_mgr);
     pyassign(seqinfo->channel_name_map, Py_None); // Free up memory
-    auto nchn = (int)PyList_GET_SIZE(seqinfo->channel_paths);
     auto all_actions = new std::vector<action::Action*>[nchn];
-    pyx_fld(self, all_actions).reset(all_actions);
-    collect_actions<TimeStep>(pyx_find_base(self, sub_seqs), all_actions);
+    pyx_fld(seq, all_actions).reset(all_actions);
+    collect_actions<TimeStep>(pyx_find_base(seq, sub_seqs), all_actions);
     auto get_time = [event_times=time_mgr->event_times] (int tid) {
         return (EventTime*)PyList_GET_ITEM(event_times, tid);
     };
@@ -139,16 +150,26 @@ static inline void seq_finalize(auto self, TimeStep*, _RampFunctionBase*)
             action->end_val.reset(py_newref(value.get()));
         }
     }
+    foreach_pydict(comp->backends, [] (auto name, auto _backend) {
+        auto backend = (Backend*)_backend;
+        throw_if(backend->__pyx_vtab->finalize(backend) < 0);
+    });
 }
 
-template<typename _RampFunctionBase>
-static inline void seq_runtime_finalize(auto self, unsigned age, py_object &pyage,
-                                        _RampFunctionBase*)
+template<typename _RampFunctionBase, typename Backend>
+static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
+                                             _RampFunctionBase*, Backend*)
 {
-    auto seqinfo = pyx_fld(self, seqinfo);
+    py_object pyage;
+    if (Py_TYPE(_age) == &PyLong_Type)
+        pyage.set_obj(_age);
+    unsigned age = PyLong_AsLong(_age);
+    throw_if(age == (unsigned)-1 && PyErr_Occurred());
+    auto seq = comp->seq;
+    auto seqinfo = pyx_fld(seq, seqinfo);
     auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);
     auto time_mgr = seqinfo->time_mgr;
-    pyx_fld(self, total_time) = time_mgr->__pyx_vtab->compute_all_times(time_mgr, age, pyage);
+    pyx_fld(seq, total_time) = time_mgr->__pyx_vtab->compute_all_times(time_mgr, age, pyage);
     auto assertions = seqinfo->assertions;
     int nassert = PyList_GET_SIZE(assertions);
     for (int assert_id = 0; assert_id < nassert; assert_id++) {
@@ -177,7 +198,7 @@ static inline void seq_runtime_finalize(auto self, unsigned age, py_object &pyag
     };
     auto nchn = (int)PyList_GET_SIZE(seqinfo->channel_paths);
     for (int cid = 0; cid < nchn; cid++) {
-        auto &actions = pyx_fld(self, all_actions)[cid];
+        auto &actions = pyx_fld(seq, all_actions)[cid];
         long long prev_time = 0;
         for (auto action: actions) {
             bool cond_val = get_condval(action);
@@ -211,6 +232,10 @@ static inline void seq_runtime_finalize(auto self, unsigned age, py_object &pyag
             prev_time = (isramp || action->is_pulse) ? end_time : start_time;
         }
     }
+    foreach_pydict(comp->backends, [&] (auto name, auto _backend) {
+        auto backend = (Backend*)_backend;
+        throw_if(backend->__pyx_vtab->runtime_finalize(backend, age, pyage) < 0);
+    });
 }
 
 }

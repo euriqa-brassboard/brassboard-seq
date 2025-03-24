@@ -234,13 +234,11 @@ cdef class ArtiqBackend:
         self.device_delay[name] = round_time_int(delay)
 
     cdef int finalize(self) except -1:
-        bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)
         collect_channels(&self.channels, self.prefix, self.sys, self.seq,
                          self.device_delay)
         collect_actions(self, None)
 
     cdef int runtime_finalize(self, unsigned age, py_object &pyage) except -1:
-        bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)
         generate_rtios(self, age, pyage)
 
 @cython.internal

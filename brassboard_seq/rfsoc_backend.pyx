@@ -186,7 +186,6 @@ cdef class RFSOCBackend:
         set_dds_delay(self, dds, <double>delay)
 
     cdef int finalize(self) except -1:
-        bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)
         # Channel name format: rfsoc/dds<chn>/<tone>/<param>
         cdef cppmap[int, int] chn_idx_map
         cdef int idx = -1
@@ -233,7 +232,6 @@ cdef class RFSOCBackend:
         collect_actions(self, None)
 
     cdef int runtime_finalize(self, unsigned age, py_object &pyage) except -1:
-        bt_guard = set_global_tracker(&self.seq.seqinfo.bt_tracker)
         for dds, delay in self.rt_dds_delay.items():
             rt_eval_throw(<RuntimeValue>delay, age, pyage)
             set_dds_delay(self, dds, rtval_cache(<RuntimeValue>delay).get[double]())
