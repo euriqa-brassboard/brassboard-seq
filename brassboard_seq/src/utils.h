@@ -304,7 +304,7 @@ void bb_reraise_and_throw_if(bool cond, uintptr_t key)
 }
 
 static __attribute__((always_inline)) inline
-bool get_value_bool(PyObject *obj, auto &&cb)
+bool get_value_bool(PyObject *obj, auto &&cb) requires requires { cb(); }
 {
     if (obj == Py_True)
         return true;
@@ -324,7 +324,7 @@ static inline bool get_value_bool(PyObject *obj, uintptr_t key)
 }
 
 static __attribute__((always_inline)) inline
-double get_value_f64(PyObject *obj, auto &&cb)
+double get_value_f64(PyObject *obj, auto &&cb) requires requires { cb(); }
 {
     if (PyFloat_CheckExact(obj)) [[likely]]
         return PyFloat_AS_DOUBLE(obj);

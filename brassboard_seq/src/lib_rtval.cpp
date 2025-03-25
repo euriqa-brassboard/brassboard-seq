@@ -422,9 +422,7 @@ TagVal TagVal::from_py(PyObject *value)
         throw_if(val == -1 && PyErr_Occurred());
         return TagVal(val);
     }
-    auto val = PyFloat_AsDouble(value);
-    throw_if(val == -1 && PyErr_Occurred());
-    return TagVal(val);
+    return TagVal(brassboard_seq::get_value_f64(value, -1));
 }
 
 __attribute__((flatten, noinline, visibility("protected")))

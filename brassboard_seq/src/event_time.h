@@ -206,9 +206,7 @@ static inline long long round_time_int(PyObject *v)
         throw_if(vi == -1 && PyErr_Occurred());
         return vi * time_scale;
     }
-    auto vf = PyFloat_AsDouble(v);
-    throw_if(vf == -1 && PyErr_Occurred());
-    return round_time_f64(vf);
+    return round_time_f64(get_value_f64(v, -1));
 }
 
 template<typename RuntimeValue>

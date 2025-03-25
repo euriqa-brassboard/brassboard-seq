@@ -130,6 +130,7 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
     void rt_eval_throw(RuntimeValue self, unsigned age, py_object &pyage) except +
     void rt_eval_throw(RuntimeValue self, unsigned age, py_object &pyage,
                        uintptr_t) except +
+    double get_value_f64(object, unsigned age, py_object &pyage) except +
 
     cppclass InterpFunction:
         void set_value(RuntimeValue, vector[DataType]&) except +
@@ -154,13 +155,6 @@ cpdef inline RuntimeValue new_extern(cb, ty=float):
 
 cpdef inline RuntimeValue new_extern_age(cb, ty=float):
     return new_cb_arg2(ValueType.ExternAge, cb, ty, None)
-
-cdef inline double get_value_f64(v, unsigned age, py_object &pyage) except? -1:
-    if is_rtval(v):
-        rt_eval_throw(<RuntimeValue>v, age, pyage)
-        return rtval_cache(<RuntimeValue>v).get[double]()
-    else:
-        return <double>v
 
 cdef class ExternCallback:
     pass

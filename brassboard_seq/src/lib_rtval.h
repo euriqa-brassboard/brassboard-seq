@@ -1064,6 +1064,15 @@ void rt_eval_throw(RuntimeValue *self, unsigned age, py_object &pyage,
     throw_py_error(self->cache_err, key);
 }
 
+static inline double get_value_f64(PyObject *v, unsigned age, py_object &pyage)
+{
+    if (is_rtval(v)) {
+        rt_eval_throw((_RuntimeValue*)v, age, pyage);
+        return rtval_cache((_RuntimeValue*)v).get<double>();
+    }
+    return brassboard_seq::get_value_f64(v, -1);
+}
+
 std::pair<EvalError,GenVal> interpret_func(const int *code, GenVal *data,
                                            EvalError *errors);
 
