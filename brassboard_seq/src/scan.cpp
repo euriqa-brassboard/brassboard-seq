@@ -132,6 +132,25 @@ get_value_default(auto *self, PyObject *default_value)
     return py_newref(values);
 }
 
+// Check if the struct field reference path is overwritten in `obj`.
+// Overwrite happens if the field itself exists or a parent of the field
+// is overwritten to something that's not scalar struct.
+static inline bool check_field(PyObject *d, PyObject *path)
+{
+    auto pathlen = PyTuple_GET_SIZE(path);
+    for (int i = 0; i < pathlen; i++) {
+        auto vp = PyDict_GetItemWithError(d, PyTuple_GET_ITEM(path, i));
+        if (!vp) {
+            throw_if(PyErr_Occurred());
+            return false;
+        }
+        if (!PyDict_CheckExact(vp))
+            return true;
+        d = vp;
+    }
+    return true;
+}
+
 static __attribute__((returns_nonnull)) PyObject*
 parampack_call(auto *self, PyObject *args, PyObject *kwargs)
 {

@@ -45,6 +45,7 @@ cdef extern from "src/scan.cpp" namespace "brassboard_seq::scan":
     dict ensure_dict(ParamPack self) except +
     object get_value(ParamPack self) except +
     object get_value_default(ParamPack self, object) except +
+    bint check_field(dict d, tuple path) except +
     object parampack_call(ParamPack self, tuple args, dict kwargs) except +
 
 @cython.final
@@ -73,7 +74,7 @@ cdef class ParamPack:
         if fieldp == NULL:
             return False
         field = <object>fieldp
-        if not isinstance(field, dict):
+        if type(field) is not dict:
             PyErr_Format(PyExc_TypeError, "Scalar value does not have field")
         return key in <dict>field
 
@@ -87,7 +88,7 @@ cdef class ParamPack:
         if fieldp == NULL:
             return {}
         field = <object>fieldp
-        if not isinstance(field, dict):
+        if type(field) is not dict:
             PyErr_Format(PyExc_TypeError, "Cannot access value as parameter pack.")
         return {k: pydict_deepcopy(v) for k, v in (<dict>field).items()}
 
@@ -107,7 +108,7 @@ cdef class ParamPack:
         self_values = ensure_dict(self)
         cdef PyObject *oldvaluep = PyDict_GetItemWithError(self_values, name)
         if oldvaluep != NULL:
-            was_dict = isinstance(<object>oldvaluep, dict)
+            was_dict = type(<object>oldvaluep) is dict
             is_dict = isinstance(value, dict)
             if was_dict and not is_dict:
                 PyErr_Format(PyExc_TypeError, "Cannot override parameter pack as value")
@@ -136,7 +137,7 @@ cdef class ParamPack:
         if fieldp == NULL:
             return '<Undefined>'
         field = <object>fieldp
-        if not isinstance(field, dict):
+        if type(field) is not dict:
             return str(field)
         return yaml_print(field)
 
@@ -149,10 +150,10 @@ def get_visited(ParamPack self, /):
     cdef PyObject *resp = PyDict_GetItemWithError(visited, fieldname)
     if resp != NULL:
         res = <object>resp
-        if isinstance(res, dict):
+        if type(res) is dict:
             return PyDictProxy_New(res)
         return res
-    if isinstance(self.values.get(fieldname), dict):
+    if type(self.values.get(fieldname)) is dict:
         res = {}
         assume_not_none(visited)
         visited[fieldname] = res
@@ -165,22 +166,6 @@ def get_param(param, /):
         return new_param_pack(ParamPack, {}, {}, 'root', None)
     return param
 
-# Check if the struct field reference path is overwritten in `obj`.
-# Overwrite happens if the field itself exists or a parent of the field
-# is overwritten to something that's not scalar struct.
-cdef bint check_field(dict d, tuple path) except -1:
-    cdef PyObject *vp
-    cdef int pathlen = PyTuple_GET_SIZE(path)
-    cdef int i
-    for i in range(pathlen):
-        vp = PyDict_GetItemWithError(d, <object>PyTuple_GET_ITEM(path, i))
-        if vp == NULL:
-            return False
-        if not isinstance(<object>vp, dict):
-            return True
-        d = <dict>vp
-    return True
-
 cdef dict _missing_value = {}
 cdef recursive_get(dict d, tuple path):
     cdef int pathlen = PyTuple_GET_SIZE(path)
@@ -190,7 +175,7 @@ cdef recursive_get(dict d, tuple path):
     for i in range(pathlen - 1):
         f = PyTuple_GET_ITEM(path, i)
         vp = PyDict_GetItemWithError(d, <object>f)
-        if vp == NULL or not isinstance(<object>vp, dict):
+        if vp == NULL or type(<object>vp) is not dict:
             return _missing_value
         d = <dict>vp
     vp = PyDict_GetItemWithError(d, <object>PyTuple_GET_ITEM(path, pathlen - 1))
@@ -205,7 +190,7 @@ cdef int recursive_assign(dict d, tuple path, v) except -1:
     for i in range(pathlen - 1):
         f = PyTuple_GET_ITEM(path, i)
         vp = PyDict_GetItemWithError(d, <object>f)
-        if vp == NULL or not isinstance(<object>vp, dict):
+        if vp == NULL or type(<object>vp) is not dict:
             newd = {}
             assume_not_none(d)
             d[<object>f] = newd
@@ -225,7 +210,7 @@ cdef int _foreach_nondict(foreach_nondict_cb cb, void *data, dict obj,
     assume_not_none(obj)
     for k, v in obj.items():
         path = pytuple_append1(prefix, k)
-        if isinstance(v, dict):
+        if type(v) is dict:
             _foreach_nondict(cb, data, <dict>v, path)
         else:
             cb(v, path, data)
@@ -254,7 +239,7 @@ cdef dict dump_scan1d(Scan1D self):
 
 cdef int load_scan1d_checksize_cb(v, tuple path, void *p) except -1:
     cdef int size = <int><long>p
-    if not isinstance(v, list):
+    if type(v) is not list:
         T = type(v)
         PyErr_Format(PyExc_TypeError,
                      "Invalid serialization of ScanGroup: wrong parameter type %S.",
@@ -654,7 +639,7 @@ cdef class ScanGroup:
         return new_scan_wrapper(self, <ScanND>PyList_GET_ITEM(scans, idx), (), idx)
 
     def __setitem__(self, _idx, v):
-        if isinstance(v, ScanWrapper):
+        if type(v) is ScanWrapper:
             if (<ScanWrapper>v).sg is not self:
                 PyErr_Format(PyExc_ValueError, "ScanGroup mismatch in assignment.")
             new_scan = copy_scannd((<ScanWrapper>v).scan)
@@ -809,7 +794,7 @@ cdef class ScanGroup:
             assume_not_none(params)
             for k, v in params.items():
                 path = pytuple_append1(path, k)
-                if not isinstance(v, dict):
+                if type(v) is not dict:
                     return v, path
                 params = <dict>v
                 break
@@ -867,12 +852,12 @@ cdef int add_cat_scannd(ScanGroup self, ScanGroup other, int idx) except -1:
 
 cdef int add_cat_scan(ScanGroup self, scan) except -1:
     cdef int idx
-    if isinstance(scan, ScanWrapper):
+    if type(scan) is ScanWrapper:
         sw = <ScanWrapper>scan
         if PyTuple_GET_SIZE(sw.path):
             PyErr_Format(PyExc_ValueError, "Only top-level Scan can be concatenated.")
         add_cat_scannd(self, sw.sg, sw.idx)
-    elif isinstance(scan, ScanGroup):
+    elif type(scan) is ScanGroup:
         sg = <ScanGroup>scan
         for idx in range(PyList_GET_SIZE(sg.scans)):
             add_cat_scannd(self, sg, idx)
@@ -981,14 +966,14 @@ cdef int check_param_overwrite(dict obj, tuple path, bint isdict) except -1:
         vp = PyDict_GetItemWithError(obj, <object>PyTuple_GET_ITEM(path, i))
         if vp == NULL:
             return 0
-        if not isinstance(<object>vp, dict):
+        if type(<object>vp) is not dict:
             PyErr_Format(PyExc_TypeError, "Assignment to field of scalar not allowed.")
         obj = <dict>vp
 
     vp = PyDict_GetItemWithError(obj, <object>PyTuple_GET_ITEM(path, pathlen - 1))
     if vp == NULL:
         return 0
-    cdef bint wasdict = isinstance(<object>vp, dict)
+    cdef bint wasdict = type(<object>vp) is dict
     if isdict and not wasdict:
         PyErr_Format(PyExc_TypeError,
                      "Changing field from non-dict to dict not allowed.")
@@ -1024,7 +1009,7 @@ cdef convert_param_value(obj, bint allow_dict):
 
 cdef int set_fixed_param(ScanGroup sg, ScanND scan, tuple path, int idx, v) except -1:
     check_noconflict(scan, path, -1)
-    if isinstance(v, ScanGroup) or isinstance(v, ScanWrapper):
+    if type(v) is ScanGroup or type(v) is ScanWrapper:
         PyErr_Format(PyExc_TypeError, "Scan parameter cannot be a scan.")
     set_dirty(sg, idx)
     check_param_overwrite(scan.fixed, path, isinstance(v, dict))
@@ -1032,7 +1017,7 @@ cdef int set_fixed_param(ScanGroup sg, ScanND scan, tuple path, int idx, v) exce
 
 cdef int set_scan_param(ScanGroup sg, ScanND scan, tuple path, int idx,
                         int scandim, _v) except -1:
-    if isinstance(_v, ScanGroup) or isinstance(_v, ScanWrapper):
+    if type(_v) is ScanGroup or type(_v) is ScanWrapper:
         PyErr_Format(PyExc_TypeError, "Scan parameter cannot be a scan.")
     if not hasattr(_v, '__len__'):
         return set_fixed_param(sg, scan, path, idx, _v)
