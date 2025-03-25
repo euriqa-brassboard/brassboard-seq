@@ -24,3 +24,4 @@ cdef class ParamPack:
     cdef dict values
     cdef dict visited
     cdef str fieldname
+    cdef void *vectorcall_ptr

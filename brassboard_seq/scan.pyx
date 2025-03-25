@@ -31,7 +31,7 @@ import numpy as np
 
 cimport cython
 
-from cpython cimport PyObject, \
+from cpython cimport PyObject, PyTypeObject, \
   PyDict_GetItemWithError, PyDictProxy_New, \
   PyTuple_GET_SIZE, PyTuple_GET_ITEM, \
   PyList_GET_SIZE, PyList_GET_ITEM, \
@@ -46,7 +46,7 @@ cdef extern from "src/scan.cpp" namespace "brassboard_seq::scan":
     object get_value(ParamPack self) except +
     object get_value_default(ParamPack self, object) except +
     bint check_field(dict d, tuple path) except +
-    object parampack_call(ParamPack self, tuple args, dict kwargs) except +
+    void update_param_pack(PyTypeObject *type, ParamPack)
 
 @cython.final
 cdef class ParamPack:
@@ -123,12 +123,12 @@ cdef class ParamPack:
             assume_not_none(self_values)
             self_values[name] = pydict_deepcopy(value)
 
-    def __call__(self, *args, **kwargs):
-        # Supported syntax
-        # () -> get value without default
-        # (value) -> get value with default
-        # (*dicts, **kwargs) -> get parameter pack with default
-        return parampack_call(self, args, kwargs)
+    # Methods defined in c++
+    # def __call__(self, *args, **kwargs)
+    #   Supported syntax
+    #   () -> get value without default
+    #   (value) -> get value with default
+    #   (*dicts, **kwargs) -> get parameter pack with default
 
     def __str__(self):
         fieldname = self.fieldname
@@ -143,6 +143,8 @@ cdef class ParamPack:
 
     def __repr__(self):
         return str(self)
+
+update_param_pack(<PyTypeObject*>ParamPack, None)
 
 def get_visited(ParamPack self, /):
     fieldname = self.fieldname

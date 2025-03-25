@@ -30,7 +30,7 @@ static inline __attribute__((returns_nonnull)) ParamPack*
 new_param_pack(PyObject *type, PyObject *values, PyObject *visited,
                PyObject *fieldname, ParamPack*)
 {
-    auto o = pytype_genericalloc(type);
+    auto o = throw_if_not(((PyTypeObject*)type)->tp_alloc((PyTypeObject*)type, 0));
     auto self = (ParamPack*)o;
     self->values = py_newref(values);
     self->visited = py_newref(visited);

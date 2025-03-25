@@ -20,34 +20,39 @@
 
 namespace brassboard_seq::scan {
 
+static void merge_dict_into(PyObject *tgt, PyObject *src, bool ovr);
+
+static void set_dict(PyObject *tgt, PyObject *key, PyObject *value, bool ovr)
+{
+    auto oldv = PyDict_GetItemWithError(tgt, key);
+    if (oldv) {
+        bool is_dict = PyDict_Check(value);
+        bool was_dict = PyDict_Check(oldv);
+        if (was_dict && !is_dict) {
+            py_throw_format(PyExc_TypeError,
+                            "Cannot override parameter pack as value");
+        }
+        else if (!was_dict && is_dict) {
+            py_throw_format(PyExc_TypeError,
+                            "Cannot override value as parameter pack");
+        }
+        else if (is_dict) {
+            merge_dict_into(oldv, value, ovr);
+        }
+        else if (ovr) {
+            throw_if(PyDict_SetItem(tgt, key, value));
+        }
+    }
+    else {
+        throw_if(PyErr_Occurred());
+        py_object copied(pydict_deepcopy(value));
+        throw_if(PyDict_SetItem(tgt, key, copied.get()));
+    }
+}
+
 static void merge_dict_into(PyObject *tgt, PyObject *src, bool ovr)
 {
-    foreach_pydict(src, [&] (auto key, auto value) {
-        auto oldv = PyDict_GetItemWithError(tgt, key);
-        if (oldv) {
-            bool is_dict = PyDict_Check(value);
-            bool was_dict = PyDict_Check(oldv);
-            if (was_dict && !is_dict) {
-                py_throw_format(PyExc_TypeError,
-                                "Cannot override parameter pack as value");
-            }
-            else if (!was_dict && is_dict) {
-                py_throw_format(PyExc_TypeError,
-                                "Cannot override value as parameter pack");
-            }
-            else if (is_dict) {
-                merge_dict_into(oldv, value, ovr);
-            }
-            else if (ovr) {
-                throw_if(PyDict_SetItem(tgt, key, value));
-            }
-        }
-        else {
-            throw_if(PyErr_Occurred());
-            py_object copied(pydict_deepcopy(value));
-            throw_if(PyDict_SetItem(tgt, key, copied.get()));
-        }
-    });
+    foreach_pydict(src, [&] (auto key, auto val) { set_dict(tgt, key, val, ovr); });
 }
 
 static inline __attribute__((returns_nonnull)) PyObject*
@@ -81,23 +86,6 @@ static __attribute__((returns_nonnull)) PyObject *ensure_dict(auto *self)
     }
     throw_if(PyErr_Occurred());
     return set_new_dict(self_values, fieldname);
-}
-
-// Return borrowed reference
-static __attribute__((returns_nonnull)) PyObject*
-_ensure_dict_kws(auto *self, PyObject *kws)
-{
-    auto fieldname = self->fieldname;
-    auto self_values = self->values;
-    auto values = PyDict_GetItemWithError(self_values, fieldname);
-    if (values) {
-        if (PyDict_Check(values))
-            return values;
-        py_throw_format(PyExc_TypeError, "Cannot access value as parameter pack.");
-    }
-    throw_if(PyErr_Occurred());
-    throw_if(PyDict_SetItem(self_values, fieldname, kws));
-    return kws;
 }
 
 static __attribute__((returns_nonnull)) PyObject *get_value(auto *self)
@@ -151,47 +139,55 @@ static inline bool check_field(PyObject *d, PyObject *path)
     return true;
 }
 
-static __attribute__((returns_nonnull)) PyObject*
-parampack_call(auto *self, PyObject *args, PyObject *kwargs)
-{
-    int nargs = PyTuple_GET_SIZE(args);
-    int nkws = PyDict_GET_SIZE(kwargs);
+static PyObject*
+parampack_vectorcall(auto *self, PyObject *const *args, size_t _nargs,
+                     PyObject *kwnames) try {
+    auto nargs = PyVectorcall_NARGS(_nargs);
+    int nkws = kwnames ? PyTuple_GET_SIZE(kwnames) : 0;
     if (nkws == 0) {
         if (nargs == 0)
             return get_value(self);
         if (nargs == 1) {
-            auto arg0 = PyTuple_GET_ITEM(args, 0);
+            auto arg0 = args[0];
             if (!PyDict_Check(arg0)) {
                 return get_value_default(self, arg0);
             }
         }
     }
-    // Reuse the kwargs dict if possible
-    auto self_values = _ensure_dict_kws(self, kwargs);
-    if (self_values == kwargs) {
-        for (int i = 0; i < nargs; i++) {
-            auto arg = PyTuple_GET_ITEM(args, nargs - 1 - i);
-            if (!PyDict_Check(arg))
-                py_throw_format(
-                    PyExc_TypeError,
-                    "Cannot use value as default value for parameter pack");
-            merge_dict_into(self_values, arg, true);
-        }
+    auto self_values = ensure_dict(self);
+    for (int i = 0; i < nargs; i++) {
+        auto arg = args[i];
+        if (!PyDict_Check(arg))
+            py_throw_format(
+                PyExc_TypeError,
+                "Cannot use value as default value for parameter pack");
+        merge_dict_into(self_values, arg, false);
     }
-    else {
-        for (int i = 0; i < nargs; i++) {
-            auto arg = PyTuple_GET_ITEM(args, i);
-            if (!PyDict_Check(arg))
-                py_throw_format(
-                    PyExc_TypeError,
-                    "Cannot use value as default value for parameter pack");
-            merge_dict_into(self_values, arg, false);
-        }
-        if (nkws) {
-            merge_dict_into(self_values, kwargs, false);
+    if (nkws) {
+        auto kwvalues = args + nargs;
+        for (int i = 0; i < nkws; i++) {
+            set_dict(self_values, PyTuple_GET_ITEM(kwnames, i), kwvalues[i], false);
         }
     }
     return py_newref((PyObject*)self);
+}
+catch (...) {
+    return nullptr;
+}
+
+template<typename ParamPack>
+static inline void update_param_pack(PyTypeObject *type, ParamPack*)
+{
+    type->tp_vectorcall_offset = offsetof(ParamPack, vectorcall_ptr);
+    type->tp_flags |= Py_TPFLAGS_HAVE_VECTORCALL;
+    type->tp_call = PyVectorcall_Call;
+    type->tp_alloc = [] (PyTypeObject *t, Py_ssize_t nitems) -> PyObject* {
+        auto o = (ParamPack*)PyType_GenericAlloc(t, nitems);
+        if (o) [[likely]]
+            o->vectorcall_ptr = (void*)&parampack_vectorcall<ParamPack>;
+        return (PyObject*)o;
+    };
+    PyType_Modified(type);
 }
 
 }
