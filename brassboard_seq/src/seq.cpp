@@ -159,48 +159,6 @@ static void type_add_method(PyTypeObject *type, PyMethodDef *meth)
                     (num_min == 1) ? "" : "s", num_found);
 }
 
-struct seq_set_params {
-    PyObject *chn;
-    PyObject *value;
-    bool exact_time{false};
-    PyObject *cond{Py_True};
-    py_object kws;
-
-    PyObject *kwargs() const
-    {
-        return kws ? kws.get() : Py_None;
-    }
-
-    seq_set_params(PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames,
-                   bool is_pulse)
-    {
-        if (nargs != 2)
-            raise_too_few_args((is_pulse ? "pulse" : "set"), true, 2, nargs);
-        chn = args[0];
-        value = args[1];
-
-        if (kwnames) {
-            auto kwvalues = args + nargs;
-            int nkws = (int)PyTuple_GET_SIZE(kwnames);
-            for (int i = 0; i < nkws; i++) {
-                auto name = PyTuple_GET_ITEM(kwnames, i);
-                auto value = kwvalues[i];
-                if (PyUnicode_CompareWithASCIIString(name, "cond") == 0) {
-                    cond = value;
-                }
-                else if (PyUnicode_CompareWithASCIIString(name, "exact_time") == 0) {
-                    exact_time = get_value_bool(value, (uintptr_t)-1);
-                }
-                else {
-                    if (!kws)
-                        kws.reset(pydict_new());
-                    throw_if(PyDict_SetItem(kws, name, value));
-                }
-            }
-        }
-    }
-};
-
 struct CondCombiner {
     PyObject *cond{nullptr};
     bool needs_free{false};
@@ -402,17 +360,41 @@ template<typename CondSeq, bool is_step=false, bool is_pulse=false>
 static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
                              Py_ssize_t nargs, PyObject *kwnames) try
 {
-    seq_set_params params(args, nargs, kwnames, is_pulse);
+    static_assert(is_step || !is_pulse);
+    if (nargs != 2)
+        raise_too_few_args((is_pulse ? "pulse" : "set"), true, 2, nargs);
+    auto chn = args[0];
+    auto value = args[1];
+    bool exact_time{false};
+    PyObject *arg_cond{Py_True};
+    py_object kws;
+    if (kwnames) {
+        auto kwvalues = args + nargs;
+        int nkws = (int)PyTuple_GET_SIZE(kwnames);
+        for (int i = 0; i < nkws; i++) {
+            auto name = PyTuple_GET_ITEM(kwnames, i);
+            auto value = kwvalues[i];
+            if (PyUnicode_CompareWithASCIIString(name, "cond") == 0) {
+                arg_cond = value;
+            }
+            else if (PyUnicode_CompareWithASCIIString(name, "exact_time") == 0) {
+                exact_time = get_value_bool(value, (uintptr_t)-1);
+            }
+            else {
+                if (!kws)
+                    kws.reset(pydict_new());
+                throw_if(PyDict_SetItem(kws, name, value));
+            }
+        }
+    }
     auto self = (CondSeq*)py_self;
     auto subseq = condseq_get_subseq(self);
     auto cond = pyx_fld(self, cond);
-    CondCombiner cc(cond, params.cond);
+    CondCombiner cc(cond, arg_cond);
     if constexpr (is_step)
-        timestep_set(subseq, params.chn, params.value, cc.cond, is_pulse,
-                     params.exact_time, std::move(params.kws));
+        timestep_set(subseq, chn, value, cc.cond, is_pulse, exact_time, std::move(kws));
     else
-        subseq_set(subseq, params.chn, params.value, cc.cond, params.exact_time,
-                   std::move(params.kws));
+        subseq_set(subseq, chn, value, cc.cond, exact_time, std::move(kws));
     return py_newref(py_self);
 }
 catch (...) {
