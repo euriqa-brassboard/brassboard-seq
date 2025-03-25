@@ -40,7 +40,7 @@ from cpython cimport PyObject, PyTypeObject, \
 from libcpp.vector cimport vector
 
 cdef extern from "src/scan.cpp" namespace "brassboard_seq::scan":
-    void merge_dict_into(object tgt, object src, bint ovr) except +
+    void merge_dict_ovr(object tgt, object src) except +
     dict ensure_visited(ParamPack self) except +
     dict ensure_dict(ParamPack self) except +
     object get_value(ParamPack self) except +
@@ -50,23 +50,6 @@ cdef extern from "src/scan.cpp" namespace "brassboard_seq::scan":
 
 @cython.final
 cdef class ParamPack:
-    def __init__(self, *args, **kwargs):
-        self.visited = {}
-        self.fieldname = 'root'
-        cdef int nargs = PyTuple_GET_SIZE(args)
-        if PyDict_GET_SIZE(kwargs) == 0 and nargs == 0:
-            self.values = kwargs # Use the "free" dict
-            return
-        self.values = {'root': kwargs}
-        cdef int i
-        cdef PyObject *argp
-        for i in range(nargs):
-            argp = PyTuple_GET_ITEM(args, nargs - 1 - i)
-            if not isinstance(<object>argp, dict):
-                PyErr_Format(PyExc_TypeError,
-                             "Cannot use value as default value for parameter pack")
-            merge_dict_into(kwargs, <dict>argp, True)
-
     def __contains__(self, str key):
         fieldname = self.fieldname
         values = self.values
@@ -115,7 +98,7 @@ cdef class ParamPack:
             if not was_dict and is_dict:
                 PyErr_Format(PyExc_TypeError, "Cannot override value as parameter pack")
             if is_dict:
-                merge_dict_into(<dict>oldvaluep, <dict>value, True)
+                merge_dict_ovr(<dict>oldvaluep, <dict>value)
             else:
                 assume_not_none(self_values)
                 self_values[name] = value
@@ -124,6 +107,7 @@ cdef class ParamPack:
             self_values[name] = pydict_deepcopy(value)
 
     # Methods defined in c++
+    # def __init__(self, *args, **kwargs)
     # def __call__(self, *args, **kwargs)
     #   Supported syntax
     #   () -> get value without default

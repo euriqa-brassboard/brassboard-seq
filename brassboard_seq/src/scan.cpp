@@ -20,9 +20,11 @@
 
 namespace brassboard_seq::scan {
 
-static void merge_dict_into(PyObject *tgt, PyObject *src, bool ovr);
+template<bool ovr>
+static void merge_dict_into(PyObject *tgt, PyObject *src);
 
-static void set_dict(PyObject *tgt, PyObject *key, PyObject *value, bool ovr)
+template<bool ovr>
+static void set_dict(PyObject *tgt, PyObject *key, PyObject *value)
 {
     auto oldv = PyDict_GetItemWithError(tgt, key);
     if (oldv) {
@@ -37,7 +39,7 @@ static void set_dict(PyObject *tgt, PyObject *key, PyObject *value, bool ovr)
                             "Cannot override value as parameter pack");
         }
         else if (is_dict) {
-            merge_dict_into(oldv, value, ovr);
+            merge_dict_into<ovr>(oldv, value);
         }
         else if (ovr) {
             throw_if(PyDict_SetItem(tgt, key, value));
@@ -50,9 +52,15 @@ static void set_dict(PyObject *tgt, PyObject *key, PyObject *value, bool ovr)
     }
 }
 
-static void merge_dict_into(PyObject *tgt, PyObject *src, bool ovr)
+template<bool ovr>
+static void merge_dict_into(PyObject *tgt, PyObject *src)
 {
-    foreach_pydict(src, [&] (auto key, auto val) { set_dict(tgt, key, val, ovr); });
+    foreach_pydict(src, [&] (auto key, auto val) { set_dict<ovr>(tgt, key, val); });
+}
+
+static inline void merge_dict_ovr(PyObject *tgt, PyObject *src)
+{
+    merge_dict_into<true>(tgt, src);
 }
 
 static inline __attribute__((returns_nonnull)) PyObject*
@@ -161,15 +169,45 @@ parampack_vectorcall(auto *self, PyObject *const *args, size_t _nargs,
             py_throw_format(
                 PyExc_TypeError,
                 "Cannot use value as default value for parameter pack");
-        merge_dict_into(self_values, arg, false);
+        merge_dict_into<false>(self_values, arg);
     }
-    if (nkws) {
-        auto kwvalues = args + nargs;
-        for (int i = 0; i < nkws; i++) {
-            set_dict(self_values, PyTuple_GET_ITEM(kwnames, i), kwvalues[i], false);
-        }
-    }
+    auto kwvalues = args + nargs;
+    for (int i = 0; i < nkws; i++)
+        set_dict<false>(self_values, PyTuple_GET_ITEM(kwnames, i), kwvalues[i]);
     return py_newref((PyObject*)self);
+}
+catch (...) {
+    return nullptr;
+}
+
+static PyObject *py_root = pyunicode_from_string("root");
+
+template<typename ParamPack> static PyObject*
+parampack_new(PyObject *type, PyObject *const *args, size_t _nargs,
+              PyObject *kwnames) try {
+    py_object o(pytype_genericalloc(type));
+    auto self = (ParamPack*)o.get();
+    self->vectorcall_ptr = (void*)&parampack_vectorcall<ParamPack>;
+    self->visited = pydict_new();
+    self->fieldname = py_newref(py_root);
+    auto nargs = PyVectorcall_NARGS(_nargs);
+    int nkws = kwnames ? PyTuple_GET_SIZE(kwnames) : 0;
+    self->values = pydict_new();
+    if (!nargs && !nkws)
+        return o.release();
+    py_object kwargs(pydict_new());
+    throw_if(PyDict_SetItem(self->values, py_root, kwargs.get()));
+    for (size_t i = 0; i < nargs; i++) {
+        auto arg = args[i];
+        if (!PyDict_Check(arg))
+            py_throw_format(PyExc_TypeError,
+                            "Cannot use value as default value for parameter pack");
+        merge_dict_into<false>(kwargs, arg);
+    }
+    auto kwvalues = args + nargs;
+    for (int i = 0; i < nkws; i++)
+        set_dict<false>(kwargs, PyTuple_GET_ITEM(kwnames, i), kwvalues[i]);
+    return o.release();
 }
 catch (...) {
     return nullptr;
@@ -187,6 +225,7 @@ static inline void update_param_pack(PyTypeObject *type, ParamPack*)
             o->vectorcall_ptr = (void*)&parampack_vectorcall<ParamPack>;
         return (PyObject*)o;
     };
+    type->tp_vectorcall = parampack_new<ParamPack>;
     PyType_Modified(type);
 }
 
