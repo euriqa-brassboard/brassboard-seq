@@ -463,6 +463,7 @@ private:
     PyObject *obj;
 };
 
+template<typename Value, typename Key>
 struct _pydict_iterator {
     _pydict_iterator(PyObject *dict) : dict(dict)
     {
@@ -473,9 +474,9 @@ struct _pydict_iterator {
         has_next = PyDict_Next(dict, &pos, &key, &value);
         return *this;
     }
-    std::pair<PyObject*,PyObject*> operator*()
+    std::pair<Key*,Value*> operator*()
     {
-        return { key, value };
+        return { (Key*)key, (Value*)value };
     }
     bool operator==(std::nullptr_t) { return !has_next; }
     static std::nullptr_t end(auto) { return nullptr; };
@@ -487,6 +488,7 @@ private:
     bool has_next;
 };
 
+template<typename Value>
 struct _pylist_iterator {
     _pylist_iterator(PyObject *list) : list(list) {}
     _pylist_iterator &operator++()
@@ -494,9 +496,9 @@ struct _pylist_iterator {
         ++pos;
         return *this;
     }
-    std::pair<Py_ssize_t,PyObject*> operator*()
+    std::pair<Py_ssize_t,Value*> operator*()
     {
-        return { pos, PyList_GET_ITEM(list, pos) };
+        return { pos, (Value*)PyList_GET_ITEM(list, pos) };
     }
     bool operator==(Py_ssize_t n) { return pos == n; }
     static Py_ssize_t end(PyObject *list) { return PyList_GET_SIZE(list); }
@@ -506,6 +508,7 @@ private:
     Py_ssize_t pos{0};
 };
 
+template<typename Value>
 struct _pytuple_iterator {
     _pytuple_iterator(PyObject *tuple) : tuple(tuple) {}
     _pytuple_iterator &operator++()
@@ -513,9 +516,9 @@ struct _pytuple_iterator {
         ++pos;
         return *this;
     }
-    std::pair<Py_ssize_t,PyObject*> operator*()
+    std::pair<Py_ssize_t,Value*> operator*()
     {
-        return { pos, PyTuple_GET_ITEM(tuple, pos) };
+        return { pos, (Value*)PyTuple_GET_ITEM(tuple, pos) };
     }
     bool operator==(Py_ssize_t n) { return pos == n; }
     static Py_ssize_t end(PyObject *tuple) { return PyTuple_GET_SIZE(tuple); }
@@ -525,9 +528,12 @@ private:
     Py_ssize_t pos{0};
 };
 
-using pydict_iter = py_iter<_pydict_iterator>;
-using pylist_iter = py_iter<_pylist_iterator>;
-using pytuple_iter = py_iter<_pytuple_iterator>;
+template<typename Value=PyObject, typename Key=PyObject>
+using pydict_iter = py_iter<_pydict_iterator<Value,Key>>;
+template<typename Value=PyObject>
+using pylist_iter = py_iter<_pylist_iterator<Value>>;
+template<typename Value=PyObject>
+using pytuple_iter = py_iter<_pytuple_iterator<Value>>;
 
 template<typename T>
 struct ValueIndexer {

@@ -146,8 +146,7 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
             action->end_val.reset(py_newref(value.get()));
         }
     }
-    for (auto [name, _backend]: pydict_iter(comp->backends)) {
-        auto backend = (Backend*)_backend;
+    for (auto [name, backend]: pydict_iter<Backend>(comp->backends)) {
         throw_if(backend->__pyx_vtab->finalize(backend, comp->cseq) < 0);
     }
 }
@@ -227,8 +226,7 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
             prev_time = (isramp || action->is_pulse) ? end_time : start_time;
         }
     }
-    for (auto [name, _backend]: pydict_iter(comp->backends)) {
-        auto backend = (Backend*)_backend;
+    for (auto [name, backend]: pydict_iter<Backend>(comp->backends)) {
         throw_if(backend->__pyx_vtab->runtime_finalize(backend, comp->cseq, age, pyage) < 0);
     }
 }
