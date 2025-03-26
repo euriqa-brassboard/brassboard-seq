@@ -172,19 +172,6 @@ static inline void basicseq_add_branch(auto self, auto bseq)
     next_bseq.push_back(bseq_id);
 }
 
-static inline bool basicseq_may_terminate(auto self)
-{
-    auto term_status = pyx_fld(self, term_status);
-    switch (term_status) {
-    case TerminateStatus::MayTerm:
-        return true;
-    case TerminateStatus::MayNotTerm:
-        return false;
-    default:
-        return pyx_fld(self, next_bseq).empty();
-    }
-}
-
 struct CondCombiner {
     PyObject *cond{nullptr};
     bool needs_free{false};

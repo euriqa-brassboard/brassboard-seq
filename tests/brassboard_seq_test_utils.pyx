@@ -162,13 +162,21 @@ cdef extern from *:
     private:
         brassboard_seq::pybytearray_streambuf m_buf;
     };
-    auto compiledseq_get_all_actions(brassboard_seq::backend::CompiledSeq &cseq)
+    auto compiledseq_get_nbasicseq(brassboard_seq::backend::CompiledSeq &cseq)
     {
-        return cseq.all_actions.get();
+        return (int)cseq.basic_seqs.size();
     }
-    auto compiledseq_get_total_time(brassboard_seq::backend::CompiledSeq &cseq)
+    auto compiledseq_get_all_actions(brassboard_seq::backend::CompiledSeq &cseq, int i)
     {
-        return cseq.total_time;
+        return cseq.basic_seqs[i]->all_actions.get();
+    }
+    auto compiledseq_get_total_time(brassboard_seq::backend::CompiledSeq &cseq, int i)
+    {
+        return cseq.basic_seqs[i]->total_time;
+    }
+    auto compiledseq_get_bseq_id(brassboard_seq::backend::CompiledSeq &cseq, int i)
+    {
+        return cseq.basic_seqs[i]->bseq_id;
     }
     """
     rtval.TagVal test_callback_extern(TestCallback) except +
@@ -253,8 +261,10 @@ cdef extern from *:
         test_istream_ba &seekg(ssize_t)
         test_istream_ba &seekg2 "seekg"(ssize_t, utils.seekdir)
         bint fail() const
-    vector[action.Action*] *compiledseq_get_all_actions(backend.CompiledSeq &cseq)
-    int64_t compiledseq_get_total_time(backend.CompiledSeq &cseq)
+    int compiledseq_get_nbasicseq(backend.CompiledSeq &cseq)
+    vector[action.Action*] *compiledseq_get_all_actions(backend.CompiledSeq &cseq, int i)
+    int64_t compiledseq_get_total_time(backend.CompiledSeq &cseq, int i)
+    int compiledseq_get_bseq_id(backend.CompiledSeq &cseq, int i)
     void py_check_num_arg "brassboard_seq::py_check_num_arg" (
         const char *func_name, ssize_t nfound, ssize_t nmin, ssize_t nmax) except +
 
@@ -469,24 +479,32 @@ def seq_get_cond(s):
         return (<seq.ConditionalWrapper>s).cond
     return (<seq.TimeSeq?>s).cond
 
-def compiler_get_all_actions(backend.SeqCompiler comp):
+def compiler_num_basic_seq(backend.SeqCompiler comp):
+    return compiledseq_get_nbasicseq(comp.cseq)
+
+def compiler_get_all_actions(backend.SeqCompiler comp, cbseq_id):
     s = comp.seq
     cdef int nchn = len(s.seqinfo.channel_paths)
-    all_actions = compiledseq_get_all_actions(comp.cseq)
+    all_actions = compiledseq_get_all_actions(comp.cseq, cbseq_id)
     res = []
     for cid in range(nchn):
         actions = all_actions[cid]
         res.append([_ref_action(action, s) for action in actions])
     return res
 
-def compiler_get_all_times(backend.SeqCompiler comp):
+def compiler_get_bseq_id(backend.SeqCompiler comp, cbseq_id):
+    return compiledseq_get_bseq_id(comp.cseq, cbseq_id)
+
+def compiler_get_all_times(backend.SeqCompiler comp, cbseq_id):
     s = comp.seq
-    time_mgr = s.seqinfo.time_mgr
+    bseq_id = compiledseq_get_bseq_id(comp.cseq, cbseq_id)
+    bseq = <seq.BasicSeq>s.basic_seqs[bseq_id]
+    time_mgr = bseq.seqinfo.time_mgr
     ntimes = time_mgr.time_values.size()
     values = []
     for i in range(ntimes):
         values.append(time_mgr.time_values[i])
-    return compiledseq_get_total_time(comp.cseq), values
+    return compiledseq_get_total_time(comp.cseq, cbseq_id), values
 
 def get_suffix_array(ary):
     return _get_suffix_array(ary)

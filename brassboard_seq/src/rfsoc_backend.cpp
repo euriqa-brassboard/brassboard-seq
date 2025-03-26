@@ -3888,6 +3888,8 @@ template<typename EventTime>
 static __attribute__((always_inline)) inline
 void collect_actions(auto *rb, backend::CompiledSeq &cseq, EventTime*)
 {
+    if (cseq.basic_seqs.size() != 1)
+        py_throw_format(PyExc_ValueError, "Branch not yet supported in rfsoc backend");
     auto seq = pyx_fld(rb, seq);
 
     ValueIndexer<int> bool_values;
@@ -3902,7 +3904,7 @@ void collect_actions(auto *rb, backend::CompiledSeq &cseq, EventTime*)
         auto is_ff = param == ToneFF;
         auto &channel = rb->channels.channels[chn_idx];
         auto &rfsoc_actions = channel.actions[(int)param];
-        for (auto action: cseq.all_actions[seq_chn]) {
+        for (auto action: cseq.basic_seqs[0]->all_actions[seq_chn]) {
             auto sync = parse_action_kws(action->kws.get(), action->aid);
             auto value = action->value.get();
             auto is_ramp = py_issubtype_nontrivial(Py_TYPE(value), rampfunctionbase_type);
@@ -4285,7 +4287,7 @@ void gen_rfsoc_data(auto *rb, backend::CompiledSeq &cseq,
     gen->start();
 
     // Add extra cycles to be able to handle the requirement of minimum 4 cycles.
-    auto total_cycle = seq_time_to_cycle(cseq.total_time + max_delay) + 8;
+    auto total_cycle = seq_time_to_cycle(cseq.basic_seqs[0]->total_time + max_delay) + 8;
     for (auto &channel: rb->channels.channels) {
         ScopeExit cleanup([&] {
             rb->tone_buffer.clear();

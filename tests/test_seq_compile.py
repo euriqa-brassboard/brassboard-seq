@@ -67,7 +67,8 @@ def test_cond_order1(max_bt):
       artiq/ttl1: Set(False)
 """
 
-    actions = test_utils.compiler_get_all_actions(comp)
+    assert test_utils.compiler_num_basic_seq(comp) == 1
+    actions = test_utils.compiler_get_all_actions(comp, 0)
     assert len(actions) == 1
     assert len(actions[0]) == 2
     action1 = actions[0][0]
@@ -89,7 +90,7 @@ def test_cond_order1(max_bt):
     comp.runtime_finalize(1)
     assert test_utils.action_get_cond_val(action1) is True
     assert test_utils.action_get_cond_val(action2) is True
-    total_time, times = test_utils.compiler_get_all_times(comp)
+    total_time, times = test_utils.compiler_get_all_times(comp, 0)
 
     assert times == [0,
                      100_000_000_000,
@@ -102,7 +103,7 @@ def test_cond_order1(max_bt):
     comp.runtime_finalize(2)
     assert test_utils.action_get_cond_val(action1) is c1val
     assert test_utils.action_get_cond_val(action2) is True
-    total_time, times = test_utils.compiler_get_all_times(comp)
+    total_time, times = test_utils.compiler_get_all_times(comp, 0)
 
     assert times == [0,
                      100_000_000_000,
@@ -115,7 +116,7 @@ def test_cond_order1(max_bt):
     comp.runtime_finalize(3)
     assert test_utils.action_get_cond_val(action1) is c1val
     assert test_utils.action_get_cond_val(action2) is True
-    total_time, times = test_utils.compiler_get_all_times(comp)
+    total_time, times = test_utils.compiler_get_all_times(comp, 0)
 
     assert times == [0,
                      100_000_000_000,
@@ -181,7 +182,8 @@ def test_cond_order2(max_bt):
       artiq/ttl1: Set(True, cond=bool({c1}))
 """
 
-    actions = test_utils.compiler_get_all_actions(comp)
+    assert test_utils.compiler_num_basic_seq(comp) == 1
+    actions = test_utils.compiler_get_all_actions(comp, 0)
     assert len(actions) == 1
     assert len(actions[0]) == 2
     action1 = actions[0][0]
@@ -203,7 +205,7 @@ def test_cond_order2(max_bt):
     comp.runtime_finalize(1)
     assert test_utils.action_get_cond_val(action1) is True
     assert test_utils.action_get_cond_val(action2) is True
-    total_time, times = test_utils.compiler_get_all_times(comp)
+    total_time, times = test_utils.compiler_get_all_times(comp, 0)
 
     assert times == [0,
                      100_000_000_000,
@@ -217,7 +219,7 @@ def test_cond_order2(max_bt):
     comp.runtime_finalize(2)
     assert test_utils.action_get_cond_val(action1) is c1val
     assert test_utils.action_get_cond_val(action2) is True
-    total_time, times = test_utils.compiler_get_all_times(comp)
+    total_time, times = test_utils.compiler_get_all_times(comp, 0)
 
     assert times == [0,
                      100_000_000_000,
@@ -231,7 +233,7 @@ def test_cond_order2(max_bt):
     comp.runtime_finalize(3)
     assert test_utils.action_get_cond_val(action1) is c1val
     assert test_utils.action_get_cond_val(action2) is True
-    total_time, times = test_utils.compiler_get_all_times(comp)
+    total_time, times = test_utils.compiler_get_all_times(comp, 0)
 
     assert times == [0,
                      100_000_000_000,
@@ -347,7 +349,8 @@ def test_order_error3(max_bt):
     artiq/ttl1: Set(False)
 """
 
-    actions = test_utils.compiler_get_all_actions(comp)
+    assert test_utils.compiler_num_basic_seq(comp) == 1
+    actions = test_utils.compiler_get_all_actions(comp, 0)
     assert len(actions) == 1
     assert len(actions[0]) == 2
     action1 = actions[0][0]
@@ -397,7 +400,8 @@ def test_order_error3(max_bt):
     artiq/ttl1: Pulse(False)
 """
 
-    actions = test_utils.compiler_get_all_actions(comp)
+    assert test_utils.compiler_num_basic_seq(comp) == 1
+    actions = test_utils.compiler_get_all_actions(comp, 0)
     assert len(actions) == 1
     assert len(actions[0]) == 2
     action1 = actions[0][0]
@@ -419,7 +423,7 @@ def test_order_error3(max_bt):
     comp.runtime_finalize(1)
     assert test_utils.action_get_cond_val(action1) is True
     assert test_utils.action_get_cond_val(action2) is True
-    total_time, times = test_utils.compiler_get_all_times(comp)
+    total_time, times = test_utils.compiler_get_all_times(comp, 0)
 
     assert times == [0,
                      100_000_000_000,
@@ -543,7 +547,8 @@ def test_ramp_order1(max_bt):
 
     comp.finalize()
 
-    actions = test_utils.compiler_get_all_actions(comp)
+    assert test_utils.compiler_num_basic_seq(comp) == 1
+    actions = test_utils.compiler_get_all_actions(comp, 0)
     assert len(actions) == 1
     assert len(actions[0]) == 3
     action1 = actions[0][0]
@@ -574,7 +579,7 @@ def test_ramp_order1(max_bt):
     assert test_utils.action_get_cond_val(action1) is True
     assert test_utils.action_get_cond_val(action2) is True
     assert test_utils.action_get_cond_val(action3) is True
-    total_time, times = test_utils.compiler_get_all_times(comp)
+    total_time, times = test_utils.compiler_get_all_times(comp, 0)
 
     assert times == [0,
                      0,
@@ -589,7 +594,7 @@ def test_ramp_order1(max_bt):
     assert test_utils.action_get_cond_val(action1) is True
     assert test_utils.action_get_cond_val(action2) is True
     assert test_utils.action_get_cond_val(action3) is True
-    total_time, times = test_utils.compiler_get_all_times(comp)
+    total_time, times = test_utils.compiler_get_all_times(comp, 0)
 
     assert times == [0,
                      0,
@@ -703,3 +708,142 @@ def test_ramp_noinit_error(max_bt):
     with pytest.raises(RuntimeError, match="RampFunction.__init__ not called") as exc:
         comp.runtime_finalize(1)
     test_utils.check_bt(exc, max_bt, 'jaksdjfpoiasdnqeurfsda8u2jadf')
+
+@test_utils.with_seq_params
+def test_invalid_flow(max_bt):
+    def jlasdfjksdfkief48():
+        return test_env.new_comp(max_bt)
+    comp = jlasdfjksdfkief48()
+    s = comp.seq
+    s.add_branch(s)
+    with pytest.raises(ValueError, match="Loop found in sequence") as exc:
+        comp.finalize()
+    test_utils.check_bt(exc, max_bt, 'jlasdfjksdfkief48')
+
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
+    def jkiaj8f92fasd():
+        s.new_basic_seq()
+    jkiaj8f92fasd()
+    with pytest.raises(ValueError, match="BasicSeq 1 unreachable") as exc:
+        comp.finalize()
+    test_utils.check_bt(exc, max_bt, 'jkiaj8f92fasd')
+
+@test_utils.with_seq_params
+def test_bseq_merge(max_bt):
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
+    bt1 = s.new_basic_seq()
+    bt2 = s.new_basic_seq()
+    s.add_branch(bt1)
+    bt1.add_branch(bt2)
+    s.add_branch(bt2)
+    comp.finalize()
+    assert test_utils.compiler_num_basic_seq(comp) == 3
+    assert test_utils.compiler_get_all_actions(comp, 0) == []
+    assert test_utils.compiler_get_all_actions(comp, 1) == []
+    assert test_utils.compiler_get_all_actions(comp, 2) == []
+    assert test_utils.compiler_get_bseq_id(comp, 0) == 0
+    assert test_utils.compiler_get_bseq_id(comp, 1) == 1
+    assert test_utils.compiler_get_bseq_id(comp, 2) == 2
+
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
+    bt1 = s.new_basic_seq()
+    bt1.set('artiq/urukul0_ch0/amp', 0.0)
+    bt2 = s.new_basic_seq()
+    s.add_branch(bt1)
+    bt1.add_branch(bt2)
+    s.add_branch(bt2)
+    comp.finalize()
+    assert test_utils.compiler_num_basic_seq(comp) == 3
+    assert test_utils.compiler_get_all_actions(comp, 0) == [[]]
+    actions1 = test_utils.compiler_get_all_actions(comp, 1)
+    assert len(actions1) == 1
+    assert len(actions1[0]) == 1
+    assert str(actions1[0][0]) == 'Set(0.0)'
+    assert test_utils.compiler_get_all_actions(comp, 2) == [[]]
+    assert test_utils.compiler_get_bseq_id(comp, 0) == 0
+    assert test_utils.compiler_get_bseq_id(comp, 1) == 1
+    assert test_utils.compiler_get_bseq_id(comp, 2) == 2
+
+    r1 = test_utils.new_extern(lambda: 1)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
+    s.set('artiq/urukul0_ch0/amp', r1 * 3 + 2.0)
+    bt1 = s.new_basic_seq()
+    bt1.add_step(1).set('artiq/urukul0_ch0/amp', 1.0)
+    bt1.set('artiq/urukul0_ch0/amp', r1 * 3.0 + 2)
+    bt2 = s.new_basic_seq()
+    s.add_branch(bt1)
+    bt1.add_branch(bt2)
+    s.add_branch(bt2)
+    comp.finalize()
+    assert test_utils.compiler_num_basic_seq(comp) == 3
+    actions0 = test_utils.compiler_get_all_actions(comp, 0)
+    assert len(actions0) == 1
+    assert len(actions0[0]) == 1
+    assert str(actions0[0][0]) == f'Set(2.0 + {r1} * 3)'
+    actions1 = test_utils.compiler_get_all_actions(comp, 1)
+    assert len(actions1) == 1
+    assert len(actions1[0]) == 2
+    assert str(actions1[0][0]) == 'Set(1.0)'
+    assert str(actions1[0][1]) == f'Set(2 + {r1} * 3.0)'
+    assert test_utils.compiler_get_all_actions(comp, 2) == [[]]
+    assert test_utils.compiler_get_bseq_id(comp, 0) == 0
+    assert test_utils.compiler_get_bseq_id(comp, 1) == 1
+    assert test_utils.compiler_get_bseq_id(comp, 2) == 2
+
+    r1 = test_utils.new_extern(lambda: 1)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
+    s.set('artiq/urukul0_ch0/amp', r1 * 3 + 2.0)
+    bt1 = s.new_basic_seq()
+    bt1.add_step(1).pulse('artiq/urukul0_ch0/amp', 1.0)
+    bt2 = s.new_basic_seq()
+    s.add_branch(bt1)
+    bt1.add_branch(bt2)
+    s.add_branch(bt2)
+    comp.finalize()
+    assert test_utils.compiler_num_basic_seq(comp) == 3
+    actions0 = test_utils.compiler_get_all_actions(comp, 0)
+    assert len(actions0) == 1
+    assert len(actions0[0]) == 1
+    assert str(actions0[0][0]) == f'Set(2.0 + {r1} * 3)'
+    actions1 = test_utils.compiler_get_all_actions(comp, 1)
+    assert len(actions1) == 1
+    assert len(actions1[0]) == 1
+    assert str(actions1[0][0]) == 'Pulse(1.0)'
+    assert test_utils.compiler_get_all_actions(comp, 2) == [[]]
+    assert test_utils.compiler_get_bseq_id(comp, 0) == 0
+    assert test_utils.compiler_get_bseq_id(comp, 1) == 1
+    assert test_utils.compiler_get_bseq_id(comp, 2) == 2
+
+@test_utils.with_seq_params
+def test_bseq_split(max_bt):
+    r1 = test_utils.new_extern(lambda: 1)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
+    s.set('artiq/urukul0_ch0/amp', r1 * 3 + 2.0)
+    bt1 = s.new_basic_seq()
+    bt1.add_step(1).set('artiq/urukul0_ch0/amp', 1.0)
+    bt2 = s.new_basic_seq()
+    s.add_branch(bt1)
+    bt1.add_branch(bt2)
+    s.add_branch(bt2)
+    comp.finalize()
+    assert test_utils.compiler_num_basic_seq(comp) == 4
+    actions0 = test_utils.compiler_get_all_actions(comp, 0)
+    assert len(actions0) == 1
+    assert len(actions0[0]) == 1
+    assert str(actions0[0][0]) == f'Set(2.0 + {r1} * 3)'
+    actions1 = test_utils.compiler_get_all_actions(comp, 1)
+    assert len(actions1) == 1
+    assert len(actions1[0]) == 1
+    assert str(actions1[0][0]) == 'Set(1.0)'
+    assert test_utils.compiler_get_all_actions(comp, 2) == [[]]
+    assert test_utils.compiler_get_all_actions(comp, 3) == [[]]
+    assert test_utils.compiler_get_bseq_id(comp, 0) == 0
+    assert test_utils.compiler_get_bseq_id(comp, 1) == 1
+    assert test_utils.compiler_get_bseq_id(comp, 2) == 2
+    assert test_utils.compiler_get_bseq_id(comp, 3) == 2
