@@ -117,10 +117,9 @@ static inline DataType pytype_to_datatype(PyObject *type)
     py_throw_format(PyExc_TypeError, "Unknown runtime value type '%S'", type);
 }
 
-template<typename T> static constexpr DataType data_type_v = DataType::Bool;
-template<> constexpr DataType data_type_v<bool> = DataType::Bool;
-template<> constexpr DataType data_type_v<int64_t> = DataType::Int64;
-template<> constexpr DataType data_type_v<double> = DataType::Float64;
+template<typename T> static constexpr DataType data_type_v =
+    (std::same_as<T,int64_t> ? DataType::Int64 :
+     std::same_as<T,double> ? DataType::Float64 : DataType::Bool);
 
 template<DataType DT> struct _data_type;
 template<> struct _data_type<DataType::Bool> { using type = bool; };
