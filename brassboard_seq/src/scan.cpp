@@ -55,7 +55,9 @@ static void set_dict(PyObject *tgt, PyObject *key, PyObject *value)
 template<bool ovr>
 static void merge_dict_into(PyObject *tgt, PyObject *src)
 {
-    foreach_pydict(src, [&] (auto key, auto val) { set_dict<ovr>(tgt, key, val); });
+    for (auto [key, val]: pydict_iter(src)) {
+        set_dict<ovr>(tgt, key, val);
+    }
 }
 
 static inline void merge_dict_ovr(PyObject *tgt, PyObject *src)
@@ -133,9 +135,8 @@ get_value_default(auto *self, PyObject *default_value)
 // is overwritten to something that's not scalar struct.
 static inline bool check_field(PyObject *d, PyObject *path)
 {
-    auto pathlen = PyTuple_GET_SIZE(path);
-    for (int i = 0; i < pathlen; i++) {
-        auto vp = PyDict_GetItemWithError(d, PyTuple_GET_ITEM(path, i));
+    for (auto [_, name]: pytuple_iter(path)) {
+        auto vp = PyDict_GetItemWithError(d, name);
         if (!vp) {
             throw_if(PyErr_Occurred());
             return false;

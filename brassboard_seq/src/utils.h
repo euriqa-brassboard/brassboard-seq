@@ -442,14 +442,92 @@ pyunicode_from_string(const char *str)
 
 py_object channel_name_from_path(PyObject *path);
 
-static inline void foreach_pydict(PyObject *dict, auto &&cb)
+template<typename F, typename ...Args>
+static inline bool call_loop_cb(F &&f, Args&&... args)
 {
-    PyObject *key, *value;
-    Py_ssize_t pos = 0;
-    while (PyDict_Next(dict, &pos, &key, &value)) {
-        cb(key, value);
+    if constexpr (std::is_void_v<decltype(std::forward<F>(f)(std::forward<Args>(args)...))>) {
+        std::forward<F>(f)(std::forward<Args>(args)...);
+        return true;
+    }
+    else {
+        return std::forward<F>(f)(std::forward<Args>(args)...);
     }
 }
+
+template<typename It>
+struct py_iter {
+    explicit py_iter(PyObject *obj) : obj(obj) {}
+    auto begin() const { return It(obj); };
+    auto end() const { return It::end(obj); }
+private:
+    PyObject *obj;
+};
+
+struct _pydict_iterator {
+    _pydict_iterator(PyObject *dict) : dict(dict)
+    {
+        ++(*this);
+    }
+    _pydict_iterator &operator++()
+    {
+        has_next = PyDict_Next(dict, &pos, &key, &value);
+        return *this;
+    }
+    std::pair<PyObject*,PyObject*> operator*()
+    {
+        return { key, value };
+    }
+    bool operator==(std::nullptr_t) { return !has_next; }
+    static std::nullptr_t end(auto) { return nullptr; };
+
+private:
+    PyObject *dict;
+    PyObject *key, *value;
+    Py_ssize_t pos{0};
+    bool has_next;
+};
+
+struct _pylist_iterator {
+    _pylist_iterator(PyObject *list) : list(list) {}
+    _pylist_iterator &operator++()
+    {
+        ++pos;
+        return *this;
+    }
+    std::pair<Py_ssize_t,PyObject*> operator*()
+    {
+        return { pos, PyList_GET_ITEM(list, pos) };
+    }
+    bool operator==(Py_ssize_t n) { return pos == n; }
+    static Py_ssize_t end(PyObject *list) { return PyList_GET_SIZE(list); }
+
+private:
+    PyObject *list;
+    Py_ssize_t pos{0};
+};
+
+struct _pytuple_iterator {
+    _pytuple_iterator(PyObject *tuple) : tuple(tuple) {}
+    _pytuple_iterator &operator++()
+    {
+        ++pos;
+        return *this;
+    }
+    std::pair<Py_ssize_t,PyObject*> operator*()
+    {
+        return { pos, PyTuple_GET_ITEM(tuple, pos) };
+    }
+    bool operator==(Py_ssize_t n) { return pos == n; }
+    static Py_ssize_t end(PyObject *tuple) { return PyTuple_GET_SIZE(tuple); }
+
+private:
+    PyObject *tuple;
+    Py_ssize_t pos{0};
+};
+
+using pydict_iter = py_iter<_pydict_iterator>;
+using pylist_iter = py_iter<_pylist_iterator>;
+using pytuple_iter = py_iter<_pytuple_iterator>;
 
 template<typename T>
 struct ValueIndexer {

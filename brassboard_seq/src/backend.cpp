@@ -34,10 +34,7 @@ using namespace rtval;
 template<typename TimeStep, typename SubSeq>
 static void collect_actions(SubSeq *self, std::vector<action::Action*> *actions)
 {
-    auto sub_seqs = self->sub_seqs;
-    int n = PyList_GET_SIZE(sub_seqs);
-    for (int i = 0; i < n; i++) {
-        auto subseq = PyList_GET_ITEM(sub_seqs, i);
+    for (auto [i, subseq]: pylist_iter(self->sub_seqs)) {
         if (Py_TYPE(subseq) != timestep_type) {
             collect_actions<TimeStep>((SubSeq*)subseq, actions);
             continue;
@@ -65,8 +62,7 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
     auto seqinfo = pyx_fld(seq, seqinfo);
     auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);
     auto nchn = (int)PyList_GET_SIZE(seqinfo->channel_paths);
-    for (int i = 0; i < nchn; i++) {
-        auto path = PyList_GET_ITEM(seqinfo->channel_paths, i);
+    for (auto [i, path]: pylist_iter(seqinfo->channel_paths)) {
         auto prefix = PyTuple_GET_ITEM(path, 0);
         auto res = PyDict_Contains(comp->backends, prefix);
         if (res > 0) [[likely]]
@@ -150,10 +146,10 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
             action->end_val.reset(py_newref(value.get()));
         }
     }
-    foreach_pydict(comp->backends, [&] (auto name, auto _backend) {
+    for (auto [name, _backend]: pydict_iter(comp->backends)) {
         auto backend = (Backend*)_backend;
         throw_if(backend->__pyx_vtab->finalize(backend, comp->cseq) < 0);
-    });
+    }
 }
 
 static inline auto action_get_condval(auto action, unsigned age, py_object &pyage)
@@ -187,10 +183,7 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
     auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);
     auto time_mgr = seqinfo->time_mgr;
     comp->cseq.total_time = time_mgr->__pyx_vtab->compute_all_times(time_mgr, age, pyage);
-    auto assertions = seqinfo->assertions;
-    int nassert = PyList_GET_SIZE(assertions);
-    for (int assert_id = 0; assert_id < nassert; assert_id++) {
-        auto a = PyList_GET_ITEM(assertions, assert_id);
+    for (auto [assert_id, a]: pylist_iter(seqinfo->assertions)) {
         auto c = (_RuntimeValue*)PyTuple_GET_ITEM(a, 0);
         rt_eval_throw(c, age, pyage, assert_key(assert_id));
         if (rtval_cache(c).is_zero()) {
@@ -234,10 +227,10 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
             prev_time = (isramp || action->is_pulse) ? end_time : start_time;
         }
     }
-    foreach_pydict(comp->backends, [&] (auto name, auto _backend) {
+    for (auto [name, _backend]: pydict_iter(comp->backends)) {
         auto backend = (Backend*)_backend;
         throw_if(backend->__pyx_vtab->runtime_finalize(backend, comp->cseq, age, pyage) < 0);
-    });
+    }
 }
 
 }

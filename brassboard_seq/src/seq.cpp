@@ -266,9 +266,8 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
     if (kwnames) {
         kws.reset(pydict_new());
         auto kwvalues = args + nargs;
-        int nkws = (int)PyTuple_GET_SIZE(kwnames);
-        for (int i = 0; i < nkws; i++) {
-            throw_if(PyDict_SetItem(kws, PyTuple_GET_ITEM(kwnames, i), kwvalues[i]));
+        for (auto [i, name]: pytuple_iter(kwnames)) {
+            throw_if(PyDict_SetItem(kws, name, kwvalues[i]));
         }
     }
 
@@ -370,9 +369,7 @@ static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
     py_object kws;
     if (kwnames) {
         auto kwvalues = args + nargs;
-        int nkws = (int)PyTuple_GET_SIZE(kwnames);
-        for (int i = 0; i < nkws; i++) {
-            auto name = PyTuple_GET_ITEM(kwnames, i);
+        for (auto [i, name]: pytuple_iter(kwnames)) {
             auto value = kwvalues[i];
             if (PyUnicode_CompareWithASCIIString(name, "cond") == 0) {
                 arg_cond = value;
