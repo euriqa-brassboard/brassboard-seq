@@ -34,6 +34,19 @@ static py_object channel_name_from_id(auto *seqinfo, int cid)
     return channel_name_from_path(PyList_GET_ITEM(seqinfo->channel_paths, cid));
 }
 
+static inline bool basicseq_may_terminate(auto self)
+{
+    auto term_status = pyx_fld(self, term_status);
+    switch (term_status) {
+    case TerminateStatus::MayTerm:
+        return true;
+    case TerminateStatus::MayNotTerm:
+        return false;
+    default:
+        return pyx_fld(self, next_bseq).empty();
+    }
+}
+
 }
 
 #endif

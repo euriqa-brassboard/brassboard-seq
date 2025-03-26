@@ -42,7 +42,8 @@ class Compiler(backend.SeqCompiler):
         compiled_info = artiq_utils.get_compiled_info(self.ab)
         channels = artiq_utils.get_channel_info(self.ab)
         all_actions = {}
-        for (chn, actions) in enumerate(test_utils.compiler_get_all_actions(self)):
+        assert test_utils.compiler_num_basic_seq(self) == 1
+        for (chn, actions) in enumerate(test_utils.compiler_get_all_actions(self, 0)):
             for action in actions:
                 if test_utils.action_get_cond(action) is False:
                     continue

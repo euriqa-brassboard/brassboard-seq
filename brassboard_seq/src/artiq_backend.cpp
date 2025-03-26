@@ -102,6 +102,8 @@ template<typename EventTime>
 static __attribute__((always_inline)) inline
 void collect_actions(auto *ab, backend::CompiledSeq &cseq, EventTime*)
 {
+    if (cseq.basic_seqs.size() != 1)
+        py_throw_format(PyExc_ValueError, "Branch not yet supported in artiq backend");
     auto seq = pyx_fld(ab, seq);
     std::vector<ArtiqAction> &artiq_actions = ab->all_actions;
 
@@ -220,7 +222,7 @@ void collect_actions(auto *ab, backend::CompiledSeq &cseq, EventTime*)
     for (auto [chn, ttl_idx]: ab->channels.ttl_chn_map) {
         auto ttl_chn_info = ab->channels.ttlchns[ttl_idx];
         auto type = ttl_chn_info.iscounter ? CounterEnable : TTLOut;
-        for (auto action: cseq.all_actions[chn]) {
+        for (auto action: cseq.basic_seqs[0].all_actions[chn]) {
             if (action->kws)
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "Invalid output keyword argument %S",
@@ -237,7 +239,7 @@ void collect_actions(auto *ab, backend::CompiledSeq &cseq, EventTime*)
 
     for (auto [chn, value]: ab->channels.dds_param_chn_map) {
         auto [dds_idx, type] = value;
-        for (auto action: cseq.all_actions[chn]) {
+        for (auto action: cseq.basic_seqs[0].all_actions[chn]) {
             if (action->kws)
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "Invalid output keyword argument %S",
@@ -506,7 +508,7 @@ void generate_rtios(auto *ab, backend::CompiledSeq &cseq, unsigned age, py_objec
         return a1.time_mu < a2.time_mu;
     });
 
-    auto total_time_mu = seq_time_to_mu(cseq.total_time + max_delay);
+    auto total_time_mu = seq_time_to_mu(cseq.basic_seqs[0].total_time + max_delay);
     if (ab->use_dma) {
         auto rtio_array = ab->rtio_array;
         auto nactions = rtio_actions.size();
