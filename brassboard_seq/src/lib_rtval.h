@@ -137,30 +137,30 @@ union GenVal {
     int64_t i64_val;
     double f64_val;
 
-    template<typename T> struct _getter;
+    template<typename T>
+    static auto &_get(auto &&g)
+    {
+        if constexpr (std::same_as<T,bool>) {
+            return g.b_val;
+        }
+        else if constexpr (std::same_as<T,int64_t>) {
+            return g.i64_val;
+        }
+        else if constexpr (std::same_as<T,double>) {
+            return g.f64_val;
+        }
+    }
 
     template<typename T>
     T &get()
     {
-        return _getter<T>::get(*this);
+        return _get<T>(*this);
     }
     template<typename T>
     const T &get() const
     {
-        return _getter<T>::get(*this);
+        return _get<T>(*this);
     }
-};
-template<> struct GenVal::_getter<bool> {
-    static inline bool &get(GenVal &v) { return v.b_val; };
-    static inline const bool &get(const GenVal &v) { return v.b_val; };
-};
-template<> struct GenVal::_getter<int64_t> {
-    static inline int64_t &get(GenVal &v) { return v.i64_val; };
-    static inline const int64_t &get(const GenVal &v) { return v.i64_val; };
-};
-template<> struct GenVal::_getter<double> {
-    static inline double &get(GenVal &v) { return v.f64_val; };
-    static inline const double &get(const GenVal &v) { return v.f64_val; };
 };
 
 enum class EvalError: uint8_t {
