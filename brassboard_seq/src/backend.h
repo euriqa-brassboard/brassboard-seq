@@ -27,9 +27,17 @@
 
 namespace brassboard_seq::backend {
 
-struct CompiledSeq {
+struct CompiledBasicSeq {
+    int bseq_id;
+    bool may_term;
     std::unique_ptr<std::vector<action::Action*>[]> all_actions;
     int64_t total_time;
+    std::vector<int> next_bseq;
+    std::vector<py_object> start_values;
+};
+
+struct CompiledSeq {
+    std::vector<CompiledBasicSeq> basic_seqs;
 };
 
 }

@@ -79,7 +79,7 @@ def test_cond_order1(max_bt):
     assert info1['tid'] == 1
     assert info1['end_tid'] == 2
     assert info1['length'] == 1
-    assert str(info1['end_val']) == f'ifelse(bool({c1}), True, 0)'
+    assert str(info1['end_val']) == f'ifelse(bool({c1}), True, False)'
 
     assert info2['tid'] == 3
     assert info2['end_tid'] == 4
@@ -193,7 +193,7 @@ def test_cond_order2(max_bt):
     assert info1['tid'] == 1
     assert info1['end_tid'] == 2
     assert info1['length'] == 1
-    assert str(info1['end_val']) == f'ifelse(bool({c1}), True, 0)'
+    assert str(info1['end_val']) == f'ifelse(bool({c1}), True, False)'
 
     assert info2['tid'] == 4
     assert info2['end_tid'] == 5
