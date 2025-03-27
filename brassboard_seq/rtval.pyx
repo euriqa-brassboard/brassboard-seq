@@ -591,6 +591,18 @@ cdef rtprop_callback new_rtprop_callback(obj, str fieldname):
 cdef class RTProp:
     cdef str fieldname
 
+    def get_state(self, obj):
+        try:
+            return getattr(obj, self.fieldname)
+        except AttributeError:
+            return
+
+    def set_state(self, obj, val):
+        if val is None:
+            delattr(obj, self.fieldname)
+        else:
+            setattr(obj, self.fieldname, val)
+
     def __set_name__(self, owner, name):
         self.fieldname = rtprop_prefix + name
 
