@@ -393,15 +393,19 @@ def test_rtprop():
     with pytest.raises(ValueError, match="Cannot determine runtime property name"):
         prop2.__set__(c1, 1)
 
+    assert C.p1.get_state(c1) is None
     c1p1 = c1.p1
     assert isinstance(c1p1, rtval.RuntimeValue)
     assert str(c1p1).startswith('<RTProp p1 for ')
     assert str(c1p1) == str(c1.p1)
+    assert C.p1.get_state(c1) is c1p1
 
+    assert C.p1.get_state(c2) is None
     c2p1 = c2.p1
     assert isinstance(c2p1, rtval.RuntimeValue)
     assert str(c2p1).startswith('<RTProp p1 for ')
     assert str(c2p1) == str(c2.p1)
+    assert C.p1.get_state(c2) is c2p1
 
     with pytest.raises(ValueError):
         c1p1.eval(1)
@@ -411,6 +415,8 @@ def test_rtprop():
 
     c1.p1 = 1.2
     assert c1.p1 == 1.2
+    assert C.p1.get_state(c1) == 1.2
+    assert C.p1.get_state(c2) is c2p1
     assert c1p1.eval(1) == 1.2
     assert rtval.get_value(c1p1, 1) == 1.2
     assert isinstance(c2.p1, rtval.RuntimeValue)
@@ -422,6 +428,8 @@ def test_rtprop():
     v3 = rtval.new_extern(lambda: 3.5)
     c2.p1 = v3
     assert c2.p1 is v3
+    assert C.p1.get_state(c1) == 1.2
+    assert C.p1.get_state(c2) is v3
     assert c2p1.eval(1) == 3.5
     assert rtval.get_value(c2p1, 1) == 3.5
 
@@ -429,6 +437,16 @@ def test_rtprop():
     assert isinstance(c2.p2, rtval.RuntimeValue)
     assert str(c1.p2).startswith('<RTProp p2 for ')
     assert str(c2.p2).startswith('<RTProp p2 for ')
+
+    C.p1.set_state(c1, None)
+    assert C.p1.get_state(c1) is None
+    c1p1_2 = c1.p1
+    assert C.p1.get_state(c1) is c1p1_2
+    assert c1p1 is not c1p1_2
+    assert c1.p1 is c1p1_2
+    C.p1.set_state(c1, 3)
+    assert rtval.get_value(c1p1, 3) == 3
+    assert rtval.get_value(c1p1_2, 3) == 3
 
     c1 = C()
 
