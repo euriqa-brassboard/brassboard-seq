@@ -1244,3 +1244,11 @@ def test_istream_ba_seek(ssize_t p, _dir=None):
         raise ValueError(f"Invalid seek direction {_dir}")
     stm.seekg2(p, dir)
     return stm.fail()
+
+def check_bt(exc, max_bt, *names):
+    fnames = [tb.name for tb in exc.traceback]
+    for name in names:
+        if max_bt == 0:
+            assert name not in fnames
+        else:
+            assert name in fnames

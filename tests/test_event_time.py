@@ -1,7 +1,7 @@
 #
 
 from brassboard_seq import event_time, rtval
-import brassboard_seq_test_utils as test_utils
+import py_test_utils as test_utils
 
 import pytest
 

@@ -3,22 +3,14 @@
 import dummy_pulse_compiler
 dummy_pulse_compiler.inject()
 
-from brassboard_seq.action import Blackman, BlackmanSquare, LinearRamp, \
-     RampFunction, _RampFunctionBase, SeqCubicSpline
-from brassboard_seq.config import Config
-from brassboard_seq import backend, rfsoc_backend, rtval, seq
-import brassboard_seq_test_utils as test_utils
-import brassboard_seq_rfsoc_backend_utils as rfsoc_utils
+from brassboard_seq.action import Blackman, BlackmanSquare, LinearRamp, SeqCubicSpline
+from brassboard_seq import rfsoc_backend, rtval
+import py_test_utils as test_utils
+from rfsoc_test_utils import Env as _Env, Spline
 
 import pytest
 import typing
 import numpy as np
-
-class Spline(typing.NamedTuple):
-    order0: float = 0.0
-    order1: float = 0.0
-    order2: float = 0.0
-    order3: float = 0.0
 
 class Tone(typing.NamedTuple):
     cycles: int
@@ -28,269 +20,77 @@ class Tone(typing.NamedTuple):
     sync: bool = False
     feedback: bool = False
 
-global_conf = Config()
-global_conf.add_supported_prefix('artiq')
-global_conf.add_supported_prefix('rfsoc')
-
-def new_seq_compiler(*args):
-    s = seq.Seq(global_conf, *args)
-    comp = backend.SeqCompiler(s)
-    return s, comp
-
-global_gen = rfsoc_backend.PulseCompilerGenerator()
-
-def add_rfsoc_backend(comp):
-    rb = rfsoc_backend.RFSOCBackend(global_gen)
-    comp.add_backend('rfsoc', rb)
-    comp.add_backend('artiq', backend.Backend()) # Dummy backend
-    return rb
-
-def get_output():
-    output = global_gen.output
-    from qiskit.pulse import ControlChannel, DriveChannel
-
-    total_len = None
-
-    stripped_output = {}
-
-    for (key, tonedatas) in output.items():
-        if isinstance(key, ControlChannel):
-            assert key.index in range(2)
-            chn = key.index
-        else:
-            assert isinstance(key, DriveChannel)
-            assert key.index in range(62)
-            chn = key.index + 2
-        tone_len = 0
-        is_first = True
-        stripped_tonedatas = []
-        stripped_output[chn] = stripped_tonedatas
-        for tonedata in tonedatas:
-            assert tonedata.tone in range(2)
-            assert tonedata.channel in range(32)
-            assert (tonedata.channel << 1) | tonedata.tone == chn
-            assert tonedata.duration_cycles >= 4
-            tone_len += tonedata.duration_cycles
-            assert tonedata.frame_rotation_rad == (0, 0, 0, 0)
-
-            assert tonedata.wait_trigger == is_first
-            is_first = False
-            assert not tonedata.output_enable
-            assert not tonedata.bypass_lookup_tables
-            assert not tonedata.frame_rotate_at_end
-            assert not tonedata.reset_frame
-
-            stripped_tonedatas.append(Tone(tonedata.duration_cycles,
-                                           Spline(*tonedata.frequency_hz),
-                                           Spline(*tonedata.amplitude),
-                                           Spline(*tonedata.phase_rad),
-                                           tonedata.sync, tonedata.feedback_enable))
-        if total_len is None:
-            total_len = tone_len
-        else:
-            assert total_len == tone_len
-        assert total_len >= 8
-
-    return stripped_output
-
-def check_bt(exc, max_bt, *names):
-    fnames = [tb.name for tb in exc.traceback]
-    for name in names:
-        if max_bt == 0:
-            assert name not in fnames
-        else:
-            assert name in fnames
-
-class StaticFunction(RampFunction):
+class Env(_Env):
     def __init__(self):
-        RampFunction.__init__(self)
+        super().__init__(rfsoc_backend.PulseCompilerGenerator())
 
-    def eval(self, t, length, oldval):
-        return t / 2 + oldval - length
+    def get_output(self):
+        output = self.gen.output
+        from qiskit.pulse import ControlChannel, DriveChannel
 
-class LinearRampNoSeg(RampFunction):
-    def __init__(self, start, end):
-        super().__init__(start=start, end=end)
+        total_len = None
 
-    def eval(self, t, length, oldval):
-        t = t / length
-        return self.start * (1 - t) + self.end * t
+        stripped_output = {}
 
-class RampUpAndDown(RampFunction):
-    def __init__(self, pos, val):
-        super().__init__(pos=pos, val=val)
+        for (key, tonedatas) in output.items():
+            if isinstance(key, ControlChannel):
+                assert key.index in range(2)
+                chn = key.index
+            else:
+                assert isinstance(key, DriveChannel)
+                assert key.index in range(62)
+                chn = key.index + 2
+            tone_len = 0
+            is_first = True
+            stripped_tonedatas = []
+            stripped_output[chn] = stripped_tonedatas
+            for tonedata in tonedatas:
+                assert tonedata.tone in range(2)
+                assert tonedata.channel in range(32)
+                assert (tonedata.channel << 1) | tonedata.tone == chn
+                assert tonedata.duration_cycles >= 4
+                tone_len += tonedata.duration_cycles
+                assert tonedata.frame_rotation_rad == (0, 0, 0, 0)
 
-    def eval(self, t, length, oldval):
-        t = t / length
-        len1 = self.pos
-        len2 = 1 - self.pos
-        t1 = t / len1
-        t2 = (t - self.pos) / len2
-        v1 = oldval * (1 - t1) + self.val * t1
-        v2 = self.val * (1 - t2) + oldval * t2
-        return rtval.ifelse(t > self.pos, v2, v1)
+                assert tonedata.wait_trigger == is_first
+                is_first = False
+                assert not tonedata.output_enable
+                assert not tonedata.bypass_lookup_tables
+                assert not tonedata.frame_rotate_at_end
+                assert not tonedata.reset_frame
 
-    def spline_segments(self, length, oldval):
-        return (length * self.pos,)
+                stripped_tonedatas.append(Tone(tonedata.duration_cycles,
+                                               Spline(*tonedata.frequency_hz),
+                                               Spline(*tonedata.amplitude),
+                                               Spline(*tonedata.phase_rad),
+                                               tonedata.sync, tonedata.feedback_enable))
+            if total_len is None:
+                total_len = tone_len
+            else:
+                assert total_len == tone_len
+            assert total_len >= 8
 
-class ErrorSegment(RampFunction):
-    def __init__(self):
-        super().__init__()
+        return stripped_output
 
-    def eval(self, t, length, oldval):
-        return t
+    def check_output(self, expected):
+        pulses = self.get_output()
+        assert pulses == expected
 
-    def spline_segments(self, length, oldval):
-        raise ValueError("JJJLLL---DFFDAFD")
-
-class CustomSegment(RampFunction):
-    def __init__(self, seg):
-        self.seg = seg
-        super().__init__()
-
-    def eval(self, t, length, oldval):
-        return t
-
-    def spline_segments(self, length, oldval):
-        return self.seg
-
-class DivLengthFunction(RampFunction):
-    def __init__(self):
-        super().__init__()
-
-    def eval(self, t, length, oldval):
-        return t / length
+test_env = Env()
 
 def test_generator():
     rfsoc_backend.PulseCompilerGenerator()
     rfsoc_backend.PulseCompilerGenerator()
 
-def get_channel_info(rb, comp):
-    s = comp.seq
-    channels = rfsoc_utils.get_channel_info(rb)
-    compiled_info = rfsoc_utils.get_compiled_info(rb)
-    chn_ids = set(tone_chn.chn for tone_chn in channels.channels)
-    assert len(chn_ids) == len(channels.channels)
-    chn_params = set()
-    for seq_chn, (chn_idx, param) in channels.chn_map.items():
-        assert param in ('amp', 'freq', 'phase', 'ff')
-        assert 0 <= chn_idx
-        assert chn_idx < len(channels.channels)
-        assert (chn_idx, param) not in chn_params
-        chn_params.add((chn_idx, param))
-
-    all_actions = {}
-    for (chn, actions) in enumerate(test_utils.compiler_get_all_actions(comp)):
-        for action in actions:
-            if test_utils.action_get_cond(action) is False:
-                continue
-            all_actions[test_utils.action_get_aid(action)] = (chn, action,
-                                                                  [False, False])
-    bool_values_used = [False for _ in range(len(compiled_info.bool_values))]
-    float_values_used = [False for _ in range(len(compiled_info.float_values))]
-    relocations_used = [False for _ in range(len(compiled_info.relocations))]
-
-    for chn in channels.channels:
-        for (param, param_actions) in enumerate(chn.actions):
-            param = ['freq', 'amp', 'phase', 'ff'][param]
-            for rfsoc_action in param_actions:
-                chn, action, seen = all_actions[rfsoc_action.aid]
-                action_info = test_utils.action_get_compile_info(action)
-                if rfsoc_action.reloc_id >= 0:
-                    reloc = compiled_info.relocations[rfsoc_action.reloc_id]
-                    relocations_used[rfsoc_action.reloc_id] = True
-                    assert (reloc.cond_idx >= 0 or reloc.val_idx >= 0 or
-                                reloc.time_idx >= 0)
-                    cond_idx = reloc.cond_idx
-                    val_idx = reloc.val_idx
-                    time_idx = reloc.time_idx
-                else:
-                    cond_idx = -1
-                    val_idx = -1
-                    time_idx = -1
-
-                cond = test_utils.action_get_cond(action)
-                if cond_idx >= 0:
-                    bool_values_used[cond_idx] = True
-                    assert isinstance(cond, rtval.RuntimeValue)
-                    assert compiled_info.bool_values[cond_idx] is cond
-                else:
-                    assert cond
-
-                event_time = test_utils.seq_get_event_time(s, rfsoc_action.tid)
-                static_time = test_utils.event_time_get_static(event_time)
-                if time_idx >= 0:
-                    assert static_time == -1
-                else:
-                    assert static_time == rfsoc_action.seq_time
-
-                action_value = test_utils.action_get_value(action)
-                isramp = isinstance(action_value, _RampFunctionBase)
-                if rfsoc_action.tid == action_info['tid']:
-                    assert not seen[0]
-                    seen[0] = True
-                    value = action_value
-                    assert isramp == rfsoc_action.isramp
-                else:
-                    assert rfsoc_action.tid == action_info['end_tid']
-                    isramp = isinstance(test_utils.action_get_value(action),
-                                        _RampFunctionBase)
-                    assert test_utils.action_get_is_pulse(action) or isramp
-                    assert not seen[1]
-                    seen[1] = True
-                    value = action_info['end_val']
-                # Check value
-                if val_idx >= 0:
-                    if rfsoc_action.isramp:
-                        length = action_info['length']
-                        assert isinstance(length, rtval.RuntimeValue)
-                        float_values_used[val_idx] = True
-                        assert compiled_info.float_values[val_idx] is length
-                    else:
-                        assert isinstance(value, rtval.RuntimeValue)
-                        if param == 'ff':
-                            bool_values_used[val_idx] = True
-                            assert compiled_info.bool_values[val_idx] is value
-                        else:
-                            float_values_used[val_idx] = True
-                            assert compiled_info.float_values[val_idx] is value
-                elif rfsoc_action.isramp:
-                    length = action_info['length']
-                    assert not isinstance(length, rtval.RuntimeValue)
-                    assert rfsoc_action.float_value == length
-                else:
-                    assert not isinstance(value, rtval.RuntimeValue)
-                    if param == 'ff':
-                        assert rfsoc_action.bool_value == value
-                    else:
-                        assert rfsoc_action.float_value == value
-
-    for chn, action, seen in all_actions.values():
-        assert seen[0]
-        action_value = test_utils.action_get_value(action)
-        isramp = isinstance(action_value, _RampFunctionBase)
-        if test_utils.action_get_is_pulse(action) or isramp:
-            assert seen[1]
-        else:
-            assert not seen[1]
-    assert all(bool_values_used)
-    assert all(float_values_used)
-    assert all(relocations_used)
-
-    return channels
-
-with_rfsoc_params = pytest.mark.parametrize("max_bt", [0, 5, 500])
-
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_channels(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
-    assert not rb.has_output
+    comp = test_env.new_comp(max_bt)
+    assert not comp.rb.has_output
     comp.finalize()
-    assert not rb.has_output
+    assert not comp.rb.has_output
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     assert s.get_channel_id('artiq/ttl0') == 0
     assert s.get_channel_id('rfsoc/dds1/0/amp') == 1
     assert s.get_channel_id('rfsoc/dds1/1/freq') == 2
@@ -300,10 +100,10 @@ def test_channels(max_bt):
     assert s.get_channel_id('rfsoc/dds1/1/amp') == 6
     assert s.get_channel_id('rfsoc/dds1/1/ff') == 7
     assert s.get_channel_id('rfsoc/dds0/0/freq') == 8
-    assert not rb.has_output
+    assert not comp.rb.has_output
     comp.finalize()
-    assert rb.has_output
-    channels = get_channel_info(rb, comp)
+    assert comp.rb.has_output
+    channels = comp.get_channel_info()
     chn_ids = [tone_chn.chn for tone_chn in channels.channels]
     assert chn_ids == [2, 3, 4, 0, 1, 5]
     assert channels.chn_map == {1: (0, 'amp'), 2: (1, 'freq'),
@@ -311,62 +111,62 @@ def test_channels(max_bt):
                                 6: (1, 'amp'), 7: (1, 'ff'),
                                 8: (3, 'freq')}
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(8)],
         1: [Tone(8)],
         2: [Tone(8)],
         3: [Tone(8)],
         4: [Tone(8)],
         5: [Tone(8)],
-    }
+    })
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     assert s.get_channel_id('rfsoc/dds0/0') == 0
     with pytest.raises(ValueError, match='Invalid channel name rfsoc/dds0/0'):
         comp.finalize()
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     assert s.get_channel_id('rfsoc/dds0/0/freq/a') == 0
     with pytest.raises(ValueError, match='Invalid channel name rfsoc/dds0/0/freq/a'):
         comp.finalize()
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     assert s.get_channel_id('rfsoc/ch0/0/freq') == 0
     with pytest.raises(ValueError, match='Invalid channel name rfsoc/ch0/0/freq'):
         comp.finalize()
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     assert s.get_channel_id('rfsoc/dds50/0/freq') == 0
     with pytest.raises(ValueError, match='Invalid channel name rfsoc/dds50/0/freq'):
         comp.finalize()
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     assert s.get_channel_id('rfsoc/dds10/2/freq') == 0
     with pytest.raises(ValueError, match='Invalid channel name rfsoc/dds10/2/freq'):
         comp.finalize()
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     assert s.get_channel_id('rfsoc/dds10/0/param') == 0
     with pytest.raises(ValueError, match='Invalid channel name rfsoc/dds10/0/param'):
         comp.finalize()
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_output1(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     s.add_step(0.01) \
       .pulse('rfsoc/dds0/1/amp', 0.2) \
       .set('rfsoc/dds0/1/freq', 100e6) \
       .set('rfsoc/dds0/1/phase', 0.1) \
       .set('rfsoc/dds0/1/ff', True)
     comp.finalize()
-    channels = get_channel_info(rb, comp)
+    channels = comp.get_channel_info()
     assert len(channels.channels) == 2
     assert channels.channels[0].chn == 1
     assert channels.channels[1].chn == 0
@@ -426,18 +226,18 @@ def test_output1(max_bt):
     assert action.bool_value
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(4096008)],
         1: [Tone(4096000, Spline(100e6), Spline(0.2),
                  Spline(0.2 * np.pi), False, True),
             Tone(8, Spline(100e6), Spline(), Spline(0.2 * np.pi), False, True)],
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_output2(max_bt):
     b1 = True
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     s.conditional(rtval.new_extern(lambda: b1)) \
       .add_step(rtval.new_extern(lambda: 0.01)) \
       .pulse('rfsoc/dds0/1/amp', rtval.new_extern(lambda: 0.2)) \
@@ -445,7 +245,7 @@ def test_output2(max_bt):
       .set('rfsoc/dds0/1/phase', rtval.new_extern(lambda: 0.1)) \
       .set('rfsoc/dds0/1/ff', rtval.new_extern(lambda: True), sync=False)
     comp.finalize()
-    channels = get_channel_info(rb, comp)
+    channels = comp.get_channel_info()
     assert len(channels.channels) == 2
     assert channels.channels[0].chn == 1
     assert channels.channels[1].chn == 0
@@ -494,24 +294,24 @@ def test_output2(max_bt):
     assert action.seq_time == 0
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(4096008)],
         1: [Tone(4096000, Spline(100e6), Spline(0.2),
                  Spline(0.2 * np.pi), True, True),
             Tone(8, Spline(100e6), Spline(), Spline(0.2 * np.pi), False, True)],
-    }
+    })
 
     b1 = False
     comp.runtime_finalize(2)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(8)],
         1: [Tone(8)],
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_output3(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     s.conditional(False) \
       .add_step(rtval.new_extern(lambda: 0.01)) \
       .pulse('rfsoc/dds0/1/amp', rtval.new_extern(lambda: 0.2)) \
@@ -519,7 +319,7 @@ def test_output3(max_bt):
       .set('rfsoc/dds0/1/phase', rtval.new_extern(lambda: 0.1)) \
       .set('rfsoc/dds0/1/ff', rtval.new_extern(lambda: True), sync=False)
     comp.finalize()
-    channels = get_channel_info(rb, comp)
+    channels = comp.get_channel_info()
     assert len(channels.channels) == 2
     assert channels.channels[0].chn == 1
     assert channels.channels[1].chn == 0
@@ -529,22 +329,22 @@ def test_output3(max_bt):
     assert len(channels.channels[0].actions[3]) == 0 # ff
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(8)],
         1: [Tone(8)],
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_ramp_output1(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
-    ramp1 = StaticFunction()
-    ramp2 = StaticFunction()
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
+    ramp1 = test_utils.StaticFunction()
+    ramp2 = test_utils.StaticFunction()
     s.add_step(0.01) \
       .pulse('rfsoc/dds0/1/amp', ramp1) \
       .set('rfsoc/dds0/1/phase', ramp2)
     comp.finalize()
-    channels = get_channel_info(rb, comp)
+    channels = comp.get_channel_info()
     assert len(channels.channels) == 2
     assert channels.channels[0].chn == 1
     assert channels.channels[1].chn == 0
@@ -596,26 +396,26 @@ def test_ramp_output1(max_bt):
     assert len(channels.channels[0].actions[3]) == 0 # ff
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(4096008)],
         1: [Tone(2048000, Spline(), pytest.approx(Spline(-0.01, 0.0025)),
                  pytest.approx(Spline(-0.02 * np.pi, 0.005 * np.pi))),
             Tone(2048000, Spline(), pytest.approx(Spline(-0.0075, 0.0025)),
                  pytest.approx(Spline(-0.015 * np.pi, 0.005 * np.pi))),
             Tone(8, Spline(), Spline(), pytest.approx(Spline(-0.01 * np.pi)))],
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_ramp_output2(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
-    ramp1 = StaticFunction()
-    ramp2 = StaticFunction()
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
+    ramp1 = test_utils.StaticFunction()
+    ramp2 = test_utils.StaticFunction()
     s.add_step(rtval.new_extern(lambda: 0.01)) \
       .pulse('rfsoc/dds0/1/amp', ramp1) \
       .set('rfsoc/dds0/1/phase', ramp2)
     comp.finalize()
-    channels = get_channel_info(rb, comp)
+    channels = comp.get_channel_info()
     assert len(channels.channels) == 2
     assert channels.channels[0].chn == 1
     assert channels.channels[1].chn == 0
@@ -661,20 +461,20 @@ def test_ramp_output2(max_bt):
     assert len(channels.channels[0].actions[3]) == 0 # ff
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(4096008)],
         1: [Tone(2048000, Spline(), pytest.approx(Spline(-0.01, 0.0025)),
                  pytest.approx(Spline(-0.02 * np.pi, 0.005 * np.pi))),
             Tone(2048000, Spline(), pytest.approx(Spline(-0.0075, 0.0025)),
                  pytest.approx(Spline(-0.015 * np.pi, 0.005 * np.pi))),
             Tone(8, Spline(), Spline(), pytest.approx(Spline(-0.01 * np.pi)))],
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_ramp_output3(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
-    ramp1 = LinearRampNoSeg(0.1, 0.2)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
+    ramp1 = test_utils.LinearRampNoSeg(0.1, 0.2)
     ramp2 = LinearRamp(0.1, 0.2)
     ramp3 = SeqCubicSpline(0.2, 0.1, 0.9, 0.3)
     s.add_step(5e-3) \
@@ -685,7 +485,7 @@ def test_ramp_output3(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(2048008)],
         1: [Tone(1024000, Spline(), pytest.approx(Spline(0.1, 0.05, 0.0, 0.0))),
             Tone(1024000, Spline(), pytest.approx(Spline(0.15, 0.05, 0.0, 0.0))),
@@ -697,13 +497,13 @@ def test_ramp_output3(max_bt):
         8: [Tone(2048008)],
         9: [Tone(2048000, Spline(), Spline(0.2, 0.1, 0.9, 0.3)),
             Tone(8, Spline(), pytest.approx(Spline(1.5)))],
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_ramp_output4(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
-    ramp1 = LinearRampNoSeg(0.1, 0.2)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
+    ramp1 = test_utils.LinearRampNoSeg(0.1, 0.2)
     ramp2 = SeqCubicSpline(0.2, 0.1, 0.9, 0.3)
     s.add_step(5e-3) \
       .pulse('rfsoc/dds0/1/phase', ramp1) \
@@ -713,7 +513,7 @@ def test_ramp_output4(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(2048008)],
         1: [Tone(1024000, Spline(), Spline(),
                  pytest.approx(Spline(0.2 * np.pi, 0.1 * np.pi))),
@@ -724,25 +524,25 @@ def test_ramp_output4(max_bt):
         5: [Tone(2048000, Spline(), Spline(),
                  pytest.approx(Spline(0.4 * np.pi, 0.2 * np.pi, 1.8 * np.pi, 0.6 * np.pi))),
             Tone(8, Spline(), Spline(), pytest.approx(Spline(3 * np.pi)))],
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_ramp_output5(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     s.set('rfsoc/dds0/1/amp', 0.2)
     s.set('rfsoc/dds2/0/freq', 80e6)
     s.set('rfsoc/dds0/1/phase', 0.9)
     s.add_step(5e-3) \
-      .set('rfsoc/dds0/1/amp', RampUpAndDown(0.25, 0.5)) \
-      .set('rfsoc/dds2/0/freq', RampUpAndDown(0.5, 100e6)) \
-      .set('rfsoc/dds0/1/phase', RampUpAndDown(0.75, 0.3)) \
+      .set('rfsoc/dds0/1/amp', test_utils.RampUpAndDown(0.25, 0.5)) \
+      .set('rfsoc/dds2/0/freq', test_utils.RampUpAndDown(0.5, 100e6)) \
+      .set('rfsoc/dds0/1/phase', test_utils.RampUpAndDown(0.75, 0.3)) \
       .set('rfsoc/dds0/0/amp', 0.2) \
       .set('rfsoc/dds0/0/phase', -0.5 / 2 / np.pi)
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(2048008, Spline(), Spline(0.2), Spline(-0.5))],
         1: [Tone(512000, Spline(), pytest.approx(Spline(0.2, 0.3)),
                  pytest.approx(Spline(1.8 * np.pi, -0.4 * np.pi))),
@@ -755,12 +555,12 @@ def test_ramp_output5(max_bt):
             Tone(1024000, pytest.approx(Spline(100e6, -20e6), abs=1e-3)),
             Tone(8, Spline(80e6))],
         5: [Tone(2048008)],
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_ramp_output6(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     @s.add_background
     def amp_step(s):
         s.add_step(4e-3) \
@@ -792,7 +592,7 @@ def test_ramp_output6(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [
             # amp 0.0
             Tone(409600, Spline(),
@@ -871,19 +671,19 @@ def test_ramp_output6(max_bt):
         4: [Tone(409600),
             Tone(4096008, Spline(), Spline(0.1))],
         5: [Tone(4505608)],
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_ramp_output7(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     s.add_step(1) \
       .set('rfsoc/dds0/0/amp', Blackman(1.0)) \
       .set('rfsoc/dds0/1/amp', 1.0)
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [
             Tone(25600000, Spline(),
                  pytest.approx(Spline(0.0, 0.00015745877326822644,
@@ -936,12 +736,12 @@ def test_ramp_output7(max_bt):
             Tone(8, Spline(), pytest.approx(Spline()))
         ],
         1: [Tone(409600008, Spline(), Spline(1.0))]
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_ramp_reuse_spline(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     r = SeqCubicSpline(0.1, 0.4, -0.2, 0.1)
     s.add_step(5e-3) \
       .set('rfsoc/dds0/0/amp', r)
@@ -950,18 +750,18 @@ def test_ramp_reuse_spline(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(2048000, Spline(), pytest.approx(Spline(0.1, 0.4, -0.2, 0.1))),
             Tone(4096000, Spline(), pytest.approx(Spline(0.1, 0.4, -0.2, 0.1))),
             Tone(8, Spline(), Spline(0.4))],
         1: [Tone(6144008)],
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_ramp_reuse_oldval(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
-    r = RampUpAndDown(0.5, 0.9)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
+    r = test_utils.RampUpAndDown(0.5, 0.9)
     s.add_step(5e-3) \
       .set('rfsoc/dds0/0/amp', r)
     s.set('rfsoc/dds0/0/amp', 0.3)
@@ -970,21 +770,21 @@ def test_ramp_reuse_oldval(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(1024000, Spline(), pytest.approx(Spline(0, 0.9))),
             Tone(1024000, Spline(), pytest.approx(Spline(0.9, -0.9))),
             Tone(2048000, Spline(), pytest.approx(Spline(0.3, 0.6))),
             Tone(2048000, Spline(), pytest.approx(Spline(0.9, -0.6))),
             Tone(8, Spline(), Spline(0.3))],
         1: [Tone(6144008)],
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_ramp_reuse_linear(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     r = LinearRamp(0.1, 0.9)
-    r2 = LinearRampNoSeg(0.1, 0.9)
+    r2 = test_utils.LinearRampNoSeg(0.1, 0.9)
     s.add_step(5e-3) \
       .set('rfsoc/dds0/0/amp', r) \
       .set('rfsoc/dds0/1/amp', r2)
@@ -994,7 +794,7 @@ def test_ramp_reuse_linear(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(2048000, Spline(), pytest.approx(Spline(0.1, 0.8))),
             Tone(2048000, Spline(), pytest.approx(Spline(0.1, 0.4))),
             Tone(2048000, Spline(), pytest.approx(Spline(0.5, 0.4))),
@@ -1003,12 +803,12 @@ def test_ramp_reuse_linear(max_bt):
             Tone(1024000, Spline(), pytest.approx(Spline(0.5, 0.4))),
             Tone(4096000, Spline(), pytest.approx(Spline(0.1, 0.8))),
             Tone(8, Spline(), Spline(0.9))],
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_ramp_reuse_blackman(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     r = Blackman(1.0)
     s.add_step(1) \
       .set('rfsoc/dds0/0/amp', r) \
@@ -1019,7 +819,7 @@ def test_ramp_reuse_blackman(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [
             Tone(25600000, Spline(),
                  pytest.approx(Spline(0.0, 0.00015745877326822644,
@@ -1120,19 +920,19 @@ def test_ramp_reuse_blackman(max_bt):
             Tone(8, Spline(), pytest.approx(Spline()))
         ],
         1: [Tone(1228800008, Spline(), Spline(1.0))]
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_short_ramp_output1(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
-    ramp1 = StaticFunction()
-    ramp2 = StaticFunction()
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
+    ramp1 = test_utils.StaticFunction()
+    ramp2 = test_utils.StaticFunction()
     s.add_step(200e-9) \
       .pulse('rfsoc/dds0/1/amp', ramp1) \
       .set('rfsoc/dds0/1/phase', ramp2)
     comp.finalize()
-    channels = get_channel_info(rb, comp)
+    channels = comp.get_channel_info()
     assert len(channels.channels) == 2
     assert channels.channels[0].chn == 1
     assert channels.channels[1].chn == 0
@@ -1184,20 +984,20 @@ def test_short_ramp_output1(max_bt):
     assert len(channels.channels[0].actions[3]) == 0 # ff
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(90)],
         1: [Tone(41, Spline(), pytest.approx(Spline(-2e-7, 5e-8), rel=3e-3),
                  pytest.approx(Spline(-4e-7 * np.pi, 1e-7 * np.pi), rel=3e-3)),
             Tone(41, Spline(), pytest.approx(Spline(-1.5e-7, 5e-8), rel=3e-3),
                  pytest.approx(Spline(-3e-7 * np.pi, 1e-7 * np.pi), rel=3e-3)),
             Tone(8, Spline(), Spline(), pytest.approx(Spline(-2e-7 * np.pi)))],
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_short_ramp_output2(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
-    ramp1 = LinearRampNoSeg(0.1, 0.2)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
+    ramp1 = test_utils.LinearRampNoSeg(0.1, 0.2)
     ramp2 = LinearRamp(0.1, 0.2)
     s.add_step(5e-9) \
       .pulse('rfsoc/dds0/1/amp', ramp1) \
@@ -1206,7 +1006,7 @@ def test_short_ramp_output2(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(10)],
         1: [Tone(4, Spline(),
                  pytest.approx(Spline(0.1, 0.35, -1.35, 0.9), rel=3e-3),
@@ -1215,12 +1015,12 @@ def test_short_ramp_output2(max_bt):
             Tone(6, Spline(), Spline(), pytest.approx(Spline(0.4 * np.pi)))],
         4: [Tone(10, Spline(), Spline(0.1))],
         5: [Tone(10)],
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_arg_error(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     st = s.add_step(0.01)
     def jasd89jfkalsdfasd():
         st.pulse('rfsoc/dds0/1/amp', 0.2, sth=0.1)
@@ -1228,116 +1028,116 @@ def test_arg_error(max_bt):
     with pytest.raises(ValueError,
                        match="Invalid output keyword argument {'sth': 0.1}") as exc:
         comp.finalize()
-    check_bt(exc, max_bt, 'jasd89jfkalsdfasd')
+    test_utils.check_bt(exc, max_bt, 'jasd89jfkalsdfasd')
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_ff_ramp(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     st = s.add_step(0.01)
     def ja98fas923ncf():
-        st.pulse('rfsoc/dds0/1/ff', StaticFunction())
+        st.pulse('rfsoc/dds0/1/ff', test_utils.StaticFunction())
     ja98fas923ncf()
     with pytest.raises(ValueError,
                        match="Feed forward control cannot be ramped") as exc:
         comp.finalize()
-    check_bt(exc, max_bt, 'ja98fas923ncf')
+    test_utils.check_bt(exc, max_bt, 'ja98fas923ncf')
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_rampfunc_error(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     st = s.add_step(0.01)
     def jiasd9f89asd():
-        st.pulse('rfsoc/dds0/1/freq', ErrorSegment())
+        st.pulse('rfsoc/dds0/1/freq', test_utils.ErrorSegment())
     jiasd9f89asd()
     comp.finalize()
     with pytest.raises(ValueError, match="JJJLLL---DFFDAFD") as exc:
         comp.runtime_finalize(1)
-    check_bt(exc, max_bt, 'jiasd9f89asd')
+    test_utils.check_bt(exc, max_bt, 'jiasd9f89asd')
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     st = s.add_step(0.01)
     def j89asdf():
-        st.pulse('rfsoc/dds0/1/freq', CustomSegment((-0.1,)))
+        st.pulse('rfsoc/dds0/1/freq', test_utils.CustomSegment((-0.1,)))
     j89asdf()
     comp.finalize()
     with pytest.raises(ValueError, match="Segment time cannot be negative") as exc:
         comp.runtime_finalize(1)
-    check_bt(exc, max_bt, 'j89asdf')
+    test_utils.check_bt(exc, max_bt, 'j89asdf')
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     st = s.add_step(0.01)
     def ajs89dfjasvsrsdsfa():
-        st.pulse('rfsoc/dds0/1/freq', CustomSegment((0,)))
+        st.pulse('rfsoc/dds0/1/freq', test_utils.CustomSegment((0,)))
     ajs89dfjasvsrsdsfa()
     comp.finalize()
     with pytest.raises(ValueError,
                        match="Segment time point must monotonically increase") as exc:
         comp.runtime_finalize(1)
-    check_bt(exc, max_bt, 'ajs89dfjasvsrsdsfa')
+    test_utils.check_bt(exc, max_bt, 'ajs89dfjasvsrsdsfa')
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     st = s.add_step(0.01)
     def ajs89dfjasvsrsdsf2():
-        st.pulse('rfsoc/dds0/1/freq', CustomSegment((0.005, 0.002)))
+        st.pulse('rfsoc/dds0/1/freq', test_utils.CustomSegment((0.005, 0.002)))
     ajs89dfjasvsrsdsf2()
     comp.finalize()
     with pytest.raises(ValueError,
                        match="Segment time point must monotonically increase") as exc:
         comp.runtime_finalize(1)
-    check_bt(exc, max_bt, 'ajs89dfjasvsrsdsf2')
+    test_utils.check_bt(exc, max_bt, 'ajs89dfjasvsrsdsf2')
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     st = s.add_step(0.01)
     def jas8faslj34ajsdfa8s9():
-        st.pulse('rfsoc/dds0/1/freq', CustomSegment((0.005, 0.01)))
+        st.pulse('rfsoc/dds0/1/freq', test_utils.CustomSegment((0.005, 0.01)))
     jas8faslj34ajsdfa8s9()
     comp.finalize()
     with pytest.raises(ValueError,
                        match="Segment time point must not exceed action length") as exc:
         comp.runtime_finalize(1)
-    check_bt(exc, max_bt, 'jas8faslj34ajsdfa8s9')
+    test_utils.check_bt(exc, max_bt, 'jas8faslj34ajsdfa8s9')
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     st = s.add_step(0.01)
     def jaksdjf8a9sdfjas():
-        st.pulse('rfsoc/dds0/1/freq', CustomSegment(([],)))
+        st.pulse('rfsoc/dds0/1/freq', test_utils.CustomSegment(([],)))
     jaksdjf8a9sdfjas()
     comp.finalize()
     with pytest.raises(TypeError) as exc:
         comp.runtime_finalize(1)
-    check_bt(exc, max_bt, 'jaksdjf8a9sdfjas')
+    test_utils.check_bt(exc, max_bt, 'jaksdjf8a9sdfjas')
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_val_error(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     # This causes a error to be thrown when converting to boolean
     def j893ajjaks988394():
         s.set('rfsoc/dds0/0/ff', np.array([1, 2]))
     j893ajjaks988394()
     with pytest.raises(ValueError) as exc:
         comp.finalize()
-    check_bt(exc, max_bt, 'j893ajjaks988394')
+    test_utils.check_bt(exc, max_bt, 'j893ajjaks988394')
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     # This causes a error to be thrown when converting to float
     def a88f2398fasd():
         s.set('rfsoc/dds3/0/freq', [1, 2])
     a88f2398fasd()
     with pytest.raises(TypeError) as exc:
         comp.finalize()
-    check_bt(exc, max_bt, 'a88f2398fasd')
+    test_utils.check_bt(exc, max_bt, 'a88f2398fasd')
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     s.set('rfsoc/dds0/0/ff', True)
     s.add_step(0.01) \
       .pulse('rfsoc/dds1/1/freq', rtval.new_extern(lambda: 1.23)) \
@@ -1349,10 +1149,10 @@ def test_val_error(max_bt):
     comp.finalize()
     with pytest.raises(TypeError) as exc:
         comp.runtime_finalize(1)
-    check_bt(exc, max_bt, 'js89j308joro82qwe')
+    test_utils.check_bt(exc, max_bt, 'js89j308joro82qwe')
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     s.set('rfsoc/dds0/0/ff', True)
     s.add_step(0.01) \
       .pulse('rfsoc/dds1/1/freq', rtval.new_extern(lambda: 1.23)) \
@@ -1364,13 +1164,13 @@ def test_val_error(max_bt):
     comp.finalize()
     with pytest.raises(TypeError) as exc:
         comp.runtime_finalize(1)
-    check_bt(exc, max_bt, 'e083jafd')
+    test_utils.check_bt(exc, max_bt, 'e083jafd')
 
     def error_callback():
         raise ValueError("AAABBBCCC")
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     s.set('rfsoc/dds0/0/ff', True)
     s.add_step(0.01) \
       .pulse('rfsoc/dds1/1/freq', rtval.new_extern(lambda: 1.23)) \
@@ -1381,10 +1181,10 @@ def test_val_error(max_bt):
     comp.finalize()
     with pytest.raises(ValueError, match="AAABBBCCC") as exc:
         comp.runtime_finalize(1)
-    check_bt(exc, max_bt, 'oqo8we9813fasd')
+    test_utils.check_bt(exc, max_bt, 'oqo8we9813fasd')
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     s.set('rfsoc/dds0/0/ff', True)
     s.add_step(0.01) \
       .pulse('rfsoc/dds1/1/freq', rtval.new_extern(lambda: 1.23)) \
@@ -1395,12 +1195,12 @@ def test_val_error(max_bt):
     comp.finalize()
     with pytest.raises(ValueError, match="AAABBBCCC") as exc:
         comp.runtime_finalize(1)
-    check_bt(exc, max_bt, 'q9e8uasdfasd')
+    test_utils.check_bt(exc, max_bt, 'q9e8uasdfasd')
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_ff_output(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
 
     s.add_step(1e-3) \
       .set('rfsoc/dds0/0/ff', False)
@@ -1411,14 +1211,14 @@ def test_ff_output(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(409600),
             Tone(819208, feedback=True)],
         1: [Tone(1228808)],
-    }
+    })
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
 
     s.add_step(1e-3) \
       .set('rfsoc/dds0/0/ff', False)
@@ -1429,17 +1229,17 @@ def test_ff_output(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(409600),
             Tone(409600, feedback=True),
             Tone(409608, sync=True, feedback=True)],
         1: [Tone(1228808)],
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_param_output(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
 
     s.add_step(1e-3) \
       .set('rfsoc/dds0/0/amp', 0)
@@ -1450,14 +1250,14 @@ def test_param_output(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(409600),
             Tone(819208, Spline(), Spline(0.2))],
         1: [Tone(1228808)],
-    }
+    })
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
 
     s.add_step(1e-3) \
       .set('rfsoc/dds0/0/amp', 0)
@@ -1468,17 +1268,17 @@ def test_param_output(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(409600),
             Tone(409600, Spline(), Spline(0.2)),
             Tone(409608, Spline(), Spline(0.2), sync=True)],
         1: [Tone(1228808)],
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_sync_merge(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
 
     s.set('rfsoc/dds0/0/freq', 100e6, sync=True)
     s.wait(0)
@@ -1486,13 +1286,13 @@ def test_sync_merge(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(8, Spline(120e6), sync=True)],
         1: [Tone(8)],
-    }
+    })
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
 
     s.set('rfsoc/dds0/0/freq', 100e6, sync=True)
     s.wait(100e-12)
@@ -1500,13 +1300,13 @@ def test_sync_merge(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(8, Spline(120e6), sync=True)],
         1: [Tone(8)],
-    }
+    })
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
 
     s.set('rfsoc/dds0/0/freq', 100e6, sync=True)
     s.wait(2e-9)
@@ -1514,14 +1314,14 @@ def test_sync_merge(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(4, Spline(120e6), sync=True),
             Tone(5, Spline(120e6))],
         1: [Tone(9)],
-    }
+    })
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
 
     s.set('rfsoc/dds0/0/freq', 100e6, sync=True)
     s.wait(0)
@@ -1529,14 +1329,14 @@ def test_sync_merge(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(4, Spline(100e6, 110e6, -180e6, 90e6), sync=True),
             Tone(4, Spline(120e6))],
         1: [Tone(8)],
-    }
+    })
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
 
     s.set('rfsoc/dds0/0/freq', 100e6, sync=True)
     s.wait(100e-12)
@@ -1544,14 +1344,14 @@ def test_sync_merge(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(4, Spline(100e6, 110e6, -180e6, 90e6), sync=True),
             Tone(4, Spline(120e6))],
         1: [Tone(8)],
-    }
+    })
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
 
     s.set('rfsoc/dds0/0/freq', 100e6, sync=True)
     s.wait(2e-9)
@@ -1559,19 +1359,19 @@ def test_sync_merge(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(4, Spline(100e6, 110e6, -180e6, 90e6), sync=True),
             Tone(5, Spline(120e6))],
         1: [Tone(9)],
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_dyn_seq1(max_bt):
     b1 = True
     v1 = 0.001
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     s.add_step(0.0005) \
       .pulse('rfsoc/dds0/0/amp', 0.2)
     s.conditional(rtval.new_extern(lambda: b1)) \
@@ -1582,48 +1382,48 @@ def test_dyn_seq1(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(204800, Spline(), Spline(0.2)),
             Tone(409600, Spline(), Spline(0.1)),
             Tone(8, Spline(), Spline(0.5))],
         1: [Tone(614400),
             Tone(8, Spline(), Spline(0.1))],
-    }
+    })
 
     b1 = False
     v1 = 0.001
     comp.runtime_finalize(2)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(204800, Spline(), Spline(0.2)),
             Tone(8, Spline(), Spline(0.5))],
         1: [Tone(204800),
             Tone(8, Spline(), Spline(0.1))],
-    }
+    })
 
     b1 = True
     v1 = 0
     comp.runtime_finalize(3)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(204800, Spline(), Spline(0.2)),
             Tone(8, Spline(), Spline(0.5))],
         1: [Tone(204800),
             Tone(8, Spline(), Spline(0.1))],
-    }
+    })
 
     b1 = False
     v1 = 0
     comp.runtime_finalize(4)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(204800, Spline(), Spline(0.2)),
             Tone(8, Spline(), Spline(0.5))],
         1: [Tone(204800),
             Tone(8, Spline(), Spline(0.1))],
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_tight_output1(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     s.add_step(2.441e-9) \
       .pulse('rfsoc/dds0/1/amp', 0.1) \
       .set('rfsoc/dds0/1/phase', 0.2) \
@@ -1649,7 +1449,7 @@ def test_tight_output1(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(12)],
         1: [Tone(4, pytest.approx(Spline(100e6, 110e6, -180e6, 90e6),
                                   rel=1e-5, abs=1e-3),
@@ -1660,12 +1460,12 @@ def test_tight_output1(max_bt):
                  pytest.approx(Spline(0.3, -0.8, 3, -1.8)), feedback=True),
             Tone(8, Spline(), Spline(0.3), feedback=True)],
         5: [Tone(12)],
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_tight_output2(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     s.add_step(2.441e-9) \
       .pulse('rfsoc/dds0/1/amp', 0.1, sync=True) \
       .set('rfsoc/dds0/1/phase', 0.2) \
@@ -1691,7 +1491,7 @@ def test_tight_output2(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(12)],
         1: [Tone(4, pytest.approx(Spline(200e6, -320e6, 600e6, -360e6),
                                   rel=1e-5, abs=1e-3),
@@ -1703,12 +1503,12 @@ def test_tight_output2(max_bt):
                  pytest.approx(Spline(0.3, -0.8, 3, -1.8)), feedback=True),
             Tone(8, Spline(), Spline(0.3), feedback=True)],
         5: [Tone(12)],
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_tight_output3(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     s.add_step(2.441e-9) \
       .pulse('rfsoc/dds0/1/amp', 0.1) \
       .set('rfsoc/dds0/1/phase', 0.2) \
@@ -1734,7 +1534,7 @@ def test_tight_output3(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(12)],
         1: [Tone(4, pytest.approx(Spline(120e6), rel=1e-5, abs=1e-3),
                  pytest.approx(Spline(0.1, 0.55, -0.9, 0.45)),
@@ -1745,12 +1545,12 @@ def test_tight_output3(max_bt):
                  pytest.approx(Spline(0.3, -0.8, 3, -1.8)), feedback=True),
             Tone(8, Spline(), Spline(0.3), feedback=True)],
         5: [Tone(12)],
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_tight_output4(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     s.add_step(2.441e-9) \
       .pulse('rfsoc/dds0/1/amp', 0.1) \
       .set('rfsoc/dds0/1/phase', 0.2) \
@@ -1776,7 +1576,7 @@ def test_tight_output4(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(12)],
         1: [Tone(4, pytest.approx(Spline(200e6, -320e6, 600e6, -360e6),
                                   rel=1e-5, abs=1e-3),
@@ -1788,12 +1588,12 @@ def test_tight_output4(max_bt):
                  pytest.approx(Spline(0.3, -0.8, 3, -1.8)), feedback=True),
             Tone(8, Spline(), Spline(0.3), feedback=True)],
         5: [Tone(12)],
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_tight_output5(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     s.add_step(2.441e-9) \
       .pulse('rfsoc/dds0/1/amp', 0.1) \
       .set('rfsoc/dds0/1/phase', 0.2) \
@@ -1819,7 +1619,7 @@ def test_tight_output5(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(12)],
         1: [Tone(4, pytest.approx(Spline(200e6, -320e6, 600e6, -360e6),
                                   rel=1e-5, abs=1e-3),
@@ -1831,42 +1631,40 @@ def test_tight_output5(max_bt):
                  pytest.approx(Spline(0.3, -0.8, 3, -1.8)), feedback=True),
             Tone(8, Spline(), Spline(0.3), feedback=True)],
         5: [Tone(12)],
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_dds_delay_rt_error(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
-    rb.set_dds_delay(0, rtval.new_extern(lambda: -0.001))
+    comp = test_env.new_comp(max_bt)
+    comp.rb.set_dds_delay(0, rtval.new_extern(lambda: -0.001))
     comp.finalize()
     with pytest.raises(ValueError, match="DDS time offset -0.001 cannot be negative."):
         comp.runtime_finalize(1)
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
-    rb.set_dds_delay(1, rtval.new_extern(lambda: 1))
+    comp = test_env.new_comp(max_bt)
+    comp.rb.set_dds_delay(1, rtval.new_extern(lambda: 1))
     comp.finalize()
     with pytest.raises(ValueError,
                        match="DDS time offset 1.0 cannot be more than 100ms."):
         comp.runtime_finalize(1)
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 @pytest.mark.parametrize('use_rt', [False, True])
 def test_dds_delay(max_bt, use_rt):
     def wrap_value(v):
         if use_rt:
             return rtval.new_extern(lambda: v)
         return v
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     with pytest.raises(ValueError, match="DDS time offset -0.001 cannot be negative."):
-        rb.set_dds_delay(0, -0.001)
+        comp.rb.set_dds_delay(0, -0.001)
     with pytest.raises(ValueError,
                        match="DDS time offset 1.0 cannot be more than 100ms."):
-        rb.set_dds_delay(1, 1)
+        comp.rb.set_dds_delay(1, 1)
 
-    rb.set_dds_delay(1, wrap_value(1e-3))
-    rb.set_dds_delay(0, wrap_value(1e-6))
+    comp.rb.set_dds_delay(1, wrap_value(1e-3))
+    comp.rb.set_dds_delay(0, wrap_value(1e-6))
     s.add_step(1e-3) \
       .pulse('rfsoc/dds0/0/amp', 0.1) \
       .set('rfsoc/dds0/1/phase', 0.2) \
@@ -1875,7 +1673,7 @@ def test_dds_delay(max_bt, use_rt):
     comp.finalize()
 
     if not use_rt:
-        channels = get_channel_info(rb, comp)
+        channels = comp.get_channel_info()
         assert channels.dds_delay == {
             0: 1000_000,
             1: 1000_000_000
@@ -1883,12 +1681,12 @@ def test_dds_delay(max_bt, use_rt):
 
     comp.runtime_finalize(1)
     if use_rt:
-        channels = get_channel_info(rb, comp)
+        channels = comp.get_channel_info()
         assert channels.dds_delay == {
             0: 1000_000,
             1: 1000_000_000
         }
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(410),
             Tone(409600, Spline(), Spline(0.1)),
             Tone(409198)],
@@ -1900,21 +1698,21 @@ def test_dds_delay(max_bt, use_rt):
         4: [Tone(409600, Spline(), Spline(0.3)),
             Tone(409608)],
         5: [Tone(819208)],
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_cond_ramp_error(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     s.conditional(rtval.new_extern(lambda: False)) \
       .add_step(rtval.new_extern(lambda: 0)) \
-      .set('rfsoc/dds0/0/amp', DivLengthFunction()) \
-      .pulse('rfsoc/dds0/1/amp', DivLengthFunction())
+      .set('rfsoc/dds0/0/amp', test_utils.DivLengthFunction()) \
+      .pulse('rfsoc/dds0/1/amp', test_utils.DivLengthFunction())
     comp.finalize()
     comp.runtime_finalize(1)
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     s.add_step(0) \
       .set('rfsoc/dds0/0/amp', Blackman(1)) \
       .pulse('rfsoc/dds0/1/amp', Blackman(1)) \
@@ -1923,8 +1721,8 @@ def test_cond_ramp_error(max_bt):
     comp.finalize()
     comp.runtime_finalize(1)
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     s.add_step(rtval.new_extern(lambda: 0)) \
       .set('rfsoc/dds0/0/amp', Blackman(1)) \
       .pulse('rfsoc/dds0/1/amp', Blackman(1)) \
@@ -1933,10 +1731,10 @@ def test_cond_ramp_error(max_bt):
     comp.finalize()
     comp.runtime_finalize(1)
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_cross_channel_sync1(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     @s.add_background
     def other_step(s):
         s.wait(2.5e-3)
@@ -1950,14 +1748,14 @@ def test_cross_channel_sync1(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(4096008)],
         1: [Tone(4096000, pytest.approx(Spline(100e6, 20e6), abs=1e-6)),
             Tone(8, Spline(120e6))],
-    }
+    })
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     @s.add_background
     def other_step(s):
         s.wait(2.5e-3)
@@ -1971,19 +1769,19 @@ def test_cross_channel_sync1(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(4096008)],
         1: [Tone(1024000, pytest.approx(Spline(100e6, 5e6), abs=1e-6)),
             Tone(1024000, pytest.approx(Spline(105e6, 5e6), abs=1e-6), sync=True),
             Tone(1024000, pytest.approx(Spline(110e6, 5e6), abs=1e-6), sync=True),
             Tone(1024000, pytest.approx(Spline(115e6, 5e6), abs=1e-6), sync=True),
             Tone(8, Spline(120e6))],
-    }
+    })
 
-@with_rfsoc_params
+@test_utils.with_seq_params
 def test_cross_channel_sync2(max_bt):
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     @s.add_background
     def amp_step(s):
         s.wait(5e-6)
@@ -1997,14 +1795,14 @@ def test_cross_channel_sync2(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(4104)],
         1: [Tone(2048),
             Tone(2056, Spline(110e6), sync=True)],
-    }
+    })
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     @s.add_step
     def freq_step(s):
         s.wait(5e-6)
@@ -2015,14 +1813,14 @@ def test_cross_channel_sync2(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(4104)],
         1: [Tone(2048),
             Tone(2056, Spline(110e6), sync=True)],
-    }
+    })
 
-    s, comp = new_seq_compiler(max_bt)
-    rb = add_rfsoc_backend(comp)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     @s.add_step
     def freq_step(s):
         s.wait(5e-6)
@@ -2033,9 +1831,9 @@ def test_cross_channel_sync2(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    assert get_output() == {
+    test_env.check_output({
         0: [Tone(4104)],
         1: [Tone(2048),
             Tone(4, pytest.approx(Spline(100e6, 55e6, -90e6, 45e6)), sync=True),
             Tone(2052, Spline(110e6))],
-    }
+    })

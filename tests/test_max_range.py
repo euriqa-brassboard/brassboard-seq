@@ -1,6 +1,6 @@
 #
 
-import brassboard_seq_test_utils as test_utils
+import py_test_utils as test_utils
 
 import itertools
 import pytest

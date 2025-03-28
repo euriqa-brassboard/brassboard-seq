@@ -9,9 +9,12 @@ python_test("${CMAKE_BINARY_DIR}"
   brassboard_seq_test_utils.pyx
   brassboard_seq_artiq_backend_utils.pyx
   brassboard_seq_rfsoc_backend_utils.pyx
+  conftest.py
   dummy_artiq.py
   dummy_pulse_compiler.py
   check_artiq_backend.py
+  py_test_utils.py
+  rfsoc_test_utils.py
   # Keep these as the first in a parallel run since they take the longest
   test_max_range.py
   test_suffix_array.py

@@ -1,7 +1,7 @@
 #
 
 from brassboard_seq import action, rtval
-import brassboard_seq_test_utils as test_utils
+import py_test_utils as test_utils
 import pytest
 
 import math
@@ -26,45 +26,6 @@ def test_action():
     check_action_str(a2, "Set(1.2, a=1, b=2)")
     check_action_str(a3, "Pulse(2.3, cond=False, exact_time=True)")
 
-class StaticFunction(action.RampFunction):
-    def __init__(self):
-        action.RampFunction.__init__(self)
-
-    def eval(self, t, length, oldval):
-        return t / 2 + oldval - length
-
-class SinFunction(action.RampFunction):
-    def __init__(self, amp, freq, phase):
-        action.RampFunction.__init__(self, amp=amp, freq=freq, phase=phase)
-
-    def eval(self, t, length, oldval):
-        return oldval + self.amp * np.sin(self.freq * t + self.phase)
-
-class ValueFunction(action.RampFunction):
-    def __init__(self, res):
-        self.res = res
-        action.RampFunction.__init__(self)
-
-    def eval(self, t, length, oldval):
-        return self.res
-
-class ErrorFunction(action.RampFunction):
-    def __init__(self, err):
-        self.err = err
-        action.RampFunction.__init__(self)
-
-    def eval(self, t, length, oldval):
-        raise self.err
-
-class PyCubicSpline(action.RampFunction):
-    def __init__(self, order0, order1=0.0, order2=0.0, order3=0.0):
-        super().__init__(order0=order0, order1=order1, order2=order2, order3=order3)
-    def eval(self, t, length, oldval):
-        t = t / length
-        return self.order0 + (self.order1 + (self.order2 + self.order3 * t) * t) * t
-    def spline_segments(self, length, oldval):
-        return ()
-
 def test_ramp_base():
     r = action._RampFunctionBase()
     test = test_utils.RampTest(r, 1, 0)
@@ -84,7 +45,7 @@ def test_ramp_eval():
     slen = str(rlen)
     sold = str(rold)
 
-    test = test_utils.RampTest(StaticFunction(), rlen, rold)
+    test = test_utils.RampTest(test_utils.StaticFunction(), rlen, rold)
     rv = test.eval_compile_end()
     assert str(rv) == f'({slen} / 2 + {sold}) - {slen}'
     assert rtval.get_value(rv, 0) == 2 / 2 + -0.2 - 2
@@ -106,7 +67,7 @@ def test_ramp_eval():
     rphase = 2.3
     samp = str(ramp)
     sfreq = str(rfreq)
-    test = test_utils.RampTest(SinFunction(ramp, rfreq, rphase), rlen, rold)
+    test = test_utils.RampTest(test_utils.SinFunction(ramp, rfreq, rphase), rlen, rold)
     rv = test.eval_compile_end()
     assert str(rv) == f'{sold} + {samp} * sin(2.3 + {sfreq} * {slen})'
     assert rtval.get_value(rv, 0) == -0.2 + 2 * np.sin(2.3 + 1.2 * 2)
@@ -124,25 +85,25 @@ def test_ramp_eval():
     assert (vs == -0.2 + 2 * np.sin(2.3 + 1.2 * ts)).all()
 
     with pytest.raises(TypeError):
-        ValueFunction([])
-    wtfunc = ValueFunction(1)
+        test_utils.ValueFunction([])
+    wtfunc = test_utils.ValueFunction(1)
     test = test_utils.RampTest(wtfunc, rlen, rold)
     assert test.eval_compile_end() == 1
     assert test.eval_runtime(0, [1, 2, 3]) == [1, 1, 1]
     with pytest.raises(TypeError):
-        ValueFunction(np.empty((2, 2)))
+        test_utils.ValueFunction(np.empty((2, 2)))
     with pytest.raises(IndexError, match="Argument index out of bound: 3."):
-        ValueFunction(test_utils.new_arg(3))
+        test_utils.ValueFunction(test_utils.new_arg(3))
     with pytest.raises(TypeError):
-        ValueFunction(test_utils.new_arg([]))
+        test_utils.ValueFunction(test_utils.new_arg([]))
     with pytest.raises(ValueError, match="Unknown value type"):
-        ValueFunction(test_utils.new_invalid_rtval())
+        test_utils.ValueFunction(test_utils.new_invalid_rtval())
 
     with pytest.raises(ValueError, match="^AAAAA$"):
-        ErrorFunction(ValueError("AAAAA"))
+        test_utils.ErrorFunction(ValueError("AAAAA"))
 
 def test_spline():
-    assert test_utils.ramp_get_spline_segments(SinFunction(1.0, 2.0, 0.1), 1, 0) is None
+    assert test_utils.ramp_get_spline_segments(test_utils.SinFunction(1.0, 2.0, 0.1), 1, 0) is None
 
     o0 = 0.1
     o1 = 0.2
@@ -160,7 +121,7 @@ def test_spline():
         assert sp_seq.order1 is ro1
         assert sp_seq.order2 is ro2
         assert sp_seq.order3 is ro3
-        sp_py = PyCubicSpline(ro0, ro1, ro2, ro3)
+        sp_py = test_utils.PyCubicSpline(ro0, ro1, ro2, ro3)
         assert test_utils.ramp_get_spline_segments(sp_seq, 1, 0) == ()
         assert test_utils.ramp_get_spline_segments(sp_py, 1, 0) == ()
 
@@ -214,20 +175,20 @@ def test_linear():
 def test_const():
     ts = np.linspace(0, 1, 1000)
 
-    p = ValueFunction(0.2)
+    p = test_utils.ValueFunction(0.2)
     test1 = test_utils.RampTest(p, 1, 0)
     v1 = test1.eval_runtime(0, ts)
     expect1 = list(ts * 0 + 0.2)
     assert v1 == pytest.approx(expect1)
 
-    p = ValueFunction(1)
+    p = test_utils.ValueFunction(1)
     test1 = test_utils.RampTest(p, 1, 0)
     v1 = test1.eval_runtime(0, ts)
     expect1 = list(ts * 0 + 1)
     assert v1 == pytest.approx(expect1)
 
     v0 = 0.1
-    p = ValueFunction(rtval.new_extern(lambda: v0))
+    p = test_utils.ValueFunction(rtval.new_extern(lambda: v0))
     test1 = test_utils.RampTest(p, 1, 0)
     v1 = test1.eval_runtime(0, ts)
     expect1 = list(ts * 0 + v0)
@@ -239,7 +200,7 @@ def test_const():
     assert v1 == pytest.approx(expect1)
 
     v0 = 0.1
-    p = ValueFunction(np.cos(rtval.new_extern(lambda: v0)) + 1)
+    p = test_utils.ValueFunction(np.cos(rtval.new_extern(lambda: v0)) + 1)
     test1 = test_utils.RampTest(p, 1, 0)
     v1 = test1.eval_runtime(0, ts)
     expect1 = list(ts * 0 + np.cos(v0) + 1)
@@ -249,14 +210,6 @@ def test_const():
     v1 = test1.eval_runtime(1, ts)
     expect1 = list(ts * 0 + np.cos(v0) + 1)
     assert v1 == pytest.approx(expect1)
-
-class FuncAction(action.RampFunction):
-    def __init__(self, cb):
-        self.cb = cb
-        super().__init__()
-
-    def eval(self, t, l, o):
-        return self.cb(t, l, o)
 
 values = [True, False, -5, -4, -12, -2, -1, 0, 1, 2, 3, 4, 10,
           0.12, 0.34, 0.56, 1.02, 3.04, -0.12, -0.34, -0.56, -1.02, -3.04]
@@ -300,7 +253,7 @@ def run_check_unary(f):
         ts1 = np.linspace(0.1, 0.5, 1000)
     ts2 = np.linspace(-2, 2, 1001)
 
-    p1 = FuncAction(lambda t, l, o: f(t))
+    p1 = test_utils.FuncAction(lambda t, l, o: f(t))
     test1 = test_utils.RampTest(p1, 2, 0)
     v1 = test1.eval_runtime(0, ts1)
     expect1 = [f(t) for t in ts1]
@@ -318,7 +271,7 @@ def run_check_unary(f):
         def expect1():
             fv = throw_non_finite(f, v)
             return [fv for t in ts]
-        p2 = FuncAction(lambda t, l, o: f(rv))
+        p2 = test_utils.FuncAction(lambda t, l, o: f(rv))
         test2 = test_utils.RampTest(p2, 2, 0)
         v1 = none_on_error(test2.eval_runtime, 0, ts)
         assert cmp_list(v1, expect1)
@@ -330,10 +283,10 @@ def run_check_binary(f):
                        np.bitwise_or, operator.xor, np.bitwise_xor)
 
     if is_bitwise:
-        p1 = FuncAction(lambda t, l, o: f(round(t * 100), round(t * 123 + 1)))
+        p1 = test_utils.FuncAction(lambda t, l, o: f(round(t * 100), round(t * 123 + 1)))
         expect1 = [f(round(t * 100), round(t * 123 + 1)) for t in ts1]
     else:
-        p1 = FuncAction(lambda t, l, o: f(t, t * 2 + 1))
+        p1 = test_utils.FuncAction(lambda t, l, o: f(t, t * 2 + 1))
         expect1 = [f(t, t * 2 + 1) for t in ts1]
 
     test1 = test_utils.RampTest(p1, 2, 0)
@@ -343,11 +296,11 @@ def run_check_binary(f):
     for v in values:
         rv = rtval.new_extern(lambda: v)
         if is_bitwise:
-            p2 = FuncAction(lambda t, l, o: f(rv, round(t * 123 + 1)))
-            p3 = FuncAction(lambda t, l, o: f(round(t * 100), rv))
+            p2 = test_utils.FuncAction(lambda t, l, o: f(rv, round(t * 123 + 1)))
+            p3 = test_utils.FuncAction(lambda t, l, o: f(round(t * 100), rv))
         else:
-            p2 = FuncAction(lambda t, l, o: f(rv, t * 2 + 1))
-            p3 = FuncAction(lambda t, l, o: f(t, rv))
+            p2 = test_utils.FuncAction(lambda t, l, o: f(rv, t * 2 + 1))
+            p3 = test_utils.FuncAction(lambda t, l, o: f(t, rv))
         @none_on_error
         def expect2():
             if is_bitwise:
@@ -381,7 +334,7 @@ def run_check_binary(f):
                 # Numpy doesn't raise an error in this case for some reason
                 continue
             rv2 = rtval.new_extern(lambda: v2)
-            p4 = FuncAction(lambda t, l, o: f(rv1, rv2))
+            p4 = test_utils.FuncAction(lambda t, l, o: f(rv1, rv2))
             @none_on_error
             def expect4():
                 fv = throw_non_finite(f, v1, v2)

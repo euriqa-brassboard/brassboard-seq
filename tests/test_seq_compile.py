@@ -2,31 +2,26 @@
 
 from brassboard_seq.config import Config
 from brassboard_seq import seq, rtval, action, backend
-import brassboard_seq_test_utils as test_utils
+import py_test_utils as test_utils
 import pytest
 
-global_conf = Config()
-global_conf.add_supported_prefix('artiq')
+class Env:
+    def __init__(self):
+        self.conf = Config()
+        self.conf.add_supported_prefix('artiq')
 
-def new_seq_compiler(*args):
-    s = seq.Seq(global_conf, *args)
-    comp = backend.SeqCompiler(s)
-    comp.add_backend('artiq', backend.Backend()) # Dummy backend
-    return s, comp
+    def new_comp(self, *args):
+        s = seq.Seq(self.conf, *args)
+        comp = backend.SeqCompiler(s)
+        comp.add_backend('artiq', backend.Backend()) # Dummy backend
+        return comp
 
-def check_bt(exc, max_bt, *names):
-    fnames = [tb.name for tb in exc.traceback]
-    for name in names:
-        if max_bt == 0:
-            assert name not in fnames
-        else:
-            assert name in fnames
+test_env = Env()
 
-with_seq_params = pytest.mark.parametrize("max_bt", [0, 5, 500])
-
-@with_seq_params
+@test_utils.with_seq_params
 def test_cond_order1(max_bt):
-    s, comp = new_seq_compiler(max_bt)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
 
     c1val = True
     c1 = rtval.new_extern(lambda: c1val)
@@ -132,11 +127,12 @@ def test_cond_order1(max_bt):
     c1val = True
     with pytest.raises(ValueError, match="Action time order violation") as exc:
         comp.runtime_finalize(4)
-    check_bt(exc, max_bt, 'step_bbb_yxz_2')
+    test_utils.check_bt(exc, max_bt, 'step_bbb_yxz_2')
 
-@with_seq_params
+@test_utils.with_seq_params
 def test_cond_order2(max_bt):
-    s, comp = new_seq_compiler(max_bt)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
 
     c1val = True
     c1 = rtval.new_extern(lambda: c1val)
@@ -248,11 +244,12 @@ def test_cond_order2(max_bt):
     c1val = True
     with pytest.raises(ValueError, match="Action time order violation") as exc:
         comp.runtime_finalize(4)
-    check_bt(exc, max_bt, 'g_123_asnbe', 'f_0_21234_alsdf')
+    test_utils.check_bt(exc, max_bt, 'g_123_asnbe', 'f_0_21234_alsdf')
 
-@with_seq_params
+@test_utils.with_seq_params
 def test_order_error1(max_bt):
-    s, comp = new_seq_compiler(max_bt)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
 
     c1val = True
     c1 = rtval.new_extern(lambda: c1val)
@@ -278,11 +275,12 @@ def test_order_error1(max_bt):
                        match="Multiple actions added for the same channel "
                        "at the same time on artiq/ttl1") as exc:
         comp.finalize()
-    check_bt(exc, max_bt, 'f1_89374asjkl_asbd', 'gj18j_9034rfj')
+    test_utils.check_bt(exc, max_bt, 'f1_89374asjkl_asbd', 'gj18j_9034rfj')
 
-@with_seq_params
+@test_utils.with_seq_params
 def test_order_error2(max_bt):
-    s, comp = new_seq_compiler(max_bt)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
 
     c1val = True
     c1 = rtval.new_extern(lambda: c1val)
@@ -314,11 +312,12 @@ def test_order_error2(max_bt):
     with pytest.raises(ValueError,
                        match="Actions on artiq/ttl1 is not statically ordered") as exc:
         comp.finalize()
-    check_bt(exc, max_bt, 'f_1239', 'step_13238324', 'kjaksd9123')
+    test_utils.check_bt(exc, max_bt, 'f_1239', 'step_13238324', 'kjaksd9123')
 
-@with_seq_params
+@test_utils.with_seq_params
 def test_order_error3(max_bt):
-    s, comp = new_seq_compiler(max_bt)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
 
     s.add_background(0.1).set('artiq/ttl1', True)
     s.wait(0.2)
@@ -367,7 +366,8 @@ def test_order_error3(max_bt):
     assert info2['length'] == 0.1
     assert info2['end_val'] is False
 
-    s, comp = new_seq_compiler(max_bt)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
 
     s.add_background(0.1).set('artiq/ttl1', True)
     s.wait(0.2)
@@ -427,7 +427,8 @@ def test_order_error3(max_bt):
                      300_000_000_000]
     assert total_time == 300_000_000_000
 
-    s, comp = new_seq_compiler(max_bt)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
 
     s.add_background(0.1).pulse('artiq/ttl1', True)
     s.wait(0.2)
@@ -449,20 +450,14 @@ def test_order_error3(max_bt):
     with pytest.raises(ValueError,
                        match="Actions on artiq/ttl1 is not statically ordered") as exc:
         comp.finalize()
-    check_bt(exc, max_bt, 'jdaksf8923jfasd')
+    test_utils.check_bt(exc, max_bt, 'jdaksf8923jfasd')
 
-class StaticFunction(action.RampFunction):
-    def __init__(self):
-        action.RampFunction.__init__(self)
-
-    def eval(self, t, length, oldval):
-        return t / 2 + oldval - length
-
-@with_seq_params
+@test_utils.with_seq_params
 def test_ramp_order_error1(max_bt):
-    s, comp = new_seq_compiler(max_bt)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
 
-    f1 = StaticFunction()
+    f1 = test_utils.StaticFunction()
     s.add_background(0.1).set('artiq/analog', f1)
     s.wait(0.2)
     def fjasldf918327():
@@ -483,13 +478,14 @@ def test_ramp_order_error1(max_bt):
     with pytest.raises(ValueError,
                        match="Actions on artiq/analog is not statically ordered") as exc:
         comp.finalize()
-    check_bt(exc, max_bt, 'fjasldf918327')
+    test_utils.check_bt(exc, max_bt, 'fjasldf918327')
 
-@with_seq_params
+@test_utils.with_seq_params
 def test_ramp_order_error2(max_bt):
-    s, comp = new_seq_compiler(max_bt)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
 
-    f1 = StaticFunction()
+    f1 = test_utils.StaticFunction()
     s.conditional(False).add_background(0.1).set('artiq/analog', f1)
     s.wait(0.2)
     def j98asdfjk2398asdf():
@@ -510,11 +506,12 @@ def test_ramp_order_error2(max_bt):
     with pytest.raises(ValueError,
                        match="Actions on artiq/analog is not statically ordered") as exc:
         comp.finalize()
-    check_bt(exc, max_bt, 'j98asdfjk2398asdf')
+    test_utils.check_bt(exc, max_bt, 'j98asdfjk2398asdf')
 
-@with_seq_params
+@test_utils.with_seq_params
 def test_ramp_order1(max_bt):
-    s, comp = new_seq_compiler(max_bt)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
 
     c1val = 0.1
     c1 = rtval.new_extern(lambda: c1val)
@@ -523,7 +520,7 @@ def test_ramp_order1(max_bt):
     c2 = rtval.new_extern(lambda: c2val)
 
     s.set('artiq/analog', c1)
-    f1 = StaticFunction()
+    f1 = test_utils.StaticFunction()
     step = s.add_background(c2).set('artiq/analog', f1)
     s.wait(0.2)
     s.wait_for(step)
@@ -602,9 +599,10 @@ def test_ramp_order1(max_bt):
                      600_000_000_000]
     assert total_time == 600_000_000_000
 
-@with_seq_params
+@test_utils.with_seq_params
 def test_rt_assert(max_bt):
-    s, comp = new_seq_compiler(max_bt)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
 
     c1val = True
     c1 = rtval.new_extern(lambda: c1val)
@@ -619,12 +617,13 @@ def test_rt_assert(max_bt):
     c1val = False
     with pytest.raises(AssertionError, match="Some message") as exc:
         comp.runtime_finalize(2)
-    check_bt(exc, max_bt, 'japsidfjpaoisdjpafosd')
+    test_utils.check_bt(exc, max_bt, 'japsidfjpaoisdjpafosd')
 
     c1val = True
     comp.runtime_finalize(3)
 
-    s, comp = new_seq_compiler(max_bt)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     def assert_cb_JALKDFJOIADF():
         raise ValueError("XXX YYY ZZZ")
     c1 = rtval.new_extern(assert_cb_JALKDFJOIADF)
@@ -632,12 +631,13 @@ def test_rt_assert(max_bt):
     comp.finalize()
     with pytest.raises(ValueError, match="XXX YYY ZZZ") as exc:
         comp.runtime_finalize(1)
-    check_bt(exc, max_bt, 'japsidfjpaoisdjpafosd')
-    check_bt(exc, 1, 'assert_cb_JALKDFJOIADF')
+    test_utils.check_bt(exc, max_bt, 'japsidfjpaoisdjpafosd')
+    test_utils.check_bt(exc, 1, 'assert_cb_JALKDFJOIADF')
 
-@with_seq_params
+@test_utils.with_seq_params
 def test_cond_error(max_bt):
-    s, comp = new_seq_compiler(max_bt)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     s.set('artiq/ttl0', True)
     s.add_step(0.01) \
       .pulse('artiq/urukul0_ch2/freq', rtval.new_extern(lambda: 1.23)) \
@@ -651,26 +651,21 @@ def test_cond_error(max_bt):
     comp.finalize()
     with pytest.raises(ValueError, match="AAABBBCCC") as exc:
         comp.runtime_finalize(1)
-    check_bt(exc, max_bt, 'ajqu7sdf7h7uhfasd')
+    test_utils.check_bt(exc, max_bt, 'ajqu7sdf7h7uhfasd')
 
-class DivLengthFunction(action.RampFunction):
-    def __init__(self):
-        action.RampFunction.__init__(self)
-
-    def eval(self, t, length, oldval):
-        return t / length
-
-@with_seq_params
+@test_utils.with_seq_params
 def test_cond_ramp_error(max_bt):
-    s, comp = new_seq_compiler(max_bt)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     s.conditional(rtval.new_extern(lambda: False)) \
       .add_step(rtval.new_extern(lambda: 0)) \
-      .set('artiq/urukul0_ch0/amp', DivLengthFunction()) \
-      .pulse('artiq/urukul0_ch1/amp', DivLengthFunction())
+      .set('artiq/urukul0_ch0/amp', test_utils.DivLengthFunction()) \
+      .pulse('artiq/urukul0_ch1/amp', test_utils.DivLengthFunction())
     comp.finalize()
     comp.runtime_finalize(1)
 
-    s, comp = new_seq_compiler(max_bt)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     s.add_step(0) \
       .set('artiq/urukul0_ch0/amp', action.Blackman(1)) \
       .pulse('artiq/urukul0_ch1/amp', action.Blackman(1)) \
@@ -679,7 +674,8 @@ def test_cond_ramp_error(max_bt):
     comp.finalize()
     comp.runtime_finalize(1)
 
-    s, comp = new_seq_compiler(max_bt)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     s.add_step(rtval.new_extern(lambda: 0)) \
       .set('artiq/urukul0_ch0/amp', action.Blackman(1)) \
       .pulse('artiq/urukul0_ch1/amp', action.Blackman(1)) \
@@ -695,9 +691,10 @@ class MissingInit(action.RampFunction):
     def eval(self, t, length, oldval):
         return t / length
 
-@with_seq_params
+@test_utils.with_seq_params
 def test_ramp_noinit_error(max_bt):
-    s, comp = new_seq_compiler(max_bt)
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     def jaksdjfpoiasdnqeurfsda8u2jadf():
         s.add_step(2) \
           .set('artiq/urukul0_ch0/amp', MissingInit())
@@ -705,4 +702,4 @@ def test_ramp_noinit_error(max_bt):
     comp.finalize()
     with pytest.raises(RuntimeError, match="RampFunction.__init__ not called") as exc:
         comp.runtime_finalize(1)
-    check_bt(exc, max_bt, 'jaksdjfpoiasdnqeurfsda8u2jadf')
+    test_utils.check_bt(exc, max_bt, 'jaksdjfpoiasdnqeurfsda8u2jadf')

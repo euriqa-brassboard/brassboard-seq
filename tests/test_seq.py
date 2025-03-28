@@ -1,8 +1,8 @@
 #
 
 from brassboard_seq.config import Config
-from brassboard_seq import seq, rtval, action, scan
-import brassboard_seq_test_utils as test_utils
+from brassboard_seq import seq, rtval, scan
+import py_test_utils as test_utils
 import pytest
 
 def test_seq():
@@ -310,7 +310,7 @@ def test_seq():
     t11 = s.end_time
     assert test_utils.event_time_id(t11) == 11
     assert str(t11) == f'T[6] + (200 ms; if {bv1})'
-    f1 = StaticFunction()
+    f1 = test_utils.StaticFunction()
     st5.pulse('artiq/analog', f1, random_keyword=123)
     assert str(s) == f"""Seq - T[11]
  T[0]: 0 ps
@@ -378,7 +378,7 @@ def test_seq():
     assert test_utils.event_time_id(t14) == 14
     assert str(t13) == '<floating>'
     assert str(t14) == f'T[13] + (100 ms; if {bv1})'
-    f2 = StaticFunction()
+    f2 = test_utils.StaticFunction()
     st7.set('artiq/analog', f2)
     assert str(s) == f"""Seq - T[11]
  T[0]: 0 ps
@@ -1290,13 +1290,6 @@ def test_cond_call():
     TimeStep(0)@T[0] if False
       artiq/ttl0: Set(True, cond=False)
 """
-
-class StaticFunction(action.RampFunction):
-    def __init__(self):
-        action.RampFunction.__init__(self)
-
-    def eval(self, t, length, oldval):
-        return t / 2 + oldval - length
 
 def test_seq_arg_error():
     conf = Config()
