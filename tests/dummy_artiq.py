@@ -200,6 +200,7 @@ ad9910.AD9910 = AD9910
 edge_counter.EdgeCounter = EdgeCounter
 ttl.TTLOut = TTLOut
 environment.HasEnvironment = HasEnvironment
+environment.NoDefault = NoDefault
 
 sim_ad9910.AD9910 = AD9910
 sim_edge_counter.EdgeCounter = EdgeCounter

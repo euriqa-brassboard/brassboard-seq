@@ -1969,12 +1969,29 @@ def test_rt_value():
     x = 1.2
     fx = lambda: x
     rx = sys.rt_value(fx)
+    assert len(sys._bb_rt_values) == 1
+    assert fx in sys._bb_rt_values
     assert str(rx) == f'({fx})()'
     rd1 = sys.rt_dataset('XXX')
     assert str(rd1) == f'<dataset XXX for {sys}>'
+    assert len(sys._bb_rt_values) == 2
+    assert ('XXX', False) in sys._bb_rt_values
+    assert str(sys.rt_dataset('XXX')) == f'<dataset XXX for {sys}>'
+    assert len(sys._bb_rt_values) == 2
+    assert ('XXX', False) in sys._bb_rt_values
     sys.set_dataset('XXX', 2)
+    sys.rt_dataset_sys('XXX')
+    assert len(sys._bb_rt_values) == 3
+    assert ('XXX', True) in sys._bb_rt_values
+    sys.set_dataset_sys('XXX', 3)
+
     rd2 = submod.rt_dataset_sys('XXX')
     assert str(rd2) == f'<dataset_sys XXX for {submod}>'
+    assert len(submod._bb_rt_values) == 1
+    assert ('XXX', True) in submod._bb_rt_values
+    assert str(submod.rt_dataset_sys('XXX')) == f'<dataset_sys XXX for {submod}>'
+    assert len(submod._bb_rt_values) == 1
+    assert ('XXX', True) in submod._bb_rt_values
     submod.set_dataset_sys('XXX', 4)
     rd3 = submod.rt_dataset_sys('YYY', 1.2)
     assert str(rd3) == f'<dataset_sys YYY for {submod}>'
@@ -2015,7 +2032,7 @@ def test_rt_value():
     submod = dummy_artiq.DummyDaxSystem()
     sys.register_child(submod)
 
-    sys._bb_rt_values = [1]
+    sys._bb_rt_values = {1: 2}
 
     with pytest.raises(RuntimeError, match="Unknown object in runtime callbacks"):
         sys._eval_all_rtvals()
@@ -2024,13 +2041,10 @@ def test_rt_value():
     submod = dummy_artiq.DummyDaxSystem()
     sys.register_child(submod)
 
-    rd1 = submod.rt_dataset_sys()
-    assert str(rd1) == f'<dataset_sys <unknown> for {submod}>'
-    rd2 = sys.rt_dataset()
-    assert str(rd2) == f'<dataset <unknown> for {sys}>'
-
     with pytest.raises(TypeError):
-        sys._eval_all_rtvals()
+        submod.rt_dataset_sys()
+    with pytest.raises(TypeError):
+        submod.rt_dataset()
 
     sys = DummySystem()
     sys.get_dataset = lambda *args, **kwargs: 1

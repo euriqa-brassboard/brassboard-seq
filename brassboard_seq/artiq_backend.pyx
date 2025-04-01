@@ -40,6 +40,7 @@ import artiq.language.environment
 from artiq.coredevice import ad9910, edge_counter, spi2, ttl, urukul
 
 cdef HasEnvironment = artiq.language.environment.HasEnvironment
+cdef NoDefault = artiq.language.environment.NoDefault
 cdef DevAD9910 = ad9910.AD9910
 cdef DevEdgeCounter = edge_counter.EdgeCounter
 cdef DevTTLOut = ttl.TTLOut
@@ -264,8 +265,8 @@ cdef class EvalOnceCallback(ExternCallback):
 cdef class DatasetCallback(ExternCallback):
     cdef object value
     cdef object cb
-    cdef tuple args
-    cdef dict kwargs
+    cdef str key
+    cdef object default
 
     def __call__(self):
         if self.value is None:
@@ -273,31 +274,28 @@ cdef class DatasetCallback(ExternCallback):
         return self.value
 
     def __str__(self):
-        if self.args:
-            name = self.args[0]
-        else:
-            name = '<unknown>'
         cb = self.cb
         if not PyMethod_Check(cb):
-            return f'<dataset {name} for {self.cb}>'
+            return f'<dataset {self.key} for {self.cb}>'
         func = PyMethod_GET_FUNCTION(cb)
         obj = PyMethod_GET_SELF(cb)
         if <str?>(<object>func).__name__ == 'get_dataset_sys':
-            return f'<dataset_sys {name} for {<object>obj}>'
-        return f'<dataset {name} for {<object>obj}>'
+            return f'<dataset_sys {self.key} for {<object>obj}>'
+        return f'<dataset {self.key} for {<object>obj}>'
 
 cdef _eval_all_rtvals
+cdef dict _empty_dict = {}
 def _eval_all_rtvals(self, /):
     try:
         vals = self._bb_rt_values
     except AttributeError:
-        vals = ()
+        vals = _empty_dict
     if vals is None:
         return
-    for val in vals:
+    for val in (<dict?>vals).values():
         if type(val) is DatasetCallback:
             dval = <DatasetCallback>val
-            dval.value = pyobject_call(dval.cb, dval.args, dval.kwargs)
+            dval.value = dval.cb(dval.key, dval.default)
         elif type(val) is EvalOnceCallback:
             eoval = <EvalOnceCallback>val
             eoval.value = eoval.callback()
@@ -310,7 +308,7 @@ cdef inline check_bb_rt_values(self):
     try:
         vals = self._bb_rt_values # may be None
     except AttributeError:
-        vals = []
+        vals = {}
         self._bb_rt_values = vals
     return vals
 
@@ -321,33 +319,41 @@ def rt_value(self, cb, /):
         return cb()
     rtcb = <EvalOnceCallback>EvalOnceCallback.__new__(EvalOnceCallback)
     rtcb.callback = cb
-    (<list?>vals).append(rtcb)
+    (<dict?>vals)[cb] = rtcb
     return new_extern(rtcb)
 
 cdef rt_dataset
-def rt_dataset(self, /, *args, **kwargs):
-    vals = check_bb_rt_values(self)
+def rt_dataset(self, str key, default=NoDefault):
+    _vals = check_bb_rt_values(self)
     cb = self.get_dataset
-    if vals is None:
-        return pyobject_call(cb, args, kwargs)
+    if _vals is None:
+        return cb(key, default)
+    vals = <dict?>_vals
+    res = vals.get((key, False))
+    if res is not None:
+        return new_extern(res)
     rtcb = <DatasetCallback>DatasetCallback.__new__(DatasetCallback)
     rtcb.cb = cb
-    rtcb.args = args
-    rtcb.kwargs = kwargs
-    (<list?>vals).append(rtcb)
+    rtcb.key = key
+    rtcb.default = default
+    vals[(key, False)] = rtcb
     return new_extern(rtcb)
 
 cdef rt_dataset_sys
-def rt_dataset_sys(self, /, *args, **kwargs):
-    vals = check_bb_rt_values(self)
+def rt_dataset_sys(self, str key, default=NoDefault):
+    _vals = check_bb_rt_values(self)
     cb = self.get_dataset_sys
-    if vals is None:
-        return pyobject_call(cb, args, kwargs)
+    if _vals is None:
+        return cb(key, default)
+    vals = <dict?>_vals
+    res = vals.get((key, True))
+    if res is not None:
+        return new_extern(res)
     rtcb = <DatasetCallback>DatasetCallback.__new__(DatasetCallback)
     rtcb.cb = cb
-    rtcb.args = args
-    rtcb.kwargs = kwargs
-    (<list?>vals).append(rtcb)
+    rtcb.key = key
+    rtcb.default = default
+    vals[(key, True)] = rtcb
     return new_extern(rtcb)
 
 HasEnvironment.rt_value = rt_value
