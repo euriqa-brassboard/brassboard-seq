@@ -45,6 +45,40 @@
 #  define bb_has_builtin(x) 0
 #endif
 
+#define BB_CPU_X86_64 0
+#define BB_CPU_X86 0
+#define BB_CPU_AARCH64 0
+#define BB_CPU_AARCH32 0
+#define BB_CPU_PPC64 0
+#define BB_CPU_PPC32 0
+
+#if defined(__amd64__) || defined(__amd64) || defined(__x86_64__) || \
+    defined(__x86_64) || defined(_M_X64) || defined(_M_AMD64)
+#  undef BB_CPU_X86_64
+#  define BB_CPU_X86_64 1
+#elif defined(i386) || defined(__i386) || defined(__i386__) || defined(_M_IX86) || defined(_X86_)
+#  undef BB_CPU_X86
+#  define BB_CPU_X86 1
+#elif defined(__aarch64__)
+#  undef BB_CPU_AARCH64
+#  define BB_CPU_AARCH64 1
+#elif defined(__arm__) || defined(_M_ARM)
+#  undef BB_CPU_AARCH32
+#  define BB_CPU_AARCH32 1
+#elif defined(__PPC64__)
+#  undef BB_CPU_PPC64
+#  define BB_CPU_PPC64 1
+#elif defined(_ARCH_PPC)
+#  undef BB_CPU_PPC32
+#  define BB_CPU_PPC32 1
+#endif
+
+#if BB_CPU_X86 || BB_CPU_X86_64
+#  include <immintrin.h>
+#elif BB_CPU_AARCH64
+#  include <arm_neon.h>
+#endif
+
 namespace {
 
 __attribute__((always_inline, flatten))
@@ -1075,6 +1109,48 @@ public:
 private:
     pybytearray_streambuf m_buf;
 };
+
+template<std::signed_integral I, std::floating_point F>
+static inline I round(F f)
+{
+    static constexpr auto Isz = sizeof(I);
+    static constexpr auto Ffloat = std::is_same_v<std::remove_cvref_t<F>,float>;
+    static constexpr auto Fdouble = std::is_same_v<std::remove_cvref_t<F>,double>;
+#if BB_CPU_X86 || BB_CPU_X86_64
+    if constexpr (Ffloat) {
+        if constexpr (Isz <= 4) {
+            return I(_mm_cvtss_si32(_mm_set_ss(f)));
+        }
+        else {
+            return I(_mm_cvtss_si64(_mm_set_ss(f)));
+        }
+    }
+    else if constexpr (Fdouble) {
+        if constexpr (Isz <= 4) {
+            return I(_mm_cvtsd_si32(_mm_set_sd(f)));
+        }
+        else {
+            return I(_mm_cvtsd_si64(_mm_set_sd(f)));
+        }
+    }
+#elif BB_CPU_AARCH64
+    if constexpr (Ffloat) {
+        return I(vcvtns_s32_f32(f));
+    }
+    else if constexpr (Fdouble) {
+        return I(vcvtnd_s64_f64(f));
+    }
+#else
+    if constexpr (false) {
+    }
+#endif
+    else if constexpr (Isz > sizeof(long)) {
+        return I(std::llrint(f));
+    }
+    else {
+        return I(std::lrint(f));
+    }
+}
 
 // Input: S
 // Output: SA (require S.size() == SA.size())

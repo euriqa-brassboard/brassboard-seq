@@ -288,7 +288,7 @@ convert_pdq_spline(std::array<double,4> sp, int64_t cycles, double scale)
     // Now we'll map floating point values [-0.5, 0.5] to [-2^(nbits-1), 2^(nbits-1)]
 
     // For the 0-th order, we can just round the number
-    isp[0] = std::llrint(sp[0] * (scale * bitscale)) & mask;
+    isp[0] = round<int64_t>(sp[0] * (scale * bitscale)) & mask;
 
     int shift_len = 31;
 
@@ -327,9 +327,9 @@ convert_pdq_spline(std::array<double,4> sp, int64_t cycles, double scale)
     if (shift_len < 0) [[unlikely]]
         shift_len = 0;
 
-    isp[1] = std::llrint(std::ldexp(sp[1], _exp[0] + nbits + shift_len)) & mask;
-    isp[2] = std::llrint(std::ldexp(sp[2], _exp[1] + nbits + shift_len * 2)) & mask;
-    isp[3] = std::llrint(std::ldexp(sp[3], _exp[2] + nbits + shift_len * 3)) & mask;
+    isp[1] = round<int64_t>(std::ldexp(sp[1], _exp[0] + nbits + shift_len)) & mask;
+    isp[2] = round<int64_t>(std::ldexp(sp[2], _exp[1] + nbits + shift_len * 2)) & mask;
+    isp[3] = round<int64_t>(std::ldexp(sp[3], _exp[2] + nbits + shift_len * 3)) & mask;
     return { isp, shift_len };
 }
 
