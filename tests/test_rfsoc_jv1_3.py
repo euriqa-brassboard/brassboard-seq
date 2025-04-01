@@ -561,18 +561,18 @@ def test_pulse_inst():
 
         assert inst == MatchPulse('pulse_data', param_list, [chn], cycles=cycles,
                                   trig=trig, sync=sync, enable=enable, ff=ff,
-                                  ispl=(0, 0, 0, 0), shift=31, **fspls)
+                                  ispl=(0, 0, 0, 0), shift=0, **fspls)
         assert plut_inst == MatchPulse('plut', [], [chn], cycles=cycles,
                                        trig=trig, sync=sync, enable=enable, ff=ff,
-                                       ispl=(0, 0, 0, 0), shift=31)
+                                       ispl=(0, 0, 0, 0), shift=0)
         assert stm_inst == MatchPulse('stream', param_list, [chn], cycles=cycles,
                                        trig=trig, sync=sync, enable=enable, ff=ff,
-                                       ispl=(0, 0, 0, 0), shift=31, **fspls)
+                                       ispl=(0, 0, 0, 0), shift=0, **fspls)
         assert stm_frm_inst == MatchPulse('stream', param_list + ['frame_rot0'], [chn],
                                           cycles=cycles, trig=trig, sync=sync,
                                           enable=enable, ff=ff, eof=False,
                                           clr=ff, fwd=enable * 2 + sync, inv=0,
-                                          ispl=(0, 0, 0, 0), shift=31, **frm_fspls)
+                                          ispl=(0, 0, 0, 0), shift=0, **frm_fspls)
         assert Jaqal_v1_3.dump_insts(inst.to_bytes()) == f'invalid(reserved): {vi:0>64x}'
         assert Jaqal_v1_3.dump_insts(plut_inst.to_bytes()) == str(plut_inst)
         assert Jaqal_v1_3.dump_insts(stm_inst.to_bytes()) == str(stm_inst)
@@ -616,13 +616,13 @@ def test_pulse_inst():
 
         assert inst == MatchPulse('pulse_data', param_list, [chn], cycles=cycles,
                                   trig=trig, eof=eof, clr=clr, fwd=fwd, inv=inv,
-                                  ispl=(0, 0, 0, 0), shift=31, spl_phase=(0, 0, 0, 0))
+                                  ispl=(0, 0, 0, 0), shift=0, spl_phase=(0, 0, 0, 0))
         assert plut_inst == MatchPulse('plut', (), [chn], addr, cycles=cycles,
                                        trig=trig, eof=eof, clr=clr, fwd=fwd, inv=inv,
-                                       ispl=(0, 0, 0, 0), shift=31, spl_phase=(0, 0, 0, 0))
+                                       ispl=(0, 0, 0, 0), shift=0, spl_phase=(0, 0, 0, 0))
         assert stm_inst == MatchPulse('stream', param_list, [chn], cycles=cycles,
                                       trig=trig, eof=eof, clr=clr, fwd=fwd, inv=inv,
-                                      ispl=(0, 0, 0, 0), shift=31, spl_phase=(0, 0, 0, 0))
+                                      ispl=(0, 0, 0, 0), shift=0, spl_phase=(0, 0, 0, 0))
         assert Jaqal_v1_3.dump_insts(inst.to_bytes()) == f'invalid(reserved): {vi:0>64x}'
         assert Jaqal_v1_3.dump_insts(plut_inst.to_bytes()) == str(plut_inst)
         assert Jaqal_v1_3.dump_insts(stm_inst.to_bytes()) == str(stm_inst)
@@ -650,10 +650,10 @@ def test_freq_spline():
         return MatchPulse('pulse_data', ['freq0'], [0], trig=False, sync=False,
                           enable=False, ff=False, spl_freq=fspl, **kwargs)
     inst = freq_pulse((-409.6e6, 0, 0, 0), 1000)
-    assert inst == match(cycles=1000, shift=31, ispl=(-0x8000000000,), fspl=(-409.6e6,))
+    assert inst == match(cycles=1000, shift=0, ispl=(-0x8000000000,), fspl=(-409.6e6,))
 
     inst = freq_pulse((204.8e6, 0, 0, 0), 2100)
-    assert inst == match(cycles=2100, shift=31, ispl=(0x4000000000,), fspl=(204.8e6,))
+    assert inst == match(cycles=2100, shift=0, ispl=(0x4000000000,), fspl=(204.8e6,))
 
     inst = freq_pulse((-204.8e6, 819.2e6, 0, 0), 4)
     assert inst == match(cycles=4, shift=0, ispl=(-0x4000000000, 0x4000000000),
@@ -719,10 +719,10 @@ def test_amp_spline():
         return MatchPulse('pulse_data', ['amp0'], [0], trig=False, sync=False,
                           enable=False, ff=False, spl_amp=fspl, **kwargs)
     inst = amp_pulse((1, 0, 0, 0), 1000)
-    assert inst == match(cycles=1000, shift=31, ispl=(0x7fff800000,), fspl=(1,))
+    assert inst == match(cycles=1000, shift=0, ispl=(0x7fff800000,), fspl=(1,))
 
     inst = amp_pulse((-1, 0, 0, 0), 2100)
-    assert inst == match(cycles=2100, shift=31, ispl=(-0x7fff800000,), fspl=(-1,))
+    assert inst == match(cycles=2100, shift=0, ispl=(-0x7fff800000,), fspl=(-1,))
 
     inst = amp_pulse((-1, 2.0000305180437934, 0, 0), 4)
     assert inst == match(cycles=4, shift=0, ispl=(-0x7fff800000, 0x4000000000),
@@ -795,10 +795,10 @@ class FrameTester:
 @pytest.mark.parametrize('cls', [PhaseTester, FrameTester])
 def test_phase_spline(cls):
     inst = cls.pulse((-0.5, 0, 0, 0), 1000)
-    assert inst == cls.match(cycles=1000, shift=31, ispl=(-0x8000000000,), fspl=(-0.5,))
+    assert inst == cls.match(cycles=1000, shift=0, ispl=(-0x8000000000,), fspl=(-0.5,))
 
     inst = cls.pulse((0.25, 0, 0, 0), 2100)
-    assert inst == cls.match(cycles=2100, shift=31, ispl=(0x4000000000,), fspl=(0.25,))
+    assert inst == cls.match(cycles=2100, shift=0, ispl=(0x4000000000,), fspl=(0.25,))
 
     inst = cls.pulse((-0.25, 1, 0, 0), 4)
     assert inst == cls.match(cycles=4, fspl=(-0.25, 1), shift=0,

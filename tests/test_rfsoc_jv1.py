@@ -483,13 +483,13 @@ def test_pulse_inst():
 
         assert inst == MatchParamPulse(param, chn, tone, 'pulse_data', None, cycles,
                                        trig, sync, enable, ff, fspl=(0, 0, 0, 0),
-                                       ispl=(0, 0, 0, 0), shift=31)
+                                       ispl=(0, 0, 0, 0), shift=0)
         assert plut_inst == MatchParamPulse(param, chn, tone, 'plut', addr, cycles,
                                             trig, sync, enable, ff, fspl=(0, 0, 0, 0),
-                                            ispl=(0, 0, 0, 0), shift=31)
+                                            ispl=(0, 0, 0, 0), shift=0)
         assert stm_inst == MatchParamPulse(param, chn, tone, 'stream', None, cycles,
                                            trig, sync, enable, ff, fspl=(0, 0, 0, 0),
-                                           ispl=(0, 0, 0, 0), shift=31)
+                                           ispl=(0, 0, 0, 0), shift=0)
         assert str(inst) == f'pulse_data.{chn} {param}{tone} <{cycles}> {{0}}{flags}'
         assert repr(inst) == f'pulse_data.{chn} {param}{tone} <{cycles}> {{0}}{flags}'
         assert Jaqal_v1.dump_insts(inst.to_bytes()) == f'invalid(reserved): {vi:0>64x}'
@@ -544,13 +544,13 @@ def test_pulse_inst():
 
         assert inst == MatchFramePulse(chn, tone, 'pulse_data', None, cycles,
                                        trig, eof, clr, fwd, inv, fspl=(0, 0, 0, 0),
-                                       ispl=(0, 0, 0, 0), shift=31)
+                                       ispl=(0, 0, 0, 0), shift=0)
         assert plut_inst == MatchFramePulse(chn, tone, 'plut', addr, cycles,
                                             trig, eof, clr, fwd, inv, fspl=(0, 0, 0, 0),
-                                            ispl=(0, 0, 0, 0), shift=31)
+                                            ispl=(0, 0, 0, 0), shift=0)
         assert stm_inst == MatchFramePulse(chn, tone, 'stream', None, cycles,
                                            trig, eof, clr, fwd, inv, fspl=(0, 0, 0, 0),
-                                           ispl=(0, 0, 0, 0), shift=31)
+                                           ispl=(0, 0, 0, 0), shift=0)
         assert str(inst) == f'pulse_data.{chn} frame_rot{tone} <{cycles}> {{0}}{flags}'
         assert repr(inst) == f'pulse_data.{chn} frame_rot{tone} <{cycles}> {{0}}{flags}'
         assert Jaqal_v1.dump_insts(inst.to_bytes()) == f'invalid(reserved): {vi:0>64x}'
@@ -579,11 +579,11 @@ def test_pulse_inst():
 
 def test_freq_spline():
     inst = Jaqal_v1.freq_pulse(0, 0, (-409.6e6, 0, 0, 0), 1000, False, False, False)
-    assert inst == MatchParamPulse('freq', cycles=1000, shift=31,
+    assert inst == MatchParamPulse('freq', cycles=1000, shift=0,
                                    ispl=(-0x8000000000,), fspl=(-409.6e6,))
 
     inst = Jaqal_v1.freq_pulse(0, 0, (204.8e6, 0, 0, 0), 2100, False, False, False)
-    assert inst == MatchParamPulse('freq', cycles=2100, shift=31,
+    assert inst == MatchParamPulse('freq', cycles=2100, shift=0,
                                    ispl=(0x4000000000,), fspl=(204.8e6,))
 
     inst = Jaqal_v1.freq_pulse(0, 0, (-204.8e6, 819.2e6, 0, 0), 4, False, False, False)
@@ -649,11 +649,11 @@ def test_freq_spline():
 
 def test_amp_spline():
     inst = Jaqal_v1.amp_pulse(0, 0, (1, 0, 0, 0), 1000, False, False, False)
-    assert inst == MatchParamPulse('amp', cycles=1000, shift=31,
+    assert inst == MatchParamPulse('amp', cycles=1000, shift=0,
                                    ispl=(0x7fff800000,), fspl=(1,))
 
     inst = Jaqal_v1.amp_pulse(0, 0, (-1, 0, 0, 0), 2100, False, False, False)
-    assert inst == MatchParamPulse('amp', cycles=2100, shift=31,
+    assert inst == MatchParamPulse('amp', cycles=2100, shift=0,
                                    ispl=(-0x7fff800000,), fspl=(-1,))
 
     inst = Jaqal_v1.amp_pulse(0, 0, (-1, 2.0000305180437934, 0, 0), 4,
@@ -735,10 +735,10 @@ class FrameTester:
 @pytest.mark.parametrize('cls', [PhaseTester, FrameTester])
 def test_phase_spline(cls):
     inst = cls.pulse((-0.5, 0, 0, 0), 1000)
-    assert inst == cls.match(cycles=1000, shift=31, ispl=(-0x8000000000,), fspl=(-0.5,))
+    assert inst == cls.match(cycles=1000, shift=0, ispl=(-0x8000000000,), fspl=(-0.5,))
 
     inst = cls.pulse((0.25, 0, 0, 0), 2100)
-    assert inst == cls.match(cycles=2100, shift=31, ispl=(0x4000000000,), fspl=(0.25,))
+    assert inst == cls.match(cycles=2100, shift=0, ispl=(0x4000000000,), fspl=(0.25,))
 
     inst = cls.pulse((-0.25, 1, 0, 0), 4)
     assert inst == cls.match(cycles=4, shift=0, ispl=(-0x4000000000, 0x4000000000),

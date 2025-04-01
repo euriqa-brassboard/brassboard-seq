@@ -268,27 +268,31 @@ template<int nbits> static constexpr inline std::pair<std::array<int64_t,4>,int>
 convert_pdq_spline(std::array<double,4> sp, int64_t cycles, double scale)
 {
     static_assert(nbits < 64);
-    double tstep = 1 / double(cycles);
+    constexpr uint64_t mask = (uint64_t(1) << nbits) - 1;
+    constexpr double bitscale = double(uint64_t(1) << nbits);
+
     std::array<int64_t,4> isp;
+    // For the 0-th order, we can just round the number
+    isp[0] = (__builtin_constant_p(sp[0]) && sp[0] == 0) ? 0 :
+        round<int64_t>(sp[0] * (scale * bitscale)) & mask;
+    if (sp[1] == 0 && sp[2] == 0 && sp[3] == 0)
+        return {{isp[0], 0, 0, 0}, 0};
+
+    double tstep = 1 / double(cycles);
     double tstep2 = tstep * tstep;
     double tstep3 = tstep2 * tstep;
     sp[1] = tstep * (sp[1] + sp[2] * tstep + sp[3] * tstep2);
     sp[2] = 2 * tstep2 * (sp[2] + 3 * sp[3] * tstep);
     sp[3] = 6 * tstep3 * sp[3];
 
-    constexpr uint64_t mask = (uint64_t(1) << nbits) - 1;
-    constexpr double bitscale = double(uint64_t(1) << nbits);
     // See below, a threshold of `1 - 2^(-nbits)` should already be sufficient
     // to make sure the value doesn't round up.
     // Here we use `1 - 2 * 2^(-nbits)` just to be safe in case
     // we got the rounding mode wrong or sth...
     // FIXME: constexpr in C++23
-    double round_thresh = 1 - 2 * std::ldexp(1, -nbits);
+    constexpr double round_thresh = 1 - 2 * std::ldexp(1, -nbits);
 
     // Now we'll map floating point values [-0.5, 0.5] to [-2^(nbits-1), 2^(nbits-1)]
-
-    // For the 0-th order, we can just round the number
-    isp[0] = round<int64_t>(sp[0] * (scale * bitscale)) & mask;
 
     int shift_len = 31;
 
@@ -618,6 +622,7 @@ struct Jaqal_v1 {
     {
         assert(cycles >= 4);
         assert((cycles >> 40) == 0);
+        assume(tone == 0 || tone == 1);
         auto [isp, shift_len] = convert_pdq_spline_freq(sp.to_array(), cycles);
         auto metadata = raw_param_metadata(tone ? ModType::FRQMOD1 : ModType::FRQMOD0,
                                            channel, shift_len, waittrig,
@@ -630,6 +635,7 @@ struct Jaqal_v1 {
     {
         assert(cycles >= 4);
         assert((cycles >> 40) == 0);
+        assume(tone == 0 || tone == 1);
         auto [isp, shift_len] = convert_pdq_spline_amp(sp.to_array(), cycles);
         auto metadata = raw_param_metadata(tone ? ModType::AMPMOD1 : ModType::AMPMOD0,
                                            channel, shift_len, waittrig,
@@ -642,6 +648,7 @@ struct Jaqal_v1 {
     {
         assert(cycles >= 4);
         assert((cycles >> 40) == 0);
+        assume(tone == 0 || tone == 1);
         auto [isp, shift_len] = convert_pdq_spline_phase(sp.to_array(), cycles);
         auto metadata = raw_param_metadata(tone ? ModType::PHSMOD1 : ModType::PHSMOD0,
                                            channel, shift_len, waittrig,
@@ -672,6 +679,7 @@ struct Jaqal_v1 {
     {
         assert(cycles >= 4);
         assert((cycles >> 40) == 0);
+        assume(tone == 0 || tone == 1);
         auto [isp, shift_len] = convert_pdq_spline_phase(sp.to_array(), cycles);
         auto metadata = raw_frame_metadata(tone ? ModType::FRMROT1 : ModType::FRMROT0,
                                            channel, shift_len, waittrig, apply_at_end,
@@ -3130,6 +3138,7 @@ static inline void chn_add_tone_data(auto &channel_gen, int channel, int tone,
                                      cubic_spline_t phase, output_flags_t flags,
                                      int64_t cur_cycle)
 {
+    assume(tone == 0 || tone == 1);
     channel_gen.add_pulse(Jaqal_v1::freq_pulse(channel, tone, freq, duration_cycles,
                                                flags.wait_trigger, flags.sync,
                                                flags.feedback_enable), cur_cycle);
@@ -3523,6 +3532,7 @@ void Jaqalv1_3Generator::process_freq(std::span<DDSParamAction> freq_actions,
                                       ChnInfo chn, int64_t total_cycle)
 {
     IsFirst trig;
+    assume(chn.tone == 0 || chn.tone == 1);
     Jaqal_v1_3::ModType modtype =
         chn.tone == 0 ? Jaqal_v1_3::FRQMOD0 : Jaqal_v1_3::FRQMOD1;
 

@@ -1111,11 +1111,13 @@ private:
 };
 
 template<std::signed_integral I, std::floating_point F>
-static inline I round(F f)
+static constexpr inline I round(F f)
 {
-    static constexpr auto Isz = sizeof(I);
-    static constexpr auto Ffloat = std::is_same_v<std::remove_cvref_t<F>,float>;
-    static constexpr auto Fdouble = std::is_same_v<std::remove_cvref_t<F>,double>;
+    if (__builtin_constant_p(f))
+        return I(f < 0 ? I(f - F(0.5)) : I(f + F(0.5)));
+    constexpr auto Isz = sizeof(I);
+    constexpr auto Ffloat = std::is_same_v<std::remove_cvref_t<F>,float>;
+    constexpr auto Fdouble = std::is_same_v<std::remove_cvref_t<F>,double>;
 #if BB_CPU_X86 || BB_CPU_X86_64
     if constexpr (Ffloat) {
         if constexpr (Isz <= 4) {
