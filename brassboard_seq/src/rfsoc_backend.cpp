@@ -3106,6 +3106,9 @@ struct JaqalPulseCompilerGen: SyncChannelGen {
                        output_flags_t flags, int64_t cur_cycle) override;
     void end() override
     {
+#pragma omp parallel
+#pragma omp single
+#pragma omp taskloop
         for (auto &board: boards) {
             board.end();
         }
@@ -3279,6 +3282,7 @@ PyObject *JaqalPulseCompilerGen::BoardGen::get_sequence() const
 
 void JaqalPulseCompilerGen::BoardGen::end()
 {
+#pragma omp taskloop
     for (auto &channel_gen: channels) {
         channel_gen.end();
     }
@@ -3872,6 +3876,9 @@ private:
     }
     void end() override
     {
+#pragma omp parallel
+#pragma omp single
+#pragma omp taskloop
         for (auto &insts: board_insts) {
             std::ranges::stable_sort(insts, [] (auto &a, auto &b) {
                 return a.time < b.time;
