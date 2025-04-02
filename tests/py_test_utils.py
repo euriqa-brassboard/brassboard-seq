@@ -10,6 +10,14 @@ import numpy as np
 
 with_seq_params = pytest.mark.parametrize("max_bt", [0, 5, 500])
 
+def check_bt(exc, max_bt, *names):
+    fnames = [tb.name for tb in exc.traceback]
+    for name in names:
+        if max_bt == 0:
+            assert name not in fnames
+        else:
+            assert name in fnames
+
 class StaticFunction(RampFunction):
     def eval(self, t, length, oldval):
         return t / 2 + oldval - length
