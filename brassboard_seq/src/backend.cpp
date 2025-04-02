@@ -85,7 +85,7 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
         std::ranges::sort(actions, [] (auto *a1, auto *a2) {
             return a1->tid < a2->tid;
         });
-        py_object value(pylong_from_long(0));
+        py_object value(py_immref(Py_False));
         EventTime *last_time = nullptr;
         bool last_is_start = false;
         int tid = -1;
