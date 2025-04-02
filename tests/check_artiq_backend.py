@@ -1961,9 +1961,14 @@ def test_device_delay(max_bt, use_rt):
 class DummySystem:
     pass
 
+class DummyDaxModule(dummy_artiq.DummyDaxSystem):
+    @rtval.CompositeRTProp
+    def cprop(self):
+        return [self.rt_dataset('ACB'), self.rt_dataset('BAC')]
+
 def test_rt_value():
     sys = dummy_artiq.DummyDaxSystem()
-    submod = dummy_artiq.DummyDaxSystem()
+    submod = DummyDaxModule()
     sys.register_child(submod)
 
     x = 1.2
@@ -1994,7 +1999,17 @@ def test_rt_value():
     assert ('XXX', True) in submod._bb_rt_values
     submod.set_dataset_sys('XXX', 4)
     rd3 = submod.rt_dataset_sys('YYY', 1.2)
+    assert len(submod._bb_rt_values) == 2
+    assert ('YYY', True) in submod._bb_rt_values
     assert str(rd3) == f'<dataset_sys YYY for {submod}>'
+    cprop = submod.cprop
+    assert len(submod._bb_rt_values) == 4
+    assert ('ACB', False) in submod._bb_rt_values
+    assert ('BAC', False) in submod._bb_rt_values
+    submod.set_dataset('ACB', 6)
+    submod.set_dataset('BAC', 9)
+    assert getattr(submod, '__CompositeRTProp__cprop')[0] is cprop
+    assert getattr(submod, '__CompositeRTProp__cprop')[1] == False
 
     with pytest.raises(RuntimeError, match="Value evaluated too early"):
         rtval.get_value(rx, 1)
@@ -2004,6 +2019,10 @@ def test_rt_value():
         rtval.get_value(rd2, 1)
     with pytest.raises(RuntimeError, match="Value evaluated too early"):
         rtval.get_value(rd3, 1)
+    with pytest.raises(RuntimeError, match="Value evaluated too early"):
+        rtval.get_value(cprop[0], 1)
+    with pytest.raises(RuntimeError, match="Value evaluated too early"):
+        rtval.get_value(cprop[1], 1)
 
     sys._eval_all_rtvals()
     sys._eval_all_rtvals()
@@ -2020,6 +2039,12 @@ def test_rt_value():
     submod.set_dataset_sys('YYY', 2.3)
     assert rtval.get_value(rd3, 2) == 1.2
     assert submod.rt_dataset_sys('YYY') == 2.3
+
+    assert rtval.get_value(cprop[0], 1) == 6
+    assert rtval.get_value(cprop[1], 1) == 9
+    assert submod.cprop == [6, 9]
+    assert getattr(submod, '__CompositeRTProp__cprop')[0] == [6, 9]
+    assert getattr(submod, '__CompositeRTProp__cprop')[1] == True
 
     sys = dummy_artiq.DummyDaxSystem()
     submod = dummy_artiq.DummyDaxSystem()

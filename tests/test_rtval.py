@@ -379,6 +379,32 @@ class C:
     p1 = rtval.RTProp()
     p2 = rtval.RTProp()
 
+    cp_invalid = rtval.CompositeRTProp("not callable")
+
+    cp_scalar_count = 0
+    @rtval.CompositeRTProp
+    def cp_scalar(self):
+        C.cp_scalar_count += 1
+        return 10
+
+    cp_list_count = 0
+    @rtval.CompositeRTProp
+    def cp_list(self):
+        C.cp_list_count += 1
+        return [0, 1, 2, 3]
+
+    cp_dict_count = 0
+    @rtval.CompositeRTProp
+    def cp_dict(self):
+        C.cp_dict_count += 1
+        return {'a': 1, 'b': 2, 3: 10}
+
+    cp_nest_count = 0
+    @rtval.CompositeRTProp
+    def cp_nest(self):
+        C.cp_nest_count += 1
+        return {'a': 1, 'b': 2, 3: 10, -4: [1, 2, 3, {'b': [2, 3]}]}
+
 
 def test_rtprop():
     assert isinstance(C.p1, rtval.RTProp)
@@ -455,6 +481,299 @@ def test_rtprop():
     c1.p2 = v4
     assert c1.p1 == 2.3
     assert c1.p2 is v4
+
+def test_composite_rtprop():
+    C.cp_scalar_count = 0
+    C.cp_list_count = 0
+    C.cp_dict_count = 0
+    C.cp_nest_count = 0
+    assert isinstance(C.cp_invalid, rtval.CompositeRTProp)
+    assert isinstance(C.cp_scalar, rtval.CompositeRTProp)
+    assert isinstance(C.cp_list, rtval.CompositeRTProp)
+    assert isinstance(C.cp_dict, rtval.CompositeRTProp)
+    assert isinstance(C.cp_nest, rtval.CompositeRTProp)
+    assert C.cp_scalar_count == 0
+    assert C.cp_list_count == 0
+    assert C.cp_dict_count == 0
+    assert C.cp_nest_count == 0
+
+    c1 = C()
+    c2 = C()
+
+    cprop2 = rtval.CompositeRTProp(lambda obj: 1)
+    with pytest.raises(ValueError, match="Cannot determine runtime property name"):
+        cprop2.__get__(c1, C)
+
+    with pytest.raises(TypeError):
+        c1.cp_invalid
+    assert c1.cp_scalar == 10
+    assert C.cp_scalar_count == 1
+    assert c1.cp_scalar == 10
+    assert C.cp_scalar_count == 1
+    assert c2.cp_scalar == 10
+    assert C.cp_scalar_count == 2
+    assert c2.cp_scalar == 10
+    assert C.cp_scalar_count == 2
+
+    assert getattr(c1, '__CompositeRTProp__cp_scalar') == (10, False)
+    setattr(c1, '__CompositeRTProp__cp_scalar', 10)
+    assert c1.cp_scalar == 10
+    assert C.cp_scalar_count == 3
+    setattr(c1, '__CompositeRTProp__cp_scalar', (1, 2, 3))
+    assert c1.cp_scalar == 10
+    assert C.cp_scalar_count == 4
+    setattr(c1, '__CompositeRTProp__cp_scalar', (3, False))
+    assert c1.cp_scalar == 3
+    assert C.cp_scalar_count == 4
+
+    assert C.cp_scalar.get_state(c1) is None
+
+    C.cp_scalar.set_state(c1, [3, 4])
+    assert C.cp_scalar.get_state(c1) == [3, 4]
+    assert c1.cp_scalar == [3, 4]
+    assert c2.cp_scalar == 10
+    assert C.cp_scalar_count == 4
+
+    C.cp_scalar.set_state(c1, {1: 1000})
+    assert C.cp_scalar.get_state(c1) == {1: 1000}
+    with pytest.raises(TypeError, match=f"Unknown value type '{int}'"):
+        c1.cp_scalar
+    assert c2.cp_scalar == 10
+    assert C.cp_scalar_count == 4
+
+    C.cp_scalar.set_state(c1, {})
+    assert C.cp_scalar.get_state(c1) == {}
+    assert c1.cp_scalar == 3
+    assert c2.cp_scalar == 10
+    assert C.cp_scalar_count == 4
+
+    C.cp_scalar.set_state(c1, None)
+    assert C.cp_scalar.get_state(c1) is None
+    assert c1.cp_scalar == 3
+    assert c2.cp_scalar == 10
+    assert C.cp_scalar_count == 4
+
+    c1_cp_list1 = c1.cp_list
+    assert c1_cp_list1 == [0, 1, 2, 3]
+    assert C.cp_list_count == 1
+    assert c1.cp_list is c1_cp_list1
+    assert C.cp_list_count == 1
+    c2_cp_list1 = c2.cp_list
+    assert c2_cp_list1 == [0, 1, 2, 3]
+    assert C.cp_list_count == 2
+    assert c2.cp_list is c2_cp_list1
+    assert C.cp_list_count == 2
+
+    assert C.cp_list.get_state(c1) is None
+
+    C.cp_list.set_state(c1, [3, 4])
+    assert C.cp_list.get_state(c1) == [3, 4]
+    assert c1.cp_list == [3, 4]
+    assert c2.cp_list == [0, 1, 2, 3]
+    assert C.cp_list_count == 2
+
+    C.cp_list.set_state(c1, {1: 1000})
+    assert C.cp_list.get_state(c1) == {1: 1000}
+    assert c1.cp_list == [0, 1000, 2, 3]
+    assert c2.cp_list == [0, 1, 2, 3]
+    assert C.cp_list_count == 2
+
+    C.cp_list.set_state(c1, {'2': 1000})
+    assert C.cp_list.get_state(c1) == {'2': 1000}
+    assert c1.cp_list == [0, 1, 1000, 3]
+    assert c2.cp_list == [0, 1, 2, 3]
+    assert C.cp_list_count == 2
+
+    C.cp_list.set_state(c1, {'a': 1000})
+    assert C.cp_list.get_state(c1) == {'a': 1000}
+    with pytest.raises(ValueError):
+        c1.cp_list
+    C.cp_list.set_state(c1, {'-1': 1000})
+    with pytest.raises(IndexError):
+        c1.cp_list
+    C.cp_list.set_state(c1, {-1: 1000})
+    with pytest.raises(IndexError):
+        c1.cp_list
+    C.cp_list.set_state(c1, {'10': 1000})
+    with pytest.raises(IndexError):
+        c1.cp_list
+    C.cp_list.set_state(c1, {10: 1000})
+    with pytest.raises(IndexError):
+        c1.cp_list
+    C.cp_list.set_state(c1, {})
+    assert C.cp_list.get_state(c1) == {}
+    assert c1.cp_list == [0, 1, 2, 3]
+    assert c2.cp_list == [0, 1, 2, 3]
+    assert C.cp_list_count == 2
+
+    C.cp_list.set_state(c1, None)
+    assert C.cp_list.get_state(c1) is None
+    assert c1.cp_list == [0, 1, 2, 3]
+    assert c2.cp_list == [0, 1, 2, 3]
+    assert C.cp_list_count == 2
+
+    c1_cp_dict1 = c1.cp_dict
+    assert c1_cp_dict1 == {'a': 1, 'b': 2, 3: 10}
+    assert C.cp_dict_count == 1
+    assert c1.cp_dict is c1_cp_dict1
+    assert C.cp_dict_count == 1
+    c2_cp_dict1 = c2.cp_dict
+    assert c2_cp_dict1 == {'a': 1, 'b': 2, 3: 10}
+    assert C.cp_dict_count == 2
+    assert c2.cp_dict is c2_cp_dict1
+    assert C.cp_dict_count == 2
+
+    assert C.cp_dict.get_state(c1) is None
+
+    C.cp_dict.set_state(c1, [3, 4])
+    assert C.cp_dict.get_state(c1) == [3, 4]
+    assert c1.cp_dict == [3, 4]
+    assert c2.cp_dict == {'a': 1, 'b': 2, 3: 10}
+    assert C.cp_dict_count == 2
+
+    C.cp_dict.set_state(c1, {1: 1000})
+    assert C.cp_dict.get_state(c1) == {1: 1000}
+    assert c1.cp_dict == {'a': 1, 'b': 2, 1: 1000, 3: 10}
+    assert c2.cp_dict == {'a': 1, 'b': 2, 3: 10}
+    assert C.cp_dict_count == 2
+
+    C.cp_dict.set_state(c1, {'3': 1000})
+    assert C.cp_dict.get_state(c1) == {'3': 1000}
+    assert c1.cp_dict == {'a': 1, 'b': 2, 3: 1000}
+    assert c2.cp_dict == {'a': 1, 'b': 2, 3: 10}
+    assert C.cp_dict_count == 2
+
+    C.cp_dict.set_state(c1, {'a': 1000})
+    assert C.cp_dict.get_state(c1) == {'a': 1000}
+    assert c1.cp_dict == {'a': 1000, 'b': 2, 3: 10}
+    assert c2.cp_dict == {'a': 1, 'b': 2, 3: 10}
+    assert C.cp_dict_count == 2
+
+    C.cp_dict.set_state(c1, {'k': 2000})
+    assert C.cp_dict.get_state(c1) == {'k': 2000}
+    assert c1.cp_dict == {'a': 1, 'b': 2, 3: 10, 'k': 2000}
+    assert c2.cp_dict == {'a': 1, 'b': 2, 3: 10}
+    assert C.cp_dict_count == 2
+
+    C.cp_dict.set_state(c1, {})
+    assert C.cp_dict.get_state(c1) == {}
+    assert c1.cp_dict == {'a': 1, 'b': 2, 3: 10}
+    assert c2.cp_dict == {'a': 1, 'b': 2, 3: 10}
+    assert C.cp_dict_count == 2
+
+    C.cp_dict.set_state(c1, None)
+    assert C.cp_dict.get_state(c1) is None
+    assert c1.cp_dict == {'a': 1, 'b': 2, 3: 10}
+    assert c2.cp_dict == {'a': 1, 'b': 2, 3: 10}
+    assert C.cp_dict_count == 2
+
+    c1_cp_nest1 = c1.cp_nest
+    assert c1_cp_nest1 == {'a': 1, 'b': 2, 3: 10, -4: [1, 2, 3, {'b': [2, 3]}]}
+    assert C.cp_nest_count == 1
+    assert c1.cp_nest is c1_cp_nest1
+    assert C.cp_nest_count == 1
+    c2_cp_nest1 = c2.cp_nest
+    assert c2_cp_nest1 == {'a': 1, 'b': 2, 3: 10, -4: [1, 2, 3, {'b': [2, 3]}]}
+    assert C.cp_nest_count == 2
+    assert c2.cp_nest is c2_cp_nest1
+    assert C.cp_nest_count == 2
+
+    assert C.cp_nest.get_state(c1) is None
+
+    C.cp_nest.set_state(c1, [3, 4])
+    assert C.cp_nest.get_state(c1) == [3, 4]
+    assert c1.cp_nest == [3, 4]
+    assert c2.cp_nest == {'a': 1, 'b': 2, 3: 10, -4: [1, 2, 3, {'b': [2, 3]}]}
+    assert C.cp_nest_count == 2
+
+    C.cp_nest.set_state(c1, {1: 1000})
+    assert C.cp_nest.get_state(c1) == {1: 1000}
+    assert c1.cp_nest == {'a': 1, 'b': 2, 1: 1000, 3: 10, -4: [1, 2, 3, {'b': [2, 3]}]}
+    assert c2.cp_nest == {'a': 1, 'b': 2, 3: 10, -4: [1, 2, 3, {'b': [2, 3]}]}
+    assert C.cp_nest_count == 2
+
+    C.cp_nest.set_state(c1, {'3': 1000})
+    assert C.cp_nest.get_state(c1) == {'3': 1000}
+    assert c1.cp_nest == {'a': 1, 'b': 2, 3: 1000, -4: [1, 2, 3, {'b': [2, 3]}]}
+    assert c2.cp_nest == {'a': 1, 'b': 2, 3: 10, -4: [1, 2, 3, {'b': [2, 3]}]}
+    assert C.cp_nest_count == 2
+
+    C.cp_nest.set_state(c1, {'a': 1000})
+    assert C.cp_nest.get_state(c1) == {'a': 1000}
+    assert c1.cp_nest == {'a': 1000, 'b': 2, 3: 10, -4: [1, 2, 3, {'b': [2, 3]}]}
+    assert c2.cp_nest == {'a': 1, 'b': 2, 3: 10, -4: [1, 2, 3, {'b': [2, 3]}]}
+    assert C.cp_nest_count == 2
+
+    C.cp_nest.set_state(c1, {'-4': 1000})
+    assert C.cp_nest.get_state(c1) == {'-4': 1000}
+    assert c1.cp_nest == {'a': 1, 'b': 2, 3: 10, -4: 1000}
+    assert c2.cp_nest == {'a': 1, 'b': 2, 3: 10, -4: [1, 2, 3, {'b': [2, 3]}]}
+    assert C.cp_nest_count == 2
+
+    C.cp_nest.set_state(c1, {'-4': {'2': 'aaa'}})
+    assert C.cp_nest.get_state(c1) == {'-4': {'2': 'aaa'}}
+    assert c1.cp_nest == {'a': 1, 'b': 2, 3: 10, -4: [1, 2, 'aaa', {'b': [2, 3]}]}
+    assert c2.cp_nest == {'a': 1, 'b': 2, 3: 10, -4: [1, 2, 3, {'b': [2, 3]}]}
+    assert C.cp_nest_count == 2
+
+    C.cp_nest.set_state(c1, {'-4': {'3': {'b': {'0': [0]}}}})
+    assert C.cp_nest.get_state(c1) == {'-4': {'3': {'b': {'0': [0]}}}}
+    assert c1.cp_nest == {'a': 1, 'b': 2, 3: 10, -4: [1, 2, 3, {'b': [[0], 3]}]}
+    assert c2.cp_nest == {'a': 1, 'b': 2, 3: 10, -4: [1, 2, 3, {'b': [2, 3]}]}
+    assert C.cp_nest_count == 2
+
+    C.cp_nest.set_state(c1, {})
+    assert C.cp_nest.get_state(c1) == {}
+    assert c1.cp_nest == {'a': 1, 'b': 2, 3: 10, -4: [1, 2, 3, {'b': [2, 3]}]}
+    assert c2.cp_nest == {'a': 1, 'b': 2, 3: 10, -4: [1, 2, 3, {'b': [2, 3]}]}
+    assert C.cp_nest_count == 2
+
+    C.cp_nest.set_state(c1, None)
+    assert C.cp_nest.get_state(c1) is None
+    assert c1.cp_nest == {'a': 1, 'b': 2, 3: 10, -4: [1, 2, 3, {'b': [2, 3]}]}
+    assert c2.cp_nest == {'a': 1, 'b': 2, 3: 10, -4: [1, 2, 3, {'b': [2, 3]}]}
+    assert C.cp_nest_count == 2
+
+    c1._bb_rt_values = {}
+    assert c1.cp_scalar == 3
+    assert c2.cp_scalar == 10
+    assert C.cp_scalar_count == 4
+
+    assert c1.cp_list is c1_cp_list1
+    assert c2.cp_list is c2_cp_list1
+    assert C.cp_list_count == 2
+
+    assert c1.cp_dict is c1_cp_dict1
+    assert c2.cp_dict is c2_cp_dict1
+    assert C.cp_dict_count == 2
+
+    assert c1.cp_nest is c1_cp_nest1
+    assert c2.cp_nest is c2_cp_nest1
+    assert C.cp_nest_count == 2
+
+    c1._bb_rt_values = None
+    assert c1.cp_scalar == 10
+    assert C.cp_scalar_count == 5
+    assert c2.cp_scalar == 10
+    assert C.cp_scalar_count == 5
+
+    assert c1.cp_list is not c1_cp_list1
+    assert c1.cp_list == c1_cp_list1
+    assert C.cp_list_count == 3
+    assert c2.cp_list is c2_cp_list1
+    assert C.cp_list_count == 3
+
+    assert c1.cp_dict is not c1_cp_dict1
+    assert c1.cp_dict == c1_cp_dict1
+    assert C.cp_dict_count == 3
+    assert c2.cp_dict is c2_cp_dict1
+    assert C.cp_dict_count == 3
+
+    assert c1.cp_nest is not c1_cp_nest1
+    assert c1.cp_nest == c1_cp_nest1
+    assert C.cp_nest_count == 3
+    assert c2.cp_nest is c2_cp_nest1
+    assert C.cp_nest_count == 3
 
 def test_invalid():
     r = test_utils.new_invalid_rtval()

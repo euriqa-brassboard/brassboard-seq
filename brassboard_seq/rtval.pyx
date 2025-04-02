@@ -36,6 +36,8 @@ cdef extern from "src/rtval.cpp" namespace "brassboard_seq::rtval":
     PyTypeObject *RTVal_Type
     object new_expr2_wrap1(ValueType, object, object) except +
     object build_addsub(object v0, object v1, bint) except +
+    object apply_composite_ovr(object val, object ovr) except +
+    object composite_rtprop_get_res(CompositeRTProp self, object obj) except +
 
 RTVal_Type = <PyTypeObject*>RuntimeValue
 
@@ -624,3 +626,39 @@ cdef class RTProp:
         value = new_extern_age(new_rtprop_callback(obj, fieldname))
         setattr(obj, fieldname, value)
         return value
+
+@cython.final
+cdef class CompositeRTProp:
+    cdef str fieldname
+    cdef str ovr_fieldname
+    cdef object cb
+    cdef object val
+
+    def __init__(self, cb):
+        self.cb = cb
+
+    def get_state(self, obj):
+        try:
+            return getattr(obj, self.ovr_fieldname)
+        except AttributeError:
+            return
+
+    def set_state(self, obj, val):
+        if val is None:
+            delattr(obj, self.ovr_fieldname)
+        else:
+            setattr(obj, self.ovr_fieldname, val)
+
+    def __set_name__(self, owner, name):
+        self.ovr_fieldname = '__CompositeRTProp_ovr__' + name
+        self.fieldname = '__CompositeRTProp__' + name
+
+    def __get__(self, obj, objtype):
+        if obj is None:
+            return self
+        val = composite_rtprop_get_res(self, obj)
+        try:
+            ovr = getattr(obj, self.ovr_fieldname)
+        except AttributeError:
+            return val
+        return apply_composite_ovr(val, ovr)

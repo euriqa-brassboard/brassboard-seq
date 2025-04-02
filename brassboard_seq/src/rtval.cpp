@@ -130,4 +130,97 @@ build_addsub(PyObject *v0, PyObject *v1, bool issub)
     return _new_addsub(nc, (_RuntimeValue*)nv.get(), ns);
 }
 
+static inline __attribute__((returns_nonnull)) PyObject*
+apply_composite_ovr(PyObject *val, PyObject *ovr);
+
+static inline bool
+apply_dict_ovr(PyObject *dict, PyObject *k, PyObject *v)
+{
+    auto field = PyDict_GetItemWithError(dict, k);
+    if (field) {
+        py_object newfield(apply_composite_ovr(field, v));
+        throw_if(PyDict_SetItem(dict, k, newfield));
+        return true;
+    }
+    throw_if(PyErr_Occurred());
+    return false;
+}
+
+static inline __attribute__((returns_nonnull)) PyObject*
+apply_composite_ovr(PyObject *val, PyObject *ovr)
+{
+    if (!PyDict_Check(ovr))
+        return py_newref(ovr);
+    if (!PyDict_Size(ovr))
+        return py_newref(val);
+    if (PyDict_Check(val)) {
+        py_object newval(throw_if_not(PyDict_Copy(val)));
+        for (auto [k, v]: pydict_iter(ovr)) {
+            if (apply_dict_ovr(newval, k, v))
+                continue;
+            // for scangroup support since only string key is supported
+            if (py_object ik(PyNumber_Long(k)); !ik) {
+                PyErr_Clear();
+            }
+            else if (apply_dict_ovr(newval, ik, v)) {
+                continue;
+            }
+            throw_if(PyDict_SetItem(newval, k, v));
+        }
+        return newval.release();
+    }
+    if (PyList_Check(val)) {
+        py_object newval(throw_if_not(PySequence_List(val)));
+        for (auto [k, v]: pydict_iter(ovr)) {
+            // for scangroup support since only string key is supported
+            py_object ik(throw_if_not(PyNumber_Long(k)));
+            auto idx = PyLong_AsLong(ik.get());
+            if (idx < 0) {
+                throw_if(PyErr_Occurred());
+                py_throw_format(PyExc_IndexError, "list index out of range");
+            }
+            if (idx >= PyList_GET_SIZE(newval.get()))
+                py_throw_format(PyExc_IndexError, "list index out of range");
+            auto olditem = PyList_GET_ITEM(newval.get(), idx);
+            PyList_SET_ITEM(newval.get(), idx, apply_composite_ovr(olditem, v));
+            Py_DECREF(olditem);
+        }
+        return newval.release();
+    }
+    py_throw_format(PyExc_TypeError, "Unknown value type '%S'", Py_TYPE(val));
+}
+
+static PyObject *_bb_rt_values_str = pyunicode_from_string("_bb_rt_values");
+
+static inline bool _object_compiled(PyObject *obj)
+{
+    py_object field(PyObject_GetAttr(obj, _bb_rt_values_str));
+    if (!field)
+        PyErr_Clear();
+    return field.get() == Py_None;
+}
+
+static inline __attribute__((returns_nonnull)) PyObject*
+composite_rtprop_get_res(auto self, PyObject *obj)
+{
+    auto fieldname = self->fieldname;
+    if (fieldname == Py_None)
+        py_throw_format(PyExc_ValueError, "Cannot determine runtime property name");
+    if (py_object val(PyObject_GetAttr(obj, fieldname)); !val) {
+        PyErr_Clear();
+    }
+    else if (PyTuple_CheckExact(val.get()) && PyTuple_GET_SIZE(val.get()) == 2 &&
+             (PyTuple_GET_ITEM(val.get(), 1) == Py_True || !_object_compiled(obj))) {
+        return py_newref(PyTuple_GET_ITEM(val.get(), 0));
+    }
+    PyErr_Clear();
+    py_object res(throw_if_not(_PyObject_Vectorcall(self->cb, &obj, 1, nullptr)));
+    py_object cache(pytuple_new(2));
+    PyTuple_SET_ITEM(cache.get(), 0, py_newref(res.get()));
+    PyTuple_SET_ITEM(cache.get(), 1,
+                     py_immref(_object_compiled(obj) ? Py_True : Py_False));
+    throw_if(PyObject_SetAttr(obj, fieldname, cache.get()));
+    return res.release();
+}
+
 }
