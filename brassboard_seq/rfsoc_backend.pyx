@@ -28,7 +28,7 @@ from brassboard_seq.utils cimport set_global_tracker, \
 
 cimport cython
 from cython.operator cimport dereference as deref
-from cpython cimport PyDict_GetItemWithError, PyTypeObject, \
+from cpython cimport PyDict_GetItemWithError, \
   PyBytes_GET_SIZE, PyBytes_AS_STRING, PyList_New, PyList_SET_ITEM, Py_INCREF, \
   PyLong_AsLong
 
@@ -38,8 +38,8 @@ cdef re # hide import
 import re
 
 cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backend":
-    PyTypeObject *rampfunctionbase_type
-    PyTypeObject *seqcubicspline_type
+    PyObject *rampfunctionbase_type
+    PyObject *seqcubicspline_type
     void collect_actions(RFSOCBackend ab, CompiledSeq&, EventTime) except+
     void gen_rfsoc_data(RFSOCBackend ab, CompiledSeq&, _RampFunctionBase, SeqCubicSpline) except +
 
@@ -194,8 +194,8 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
         @staticmethod
         dict inst_to_dict(const JaqalInst &inst) except +
 
-rampfunctionbase_type = <PyTypeObject*>_RampFunctionBase
-seqcubicspline_type = <PyTypeObject*>SeqCubicSpline
+rampfunctionbase_type = <PyObject*>_RampFunctionBase
+seqcubicspline_type = <PyObject*>SeqCubicSpline
 
 cdef class RFSOCGenerator:
     pass

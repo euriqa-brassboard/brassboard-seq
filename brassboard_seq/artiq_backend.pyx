@@ -25,8 +25,7 @@ from brassboard_seq.seq cimport Seq
 from brassboard_seq.utils cimport set_global_tracker, PyErr_Format, \
   PyExc_RuntimeError, PyExc_TypeError, PyExc_ValueError, pyobject_call, py_object
 
-from cpython cimport PyMethod_Check, PyMethod_GET_FUNCTION, PyMethod_GET_SELF, \
-  PyTypeObject
+from cpython cimport PyMethod_Check, PyMethod_GET_FUNCTION, PyMethod_GET_SELF
 
 cimport cython
 cimport numpy as cnpy
@@ -69,7 +68,7 @@ cdef extern from "src/artiq_backend.cpp" namespace "brassboard_seq::artiq_backen
         int SPI_DATA_ADDR
 
     ArtiqConsts artiq_consts
-    PyTypeObject *rampfunctionbase_type
+    PyObject *rampfunctionbase_type
 
     void collect_actions(ArtiqBackend ab, CompiledSeq&, EventTime) except +
 
@@ -84,7 +83,7 @@ artiq_consts.URUKUL_SPIT_DDS_WR = <int?>urukul.SPIT_DDS_WR
 artiq_consts.URUKUL_DEFAULT_PROFILE = urukul.DEFAULT_PROFILE if hasattr(urukul, 'DEFAULT_PROFILE') else 0
 artiq_consts.SPI_DATA_ADDR = <int?>spi2.SPI_DATA_ADDR
 artiq_consts.SPI_CONFIG_ADDR = <int?>spi2.SPI_CONFIG_ADDR
-rampfunctionbase_type = <PyTypeObject*>_RampFunctionBase
+rampfunctionbase_type = <PyObject*>_RampFunctionBase
 
 cdef PyObject *raise_invalid_channel(tuple path) except NULL:
     name = '/'.join(path)

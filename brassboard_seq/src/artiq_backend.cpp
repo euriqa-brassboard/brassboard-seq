@@ -43,7 +43,7 @@ struct ArtiqConsts {
 
 static ArtiqConsts artiq_consts;
 
-static PyTypeObject *rampfunctionbase_type;
+static PyObject *rampfunctionbase_type;
 
 inline int ChannelsInfo::add_bus_channel(int bus_channel, uint32_t io_update_target,
                                          uint8_t ref_period_mu)

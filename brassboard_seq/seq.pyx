@@ -23,20 +23,20 @@ from brassboard_seq.event_time cimport round_time_int, round_time_rt, \
   set_base_int, set_base_rt, rt_time_scale, new_time_manager
 from brassboard_seq.rtval cimport is_rtval, RuntimeValue
 from brassboard_seq.scan cimport new_param_pack
-from brassboard_seq.utils cimport assume_not_none, _assume_not_none, \
+from brassboard_seq.utils cimport assume_not_none, \
   assert_key, event_time_key, PyErr_Format, PyExc_TypeError
 
 cdef StringIO # hide import
 from io import StringIO
 
 cimport cython
-from cpython cimport PyObject, PyDict_GetItemWithError, PyList_GET_SIZE, PyTypeObject
+from cpython cimport PyObject, PyDict_GetItemWithError, PyList_GET_SIZE
 
 cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
-    PyTypeObject *event_time_type
-    PyTypeObject *timestep_type
-    PyTypeObject *subseq_type
-    PyTypeObject *condwrapper_type
+    PyObject *event_time_type
+    PyObject *timestep_type
+    PyObject *subseq_type
+    PyObject *condwrapper_type
     PyObject *_rt_time_scale "brassboard_seq::seq::rt_time_scale"
     void update_timestep(TimeStep) except +
     void update_subseq(SubSeq, ConditionalWrapper, TimeSeq, TimeStep) except +
@@ -45,10 +45,10 @@ cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
     SubSeq add_custom_step(SubSeq, object cond, EventTime, object) except +
 
 
-event_time_type = <PyTypeObject*>EventTime
-timestep_type = <PyTypeObject*>TimeStep
-subseq_type = <PyTypeObject*>SubSeq
-condwrapper_type = <PyTypeObject*>ConditionalWrapper
+event_time_type = <PyObject*>EventTime
+timestep_type = <PyObject*>TimeStep
+subseq_type = <PyObject*>SubSeq
+condwrapper_type = <PyObject*>ConditionalWrapper
 _rt_time_scale = <PyObject*>rt_time_scale
 
 update_timestep(None)

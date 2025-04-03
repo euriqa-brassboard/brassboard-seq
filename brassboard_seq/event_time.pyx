@@ -28,7 +28,7 @@ from libcpp.unordered_set cimport unordered_set
 
 cimport cython
 from cython.operator cimport dereference as deref, predecrement as predec
-from cpython cimport PyList_GET_SIZE, PyTypeObject
+from cpython cimport PyList_GET_SIZE
 
 cdef object py_time_scale = c_time_scale
 cdef RuntimeValue rt_time_scale = new_const(py_time_scale, <RuntimeValue>None)
@@ -39,9 +39,9 @@ def time_scale():
 cdef extern from "src/event_time.cpp" namespace "brassboard_seq::event_time":
     bint get_cond_val(PyObject*, unsigned age, py_object &pyage) except +
     str str_time(long long) except +
-    void update_event_time_gc_callback(PyTypeObject *type, EventTime)
+    void update_event_time_gc_callback(object type, EventTime)
 
-update_event_time_gc_callback(<PyTypeObject*>EventTime, None)
+update_event_time_gc_callback(EventTime, None)
 
 cdef int visit_time(TimeManager self, EventTime t, unordered_set[int] &visited) except -1:
     cdef int id = t.data.id

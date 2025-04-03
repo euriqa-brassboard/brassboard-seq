@@ -16,7 +16,7 @@
 # License along with this library. If not,
 # see <http://www.gnu.org/licenses/>.
 
-from cpython cimport PyObject, PyTypeObject
+from cpython cimport PyObject
 
 from libc.stdint cimport *
 
@@ -94,4 +94,3 @@ cdef extern from *:
     PyObject *Py_NotImplemented
     Py_ssize_t PyDict_GET_SIZE(object)
     object _PyObject_Vectorcall(PyObject*, PyObject**, size_t, PyObject*)
-    object PyType_GenericAlloc(PyTypeObject*, Py_ssize_t nitems)

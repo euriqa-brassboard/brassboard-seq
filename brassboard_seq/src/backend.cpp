@@ -26,8 +26,8 @@
 
 namespace brassboard_seq::backend {
 
-static PyTypeObject *timestep_type;
-static PyTypeObject *rampfunctionbase_type;
+static PyObject *timestep_type;
+static PyObject *rampfunctionbase_type;
 
 using namespace rtval;
 
@@ -35,7 +35,7 @@ template<typename TimeStep, typename SubSeq>
 static void collect_actions(SubSeq *self, std::vector<action::Action*> *actions)
 {
     for (auto [i, subseq]: pylist_iter(self->sub_seqs)) {
-        if (Py_TYPE(subseq) != timestep_type) {
+        if (Py_TYPE(subseq) != (PyTypeObject*)timestep_type) {
             collect_actions<TimeStep>((SubSeq*)subseq, actions);
             continue;
         }

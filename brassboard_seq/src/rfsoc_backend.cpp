@@ -260,8 +260,8 @@ struct TimedID {
     int16_t id;
 };
 
-static PyTypeObject *rampfunctionbase_type;
-static PyTypeObject *seqcubicspline_type;
+static PyObject *rampfunctionbase_type;
+static PyObject *seqcubicspline_type;
 
 // order of the coefficient is order0, order1, order2, order3
 template<int nbits> static constexpr inline std::pair<std::array<int64_t,4>,int>
@@ -4461,7 +4461,7 @@ void gen_rfsoc_data(auto *rb, backend::CompiledSeq &cseq,
                     sync_mgr.add_action(param_action, cycle1, cycle2,
                                         sp, sp_seq_time, prev_tid, param);
                 };
-                if (Py_TYPE(ramp_func) == seqcubicspline_type) {
+                if (Py_TYPE(ramp_func) == (PyTypeObject*)seqcubicspline_type) {
                     bb_debug("found SeqCubicSpline on %s spline: "
                              "old cycle:%" PRId64 "\n", param_name(param), cur_cycle);
                     auto py_spline = (SeqCubicSpline*)ramp_func;

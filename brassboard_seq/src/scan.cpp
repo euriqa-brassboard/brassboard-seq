@@ -215,8 +215,9 @@ catch (...) {
 }
 
 template<typename ParamPack>
-static inline void update_param_pack(PyTypeObject *type, ParamPack*)
+static inline void update_param_pack(PyObject *_type, ParamPack*)
 {
+    auto type = (PyTypeObject*)_type;
     type->tp_vectorcall_offset = offsetof(ParamPack, vectorcall_ptr);
     type->tp_flags |= Py_TPFLAGS_HAVE_VECTORCALL;
     type->tp_call = PyVectorcall_Call;

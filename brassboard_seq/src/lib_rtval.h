@@ -958,11 +958,11 @@ static inline void assert_compatible_rtvalue()
     ASSERT_FIELD_OFFSET(cb_arg2);
 }
 
-extern PyTypeObject *RTVal_Type;
+extern PyObject *RTVal_Type;
 
 static inline bool is_rtval(PyObject *v)
 {
-    return Py_TYPE(v) == RTVal_Type;
+    return Py_TYPE(v) == (PyTypeObject*)RTVal_Type;
 }
 
 __attribute__((returns_nonnull)) _RuntimeValue*

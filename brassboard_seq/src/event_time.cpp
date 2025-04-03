@@ -99,8 +99,9 @@ static traverseproc event_time_base_traverse;
 static inquiry event_time_base_clear;
 
 template<typename EventTime>
-static inline void update_event_time_gc_callback(PyTypeObject *type, EventTime*)
+static inline void update_event_time_gc_callback(PyObject *_type, EventTime*)
 {
+    auto type = (PyTypeObject*)_type;
     event_time_base_traverse = type->tp_traverse;
     event_time_base_clear = type->tp_clear;
     type->tp_traverse = [] (PyObject *obj, visitproc visit, void *arg) -> int {

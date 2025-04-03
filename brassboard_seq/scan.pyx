@@ -31,7 +31,7 @@ import numpy as np
 
 cimport cython
 
-from cpython cimport PyObject, PyTypeObject, \
+from cpython cimport PyObject, \
   PyDict_GetItemWithError, PyDictProxy_New, \
   PyTuple_GET_SIZE, PyTuple_GET_ITEM, \
   PyList_GET_SIZE, PyList_GET_ITEM, \
@@ -46,7 +46,7 @@ cdef extern from "src/scan.cpp" namespace "brassboard_seq::scan":
     object get_value(ParamPack self) except +
     object get_value_default(ParamPack self, object) except +
     bint check_field(dict d, tuple path) except +
-    void update_param_pack(PyTypeObject *type, ParamPack)
+    void update_param_pack(object type, ParamPack)
 
 @cython.final
 cdef class ParamPack:
@@ -128,7 +128,7 @@ cdef class ParamPack:
     def __repr__(self):
         return str(self)
 
-update_param_pack(<PyTypeObject*>ParamPack, None)
+update_param_pack(ParamPack, None)
 
 def get_visited(ParamPack self, /):
     fieldname = self.fieldname

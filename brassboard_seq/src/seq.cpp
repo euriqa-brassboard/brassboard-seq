@@ -27,10 +27,10 @@
 
 namespace brassboard_seq::seq {
 
-static PyTypeObject *event_time_type;
-static PyTypeObject *timestep_type;
-static PyTypeObject *subseq_type;
-static PyTypeObject *condwrapper_type;
+static PyObject *event_time_type;
+static PyObject *timestep_type;
+static PyObject *subseq_type;
+static PyObject *condwrapper_type;
 static PyObject *rt_time_scale;
 
 using namespace rtval;
@@ -82,13 +82,13 @@ new_round_time(auto self, EventTime *prev, PyObject *offset, PyObject *cond,
     if (is_rtval(offset)) {
         py_object rt_offset((PyObject*)event_time::round_time_rt(
                                 (_RuntimeValue*)offset, (_RuntimeValue*)rt_time_scale));
-        return event_time::_new_time_rt(self, (PyObject*)event_time_type, prev,
+        return event_time::_new_time_rt(self, event_time_type, prev,
                                         (_RuntimeValue*)rt_offset.get(),
                                         cond, wait_for);
     }
     else {
         auto coffset = event_time::round_time_int(offset);
-        return event_time::_new_time_int(self, (PyObject*)event_time_type, prev,
+        return event_time::_new_time_int(self, event_time_type, prev,
                                          coffset, false, cond, wait_for);
     }
 }
@@ -143,8 +143,9 @@ add_custom_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *c
     return (SubSeq*)o.release();
 }
 
-static void type_add_method(PyTypeObject *type, PyMethodDef *meth)
+static void type_add_method(PyObject *_type, PyMethodDef *meth)
 {
+    auto type = (PyTypeObject*)_type;
     py_object descr(throw_if_not(PyDescr_NewMethod(type, meth)));
     throw_if(PyDict_SetItemString(type->tp_dict, meth->ml_name, descr));
 }
@@ -234,13 +235,13 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
     }
     else if (type == AddStepType::Floating) {
         auto time_mgr = pyx_fld(subseq, seqinfo)->time_mgr;
-        auto new_time = event_time::_new_time_int(time_mgr, (PyObject*)event_time_type,
+        auto new_time = event_time::_new_time_int(time_mgr, event_time_type,
                                                   (EventTime*)Py_None, 0, true, cond,
                                                   (EventTime*)Py_None);
         start_time.reset((PyObject*)new_time);
     }
     else if (type == AddStepType::At) {
-        if (args[0] != Py_None && Py_TYPE(args[0]) != event_time_type)
+        if (args[0] != Py_None && Py_TYPE(args[0]) != (PyTypeObject*)event_time_type)
             return PyErr_Format(PyExc_TypeError,
                                 "Argument 'tp' has incorrect type (expected EventTime, "
                                 "got %.200s)", Py_TYPE(args[0])->tp_name);
@@ -429,7 +430,7 @@ static inline void update_timestep(TimeStep*)
         METH_FASTCALL|METH_KEYWORDS, 0};
     type_add_method(timestep_type, &timestep_set_method);
     type_add_method(timestep_type, &timestep_pulse_method);
-    PyType_Modified(timestep_type);
+    PyType_Modified((PyTypeObject*)timestep_type);
 }
 
 template<typename SubSeq, typename ConditionalWrapper, typename TimeSeq,
@@ -464,7 +465,7 @@ static inline void update_subseq(SubSeq*, ConditionalWrapper*, TimeSeq*, TimeSte
     type_add_method(subseq_type, &subseq_add_background_method);
     type_add_method(subseq_type, &subseq_add_floating_method);
     type_add_method(subseq_type, &subseq_add_at_method);
-    PyType_Modified(subseq_type);
+    PyType_Modified((PyTypeObject*)subseq_type);
 }
 
 template<typename ConditionalWrapper, typename TimeSeq, typename TimeStep>
@@ -499,7 +500,7 @@ update_conditional(ConditionalWrapper*, TimeSeq*, TimeStep*)
     type_add_method(condwrapper_type, &conditional_add_background_method);
     type_add_method(condwrapper_type, &conditional_add_floating_method);
     type_add_method(condwrapper_type, &conditional_add_at_method);
-    PyType_Modified(condwrapper_type);
+    PyType_Modified((PyTypeObject*)condwrapper_type);
 }
 
 }

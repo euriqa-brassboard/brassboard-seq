@@ -29,11 +29,11 @@ cnpy._import_array()
 init_library()
 
 cimport cython
-from cpython cimport PyTypeObject, PyFloat_AS_DOUBLE, PyTuple_GET_ITEM
+from cpython cimport PyObject, PyFloat_AS_DOUBLE, PyTuple_GET_ITEM
 from libc cimport math as cmath
 
 cdef extern from "src/rtval.cpp" namespace "brassboard_seq::rtval":
-    PyTypeObject *RTVal_Type
+    PyObject *RTVal_Type
     object new_expr2_wrap1(ValueType, object, object) except +
     object build_addsub(object v0, object v1, bint) except +
     composite_rtprop_data get_composite_rtprop_data(CompositeRTProp prop, object obj,
@@ -41,7 +41,7 @@ cdef extern from "src/rtval.cpp" namespace "brassboard_seq::rtval":
     object composite_rtprop_get_res(CompositeRTProp self, object obj,
                                     object, composite_rtprop_data) except +
 
-RTVal_Type = <PyTypeObject*>RuntimeValue
+RTVal_Type = <PyObject*>RuntimeValue
 
 cdef int operator_precedence(ValueType type_) noexcept:
     if type_ == ValueType.Add or type_ == ValueType.Sub:

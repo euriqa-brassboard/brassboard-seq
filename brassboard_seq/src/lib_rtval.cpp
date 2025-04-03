@@ -25,7 +25,7 @@
 namespace brassboard_seq::rtval {
 
 __attribute__((visibility("protected")))
-PyTypeObject *RTVal_Type;
+PyObject *RTVal_Type;
 
 __attribute__((returns_nonnull,visibility("protected"))) _RuntimeValue*
 _new_cb_arg2(ValueType type, PyObject *cb_arg2, PyObject *ty)

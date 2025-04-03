@@ -659,11 +659,11 @@ static inline PyObject* pyobject_call(PyObject *func, PyObject *arg,
     return result;
 }
 
-static inline bool py_issubtype_nontrivial(PyTypeObject *a, PyTypeObject *b)
+static inline bool py_issubtype_nontrivial(auto *a, auto *b)
 {
     // Assume a != b and b != object, and skip the first and last element in mro.
     // Also assume fully initialized type a/b
-    PyObject *mro = a->tp_mro;
+    PyObject *mro = ((PyTypeObject*)a)->tp_mro;
     for (Py_ssize_t i = 1, n = PyTuple_GET_SIZE(mro) - 1; i < n; i++) {
         if (PyTuple_GET_ITEM(mro, i) == (PyObject*)b) {
             return true;

@@ -22,17 +22,17 @@ from brassboard_seq.seq cimport TimeStep
 from brassboard_seq.utils cimport PyErr_Format, PyExc_ValueError
 
 cimport cython
-from cpython cimport PyObject, PyTypeObject
+from cpython cimport PyObject
 
 cdef extern from "src/backend.cpp" namespace "brassboard_seq::backend":
-    PyTypeObject *timestep_type
-    PyTypeObject *rampfunctionbase_type
+    PyObject *timestep_type
+    PyObject *rampfunctionbase_type
     void compiler_finalize(SeqCompiler, TimeStep, _RampFunctionBase, Backend) except +
     void compiler_runtime_finalize(SeqCompiler, object age,
                                    _RampFunctionBase, Backend) except +
 
-timestep_type = <PyTypeObject*>TimeStep
-rampfunctionbase_type = <PyTypeObject*>_RampFunctionBase
+timestep_type = <PyObject*>TimeStep
+rampfunctionbase_type = <PyObject*>_RampFunctionBase
 
 @cython.auto_pickle(False)
 cdef class Backend:
