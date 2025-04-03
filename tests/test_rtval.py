@@ -41,7 +41,7 @@ def test_rtval():
     v1 = rtval.new_extern(lambda: 1)
     s1 = str(v1)
     assert s1.startswith('extern(')
-    v2 = rtval.new_extern_age(lambda age: 2)
+    v2 = test_utils.new_extern_age(lambda age: 2)
     s2 = str(v2)
     assert s2.startswith('extern_age(')
 
@@ -99,8 +99,8 @@ def test_rtval():
     assert rtval.same_value(test_utils.new_arg(0), test_utils.new_arg(0))
     assert not rtval.same_value(test_utils.new_arg(0), test_utils.new_arg(1))
     assert not rtval.same_value(rtval.new_extern(lambda: 1), rtval.new_extern(lambda: 1))
-    assert not rtval.same_value(rtval.new_extern_age(lambda age: 1),
-                                rtval.new_extern_age(lambda age: 1))
+    assert not rtval.same_value(test_utils.new_extern_age(lambda age: 1),
+                                test_utils.new_extern_age(lambda age: 1))
 
     assert rtval.same_value(v1 + v2, v2 + v1)
     assert rtval.same_value(v1 + v2, v2 + v1)
@@ -918,9 +918,9 @@ def test_type():
         assert isinstance(vi.eval(0), int)
         assert vf.eval(0) == 1.0
         assert isinstance(vf.eval(0), float)
-        vb = rtval.new_extern_age(lambda age: v, bool)
-        vi = rtval.new_extern_age(lambda age: v, int)
-        vf = rtval.new_extern_age(lambda age: v, float)
+        vb = test_utils.new_extern_age(lambda age: v, bool)
+        vi = test_utils.new_extern_age(lambda age: v, int)
+        vf = test_utils.new_extern_age(lambda age: v, float)
         assert vb.eval(0) is True
         assert isinstance(vb.eval(0), bool)
         assert vi.eval(0) == 1

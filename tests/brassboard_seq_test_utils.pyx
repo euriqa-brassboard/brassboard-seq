@@ -256,6 +256,9 @@ def new_const(c):
 def new_arg(idx):
     return rtval.new_arg(idx)
 
+def new_extern_age(cb, ty=float):
+    return rtval.new_extern_age(cb, ty)
+
 cdef class Action:
     cdef unique_ptr[action.Action] tofree
     cdef action.Action *action

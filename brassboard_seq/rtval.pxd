@@ -153,7 +153,7 @@ cdef inline RuntimeValue new_arg(idx, ty=float):
 cpdef inline RuntimeValue new_extern(cb, ty=float):
     return new_cb_arg2(ValueType.Extern, cb, ty, None)
 
-cpdef inline RuntimeValue new_extern_age(cb, ty=float):
+cdef inline RuntimeValue new_extern_age(cb, ty=float):
     return new_cb_arg2(ValueType.ExternAge, cb, ty, None)
 
 cdef class ExternCallback:
