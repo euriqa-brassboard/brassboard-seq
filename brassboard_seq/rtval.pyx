@@ -640,9 +640,7 @@ cdef class composite_rtprop_data:
 @cython.final
 cdef class CompositeRTProp:
     cdef str fieldname
-    cdef str ovr_fieldname
     cdef object cb
-    cdef object val
 
     def __init__(self, cb):
         self.cb = cb
