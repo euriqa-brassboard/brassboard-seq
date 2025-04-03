@@ -2008,8 +2008,6 @@ def test_rt_value():
     assert ('BAC', False) in submod._bb_rt_values
     submod.set_dataset('ACB', 6)
     submod.set_dataset('BAC', 9)
-    assert getattr(submod, '__CompositeRTProp__cprop')[0] is cprop
-    assert getattr(submod, '__CompositeRTProp__cprop')[1] == False
 
     with pytest.raises(RuntimeError, match="Value evaluated too early"):
         rtval.get_value(rx, 1)
@@ -2043,8 +2041,6 @@ def test_rt_value():
     assert rtval.get_value(cprop[0], 1) == 6
     assert rtval.get_value(cprop[1], 1) == 9
     assert submod.cprop == [6, 9]
-    assert getattr(submod, '__CompositeRTProp__cprop')[0] == [6, 9]
-    assert getattr(submod, '__CompositeRTProp__cprop')[1] == True
 
     sys = dummy_artiq.DummyDaxSystem()
     submod = dummy_artiq.DummyDaxSystem()

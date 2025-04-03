@@ -130,6 +130,28 @@ build_addsub(PyObject *v0, PyObject *v1, bool issub)
     return _new_addsub(nc, (_RuntimeValue*)nv.get(), ns);
 }
 
+template<typename composite_rtprop_data>
+static inline __attribute__((returns_nonnull)) composite_rtprop_data*
+get_composite_rtprop_data(auto prop, PyObject *obj, PyObject *DataType,
+                          composite_rtprop_data*)
+{
+    auto fieldname = prop->fieldname;
+    if (fieldname == Py_None)
+        py_throw_format(PyExc_ValueError, "Cannot determine runtime property name");
+    if (py_object val(PyObject_GetAttr(obj, fieldname)); !val) {
+        PyErr_Clear();
+    }
+    else if (Py_TYPE(val.get()) == (PyTypeObject*)DataType) {
+        return (composite_rtprop_data*)val.release();
+    }
+    py_object o(pytype_genericalloc(DataType));
+    auto data = (composite_rtprop_data*)o.get();
+    data->ovr = py_immref(Py_None);
+    data->cache = py_immref(Py_None);
+    throw_if(PyObject_SetAttr(obj, fieldname, o.get()));
+    return (composite_rtprop_data*)o.release();
+}
+
 static inline __attribute__((returns_nonnull)) PyObject*
 apply_composite_ovr(PyObject *val, PyObject *ovr);
 
@@ -200,27 +222,24 @@ static inline bool _object_compiled(PyObject *obj)
     return field.get() == Py_None;
 }
 
+template<typename composite_rtprop_data>
 static inline __attribute__((returns_nonnull)) PyObject*
-composite_rtprop_get_res(auto self, PyObject *obj)
+composite_rtprop_get_res(auto self, PyObject *obj, PyObject *DataType,
+                         composite_rtprop_data*)
 {
-    auto fieldname = self->fieldname;
-    if (fieldname == Py_None)
-        py_throw_format(PyExc_ValueError, "Cannot determine runtime property name");
-    if (py_object val(PyObject_GetAttr(obj, fieldname)); !val) {
-        PyErr_Clear();
+    auto data = get_composite_rtprop_data<composite_rtprop_data>(self, obj,
+                                                                 DataType, nullptr);
+    py_object py_data((PyObject*)data);
+    if (!data->filled || (!data->compiled && _object_compiled(obj))) {
+        py_object res(throw_if_not(_PyObject_Vectorcall(self->cb, &obj, 1, nullptr)));
+        Py_DECREF(data->cache);
+        data->cache = res.release();
+        data->filled = true;
+        data->compiled = _object_compiled(obj);
     }
-    else if (PyTuple_CheckExact(val.get()) && PyTuple_GET_SIZE(val.get()) == 2 &&
-             (PyTuple_GET_ITEM(val.get(), 1) == Py_True || !_object_compiled(obj))) {
-        return py_newref(PyTuple_GET_ITEM(val.get(), 0));
-    }
-    PyErr_Clear();
-    py_object res(throw_if_not(_PyObject_Vectorcall(self->cb, &obj, 1, nullptr)));
-    py_object cache(pytuple_new(2));
-    PyTuple_SET_ITEM(cache.get(), 0, py_newref(res.get()));
-    PyTuple_SET_ITEM(cache.get(), 1,
-                     py_immref(_object_compiled(obj) ? Py_True : Py_False));
-    throw_if(PyObject_SetAttr(obj, fieldname, cache.get()));
-    return res.release();
+    if (data->ovr == Py_None)
+        return py_newref(data->cache);
+    return apply_composite_ovr(data->cache, data->ovr);
 }
 
 }

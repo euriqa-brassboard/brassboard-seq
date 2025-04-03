@@ -515,15 +515,11 @@ def test_composite_rtprop():
     assert c2.cp_scalar == 10
     assert C.cp_scalar_count == 2
 
-    assert getattr(c1, '__CompositeRTProp__cp_scalar') == (10, False)
     setattr(c1, '__CompositeRTProp__cp_scalar', 10)
     assert c1.cp_scalar == 10
     assert C.cp_scalar_count == 3
-    setattr(c1, '__CompositeRTProp__cp_scalar', (1, 2, 3))
+    delattr(c1, '__CompositeRTProp__cp_scalar')
     assert c1.cp_scalar == 10
-    assert C.cp_scalar_count == 4
-    setattr(c1, '__CompositeRTProp__cp_scalar', (3, False))
-    assert c1.cp_scalar == 3
     assert C.cp_scalar_count == 4
 
     assert C.cp_scalar.get_state(c1) is None
@@ -543,13 +539,13 @@ def test_composite_rtprop():
 
     C.cp_scalar.set_state(c1, {})
     assert C.cp_scalar.get_state(c1) == {}
-    assert c1.cp_scalar == 3
+    assert c1.cp_scalar == 10
     assert c2.cp_scalar == 10
     assert C.cp_scalar_count == 4
 
     C.cp_scalar.set_state(c1, None)
     assert C.cp_scalar.get_state(c1) is None
-    assert c1.cp_scalar == 3
+    assert c1.cp_scalar == 10
     assert c2.cp_scalar == 10
     assert C.cp_scalar_count == 4
 
@@ -735,7 +731,7 @@ def test_composite_rtprop():
     assert C.cp_nest_count == 2
 
     c1._bb_rt_values = {}
-    assert c1.cp_scalar == 3
+    assert c1.cp_scalar == 10
     assert c2.cp_scalar == 10
     assert C.cp_scalar_count == 4
 

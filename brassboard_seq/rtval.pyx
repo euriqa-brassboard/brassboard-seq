@@ -36,8 +36,10 @@ cdef extern from "src/rtval.cpp" namespace "brassboard_seq::rtval":
     PyTypeObject *RTVal_Type
     object new_expr2_wrap1(ValueType, object, object) except +
     object build_addsub(object v0, object v1, bint) except +
-    object apply_composite_ovr(object val, object ovr) except +
-    object composite_rtprop_get_res(CompositeRTProp self, object obj) except +
+    composite_rtprop_data get_composite_rtprop_data(CompositeRTProp prop, object obj,
+                                                    object, composite_rtprop_data) except +
+    object composite_rtprop_get_res(CompositeRTProp self, object obj,
+                                    object, composite_rtprop_data) except +
 
 RTVal_Type = <PyTypeObject*>RuntimeValue
 
@@ -628,6 +630,14 @@ cdef class RTProp:
         return value
 
 @cython.final
+@cython.internal
+cdef class composite_rtprop_data:
+    cdef object ovr
+    cdef object cache
+    cdef uint8_t compiled
+    cdef uint8_t filled
+
+@cython.final
 cdef class CompositeRTProp:
     cdef str fieldname
     cdef str ovr_fieldname
@@ -638,27 +648,15 @@ cdef class CompositeRTProp:
         self.cb = cb
 
     def get_state(self, obj):
-        try:
-            return getattr(obj, self.ovr_fieldname)
-        except AttributeError:
-            return
+        return get_composite_rtprop_data(self, obj, composite_rtprop_data, None).ovr
 
     def set_state(self, obj, val):
-        if val is None:
-            delattr(obj, self.ovr_fieldname)
-        else:
-            setattr(obj, self.ovr_fieldname, val)
+        get_composite_rtprop_data(self, obj, composite_rtprop_data, None).ovr = val
 
     def __set_name__(self, owner, name):
-        self.ovr_fieldname = '__CompositeRTProp_ovr__' + name
         self.fieldname = '__CompositeRTProp__' + name
 
     def __get__(self, obj, objtype):
         if obj is None:
             return self
-        val = composite_rtprop_get_res(self, obj)
-        try:
-            ovr = getattr(obj, self.ovr_fieldname)
-        except AttributeError:
-            return val
-        return apply_composite_ovr(val, ovr)
+        return composite_rtprop_get_res(self, obj, composite_rtprop_data, None)
