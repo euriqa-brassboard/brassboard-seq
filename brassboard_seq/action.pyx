@@ -129,7 +129,7 @@ cdef class RampFunction(_RampFunctionBase):
         if self._fvalue is None:
             PyErr_Format(PyExc_RuntimeError, "RampFunction.__init__ not called")
         if self.interp_func:
-            deref(self.interp_func).eval_all(age, pyage, None)
+            deref(self.interp_func).eval_all(age, pyage)
 
     cdef TagVal runtime_eval(self, double t) noexcept:
         cdef void *fvalue

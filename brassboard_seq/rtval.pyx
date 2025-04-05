@@ -39,8 +39,10 @@ cdef extern from "src/rtval.cpp" namespace "brassboard_seq::rtval":
                                                     object, composite_rtprop_data) except +
     object composite_rtprop_get_res(CompositeRTProp self, object obj,
                                     object, composite_rtprop_data) except +
+    void assert_compatible_rtvalue(RuntimeValue)
 
 RTVal_Type = <PyObject*>RuntimeValue
+assert_compatible_rtvalue(None)
 
 cdef int operator_precedence(ValueType type_) noexcept:
     if type_ == ValueType.Add or type_ == ValueType.Sub:

@@ -134,7 +134,7 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
 
     cppclass InterpFunction:
         void set_value(RuntimeValue, vector[DataType]&) except +
-        void eval_all(unsigned, py_object&, RuntimeValue) except +
+        void eval_all(unsigned, py_object&) except +
         TagVal call()
 
 cdef class RuntimeValue:

@@ -759,7 +759,7 @@ InterpFunction::visit_value(_RuntimeValue *value, Builder &builder)
 }
 
 __attribute__((visibility("protected")))
-void InterpFunction::_eval_all(unsigned age, py_object &pyage)
+void InterpFunction::eval_all(unsigned age, py_object &pyage)
 {
     for (size_t i = 0; i < rt_vals.size(); i++) {
         auto rt_val = (_RuntimeValue*)rt_vals[i];

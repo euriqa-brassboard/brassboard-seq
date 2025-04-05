@@ -943,7 +943,7 @@ struct _RuntimeValue {
     PyObject *cb_arg2;
 };
 template<typename RuntimeValue>
-static inline void assert_compatible_rtvalue()
+static inline constexpr void assert_compatible_rtvalue(RuntimeValue*)
 {
     static_assert(sizeof(_RuntimeValue) == sizeof(RuntimeValue));
 #define ASSERT_FIELD_OFFSET(name) \
@@ -971,7 +971,6 @@ template<typename RuntimeValue>
 static inline __attribute__((returns_nonnull)) RuntimeValue*
 new_cb_arg2(ValueType type, PyObject *cb_arg2, PyObject *ty, RuntimeValue*)
 {
-    assert_compatible_rtvalue<RuntimeValue>();
     return (RuntimeValue*)_new_cb_arg2(type, cb_arg2, ty);
 }
 
@@ -981,7 +980,6 @@ template<typename RuntimeValue>
 static inline __attribute__((returns_nonnull)) RuntimeValue*
 new_expr1(ValueType type, RuntimeValue *arg0)
 {
-    assert_compatible_rtvalue<RuntimeValue>();
     return (RuntimeValue*)_new_expr1(type, (_RuntimeValue*)arg0);
 }
 
@@ -991,7 +989,6 @@ template<typename RuntimeValue>
 static inline __attribute__((returns_nonnull)) RuntimeValue*
 new_expr2(ValueType type, RuntimeValue *arg0, RuntimeValue *arg1)
 {
-    assert_compatible_rtvalue<RuntimeValue>();
     return (RuntimeValue*)_new_expr2(type, (_RuntimeValue*)arg0, (_RuntimeValue*)arg1);
 }
 
@@ -1000,7 +997,6 @@ template<typename RuntimeValue>
 static inline __attribute__((returns_nonnull)) RuntimeValue*
 new_const(TagVal v, RuntimeValue*)
 {
-    assert_compatible_rtvalue<RuntimeValue>();
     return (RuntimeValue*)_new_const(v);
 }
 
@@ -1008,7 +1004,6 @@ template<typename RuntimeValue>
 static inline __attribute__((returns_nonnull)) RuntimeValue*
 new_const(PyObject *v, RuntimeValue*)
 {
-    assert_compatible_rtvalue<RuntimeValue>();
     return (RuntimeValue*)_new_const(TagVal::from_py(v));
 }
 
@@ -1021,7 +1016,6 @@ template<typename RuntimeValue>
 static inline __attribute__((returns_nonnull)) RuntimeValue*
 new_select(RuntimeValue *arg0, PyObject *arg1, PyObject *arg2)
 {
-    assert_compatible_rtvalue<RuntimeValue>();
     return (RuntimeValue*)_new_select((_RuntimeValue*)arg0, arg1, arg2);
 }
 
@@ -1039,11 +1033,9 @@ bool rt_same_value(PyObject *v1, PyObject *v2);
 
 void _rt_eval_cache(_RuntimeValue *self, unsigned age, py_object &pyage);
 
-template<typename RuntimeValue>
 static inline __attribute__((always_inline))
-void rt_eval_cache(RuntimeValue *self, unsigned age, py_object &pyage)
+void rt_eval_cache(auto *self, unsigned age, py_object &pyage)
 {
-    assert_compatible_rtvalue<RuntimeValue>();
     _rt_eval_cache((_RuntimeValue*)self, age, pyage);
 }
 
@@ -1107,30 +1099,17 @@ struct InterpFunction {
         return idx;
     }
 
-    template<typename RuntimeValue>
-    void set_value(RuntimeValue *value, std::vector<DataType> &args)
+    void set_value(auto *value, auto &&args)
+        requires std::same_as<std::vector<DataType>,
+                              std::remove_cvref_t<decltype(args)>>
     {
-        assert_compatible_rtvalue<RuntimeValue>();
         _set_value((_RuntimeValue*)value, args);
-    }
-
-    template<typename RuntimeValue>
-    void set_value(RuntimeValue *value, std::vector<DataType> &&args)
-    {
-        set_value(value, args);
     }
 
     void _set_value(_RuntimeValue *value, std::vector<DataType> &args);
     Builder::ValueInfo &visit_value(_RuntimeValue *value, Builder &builder);
 
-    void _eval_all(unsigned age, py_object &pyage);
-
-    template<typename RuntimeValue>
-    inline void eval_all(unsigned age, py_object &pyage, RuntimeValue*)
-    {
-        assert_compatible_rtvalue<RuntimeValue>();
-        _eval_all(age, pyage);
-    }
+    void eval_all(unsigned age, py_object &pyage);
 
     TagVal call()
     {
