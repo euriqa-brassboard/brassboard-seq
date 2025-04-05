@@ -349,7 +349,7 @@ def test_ops():
               math.ceil, np.ceil, np.exp, np.expm1, math.floor, np.floor, np.log,
               np.log1p, np.log2, np.log10, np.sqrt, np.arcsin, np.arccos, np.arctan,
               np.arcsinh, np.arccosh, np.arctanh, np.sin, np.cos, np.tan, np.sinh,
-              np.cosh, np.tanh, np.rint, rtval.round_int64, round, rtval.convert_bool]:
+              np.cosh, np.tanh, np.rint, round, rtval.convert_bool]:
         run_check_unary(f)
     for f in [operator.add, operator.sub, np.subtract, operator.mul, np.multiply,
               operator.truediv, np.divide, operator.lt, np.less, operator.gt,

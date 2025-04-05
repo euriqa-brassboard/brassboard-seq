@@ -170,9 +170,8 @@ def test_rtval():
     assert rtval.convert_bool(iv1) is iv1
     assert rtval.convert_bool(iv2) is iv2
 
-    r64v1 = rtval.round_int64(v1)
+    r64v1 = round(v1)
     assert str(r64v1) == f'int64({s1})'
-    assert rtval.round_int64(r64v1) is r64v1
     assert round(r64v1) is r64v1
     assert str(rtval.convert_bool(r64v1)) == f'bool({s1})'
 
@@ -322,7 +321,7 @@ def test_ops():
               math.ceil, np.ceil, np.exp, np.expm1, math.floor, np.floor, np.log,
               np.log1p, np.log2, np.log10, np.sqrt, np.arcsin, np.arccos, np.arctan,
               np.arcsinh, np.arccosh, np.arctanh, np.sin, np.cos, np.tan, np.sinh,
-              np.cosh, np.tanh, np.rint, rtval.round_int64, round, rtval.convert_bool]:
+              np.cosh, np.tanh, np.rint, round, rtval.convert_bool]:
         run_check_unary(f)
     # Omit np.add from the list since it behaves differently for booleans
     for f in [operator.add, operator.sub, np.subtract, operator.mul, np.multiply,
@@ -343,19 +342,6 @@ def test_np_ops():
     assert list(rtval.convert_bool(np.array([True, False]))) == [True, False]
     assert list(rtval.convert_bool(np.array([0, -1, 1]))) == [False, True, True]
     assert list(rtval.convert_bool(np.array([0.0, 1.0, -1.0]))) == [False, True, True]
-
-    a = rtval.round_int64(np.array([-0.9, -0.1, 0.0, -0.1, 0.9]))
-    assert a.dtype == np.int64
-    assert list(a) == [-1, 0, 0, 0, 1]
-    a = rtval.round_int64(np.array([True, False]))
-    assert a.dtype == np.int64
-    assert list(a) == [1, 0]
-    a = rtval.round_int64(np.array([-2, -1, 0, 1, 2], dtype=np.int32))
-    assert a.dtype == np.int64
-    assert list(a) == [-2, -1, 0, 1, 2]
-    a = rtval.round_int64(np.array([-2, -1, 0, 1, 2], dtype=np.int64))
-    assert a.dtype == np.int64
-    assert list(a) == [-2, -1, 0, 1, 2]
 
     assert list(rtval.ifelse(True, np.array([1, 2]),
                              np.array([0.1, 0.2]))) == [1.0, 2.0]
@@ -844,7 +830,6 @@ def test_pow():
 def test_round():
     for v in [-3.0, -2.5, -2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]:
         vi = round(v)
-        assert rtval.round_int64(v) == vi
         rv = rtval.new_extern(lambda: v)
         rvi = round(rv)
         assert rvi.eval(0) == vi

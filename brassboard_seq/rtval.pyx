@@ -525,23 +525,6 @@ def convert_bool(_v):
         return cnpy.PyArray_Cast(_v, cnpy.NPY_BOOL)
     return bool(_v)
 
-def round_int64(_v, /):
-    cdef RuntimeValue v
-    if is_rtval(_v):
-        return rt_round_int64(<RuntimeValue>_v)
-    if isinstance(_v, cnpy.ndarray):
-        ary = <cnpy.ndarray>_v
-        if cnpy.PyArray_TYPE(ary) == cnpy.NPY_INT64:
-            return ary
-        if not (cnpy.PyArray_ISINTEGER(ary) or cnpy.PyArray_ISBOOL(ary)):
-            ary = <cnpy.ndarray>np_rint(ary)
-        return cnpy.PyArray_Cast(ary, cnpy.NPY_INT64)
-    if type(_v) is int:
-        return _v
-    if type(_v) is float:
-        return cmath.llrint(PyFloat_AS_DOUBLE(_v))
-    return round(_v)
-
 def ifelse(b, v1, v2):
     if (isinstance(b, cnpy.ndarray) or isinstance(v1, cnpy.ndarray) or
         isinstance(v2, cnpy.ndarray)):
