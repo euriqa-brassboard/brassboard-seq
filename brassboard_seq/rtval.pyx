@@ -29,8 +29,7 @@ cnpy._import_array()
 init_library()
 
 cimport cython
-from cpython cimport PyObject, PyFloat_AS_DOUBLE, PyTuple_GET_ITEM
-from libc cimport math as cmath
+from cpython cimport PyObject, PyTuple_GET_ITEM
 
 cdef extern from "src/rtval.cpp" namespace "brassboard_seq::rtval":
     PyObject *RTVal_Type
