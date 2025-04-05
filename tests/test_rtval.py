@@ -38,7 +38,7 @@ def test_rtval():
     with pytest.raises(TypeError):
         rtval.RuntimeValue()
 
-    v1 = rtval.new_extern(lambda: 1)
+    v1 = test_utils.new_extern(lambda: 1)
     s1 = str(v1)
     assert s1.startswith('extern(')
     v2 = test_utils.new_extern_age(lambda age: 2)
@@ -98,7 +98,7 @@ def test_rtval():
 
     assert rtval.same_value(test_utils.new_arg(0), test_utils.new_arg(0))
     assert not rtval.same_value(test_utils.new_arg(0), test_utils.new_arg(1))
-    assert not rtval.same_value(rtval.new_extern(lambda: 1), rtval.new_extern(lambda: 1))
+    assert not rtval.same_value(test_utils.new_extern(lambda: 1), test_utils.new_extern(lambda: 1))
     assert not rtval.same_value(test_utils.new_extern_age(lambda age: 1),
                                 test_utils.new_extern_age(lambda age: 1))
 
@@ -258,10 +258,10 @@ values = [True, False, -5, -4, -12, -2, -1, 0, 1, 2, 3, 4, 10,
 
 def get_value_options(v):
     if isinstance(v, bool):
-        return [v, rtval.new_extern(lambda: v, bool), rtval.new_extern(lambda: v)]
+        return [v, test_utils.new_extern(lambda: v, bool), test_utils.new_extern(lambda: v)]
     if isinstance(v, int) or isinstance(v, np.integer):
-        return [v, rtval.new_extern(lambda: v, int), rtval.new_extern(lambda: v)]
-    return [v, rtval.new_extern(lambda: v)]
+        return [v, test_utils.new_extern(lambda: v, int), test_utils.new_extern(lambda: v)]
+    return [v, test_utils.new_extern(lambda: v)]
 
 def run_check_unary(f):
     for v in values:
@@ -437,7 +437,7 @@ def test_rtprop():
     assert isinstance(C.p1, rtval.RTProp)
     assert isinstance(C.p2, rtval.RTProp)
 
-    v3 = rtval.new_extern(lambda: 3.5)
+    v3 = test_utils.new_extern(lambda: 3.5)
     c2.p1 = v3
     assert c2.p1 is v3
     assert C.p1.get_state(c1) == 1.2
@@ -462,7 +462,7 @@ def test_rtprop():
 
     c1 = C()
 
-    v4 = rtval.new_extern(lambda: 1.25)
+    v4 = test_utils.new_extern(lambda: 1.25)
     c1.p1 = 2.3
     c1.p2 = v4
     assert c1.p1 == 2.3
@@ -766,8 +766,8 @@ def test_invalid():
 def test_logical():
     v1 = 1.0
     v2 = 2
-    r1 = rtval.new_extern(lambda: v1)
-    r2 = rtval.new_extern(lambda: v2)
+    r1 = test_utils.new_extern(lambda: v1)
+    r2 = test_utils.new_extern(lambda: v2)
 
     r_or = r1 | r2
     r_and = r1 & r2
@@ -808,8 +808,8 @@ def test_logical():
 def test_pow():
     v1 = -1
     v2 = 0.5
-    r1 = rtval.new_extern(lambda: v1)
-    r2 = rtval.new_extern(lambda: v2)
+    r1 = test_utils.new_extern(lambda: v1)
+    r2 = test_utils.new_extern(lambda: v2)
 
     rpow = r1**r2
     with pytest.raises(ValueError, match="power of negative number"):
@@ -830,23 +830,23 @@ def test_pow():
 def test_round():
     for v in [-3.0, -2.5, -2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]:
         vi = round(v)
-        rv = rtval.new_extern(lambda: v)
+        rv = test_utils.new_extern(lambda: v)
         rvi = round(rv)
         assert rvi.eval(0) == vi
 
 def test_error_propagate():
     v1 = 1
     v2 = 0
-    r1 = rtval.new_extern(lambda: v1)
-    r2 = rtval.new_extern(lambda: v2)
+    r1 = test_utils.new_extern(lambda: v1)
+    r2 = test_utils.new_extern(lambda: v2)
     op1 = r1 / r2
 
     v3 = 2
-    r3 = rtval.new_extern(lambda: v3)
+    r3 = test_utils.new_extern(lambda: v3)
     op2 = np.arcsin(r3)
 
     b = True
-    rb = rtval.new_extern(lambda: b, bool)
+    rb = test_utils.new_extern(lambda: b, bool)
 
     res = op1 + op2
     sel = rtval.ifelse(rb, op1, op2)
@@ -894,9 +894,9 @@ def test_error_propagate():
 
 def test_type():
     for v in [True, 1, 1.0]:
-        vb = rtval.new_extern(lambda: v, bool)
-        vi = rtval.new_extern(lambda: v, int)
-        vf = rtval.new_extern(lambda: v, float)
+        vb = test_utils.new_extern(lambda: v, bool)
+        vi = test_utils.new_extern(lambda: v, int)
+        vf = test_utils.new_extern(lambda: v, float)
         assert vb.eval(0) is True
         assert isinstance(vb.eval(0), bool)
         assert vi.eval(0) == 1
@@ -914,7 +914,7 @@ def test_type():
         assert isinstance(vf.eval(0), float)
 
     with pytest.raises(TypeError, match=f"Unknown runtime value type '{list}'"):
-        rtval.new_extern(lambda: True, list)
+        test_utils.new_extern(lambda: True, list)
 
 def test_arg():
     r = test_utils.new_arg(0)

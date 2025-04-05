@@ -350,11 +350,11 @@ def test_val_error(max_bt):
     s = comp.seq
     s.set('artiq/ttl0', True)
     s.add_step(0.01) \
-      .pulse('artiq/urukul0_ch2/freq', rtval.new_extern(lambda: 1.23)) \
-      .pulse('artiq/ttl2', rtval.new_extern(lambda: True))
+      .pulse('artiq/urukul0_ch2/freq', test_utils.new_extern(lambda: 1.23)) \
+      .pulse('artiq/ttl2', test_utils.new_extern(lambda: True))
     # This causes a error to be thrown when converting to boolean
     def ajquo1827uhfasd():
-        s.set('artiq/ttl0', rtval.new_extern(lambda: np.array([1, 2])))
+        s.set('artiq/ttl0', test_utils.new_extern(lambda: np.array([1, 2])))
     ajquo1827uhfasd()
     comp.finalize()
     with pytest.raises(TypeError) as exc:
@@ -365,11 +365,11 @@ def test_val_error(max_bt):
     s = comp.seq
     s.set('artiq/ttl0', True)
     s.add_step(0.01) \
-      .pulse('artiq/urukul0_ch2/freq', rtval.new_extern(lambda: 1.23)) \
-      .pulse('artiq/ttl2', rtval.new_extern(lambda: True))
+      .pulse('artiq/urukul0_ch2/freq', test_utils.new_extern(lambda: 1.23)) \
+      .pulse('artiq/ttl2', test_utils.new_extern(lambda: True))
     # This causes a error to be thrown when converting to float
     def jausasdjklfa834fs():
-        s.set('artiq/urukul3_ch0/amp', rtval.new_extern(lambda: [1, 2]))
+        s.set('artiq/urukul3_ch0/amp', test_utils.new_extern(lambda: [1, 2]))
     jausasdjklfa834fs()
     comp.finalize()
     with pytest.raises(TypeError) as exc:
@@ -383,10 +383,10 @@ def test_val_error(max_bt):
     s = comp.seq
     s.set('artiq/ttl0', True)
     s.add_step(0.01) \
-      .pulse('artiq/urukul0_ch2/freq', rtval.new_extern(lambda: 1.23)) \
-      .pulse('artiq/ttl2', rtval.new_extern(lambda: True))
+      .pulse('artiq/urukul0_ch2/freq', test_utils.new_extern(lambda: 1.23)) \
+      .pulse('artiq/ttl2', test_utils.new_extern(lambda: True))
     def ajsdf78ah4has9d():
-        s.set('artiq/ttl0', rtval.new_extern(error_callback))
+        s.set('artiq/ttl0', test_utils.new_extern(error_callback))
     ajsdf78ah4has9d()
     comp.finalize()
     with pytest.raises(ValueError, match="AAABBBCCC") as exc:
@@ -397,10 +397,10 @@ def test_val_error(max_bt):
     s = comp.seq
     s.set('artiq/ttl0', True)
     s.add_step(0.01) \
-      .pulse('artiq/urukul0_ch2/freq', rtval.new_extern(lambda: 1.23)) \
-      .pulse('artiq/ttl2', rtval.new_extern(lambda: True))
+      .pulse('artiq/urukul0_ch2/freq', test_utils.new_extern(lambda: 1.23)) \
+      .pulse('artiq/ttl2', test_utils.new_extern(lambda: True))
     def jas830bnsod8q():
-        s.set('artiq/urukul3_ch0/amp', rtval.new_extern(error_callback))
+        s.set('artiq/urukul3_ch0/amp', test_utils.new_extern(error_callback))
     jas830bnsod8q()
     comp.finalize()
     with pytest.raises(ValueError, match="AAABBBCCC") as exc:
@@ -532,8 +532,8 @@ def test_action_kws(max_bt):
 
 @with_artiq_params
 def test_ttl(max_bt):
-    v = rtval.new_extern(lambda: True)
-    v2 = rtval.new_extern(lambda: 0.2)
+    v = test_utils.new_extern(lambda: True)
+    v2 = test_utils.new_extern(lambda: 0.2)
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
     @s.add_step
@@ -578,7 +578,7 @@ def test_ttl(max_bt):
 
 @with_artiq_params
 def test_counter(max_bt):
-    v = rtval.new_extern(lambda: True)
+    v = test_utils.new_extern(lambda: True)
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
     @s.add_step
@@ -654,8 +654,8 @@ def test_counter(max_bt):
 
 @with_artiq_params
 def test_dds(max_bt):
-    v = rtval.new_extern(lambda: 123e6)
-    v2 = rtval.new_extern(lambda: 0.1)
+    v = test_utils.new_extern(lambda: 123e6)
+    v2 = test_utils.new_extern(lambda: 0.1)
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
     @s.add_step
@@ -1022,7 +1022,7 @@ def test_ttl_exact_time(max_bt):
 @with_artiq_params
 def test_dds_merge_value(max_bt):
     v1 = 1e-6
-    rv1 = rtval.new_extern(lambda: v1)
+    rv1 = test_utils.new_extern(lambda: v1)
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
     s.set(f'artiq/urukul0_ch0/amp', 0.1)
@@ -1435,14 +1435,14 @@ def test_long_wait(max_bt):
 @with_artiq_params
 def test_dyn_seq1(max_bt):
     c1 = True
-    rc1 = rtval.new_extern(lambda: c1)
+    rc1 = test_utils.new_extern(lambda: c1)
     c2 = True
-    rc2 = rtval.new_extern(lambda: c2)
+    rc2 = test_utils.new_extern(lambda: c2)
 
     v1 = 0.1
-    rv1 = rtval.new_extern(lambda: v1)
+    rv1 = test_utils.new_extern(lambda: v1)
     v2 = 0.2
-    rv2 = rtval.new_extern(lambda: v2)
+    rv2 = test_utils.new_extern(lambda: v2)
 
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
@@ -1672,9 +1672,9 @@ def test_single(max_bt):
     b1 = True
     b2 = True
     v1 = 0.001
-    rb1 = rtval.new_extern(lambda: b1)
-    rb2 = rtval.new_extern(lambda: b2)
-    rv1 = rtval.new_extern(lambda: v1)
+    rb1 = test_utils.new_extern(lambda: b1)
+    rb2 = test_utils.new_extern(lambda: b2)
+    rv1 = test_utils.new_extern(lambda: v1)
 
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
@@ -1794,7 +1794,7 @@ def test_same_time_output(max_bt):
 def test_device_delay_rt_error(max_bt):
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
-    comp.ab.set_device_delay("ttl0", rtval.new_extern(lambda: -0.001))
+    comp.ab.set_device_delay("ttl0", test_utils.new_extern(lambda: -0.001))
     s.set('artiq/ttl0', True)
     comp.finalize()
     with pytest.raises(ValueError,
@@ -1803,7 +1803,7 @@ def test_device_delay_rt_error(max_bt):
 
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
-    comp.ab.set_device_delay("urukul0_ch2", rtval.new_extern(lambda: 1.2))
+    comp.ab.set_device_delay("urukul0_ch2", test_utils.new_extern(lambda: 1.2))
     s.set('artiq/urukul0_ch2/amp', True)
     comp.finalize()
     with pytest.raises(ValueError,
@@ -1812,7 +1812,7 @@ def test_device_delay_rt_error(max_bt):
 
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
-    comp.ab.set_device_delay("ttl0", rtval.new_extern(lambda: []))
+    comp.ab.set_device_delay("ttl0", test_utils.new_extern(lambda: []))
     s.set('artiq/ttl0', True)
     comp.finalize()
     with pytest.raises(TypeError):
@@ -1823,7 +1823,7 @@ def test_device_delay_rt_error(max_bt):
 
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
-    comp.ab.set_device_delay("ttl0", rtval.new_extern(error_callback))
+    comp.ab.set_device_delay("ttl0", test_utils.new_extern(error_callback))
     s.set('artiq/ttl0', True)
     comp.finalize()
     with pytest.raises(ValueError, match="AAABBBCCC"):
@@ -1834,7 +1834,7 @@ def test_device_delay_rt_error(max_bt):
 def test_device_delay(max_bt, use_rt):
     def wrap_value(v):
         if use_rt:
-            return rtval.new_extern(lambda: v)
+            return test_utils.new_extern(lambda: v)
         return v
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
@@ -1851,7 +1851,7 @@ def test_device_delay(max_bt, use_rt):
     comp.ab.set_device_delay("ttl2_counter", wrap_value(2e-3))
     comp.ab.set_device_delay("urukul0_ch0", wrap_value(3e-3))
 
-    s.add_step(rtval.new_extern(lambda: 5e-3)) \
+    s.add_step(test_utils.new_extern(lambda: 5e-3)) \
       .pulse('artiq/ttl1', True) \
       .pulse('artiq/ttl0', True) \
       .pulse('artiq/ttl2_counter', True) \

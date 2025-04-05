@@ -147,13 +147,13 @@ cdef class RuntimeValue:
     cdef RuntimeValue arg1
     cdef object cb_arg2 # Also used as argument index
 
-cdef inline RuntimeValue new_arg(idx, ty=float):
+cdef inline RuntimeValue new_arg(idx, ty):
     return new_cb_arg2(ValueType.Arg, idx, ty, None)
 
-cpdef inline RuntimeValue new_extern(cb, ty=float):
+cdef inline RuntimeValue new_extern(cb, ty):
     return new_cb_arg2(ValueType.Extern, cb, ty, None)
 
-cdef inline RuntimeValue new_extern_age(cb, ty=float):
+cdef inline RuntimeValue new_extern_age(cb, ty):
     return new_cb_arg2(ValueType.ExternAge, cb, ty, None)
 
 cdef class ExternCallback:

@@ -62,7 +62,7 @@ def test_seq():
 """
     assert str(c1) == repr(c1)
 
-    v1 = rtval.new_extern(lambda: True)
+    v1 = test_utils.new_extern(lambda: True)
     bv1 = rtval.convert_bool(v1)
 
     c2 = c1.conditional(bv1)
@@ -93,7 +93,7 @@ def test_seq():
    T[0]: 0 ps
 """
 
-    v2 = rtval.new_extern(lambda: False)
+    v2 = test_utils.new_extern(lambda: False)
     c6 = c2.conditional(v2)
     cc6 = test_utils.seq_get_cond(c6)
     assert str(cc6) == f'{bv1} & bool({v2})'

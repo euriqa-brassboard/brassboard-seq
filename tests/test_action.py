@@ -38,9 +38,9 @@ def test_ramp_base():
     assert test_utils.ramp_runtime_eval(r, 1) == 0
 
 def test_ramp_eval():
-    rt = rtval.new_extern(lambda: 1)
-    rlen = rtval.new_extern(lambda: 2)
-    rold = rtval.new_extern(lambda: -0.2)
+    rt = test_utils.new_extern(lambda: 1)
+    rlen = test_utils.new_extern(lambda: 2)
+    rold = test_utils.new_extern(lambda: -0.2)
     st = str(rt)
     slen = str(rlen)
     sold = str(rold)
@@ -62,8 +62,8 @@ def test_ramp_eval():
     vs = test.eval_runtime(0, ts)
     assert (vs == ts / 2 + -0.2 - 2).all()
 
-    ramp = rtval.new_extern(lambda: 2)
-    rfreq = rtval.new_extern(lambda: 1.2)
+    ramp = test_utils.new_extern(lambda: 2)
+    rfreq = test_utils.new_extern(lambda: 1.2)
     rphase = 2.3
     samp = str(ramp)
     sfreq = str(rfreq)
@@ -111,10 +111,10 @@ def test_spline():
     o3 = 0.3
 
     def check_spline(rt0, rt1, rt2, rt3):
-        ro0 = rtval.new_extern(lambda: o0) if rt0 else o0
-        ro1 = rtval.new_extern(lambda: o1) if rt1 else o1
-        ro2 = rtval.new_extern(lambda: o2) if rt2 else o2
-        ro3 = rtval.new_extern(lambda: o3) if rt3 else o3
+        ro0 = test_utils.new_extern(lambda: o0) if rt0 else o0
+        ro1 = test_utils.new_extern(lambda: o1) if rt1 else o1
+        ro2 = test_utils.new_extern(lambda: o2) if rt2 else o2
+        ro3 = test_utils.new_extern(lambda: o3) if rt3 else o3
 
         sp_seq = action.SeqCubicSpline(ro0, ro1, ro2, ro3)
         assert sp_seq.order0 is ro0
@@ -188,7 +188,7 @@ def test_const():
     assert v1 == pytest.approx(expect1)
 
     v0 = 0.1
-    p = test_utils.ValueFunction(rtval.new_extern(lambda: v0))
+    p = test_utils.ValueFunction(test_utils.new_extern(lambda: v0))
     test1 = test_utils.RampTest(p, 1, 0)
     v1 = test1.eval_runtime(0, ts)
     expect1 = list(ts * 0 + v0)
@@ -200,7 +200,7 @@ def test_const():
     assert v1 == pytest.approx(expect1)
 
     v0 = 0.1
-    p = test_utils.ValueFunction(np.cos(rtval.new_extern(lambda: v0)) + 1)
+    p = test_utils.ValueFunction(np.cos(test_utils.new_extern(lambda: v0)) + 1)
     test1 = test_utils.RampTest(p, 1, 0)
     v1 = test1.eval_runtime(0, ts)
     expect1 = list(ts * 0 + np.cos(v0) + 1)
@@ -266,7 +266,7 @@ def run_check_unary(f):
 
     ts = np.linspace(0, 2, 3)
     for v in values:
-        rv = rtval.new_extern(lambda: v)
+        rv = test_utils.new_extern(lambda: v)
         @none_on_error
         def expect1():
             fv = throw_non_finite(f, v)
@@ -294,7 +294,7 @@ def run_check_binary(f):
     assert cmp_list(v1, expect1)
 
     for v in values:
-        rv = rtval.new_extern(lambda: v)
+        rv = test_utils.new_extern(lambda: v)
         if is_bitwise:
             p2 = test_utils.FuncAction(lambda t, l, o: f(rv, round(t * 123 + 1)))
             p3 = test_utils.FuncAction(lambda t, l, o: f(round(t * 100), rv))
@@ -322,7 +322,7 @@ def run_check_binary(f):
 
     ts = np.linspace(0, 2, 3)
     for v1 in values:
-        rv1 = rtval.new_extern(lambda: v1)
+        rv1 = test_utils.new_extern(lambda: v1)
         for v2 in values:
             if isinstance(v1, bool) and isinstance(v2, bool) and f is np.subtract:
                 # Numpy error that we don't want to follow
@@ -333,7 +333,7 @@ def run_check_binary(f):
             if v2 == 0 and (f is operator.mod or f is np.remainder):
                 # Numpy doesn't raise an error in this case for some reason
                 continue
-            rv2 = rtval.new_extern(lambda: v2)
+            rv2 = test_utils.new_extern(lambda: v2)
             p4 = test_utils.FuncAction(lambda t, l, o: f(rv1, rv2))
             @none_on_error
             def expect4():

@@ -1,6 +1,7 @@
 #
 
-from brassboard_seq.rtval import new_extern, get_value
+from brassboard_seq.rtval import get_value
+from brassboard_seq_test_utils import new_extern
 from numpy import sin
 
 cb0 = lambda: 123

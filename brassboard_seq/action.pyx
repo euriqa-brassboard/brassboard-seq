@@ -64,10 +64,10 @@ cdef class _RampFunctionBase:
     cdef TagVal runtime_eval(self, double t) noexcept:
         return TagVal()
 
-cdef RuntimeValue arg0 = new_arg(0)
-cdef RuntimeValue arg1 = new_arg(1)
-cdef RuntimeValue arg2 = new_arg(2)
-cdef RuntimeValue const0 = new_const(0.0, <RuntimeValue>None)
+cdef RuntimeValue arg0 = new_arg(0, float)
+cdef RuntimeValue arg1 = new_arg(1, float)
+cdef RuntimeValue arg2 = new_arg(2, float)
+cdef RuntimeValue const0 = new_const(0.0, None)
 cdef dummy_spline_segments = []
 
 cdef rampfunction_eval(RampFunction self, t, length, oldval):

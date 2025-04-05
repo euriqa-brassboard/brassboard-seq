@@ -348,7 +348,7 @@ cdef class RuntimeValue:
                         typ == ValueType.CmpEQ)
             v2 = <RuntimeValue>other
         else:
-            v2 = new_const(other, <RuntimeValue>None)
+            v2 = new_const(other, None)
         return new_expr2(typ, self, v2)
 
     def __abs__(self):
@@ -607,7 +607,7 @@ cdef class RTProp:
             return getattr(obj, fieldname)
         except AttributeError:
             pass
-        value = new_extern_age(new_rtprop_callback(obj, fieldname))
+        value = new_extern_age(new_rtprop_callback(obj, fieldname), float)
         setattr(obj, fieldname, value)
         return value
 

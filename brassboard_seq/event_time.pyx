@@ -65,7 +65,7 @@ cdef class EventTime:
         diff.t1 = self
         diff.t2 = other
         diff.in_eval = False
-        return new_extern_age(diff)
+        return new_extern_age(diff, float)
 
     def __str__(self):
         if self.data.floating:

@@ -24,9 +24,9 @@ def test_cond_order1(max_bt):
     s = comp.seq
 
     c1val = True
-    c1 = rtval.new_extern(lambda: c1val)
+    c1 = test_utils.new_extern(lambda: c1val)
     c2val = True
-    c2 = rtval.new_extern(lambda: c2val)
+    c2 = test_utils.new_extern(lambda: c2val)
 
     def step_aaa_yyy_1(s):
         s.wait(0.1)
@@ -135,9 +135,9 @@ def test_cond_order2(max_bt):
     s = comp.seq
 
     c1val = True
-    c1 = rtval.new_extern(lambda: c1val)
+    c1 = test_utils.new_extern(lambda: c1val)
     c2val = True
-    c2 = rtval.new_extern(lambda: c2val)
+    c2 = test_utils.new_extern(lambda: c2val)
 
     def f_0_21234_alsdf():
         return s.add_floating(2).set('artiq/ttl1', False)
@@ -252,7 +252,7 @@ def test_order_error1(max_bt):
     s = comp.seq
 
     c1val = True
-    c1 = rtval.new_extern(lambda: c1val)
+    c1 = test_utils.new_extern(lambda: c1val)
 
     def f1_89374asjkl_asbd():
         st1 = s.conditional(c1).add_background(1).set('artiq/ttl1', True)
@@ -283,7 +283,7 @@ def test_order_error2(max_bt):
     s = comp.seq
 
     c1val = True
-    c1 = rtval.new_extern(lambda: c1val)
+    c1 = test_utils.new_extern(lambda: c1val)
 
     def step_13238324(s):
         s.wait(0.1)
@@ -514,10 +514,10 @@ def test_ramp_order1(max_bt):
     s = comp.seq
 
     c1val = 0.1
-    c1 = rtval.new_extern(lambda: c1val)
+    c1 = test_utils.new_extern(lambda: c1val)
 
     c2val = 0.1
-    c2 = rtval.new_extern(lambda: c2val)
+    c2 = test_utils.new_extern(lambda: c2val)
 
     s.set('artiq/analog', c1)
     f1 = test_utils.StaticFunction()
@@ -605,7 +605,7 @@ def test_rt_assert(max_bt):
     s = comp.seq
 
     c1val = True
-    c1 = rtval.new_extern(lambda: c1val)
+    c1 = test_utils.new_extern(lambda: c1val)
 
     def japsidfjpaoisdjpafosd():
         s.rt_assert(c1, "Some message")
@@ -626,7 +626,7 @@ def test_rt_assert(max_bt):
     s = comp.seq
     def assert_cb_JALKDFJOIADF():
         raise ValueError("XXX YYY ZZZ")
-    c1 = rtval.new_extern(assert_cb_JALKDFJOIADF)
+    c1 = test_utils.new_extern(assert_cb_JALKDFJOIADF)
     japsidfjpaoisdjpafosd()
     comp.finalize()
     with pytest.raises(ValueError, match="XXX YYY ZZZ") as exc:
@@ -640,12 +640,12 @@ def test_cond_error(max_bt):
     s = comp.seq
     s.set('artiq/ttl0', True)
     s.add_step(0.01) \
-      .pulse('artiq/urukul0_ch2/freq', rtval.new_extern(lambda: 1.23)) \
-      .pulse('artiq/ttl2', rtval.new_extern(lambda: True))
+      .pulse('artiq/urukul0_ch2/freq', test_utils.new_extern(lambda: 1.23)) \
+      .pulse('artiq/ttl2', test_utils.new_extern(lambda: True))
     def error_callback():
         raise ValueError("AAABBBCCC")
     def ajqu7sdf7h7uhfasd():
-        s.conditional(rtval.new_extern(error_callback)) \
+        s.conditional(test_utils.new_extern(error_callback)) \
          .set('artiq/ttl0', True)
     ajqu7sdf7h7uhfasd()
     comp.finalize()
@@ -657,8 +657,8 @@ def test_cond_error(max_bt):
 def test_cond_ramp_error(max_bt):
     comp = test_env.new_comp(max_bt)
     s = comp.seq
-    s.conditional(rtval.new_extern(lambda: False)) \
-      .add_step(rtval.new_extern(lambda: 0)) \
+    s.conditional(test_utils.new_extern(lambda: False)) \
+      .add_step(test_utils.new_extern(lambda: 0)) \
       .set('artiq/urukul0_ch0/amp', test_utils.DivLengthFunction()) \
       .pulse('artiq/urukul0_ch1/amp', test_utils.DivLengthFunction())
     comp.finalize()
@@ -676,7 +676,7 @@ def test_cond_ramp_error(max_bt):
 
     comp = test_env.new_comp(max_bt)
     s = comp.seq
-    s.add_step(rtval.new_extern(lambda: 0)) \
+    s.add_step(test_utils.new_extern(lambda: 0)) \
       .set('artiq/urukul0_ch0/amp', action.Blackman(1)) \
       .pulse('artiq/urukul0_ch1/amp', action.Blackman(1)) \
       .set('artiq/urukul1_ch0/amp', action.BlackmanSquare(1)) \

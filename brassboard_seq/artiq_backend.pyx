@@ -319,7 +319,7 @@ def rt_value(self, cb, /):
     rtcb = <EvalOnceCallback>EvalOnceCallback.__new__(EvalOnceCallback)
     rtcb.callback = cb
     (<dict?>vals)[cb] = rtcb
-    return new_extern(rtcb)
+    return new_extern(rtcb, float)
 
 cdef rt_dataset
 def rt_dataset(self, str key, default=NoDefault):
@@ -330,13 +330,13 @@ def rt_dataset(self, str key, default=NoDefault):
     vals = <dict?>_vals
     res = vals.get((key, False))
     if res is not None:
-        return new_extern(res)
+        return new_extern(res, float)
     rtcb = <DatasetCallback>DatasetCallback.__new__(DatasetCallback)
     rtcb.cb = cb
     rtcb.key = key
     rtcb.default = default
     vals[(key, False)] = rtcb
-    return new_extern(rtcb)
+    return new_extern(rtcb, float)
 
 cdef rt_dataset_sys
 def rt_dataset_sys(self, str key, default=NoDefault):
@@ -347,13 +347,13 @@ def rt_dataset_sys(self, str key, default=NoDefault):
     vals = <dict?>_vals
     res = vals.get((key, True))
     if res is not None:
-        return new_extern(res)
+        return new_extern(res, float)
     rtcb = <DatasetCallback>DatasetCallback.__new__(DatasetCallback)
     rtcb.cb = cb
     rtcb.key = key
     rtcb.default = default
     vals[(key, True)] = rtcb
-    return new_extern(rtcb)
+    return new_extern(rtcb, float)
 
 HasEnvironment.rt_value = rt_value
 HasEnvironment.rt_dataset = rt_dataset

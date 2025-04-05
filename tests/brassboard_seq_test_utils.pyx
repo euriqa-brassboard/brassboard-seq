@@ -246,18 +246,21 @@ def new_invalid_rtval():
     rv.type_ = <rtval.ValueType>1000
     rv.datatype = rtval.DataType.Float64
     rv.age = -1
-    rv.arg0 = new_const(1)
-    rv.arg1 = new_const(1)
+    rv.arg0 = rtval.new_const(1, None)
+    rv.arg1 = rtval.new_const(1, None)
     return rv
 
 def new_const(c):
-    return rtval.new_const(c, <rtval.RuntimeValue>None)
+    return rtval.new_const(c, None)
 
 def new_arg(idx):
-    return rtval.new_arg(idx)
+    return rtval.new_arg(idx, float)
 
 def new_extern_age(cb, ty=float):
     return rtval.new_extern_age(cb, ty)
+
+def new_extern(cb, ty=float):
+    return rtval.new_extern(cb, ty)
 
 cdef class Action:
     cdef unique_ptr[action.Action] tofree
