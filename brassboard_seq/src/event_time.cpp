@@ -347,7 +347,7 @@ static inline int eventtime_find_base_id(EventTime *t1, EventTime *t2,
     return frontier.begin()->second->data.id;
 }
 
-static inline double timediff_eval(auto self, unsigned age)
+static inline rtval::TagVal timediff_eval(auto self, unsigned age)
 {
     auto t1 = self->t1;
     auto t2 = self->t2;

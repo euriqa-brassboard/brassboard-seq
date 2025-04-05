@@ -17,7 +17,7 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.rtval cimport new_const, new_extern_age, ExternCallback
+from brassboard_seq.rtval cimport new_const, new_extern_age, ExternCallback, TagVal
 from brassboard_seq.utils cimport PyExc_RuntimeError, PyExc_TypeError
 
 cimport cython
@@ -33,7 +33,7 @@ cdef extern from "src/event_time.cpp" namespace "brassboard_seq::event_time":
     void timemanager_finalize(TimeManager self, EventTime) except +
     long long timemanager_compute_all_times(TimeManager self, unsigned age,
                                             py_object &pyage, EventTime) except +
-    double timediff_eval(EventTimeDiff self, unsigned age) except +
+    TagVal timediff_eval(EventTimeDiff self, unsigned age) except +
     void update_event_time_gc_callback(object type, EventTime)
 
 update_event_time_gc_callback(EventTime, None)
@@ -65,6 +65,7 @@ cdef class EventTime:
         diff.t1 = self
         diff.t2 = other
         diff.in_eval = False
+        diff.fptr = <void*><TagVal(*)(EventTimeDiff, unsigned)>timediff_eval
         return new_extern_age(diff, float)
 
     def __str__(self):
@@ -101,9 +102,6 @@ cdef class EventTimeDiff(ExternCallback):
     cdef EventTime t1
     cdef EventTime t2
     cdef bint in_eval
-
-    def __call__(self, unsigned age, /):
-        return timediff_eval(self, age)
 
     def __str__(self):
         return f'(T[{self.t1.data.id}] - T[{self.t2.data.id}])'

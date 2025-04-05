@@ -884,4 +884,11 @@ inline int64_t TimeChecker::find_time(int64_t lb_mu, int64_t t_mu, int64_t ub_mu
     }
 }
 
+static rtval::TagVal evalonce_callback(auto *self)
+{
+    if (self->value == Py_None)
+        py_throw_format(PyExc_RuntimeError, "Value evaluated too early");
+    return rtval::TagVal::from_py(self->value);
+}
+
 }

@@ -150,11 +150,11 @@ cdef class RuntimeValue:
 cdef inline RuntimeValue new_arg(idx, ty):
     return new_cb_arg2(ValueType.Arg, idx, ty, None)
 
-cdef inline RuntimeValue new_extern(cb, ty):
+cdef inline RuntimeValue new_extern(ExternCallback cb, ty):
     return new_cb_arg2(ValueType.Extern, cb, ty, None)
 
-cdef inline RuntimeValue new_extern_age(cb, ty):
+cdef inline RuntimeValue new_extern_age(ExternCallback cb, ty):
     return new_cb_arg2(ValueType.ExternAge, cb, ty, None)
 
 cdef class ExternCallback:
-    pass
+    cdef void *fptr

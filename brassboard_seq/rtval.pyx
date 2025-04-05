@@ -35,14 +35,15 @@ cdef extern from "src/rtval.cpp" namespace "brassboard_seq::rtval":
     PyObject *RTVal_Type
     object new_expr2_wrap1(ValueType, object, object) except +
     object build_addsub(object v0, object v1, bint) except +
+    TagVal rtprop_callback_func(rtprop_callback self, unsigned age) except +
     composite_rtprop_data get_composite_rtprop_data(CompositeRTProp prop, object obj,
                                                     object, composite_rtprop_data) except +
     object composite_rtprop_get_res(CompositeRTProp self, object obj,
                                     object, composite_rtprop_data) except +
-    void assert_compatible_rtvalue(RuntimeValue)
+    void assert_layout_compatible(RuntimeValue, ExternCallback)
 
 RTVal_Type = <PyObject*>RuntimeValue
-assert_compatible_rtvalue(None)
+assert_layout_compatible(None, None)
 
 cdef int operator_precedence(ValueType type_) noexcept:
     if type_ == ValueType.Add or type_ == ValueType.Sub:
@@ -114,18 +115,8 @@ cdef int show_call3(io, write, RuntimeValue v, str f) except -1:
 
 cdef int show(io, write, RuntimeValue v) except -1:
     cdef ValueType type_ = v.type_
-    if type_ == ValueType.Extern:
-        cb = v.cb_arg2
-        if isinstance(cb, ExternCallback):
-            write(str(cb))
-        else:
-            write(f'extern({cb})')
-    elif type_ == ValueType.ExternAge:
-        cb = v.cb_arg2
-        if isinstance(cb, ExternCallback):
-            write(str(cb))
-        else:
-            write(f'extern_age({cb})')
+    if type_ == ValueType.Extern or type_ == ValueType.ExternAge:
+        write(str(<ExternCallback>v.cb_arg2))
     elif type_ == ValueType.Arg:
         write(f'arg({v.cb_arg2})')
     elif type_ == ValueType.Const:
@@ -557,20 +548,9 @@ cdef class rtprop_callback(ExternCallback):
         name = self.fieldname[rtprop_prefix_len:]
         return f'<RTProp {name} for {self.obj}>'
 
-    def __call__(self, age, /):
-        _v = getattr(self.obj, self.fieldname)
-        if not is_rtval(_v):
-            return _v
-        cdef RuntimeValue v = <RuntimeValue>_v
-        if (v.type_ == ValueType.ExternAge and v.cb_arg2 is self):
-            PyErr_Format(PyExc_ValueError, 'RT property have not been assigned.')
-        cdef py_object pyage
-        pyage.set_obj(age)
-        rt_eval_cache(v, <unsigned>age, pyage)
-        return rtval_cache(v).to_py()
-
 cdef rtprop_callback new_rtprop_callback(obj, str fieldname):
     self = <rtprop_callback>rtprop_callback.__new__(rtprop_callback)
+    self.fptr = <void*><TagVal(*)(rtprop_callback, unsigned)>rtprop_callback_func
     self.obj = obj
     self.fieldname = fieldname
     return self

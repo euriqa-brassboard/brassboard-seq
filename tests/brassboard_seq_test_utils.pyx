@@ -24,6 +24,22 @@ cdef extern from *:
     #include <vector>
     #include <sstream>
 
+    static brassboard_seq::rtval::TagVal test_callback_extern(auto *self)
+    {
+        using namespace brassboard_seq;
+        py_object res(throw_if_not(_PyObject_Vectorcall(self->cb, nullptr, 0, nullptr)));
+        return rtval::TagVal::from_py(res);
+    }
+
+    static brassboard_seq::rtval::TagVal test_callback_extern_age(auto *self, unsigned age)
+    {
+        using namespace brassboard_seq;
+        py_object pyage(pylong_from_long(age));
+        PyObject *args[] = { pyage.get() };
+        py_object res(throw_if_not(_PyObject_Vectorcall(self->cb, args, 1, nullptr)));
+        return rtval::TagVal::from_py(res);
+    }
+
     static inline std::vector<int> _get_suffix_array(std::vector<int> S)
     {
         int N = S.size();
@@ -155,6 +171,8 @@ cdef extern from *:
         return cseq.total_time;
     }
     """
+    rtval.TagVal test_callback_extern(TestCallback) except +
+    rtval.TagVal test_callback_extern_age(TestCallback, unsigned) except +
     vector[int] _get_suffix_array(vector[int])
     vector[int] _get_height_array(vector[int], vector[int])
     cppclass MaxRange:
@@ -250,6 +268,22 @@ def new_invalid_rtval():
     rv.arg1 = rtval.new_const(1, None)
     return rv
 
+cdef class TestCallback(rtval.ExternCallback):
+    cdef object cb
+    cdef bint has_age
+    def __str__(self):
+        return f'extern_age({self.cb})' if self.has_age else f'extern({self.cb})'
+
+cdef TestCallback new_test_callback(cb, bint has_age):
+    self = <TestCallback>TestCallback.__new__(TestCallback)
+    self.cb = cb
+    self.has_age = has_age
+    if has_age:
+        self.fptr = <void*><rtval.TagVal(*)(TestCallback,unsigned)>test_callback_extern_age
+    else:
+        self.fptr = <void*><rtval.TagVal(*)(TestCallback)>test_callback_extern
+    return self
+
 def new_const(c):
     return rtval.new_const(c, None)
 
@@ -257,10 +291,10 @@ def new_arg(idx):
     return rtval.new_arg(idx, float)
 
 def new_extern_age(cb, ty=float):
-    return rtval.new_extern_age(cb, ty)
+    return rtval.new_extern_age(new_test_callback(cb, True), ty)
 
 def new_extern(cb, ty=float):
-    return rtval.new_extern(cb, ty)
+    return rtval.new_extern(new_test_callback(cb, False), ty)
 
 cdef class Action:
     cdef unique_ptr[action.Action] tofree

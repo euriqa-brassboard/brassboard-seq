@@ -20,7 +20,7 @@
 from brassboard_seq.action cimport _RampFunctionBase
 from brassboard_seq.backend cimport CompiledSeq
 from brassboard_seq.event_time cimport EventTime, round_time_int
-from brassboard_seq.rtval cimport ExternCallback, is_rtval, new_extern
+from brassboard_seq.rtval cimport ExternCallback, TagVal, is_rtval, new_extern
 from brassboard_seq.seq cimport Seq
 from brassboard_seq.utils cimport set_global_tracker, PyErr_Format, \
   PyExc_RuntimeError, PyExc_TypeError, PyExc_ValueError, pyobject_call, py_object
@@ -73,6 +73,7 @@ cdef extern from "src/artiq_backend.cpp" namespace "brassboard_seq::artiq_backen
     void collect_actions(ArtiqBackend ab, CompiledSeq&, EventTime) except +
 
     void generate_rtios(ArtiqBackend ab, CompiledSeq&, unsigned age, py_object&) except +
+    TagVal evalonce_callback(object) except +
 
 artiq_consts.COUNTER_ENABLE = <int?>edge_counter.CONFIG_COUNT_RISING | <int?>edge_counter.CONFIG_RESET_TO_ZERO
 artiq_consts.COUNTER_DISABLE = <int?>edge_counter.CONFIG_SEND_COUNT_EVENT
@@ -250,11 +251,6 @@ cdef class EvalOnceCallback(ExternCallback):
     cdef object value
     cdef object callback
 
-    def __call__(self):
-        if self.value is None:
-            PyErr_Format(PyExc_RuntimeError, 'Value evaluated too early')
-        return self.value
-
     def __str__(self):
         return f'({self.callback})()'
 
@@ -266,11 +262,6 @@ cdef class DatasetCallback(ExternCallback):
     cdef object cb
     cdef str key
     cdef object default
-
-    def __call__(self):
-        if self.value is None:
-            PyErr_Format(PyExc_RuntimeError, 'Value evaluated too early')
-        return self.value
 
     def __str__(self):
         cb = self.cb
@@ -317,6 +308,7 @@ def rt_value(self, cb, /):
     if vals is None:
         return cb()
     rtcb = <EvalOnceCallback>EvalOnceCallback.__new__(EvalOnceCallback)
+    rtcb.fptr = <void*><TagVal(*)(EvalOnceCallback)>evalonce_callback
     rtcb.callback = cb
     (<dict?>vals)[cb] = rtcb
     return new_extern(rtcb, float)
@@ -332,6 +324,7 @@ def rt_dataset(self, str key, default=NoDefault):
     if res is not None:
         return new_extern(res, float)
     rtcb = <DatasetCallback>DatasetCallback.__new__(DatasetCallback)
+    rtcb.fptr = <void*><TagVal(*)(DatasetCallback)>evalonce_callback
     rtcb.cb = cb
     rtcb.key = key
     rtcb.default = default
@@ -349,6 +342,7 @@ def rt_dataset_sys(self, str key, default=NoDefault):
     if res is not None:
         return new_extern(res, float)
     rtcb = <DatasetCallback>DatasetCallback.__new__(DatasetCallback)
+    rtcb.fptr = <void*><TagVal(*)(DatasetCallback)>evalonce_callback
     rtcb.cb = cb
     rtcb.key = key
     rtcb.default = default

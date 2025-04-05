@@ -942,8 +942,13 @@ struct _RuntimeValue {
     _RuntimeValue *arg1;
     PyObject *cb_arg2;
 };
-template<typename RuntimeValue>
-static inline constexpr void assert_compatible_rtvalue(RuntimeValue*)
+struct _ExternCallback {
+    PyObject_HEAD
+    void *fptr;
+};
+
+template<typename RuntimeValue, typename ExternCallback>
+static inline constexpr void assert_layout_compatible(RuntimeValue*, ExternCallback*)
 {
     static_assert(sizeof(_RuntimeValue) == sizeof(RuntimeValue));
 #define ASSERT_FIELD_OFFSET(name) \
@@ -956,6 +961,12 @@ static inline constexpr void assert_compatible_rtvalue(RuntimeValue*)
     ASSERT_FIELD_OFFSET(arg0);
     ASSERT_FIELD_OFFSET(arg1);
     ASSERT_FIELD_OFFSET(cb_arg2);
+#undef ASSERT_FIELD_OFFSET
+    static_assert(sizeof(_ExternCallback) == sizeof(ExternCallback));
+#define ASSERT_FIELD_OFFSET(name) \
+    static_assert(offsetof(_ExternCallback, name) == offsetof(ExternCallback, name))
+    ASSERT_FIELD_OFFSET(fptr);
+#undef ASSERT_FIELD_OFFSET
 }
 
 extern PyObject *RTVal_Type;

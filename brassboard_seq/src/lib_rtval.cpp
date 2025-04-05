@@ -272,6 +272,9 @@ void init()
     _import_array();
 }
 
+using extern_cb_t = TagVal(_ExternCallback*);
+using extern_age_cb_t = TagVal(_ExternCallback*, unsigned);
+
 __attribute__((flatten,visibility("protected")))
 void _rt_eval_cache(_RuntimeValue *self, unsigned age, py_object &pyage)
 {
@@ -285,11 +288,6 @@ void _rt_eval_cache(_RuntimeValue *self, unsigned age, py_object &pyage)
         self->cache_err = v.err;
         self->age = age;
     };
-    auto set_cache_py = [&] (PyObject *obj) {
-        throw_if_not(obj);
-        set_cache(TagVal::from_py(obj).convert(self->datatype));
-        Py_DECREF(obj);
-    };
 
     auto type = self->type_;
     switch (type) {
@@ -298,13 +296,11 @@ void _rt_eval_cache(_RuntimeValue *self, unsigned age, py_object &pyage)
     case Const:
         return;
     case Extern:
-        set_cache_py(_PyObject_Vectorcall(self->cb_arg2, nullptr, 0, nullptr));
-        return;
     case ExternAge: {
-        if (!pyage)
-            pyage.reset(pylong_from_long(age));
-        PyObject *args[] = { pyage.get() };
-        set_cache_py(_PyObject_Vectorcall(self->cb_arg2, args, 1, nullptr));
+        auto ecb = (_ExternCallback*)self->cb_arg2;
+        auto val = (type == Extern ? ((extern_cb_t*)ecb->fptr)(ecb) :
+                    ((extern_age_cb_t*)ecb->fptr)(ecb, age));
+        set_cache(val.convert(self->datatype));
         return;
     }
     default:
@@ -630,8 +626,7 @@ InterpFunction::visit_value(_RuntimeValue *value, Builder &builder)
     }
     case Extern:
     case ExternAge: {
-        // Hard coded for now.
-        info.val.type = DataType::Float64;
+        info.val.type = value->datatype;
         info.inited = true;
         return info;
     }

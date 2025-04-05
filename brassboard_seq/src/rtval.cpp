@@ -130,6 +130,19 @@ build_addsub(PyObject *v0, PyObject *v1, bool issub)
     return _new_addsub(nc, (_RuntimeValue*)nv.get(), ns);
 }
 
+static TagVal rtprop_callback_func(auto *self, unsigned age)
+{
+    py_object v(throw_if_not(PyObject_GetAttr(self->obj, self->fieldname)));
+    if (!is_rtval(v))
+        return TagVal::from_py(v);
+    auto rv = (_RuntimeValue*)v.get();
+    if (rv->type_ == ExternAge && rv->cb_arg2 == (PyObject*)self)
+        py_throw_format(PyExc_ValueError, "RT property have not been assigned.");
+    py_object pyage;
+    rt_eval_cache(rv, age, pyage);
+    return rtval_cache(rv);
+}
+
 template<typename composite_rtprop_data>
 static inline __attribute__((returns_nonnull)) composite_rtprop_data*
 get_composite_rtprop_data(auto prop, PyObject *obj, PyObject *DataType,
