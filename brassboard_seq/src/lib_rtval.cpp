@@ -91,8 +91,7 @@ new_const(TagVal v)
     return self;
 }
 
-__attribute__((returns_nonnull,visibility("protected"))) PyObject*
-new_expr2_wrap1(ValueType type, PyObject *arg0, PyObject *arg1)
+static PyObject *new_expr2_wrap1(ValueType type, PyObject *arg0, PyObject *arg1)
 {
     py_object rtarg0;
     py_object rtarg1;
@@ -124,8 +123,8 @@ new_expr2_wrap1(ValueType type, PyObject *arg0, PyObject *arg1)
     return o;
 }
 
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-_wrap_rtval(PyObject *v)
+static inline RuntimeValue*
+wrap_rtval(PyObject *v)
 {
     if (is_rtval(v))
         return (RuntimeValue*)py_newref(v);
@@ -135,8 +134,8 @@ _wrap_rtval(PyObject *v)
 __attribute__((returns_nonnull,visibility("protected"))) RuntimeValue*
 new_select(RuntimeValue *arg0, PyObject *arg1, PyObject *arg2)
 {
-    py_object rtarg1((PyObject*)_wrap_rtval(arg1));
-    py_object rtarg2((PyObject*)_wrap_rtval(arg2));
+    py_object rtarg1((PyObject*)wrap_rtval(arg1));
+    py_object rtarg2((PyObject*)wrap_rtval(arg2));
     auto datatype = promote_type(((RuntimeValue*)rtarg1.get())->datatype,
                                  ((RuntimeValue*)rtarg2.get())->datatype);
     auto o = pytype_genericalloc(&RuntimeValue_Type);
@@ -425,8 +424,7 @@ static inline TagVal tagval_add_or_sub(TagVal v1, TagVal v2, bool issub)
     return (issub ? Sub_op::generic_eval(v1, v2) : Add_op::generic_eval(v1, v2));
 }
 
-static inline __attribute__((returns_nonnull)) PyObject*
-_new_addsub(TagVal c, RuntimeValue *v, bool s)
+static inline PyObject *_new_addsub(TagVal c, RuntimeValue *v, bool s)
 {
     if (c.is_zero() && !s)
         return py_newref((PyObject*)v);
@@ -434,8 +432,7 @@ _new_addsub(TagVal c, RuntimeValue *v, bool s)
     return (PyObject*)new_expr2(s ? Sub : Add, (RuntimeValue*)arg0.get(), v);
 }
 
-static inline __attribute__((returns_nonnull)) PyObject*
-build_addsub(PyObject *v0, PyObject *v1, bool issub)
+static inline PyObject *build_addsub(PyObject *v0, PyObject *v1, bool issub)
 {
     assume(v0);
     assume(v1);
@@ -1079,7 +1076,7 @@ static PyMethodDef rtvalue_methods[] = {
 
 PyTypeObject RuntimeValue_Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
-    .tp_name = "brassboard_seq.rtval.""RuntimeValue",
+    .tp_name = "brassboard_seq.rtval.RuntimeValue",
     .tp_basicsize = sizeof(RuntimeValue),
     .tp_dealloc = rtvalue_dealloc,
     .tp_repr = rtvalue_str,
@@ -1094,7 +1091,7 @@ PyTypeObject RuntimeValue_Type = {
     .tp_new = rtvalue_new,
 };
 
-__attribute__((flatten, noinline, visibility("protected")))
+static __attribute__((flatten, noinline))
 std::pair<EvalError,GenVal> interpret_func(const int *code, GenVal *data,
                                            EvalError *errors)
 {
@@ -1439,6 +1436,17 @@ void InterpFunction::eval_all(unsigned age)
         data[i] = rt_val->cache_val;
         errors[i] = rt_val->cache_err;
     }
+}
+
+__attribute__((visibility("protected")))
+TagVal InterpFunction::call()
+{
+    auto [err, val] = interpret_func(code.data(), data.data(), errors.data());
+    TagVal res;
+    res.type = ret_type;
+    res.err = err;
+    res.val = val;
+    return res;
 }
 
 }

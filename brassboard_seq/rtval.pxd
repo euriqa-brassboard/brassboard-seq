@@ -81,14 +81,10 @@ cdef extern from "src/lib_rtval.h" namespace "brassboard_seq::rtval":
         Int64
         Bool
 
-    ValueType pycmp2valcmp(int op) noexcept
-
     enum class DataType(uint8_t):
         Bool
         Int64
         Float64
-    DataType promote_type(DataType t1, DataType t2)
-    DataType pytype_to_datatype(object) except +
 
     union GenVal:
         bint b_val
@@ -98,7 +94,6 @@ cdef extern from "src/lib_rtval.h" namespace "brassboard_seq::rtval":
     enum class EvalError(uint8_t):
         pass
     void throw_py_error(EvalError) except +
-    void throw_py_error(EvalError, uintptr_t) except +
 
     cppclass TagVal:
         DataType type
@@ -117,13 +112,14 @@ cdef extern from "src/lib_rtval.h" namespace "brassboard_seq::rtval":
     bint is_rtval(object)
     bint rt_same_value(object, object)
 
-    RuntimeValue new_cb_arg2(ValueType, object, object ty) except +
+    RuntimeValue new_arg(object idx, object ty) except +
+    RuntimeValue new_extern(ExternCallback cb, ty) except +
+    RuntimeValue new_extern_age(ExternCallback cb, ty) except +
     RuntimeValue new_expr1(ValueType, RuntimeValue) except +
     RuntimeValue new_expr2(ValueType, RuntimeValue, RuntimeValue) except +
     RuntimeValue new_const(object) except +
     RuntimeValue new_select(RuntimeValue arg0, object, object) except +
     RuntimeValue rt_convert_bool(RuntimeValue) except +
-    RuntimeValue rt_round_int64(RuntimeValue) except +
 
     void rt_eval_cache(RuntimeValue self, unsigned age) except +
     void rt_eval_throw(RuntimeValue self, unsigned age) except +
@@ -151,15 +147,6 @@ cdef extern from *:
     """
     using _brassboard_seq_rtval_RuntimeValue = brassboard_seq::rtval::RuntimeValue;
     """
-
-cdef inline RuntimeValue new_arg(idx, ty):
-    return new_cb_arg2(ValueType.Arg, idx, ty)
-
-cdef inline RuntimeValue new_extern(ExternCallback cb, ty):
-    return new_cb_arg2(ValueType.Extern, cb, ty)
-
-cdef inline RuntimeValue new_extern_age(ExternCallback cb, ty):
-    return new_cb_arg2(ValueType.ExternAge, cb, ty)
 
 cdef class ExternCallback:
     cdef void *fptr

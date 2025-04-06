@@ -115,7 +115,7 @@ public:
             return assume(_rt_offset);
         return nullptr;
     }
-    inline void set_rt_offset(auto *rv)
+    inline void set_rt_offset(RuntimeValue *rv)
     {
         assume(rv && !_is_static && !_is_rt_offset);
         _is_rt_offset = true;

@@ -976,6 +976,22 @@ __attribute__((returns_nonnull)) RuntimeValue*
 new_cb_arg2(ValueType type, PyObject *cb_arg2, PyObject *ty);
 
 __attribute__((returns_nonnull)) RuntimeValue*
+new_arg(PyObject *idx, PyObject *ty)
+{
+    return new_cb_arg2(Arg, idx, ty);
+}
+__attribute__((returns_nonnull)) RuntimeValue*
+new_extern(auto *cb, PyObject *ty)
+{
+    return new_cb_arg2(Extern, (PyObject*)cb, ty);
+}
+__attribute__((returns_nonnull)) RuntimeValue*
+new_extern_age(auto *cb, PyObject *ty)
+{
+    return new_cb_arg2(ExternAge, (PyObject*)cb, ty);
+}
+
+__attribute__((returns_nonnull)) RuntimeValue*
 new_expr1(ValueType type, RuntimeValue *arg0);
 static inline __attribute__((returns_nonnull)) RuntimeValue*
 new_expr1(ValueType type, not_rtval_ptr auto arg0)
@@ -998,9 +1014,6 @@ new_const(PyObject *v)
 {
     return new_const(TagVal::from_py(v));
 }
-
-__attribute__((returns_nonnull)) PyObject*
-new_expr2_wrap1(ValueType type, PyObject *arg0, PyObject *arg1);
 
 __attribute__((returns_nonnull)) RuntimeValue*
 new_select(RuntimeValue *arg0, PyObject *arg1, PyObject *arg2);
@@ -1069,9 +1082,6 @@ static inline double get_value_f64(PyObject *v, unsigned age)
     return brassboard_seq::get_value_f64(v, -1);
 }
 
-std::pair<EvalError,GenVal> interpret_func(const int *code, GenVal *data,
-                                           EvalError *errors);
-
 struct InterpFunction {
     std::vector<int> code;
     std::vector<GenVal> data;
@@ -1104,28 +1114,18 @@ struct InterpFunction {
         return idx;
     }
 
-    void set_value(auto *value, auto &&args)
+    void set_value(RuntimeValue *value, auto &&args)
         requires std::same_as<std::vector<DataType>,
                               std::remove_cvref_t<decltype(args)>>
     {
-        _set_value((RuntimeValue*)value, args);
+        _set_value(value, args);
     }
 
     void _set_value(RuntimeValue *value, std::vector<DataType> &args);
     Builder::ValueInfo &visit_value(RuntimeValue *value, Builder &builder);
 
     void eval_all(unsigned age);
-
-    TagVal call()
-    {
-        auto [err, val] = interpret_func(code.data(), data.data(), errors.data());
-        TagVal res;
-        res.type = ret_type;
-        res.err = err;
-        res.val = val;
-        return res;
-    }
-
+    TagVal call();
 };
 
 }
