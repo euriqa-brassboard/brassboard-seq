@@ -20,8 +20,7 @@
 from brassboard_seq.utils cimport PyErr_Format, Py_NotImplemented, \
   PyExc_TypeError, PyExc_ValueError, init_library
 
-cdef StringIO, np # hide import
-from io import StringIO
+cdef np # hide import
 import numpy as np
 cimport numpy as cnpy
 cnpy._import_array()
