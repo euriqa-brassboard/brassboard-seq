@@ -493,18 +493,6 @@ pyunicode_from_string(const char *str)
 
 py_object channel_name_from_path(PyObject *path);
 
-template<typename F, typename ...Args>
-static inline bool call_loop_cb(F &&f, Args&&... args)
-{
-    if constexpr (std::is_void_v<decltype(std::forward<F>(f)(std::forward<Args>(args)...))>) {
-        std::forward<F>(f)(std::forward<Args>(args)...);
-        return true;
-    }
-    else {
-        return std::forward<F>(f)(std::forward<Args>(args)...);
-    }
-}
-
 template<typename It>
 struct py_iter {
     explicit py_iter(PyObject *obj) : obj(obj) {}
