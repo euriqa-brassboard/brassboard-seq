@@ -23,26 +23,6 @@
 
 namespace brassboard_seq::rtval {
 
-template<typename RuntimeValue>
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-rt_convert_bool(RuntimeValue *v)
-{
-    if (v->type_ == Int64)
-        v = v->arg0;
-    if (v->datatype == DataType::Bool)
-        return py_newref(v);
-    return new_expr1(Bool, v);
-}
-
-template<typename RuntimeValue>
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-rt_round_int64(RuntimeValue *v)
-{
-    if (v->type_ == Int64)
-        return py_newref(v);
-    return new_expr1(Int64, v);
-}
-
 }
 
 #endif

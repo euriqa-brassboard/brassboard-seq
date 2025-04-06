@@ -1031,6 +1031,26 @@ new_select(RuntimeValue *arg0, PyObject *arg1, PyObject *arg2)
 }
 
 template<typename RuntimeValue>
+static inline __attribute__((returns_nonnull)) RuntimeValue*
+rt_convert_bool(RuntimeValue *v)
+{
+    if (v->type_ == Int64)
+        v = v->arg0;
+    if (v->datatype == DataType::Bool)
+        return py_newref(v);
+    return new_expr1(Bool, v);
+}
+
+template<typename RuntimeValue>
+static inline __attribute__((returns_nonnull)) RuntimeValue*
+rt_round_int64(RuntimeValue *v)
+{
+    if (v->type_ == Int64)
+        return py_newref(v);
+    return new_expr1(Int64, v);
+}
+
+template<typename RuntimeValue>
 static inline __attribute__((always_inline)) TagVal rtval_cache(RuntimeValue *rtval)
 {
     TagVal cache;
@@ -1064,6 +1084,8 @@ void rt_eval_throw(auto *self, unsigned age, uintptr_t key=uintptr_t(-1))
     }
     throw_py_error(self->cache_err, key);
 }
+
+void update_rtvalue();
 
 static inline double get_value_f64(PyObject *v, unsigned age)
 {
