@@ -258,6 +258,12 @@ PyObject *pydict_deepcopy(PyObject *d)
     return _pydict_deepcopy(d);
 }
 
+void pytype_add_method(PyTypeObject *type, PyMethodDef *meth)
+{
+    py_object descr(throw_if_not(PyDescr_NewMethod(type, meth)));
+    throw_if(PyDict_SetItemString(type->tp_dict, meth->ml_name, descr));
+}
+
 static PyObject *py_slash = pyunicode_from_string("/");
 py_object channel_name_from_path(PyObject *path)
 {

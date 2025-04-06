@@ -1042,12 +1042,13 @@ static inline __attribute__((always_inline)) TagVal rtval_cache(RuntimeValue *rt
 
 bool rt_same_value(PyObject *v1, PyObject *v2);
 
-void _rt_eval_cache(_RuntimeValue *self, unsigned age);
+void rt_eval_cache(_RuntimeValue *self, unsigned age);
 
 static inline __attribute__((always_inline))
 void rt_eval_cache(auto *self, unsigned age)
+    requires (!std::same_as<std::remove_cvref_t<decltype(*self)>,_RuntimeValue>)
 {
-    _rt_eval_cache((_RuntimeValue*)self, age);
+    rt_eval_cache((_RuntimeValue*)self, age);
 }
 
 static inline __attribute__((always_inline))
