@@ -19,7 +19,7 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.rtval cimport get_value_f64, is_rtval, \
   new_arg, new_const, new_expr2, ValueType, DataType, RuntimeValue
-from brassboard_seq.utils cimport _PyObject_Vectorcall, pyfloat_from_double, \
+from brassboard_seq.utils cimport PyObject_Vectorcall, pyfloat_from_double, \
   PyErr_Format, PyExc_RuntimeError
 
 cimport cython
@@ -80,7 +80,7 @@ cdef rampfunction_eval(RampFunction self, t, length, oldval):
     args[1] = <PyObject*>t
     args[2] = <PyObject*>length
     args[3] = <PyObject*>oldval
-    return _PyObject_Vectorcall(_eval, args, 4, NULL)
+    return PyObject_Vectorcall(_eval, args, 4, NULL)
 
 cdef class RampFunction(_RampFunctionBase):
     def __init__(self, *, **params):
@@ -123,7 +123,7 @@ cdef class RampFunction(_RampFunctionBase):
         args[0] = <PyObject*>self
         args[1] = <PyObject*>pylen
         args[2] = <PyObject*>pyoldval
-        return _PyObject_Vectorcall(_spline_segments, args, 3, NULL)
+        return PyObject_Vectorcall(_spline_segments, args, 3, NULL)
 
     cdef int set_runtime_params(self, unsigned age) except -1:
         if self._fvalue is None:

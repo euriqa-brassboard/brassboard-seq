@@ -128,16 +128,12 @@ add_custom_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *c
     pyx_fld(subseq, cond) = py_newref(cond);
     pyx_fld(subseq, sub_seqs) = sub_seqs.release();
     subseq->dummy_step = (decltype(subseq->dummy_step))py_immref(Py_None);
-    if (nargs || kwargs) {
-        py_object full_args(pytuple_new(nargs + 1));
-        PyTuple_SET_ITEM(full_args.get(), 0, py_newref(o.get()));
+    {
+        PyObject *callargs[nargs + 1] = { o };
         for (auto i = 0; i < nargs; i++)
-            PyTuple_SET_ITEM(full_args.get(), i + 1, py_newref(args[i]));
-        py_object res(throw_if_not(pyobject_call(cb, full_args, kwargs)));
-    }
-    else {
-        PyObject *callargs[] = { o };
-        py_object res(throw_if_not(_PyObject_Vectorcall(cb, callargs, 1, nullptr)));
+            callargs[i + 1] = args[i];
+        py_object res(throw_if_not(PyObject_VectorcallDict(cb, callargs,
+                                                           nargs + 1, kwargs)));
     }
     pylist_append(self->sub_seqs, o);
     return (SubSeq*)o.release();

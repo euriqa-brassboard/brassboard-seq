@@ -3044,12 +3044,12 @@ PulseCompilerGen::Info::Info()
         py_nums[i] = pylong_cached(i);
 
     channel_list[0] = throw_if_not(
-        _PyObject_Vectorcall(ControlChannel, &py_nums[0], 1, nullptr));
+        PyObject_Vectorcall(ControlChannel, &py_nums[0], 1, nullptr));
     channel_list[1] = throw_if_not(
-        _PyObject_Vectorcall(ControlChannel, &py_nums[1], 1, nullptr));
+        PyObject_Vectorcall(ControlChannel, &py_nums[1], 1, nullptr));
     for (int i = 0; i < 62; i++)
         channel_list[i + 2] = throw_if_not(
-            _PyObject_Vectorcall(DriveChannel, &py_nums[i], 1, nullptr));
+            PyObject_Vectorcall(DriveChannel, &py_nums[i], 1, nullptr));
 
     py_object orig_post_init(
         throw_if_not(PyObject_GetAttrString(ToneData, "__post_init__")));
@@ -3062,7 +3062,7 @@ PulseCompilerGen::Info::Info()
     py_object dummy_post_init(PyCFunction_New(&dummy_post_init_method, nullptr));
     throw_if(PyObject_SetAttrString(ToneData, "__post_init__", dummy_post_init));
     py_object dummy_tonedata(
-        throw_if_not(_PyObject_Vectorcall(ToneData, py_nums, 6, nullptr)));
+        throw_if_not(PyObject_Vectorcall(ToneData, py_nums, 6, nullptr)));
     throw_if(PyObject_SetAttrString(ToneData, "__post_init__", orig_post_init));
     py_object td_dict(throw_if_not(PyObject_GenericGetDict(dummy_tonedata, nullptr)));
     for (auto [key, value]: pydict_iter(td_dict)) {

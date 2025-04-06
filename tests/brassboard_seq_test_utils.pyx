@@ -27,7 +27,7 @@ cdef extern from *:
     static brassboard_seq::rtval::TagVal test_callback_extern(auto *self)
     {
         using namespace brassboard_seq;
-        py_object res(throw_if_not(_PyObject_Vectorcall(self->cb, nullptr, 0, nullptr)));
+        py_object res(throw_if_not(PyObject_Vectorcall(self->cb, nullptr, 0, nullptr)));
         return rtval::TagVal::from_py(res);
     }
 
@@ -36,7 +36,7 @@ cdef extern from *:
         using namespace brassboard_seq;
         py_object pyage(pylong_from_long(age));
         PyObject *args[] = { pyage.get() };
-        py_object res(throw_if_not(_PyObject_Vectorcall(self->cb, args, 1, nullptr)));
+        py_object res(throw_if_not(PyObject_Vectorcall(self->cb, args, 1, nullptr)));
         return rtval::TagVal::from_py(res);
     }
 

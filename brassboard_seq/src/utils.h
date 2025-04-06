@@ -647,23 +647,6 @@ pytype_genericalloc(auto *ty, Py_ssize_t sz=0)
     return throw_if_not(PyType_GenericAlloc((PyTypeObject*)ty, sz));
 }
 
-// Copied from cython
-static inline PyObject* pyobject_call(PyObject *func, PyObject *arg,
-                                      PyObject *kw=nullptr)
-{
-    auto call = Py_TYPE(func)->tp_call;
-    if (!call) [[unlikely]]
-        return PyObject_Call(func, arg, kw);
-    if (Py_EnterRecursiveCall(" while calling a Python object")) [[unlikely]]
-        return nullptr;
-    auto result = call(func, arg, kw);
-    Py_LeaveRecursiveCall();
-    if (!result && !PyErr_Occurred()) [[unlikely]]
-        PyErr_SetString(PyExc_SystemError,
-                        "NULL result without error in PyObject_Call");
-    return result;
-}
-
 static inline bool py_issubtype_nontrivial(auto *a, auto *b)
 {
     // Assume a != b and b != object, and skip the first and last element in mro.

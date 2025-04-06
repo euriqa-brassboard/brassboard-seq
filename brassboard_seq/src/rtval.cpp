@@ -549,7 +549,7 @@ composite_rtprop_get_res(auto self, PyObject *obj, PyObject *DataType,
                                                                  DataType, nullptr);
     py_object py_data((PyObject*)data);
     if (!data->filled || (!data->compiled && _object_compiled(obj))) {
-        py_object res(throw_if_not(_PyObject_Vectorcall(self->cb, &obj, 1, nullptr)));
+        py_object res(throw_if_not(PyObject_Vectorcall(self->cb, &obj, 1, nullptr)));
         Py_DECREF(data->cache);
         data->cache = res.release();
         data->filled = true;
