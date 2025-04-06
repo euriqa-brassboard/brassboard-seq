@@ -337,6 +337,13 @@ void bb_reraise_and_throw_if(bool cond, uintptr_t key)
     }
 }
 
+PyObject *py_catch_error(auto &&cb) try {
+    return (PyObject*)cb();
+}
+catch (...) {
+    return nullptr;
+}
+
 [[noreturn]] void py_num_arg_error(const char *func_name, ssize_t nfound,
                                    ssize_t nmin, ssize_t nmax);
 static __attribute__((always_inline)) inline void

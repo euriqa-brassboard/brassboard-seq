@@ -35,6 +35,8 @@ cdef extern from "src/rtval.cpp" namespace "brassboard_seq::rtval":
     PyObject *RTVal_Type
     object new_expr2_wrap1(ValueType, object, object) except +
     object build_addsub(object v0, object v1, bint) except +
+    bint needs_parenthesis(RuntimeValue v, ValueType parent_type)
+    void update_rtvalue()
     TagVal rtprop_callback_func(rtprop_callback self, unsigned age) except +
     composite_rtprop_data get_composite_rtprop_data(CompositeRTProp prop, object obj,
                                                     object, composite_rtprop_data) except +
@@ -44,37 +46,7 @@ cdef extern from "src/rtval.cpp" namespace "brassboard_seq::rtval":
 
 RTVal_Type = <PyObject*>RuntimeValue
 assert_layout_compatible(None, None)
-
-cdef int operator_precedence(ValueType type_) noexcept:
-    if type_ == ValueType.Add or type_ == ValueType.Sub:
-        return 3
-    if type_ == ValueType.Mul or type_ == ValueType.Div:
-        return 2
-    if (type_ == ValueType.CmpLT or type_ == ValueType.CmpGT or
-        type_ == ValueType.CmpLE or type_ == ValueType.CmpGE):
-        return 4
-    if type_ == ValueType.CmpNE or type_ == ValueType.CmpEQ:
-        return 5
-    if type_ == ValueType.And:
-        return 6
-    if type_ == ValueType.Or:
-        return 8
-    if type_ == ValueType.Pow:
-        return 7
-    # if type_ == ValueType.Not: # Not printed as operator anymore
-    #     return 1
-    return 0
-
-cdef bint needs_parenthesis(RuntimeValue v, ValueType parent_type) noexcept:
-    cdef int op_self = operator_precedence(v.type_)
-    cdef int op_parent = operator_precedence(parent_type)
-    if op_self == 0 or op_parent == 0 or op_self < op_parent:
-        return False
-    if op_self > op_parent:
-        return True
-    if parent_type == ValueType.Add or parent_type == ValueType.Mul:
-        return False
-    return True
+update_rtvalue()
 
 cdef int show_arg(io, write, RuntimeValue v, ValueType parent_type) except -1:
     cdef bint p = needs_parenthesis(v, parent_type)
@@ -216,52 +188,6 @@ cdef int show(io, write, RuntimeValue v) except -1:
     else:
         write('Unknown value')
 
-cdef np_add = np.add
-cdef np_subtract = np.subtract
-cdef np_multiply = np.multiply
-cdef np_divide = np.divide
-cdef np_remainder = np.remainder
-cdef np_bitwise_and = np.bitwise_and
-cdef np_bitwise_or = np.bitwise_or
-cdef np_bitwise_xor = np.bitwise_xor
-cdef np_logical_not = np.logical_not
-cdef np_power = np.power
-cdef np_less = np.less
-cdef np_greater = np.greater
-cdef np_less_equal = np.less_equal
-cdef np_greater_equal = np.greater_equal
-cdef np_equal = np.equal
-cdef np_not_equal = np.not_equal
-
-cdef np_fmin = np.fmin
-cdef np_fmax = np.fmax
-
-cdef np_abs = np.abs
-cdef np_ceil = np.ceil
-cdef np_exp = np.exp
-cdef np_expm1 = np.expm1
-cdef np_floor = np.floor
-cdef np_log = np.log
-cdef np_log1p = np.log1p
-cdef np_log2 = np.log2
-cdef np_log10 = np.log10
-cdef np_sqrt = np.sqrt
-cdef np_arcsin = np.arcsin
-cdef np_arccos = np.arccos
-cdef np_arctan = np.arctan
-cdef np_arctan2 = np.arctan2
-cdef np_arcsinh = np.arcsinh
-cdef np_arccosh = np.arccosh
-cdef np_arctanh = np.arctanh
-cdef np_sin = np.sin
-cdef np_cos = np.cos
-cdef np_tan = np.tan
-cdef np_sinh = np.sinh
-cdef np_cosh = np.cosh
-cdef np_tanh = np.tanh
-cdef np_hypot = np.hypot
-cdef np_rint = np.rint
-
 def get_value(v, unsigned age):
     if is_rtval(v):
         rt_eval_cache(<RuntimeValue>v, age)
@@ -291,58 +217,6 @@ cdef class RuntimeValue:
         show(io, io.write, self)
         return io.getvalue()
 
-    # It's too easy to accidentally use this in control flow/assertion
-    def __bool__(self):
-        PyErr_Format(PyExc_TypeError, "Cannot convert runtime value to boolean")
-
-    def __add__(self, other):
-        return build_addsub(self, other, False)
-    def __sub__(self, other):
-        return build_addsub(self, other, True)
-
-    def __mul__(self, other):
-        return new_expr2_wrap1(ValueType.Mul, self, other)
-
-    def __truediv__(self, other):
-        return new_expr2_wrap1(ValueType.Div, self, other)
-
-    def __and__(self, other):
-        return new_expr2_wrap1(ValueType.And, self, other)
-
-    def __or__(self, other):
-        return new_expr2_wrap1(ValueType.Or, self, other)
-
-    def __xor__(self, other):
-        return new_expr2_wrap1(ValueType.Xor, self, other)
-
-    def __pow__(self, other):
-        return new_expr2_wrap1(ValueType.Pow, self, other)
-
-    def __mod__(self, other):
-        return new_expr2_wrap1(ValueType.Mod, self, other)
-
-    def __pos__(self):
-        return self
-    def __neg__(self):
-        return build_addsub(0, self, True)
-
-    def __richcmp__(self, other, int op):
-        typ = pycmp2valcmp(op)
-        cdef RuntimeValue v2
-        if is_rtval(other):
-            if self is other:
-                return (typ == ValueType.CmpLE or typ == ValueType.CmpGE or
-                        typ == ValueType.CmpEQ)
-            v2 = <RuntimeValue>other
-        else:
-            v2 = new_const(other, None)
-        return new_expr2(typ, self, v2)
-
-    def __abs__(self):
-        if self.type_ == ValueType.Abs:
-            return self
-        return new_expr1(ValueType.Abs, self)
-
     def __ceil__(self):
         if self.type_ == ValueType.Ceil:
             return self
@@ -356,141 +230,7 @@ cdef class RuntimeValue:
     def __round__(self):
         return rt_round_int64(self)
 
-    def __array_ufunc__(self, ufunc, methods, /, *inputs):
-        if methods != '__call__':
-            return <object>Py_NotImplemented
-        # Needed for numpy type support
-        if ufunc is np_add:
-            return build_addsub(<object>PyTuple_GET_ITEM(inputs, 0),
-                                <object>PyTuple_GET_ITEM(inputs, 1), False)
-        if ufunc is np_subtract:
-            return build_addsub(<object>PyTuple_GET_ITEM(inputs, 0),
-                                <object>PyTuple_GET_ITEM(inputs, 1), True)
-        if ufunc is np_multiply:
-            return new_expr2_wrap1(ValueType.Mul, <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
-        if ufunc is np_divide:
-            return new_expr2_wrap1(ValueType.Div, <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
-        if ufunc is np_remainder:
-            return new_expr2_wrap1(ValueType.Mod, <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
-        if ufunc is np_bitwise_and:
-            return new_expr2_wrap1(ValueType.And, <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
-        if ufunc is np_bitwise_or:
-            return new_expr2_wrap1(ValueType.Or, <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
-        if ufunc is np_bitwise_xor:
-            return new_expr2_wrap1(ValueType.Xor, <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
-        if ufunc is np_logical_not:
-            if self.type_ == ValueType.Not:
-                return rt_convert_bool(self.arg0)
-            return new_expr1(ValueType.Not, self)
-        if ufunc is np_power:
-            return new_expr2_wrap1(ValueType.Pow, <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
-        if ufunc is np_less:
-            return new_expr2_wrap1(ValueType.CmpLT,
-                                   <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
-        if ufunc is np_greater:
-            return new_expr2_wrap1(ValueType.CmpGT,
-                                   <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
-        if ufunc is np_less_equal:
-            return new_expr2_wrap1(ValueType.CmpLE,
-                                   <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
-        if ufunc is np_greater_equal:
-            return new_expr2_wrap1(ValueType.CmpGE,
-                                   <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
-        if ufunc is np_equal:
-            return new_expr2_wrap1(ValueType.CmpEQ,
-                                   <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
-        if ufunc is np_not_equal:
-            return new_expr2_wrap1(ValueType.CmpNE,
-                                   <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
-        if ufunc is np_fmin:
-            v1 = PyTuple_GET_ITEM(inputs, 0)
-            v2 = PyTuple_GET_ITEM(inputs, 1)
-            if v1 == v2:
-                return <object>v1
-            return new_expr2_wrap1(ValueType.Min, <object>v1, <object>v2)
-        if ufunc is np_fmax:
-            v1 = PyTuple_GET_ITEM(inputs, 0)
-            v2 = PyTuple_GET_ITEM(inputs, 1)
-            if v1 == v2:
-                return <object>v1
-            return new_expr2_wrap1(ValueType.Max, <object>v1, <object>v2)
-        if ufunc is np_abs:
-            if self.type_ == ValueType.Abs:
-                return self
-            return new_expr1(ValueType.Abs, self)
-        if ufunc is np_ceil:
-            if self.type_ == ValueType.Ceil:
-                return self
-            return new_expr1(ValueType.Ceil, self)
-        if ufunc is np_exp:
-            return new_expr1(ValueType.Exp, self)
-        if ufunc is np_expm1:
-            return new_expr1(ValueType.Expm1, self)
-        if ufunc is np_floor:
-            if self.type_ == ValueType.Floor:
-                return self
-            return new_expr1(ValueType.Floor, self)
-        if ufunc is np_log:
-            return new_expr1(ValueType.Log, self)
-        if ufunc is np_log1p:
-            return new_expr1(ValueType.Log1p, self)
-        if ufunc is np_log2:
-            return new_expr1(ValueType.Log2, self)
-        if ufunc is np_log10:
-            return new_expr1(ValueType.Log10, self)
-        if ufunc is np_sqrt:
-            return new_expr1(ValueType.Sqrt, self)
-        if ufunc is np_arcsin:
-            return new_expr1(ValueType.Asin, self)
-        if ufunc is np_arccos:
-            return new_expr1(ValueType.Acos, self)
-        if ufunc is np_arctan:
-            return new_expr1(ValueType.Atan, self)
-        if ufunc is np_arctan2:
-            return new_expr2_wrap1(ValueType.Atan2,
-                                   <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
-        if ufunc is np_arcsinh:
-            return new_expr1(ValueType.Asinh, self)
-        if ufunc is np_arccosh:
-            return new_expr1(ValueType.Acosh, self)
-        if ufunc is np_arctanh:
-            return new_expr1(ValueType.Atanh, self)
-        if ufunc is np_sin:
-            return new_expr1(ValueType.Sin, self)
-        if ufunc is np_cos:
-            return new_expr1(ValueType.Cos, self)
-        if ufunc is np_tan:
-            return new_expr1(ValueType.Tan, self)
-        if ufunc is np_sinh:
-            return new_expr1(ValueType.Sinh, self)
-        if ufunc is np_cosh:
-            return new_expr1(ValueType.Cosh, self)
-        if ufunc is np_tanh:
-            return new_expr1(ValueType.Tanh, self)
-        if ufunc is np_hypot:
-            return new_expr2_wrap1(ValueType.Hypot,
-                                   <object>PyTuple_GET_ITEM(inputs, 0),
-                                   <object>PyTuple_GET_ITEM(inputs, 1))
-        if ufunc is np_rint:
-            if self.type_ == ValueType.Rint:
-                return self
-            return new_expr1(ValueType.Rint, self)
-        return <object>Py_NotImplemented
-
+cdef np_logical_not = np.logical_not
 def inv(v, /):
     if type(v) is bool:
         return v is False

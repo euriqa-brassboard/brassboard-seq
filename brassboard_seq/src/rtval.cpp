@@ -130,6 +130,312 @@ build_addsub(PyObject *v0, PyObject *v1, bool issub)
     return _new_addsub(nc, (_RuntimeValue*)nv.get(), ns);
 }
 
+namespace np {
+static auto const mod = throw_if_not(PyImport_ImportModule("numpy"));
+#define GET_NP(name)                                                    \
+    static auto const name = throw_if_not(PyObject_GetAttrString(mod, #name))
+GET_NP(add);
+GET_NP(subtract);
+GET_NP(multiply);
+GET_NP(divide);
+GET_NP(remainder);
+GET_NP(bitwise_and);
+GET_NP(bitwise_or);
+GET_NP(bitwise_xor);
+GET_NP(logical_not);
+GET_NP(power);
+GET_NP(less);
+GET_NP(greater);
+GET_NP(less_equal);
+GET_NP(greater_equal);
+GET_NP(equal);
+GET_NP(not_equal);
+
+GET_NP(fmin);
+GET_NP(fmax);
+
+GET_NP(abs);
+GET_NP(ceil);
+GET_NP(exp);
+GET_NP(expm1);
+GET_NP(floor);
+GET_NP(log);
+GET_NP(log1p);
+GET_NP(log2);
+GET_NP(log10);
+GET_NP(sqrt);
+GET_NP(arcsin);
+GET_NP(arccos);
+GET_NP(arctan);
+GET_NP(arctan2);
+GET_NP(arcsinh);
+GET_NP(arccosh);
+GET_NP(arctanh);
+GET_NP(sin);
+GET_NP(cos);
+GET_NP(tan);
+GET_NP(sinh);
+GET_NP(cosh);
+GET_NP(tanh);
+GET_NP(hypot);
+GET_NP(rint);
+#undef GET_NP
+};
+
+static PyObject *rtvalue_add(PyObject *v1, PyObject *v2)
+{
+    return py_catch_error([&] { return build_addsub(v1, v2, false); });
+}
+
+static PyObject *rtvalue_sub(PyObject *v1, PyObject *v2)
+{
+    return py_catch_error([&] { return build_addsub(v1, v2, true); });
+}
+
+static PyObject *rtvalue_mul(PyObject *v1, PyObject *v2)
+{
+    return py_catch_error([&] { return new_expr2_wrap1(Mul, v1, v2); });
+}
+
+static PyObject *rtvalue_div(PyObject *v1, PyObject *v2)
+{
+    return py_catch_error([&] { return new_expr2_wrap1(Div, v1, v2); });
+}
+
+static PyObject *rtvalue_mod(PyObject *v1, PyObject *v2)
+{
+    return py_catch_error([&] { return new_expr2_wrap1(Mod, v1, v2); });
+}
+
+static PyObject *rtvalue_pow(PyObject *v1, PyObject *v2, PyObject *v3)
+{
+    if (v3 != Py_None) [[unlikely]]
+        Py_RETURN_NOTIMPLEMENTED;
+    return py_catch_error([&] { return new_expr2_wrap1(Pow, v1, v2); });
+}
+
+static PyObject *rtvalue_neg(PyObject *self)
+{
+    return py_catch_error([&] { return build_addsub(pylong_cached(0), self, true); });
+}
+
+static PyObject *rtvalue_pos(PyObject *self)
+{
+    return py_newref(self);
+}
+
+static PyObject *rtvalue_abs(PyObject *self)
+{
+    if (((_RuntimeValue*)self)->type_ == Abs)
+        return py_newref(self);
+    return py_catch_error([&] { return new_expr1(Abs, self); });
+}
+
+static int rtvalue_bool(PyObject*)
+{
+    // It's too easy to accidentally use this in control flow/assertion
+    PyErr_Format(PyExc_TypeError, "Cannot convert runtime value to boolean");
+    return -1;
+}
+
+static PyObject *rtvalue_and(PyObject *v1, PyObject *v2)
+{
+    return py_catch_error([&] { return new_expr2_wrap1(And, v1, v2); });
+}
+
+static PyObject *rtvalue_xor(PyObject *v1, PyObject *v2)
+{
+    return py_catch_error([&] { return new_expr2_wrap1(Xor, v1, v2); });
+}
+
+static PyObject *rtvalue_or(PyObject *v1, PyObject *v2)
+{
+    return py_catch_error([&] { return new_expr2_wrap1(Or, v1, v2); });
+}
+
+static PyNumberMethods rtvalue_as_number = {
+    .nb_add = rtvalue_add,
+    .nb_subtract = rtvalue_sub,
+    .nb_multiply = rtvalue_mul,
+    .nb_remainder = rtvalue_mod,
+    .nb_power = rtvalue_pow,
+    .nb_negative = rtvalue_neg,
+    .nb_positive = rtvalue_pos,
+    .nb_absolute = rtvalue_abs,
+    .nb_bool = rtvalue_bool,
+    .nb_and = rtvalue_and,
+    .nb_xor = rtvalue_xor,
+    .nb_or = rtvalue_or,
+    .nb_true_divide = rtvalue_div,
+};
+
+static PyObject *rtvalue_richcmp(PyObject *v1, PyObject *v2, int op)
+{
+    return py_catch_error([&] {
+        auto typ = pycmp2valcmp(op);
+        if (is_rtval(v2)) {
+            if (v1 == v2)
+                return ((typ == CmpLE || typ == CmpGE || typ == CmpEQ) ?
+                        py_immref(Py_True) : py_immref(Py_False));
+            return new_expr2(typ, v1, v2);
+        }
+        py_object rv2((PyObject*)_new_const(TagVal::from_py(v2)));
+        return new_expr2(typ, v1, rv2.get());
+    });
+}
+
+static inline bool is_integer(auto v)
+{
+    return (v->datatype != DataType::Float64 || v->type_ == Ceil ||
+            v->type_ == Floor || v->type_ == Rint);
+}
+
+static PyObject *rtvalue_array_ufunc(PyObject *py_self, PyObject *const *args,
+                                     Py_ssize_t nargs) try
+{
+    py_check_num_arg("__array_ufunc__", nargs, 2);
+    auto self = (_RuntimeValue*)py_self;
+    auto ufunc = args[0];
+    auto methods = args[1];
+    if (PyUnicode_CompareWithASCIIString(methods, "__call__"))
+        Py_RETURN_NOTIMPLEMENTED;
+    // Needed for numpy type support
+    if (ufunc == np::add)
+        return build_addsub(args[2], args[3], false);
+    if (ufunc == np::subtract)
+        return build_addsub(args[2], args[3], true);
+    auto uni_expr = [&] (auto type) { return (PyObject*)new_expr1(type, self); };
+    auto bin_expr = [&] (auto type) { return new_expr2_wrap1(type, args[2], args[3]); };
+    if (ufunc == np::multiply)
+        return bin_expr(Mul);
+    if (ufunc == np::divide)
+        return bin_expr(Div);
+    if (ufunc == np::remainder)
+        return bin_expr(Mod);
+    if (ufunc == np::bitwise_and)
+        return bin_expr(And);
+    if (ufunc == np::bitwise_or)
+        return bin_expr(Or);
+    if (ufunc == np::bitwise_xor)
+        return bin_expr(Xor);
+    if (ufunc == np::logical_not)
+        return (self->type_ == Not ?
+                (PyObject*)rt_convert_bool(self->arg0) : uni_expr(Not));
+    if (ufunc == np::power)
+        return bin_expr(Pow);
+    if (ufunc == np::less)
+        return bin_expr(CmpLT);
+    if (ufunc == np::greater)
+        return bin_expr(CmpGT);
+    if (ufunc == np::less_equal)
+        return bin_expr(CmpLE);
+    if (ufunc == np::greater_equal)
+        return bin_expr(CmpGE);
+    if (ufunc == np::equal)
+        return bin_expr(CmpEQ);
+    if (ufunc == np::not_equal)
+        return bin_expr(CmpNE);
+    if (ufunc == np::fmin)
+        return args[2] == args[3] ? py_newref(py_self) : bin_expr(Min);
+    if (ufunc == np::fmax)
+        return args[2] == args[3] ? py_newref(py_self) : bin_expr(Max);
+    if (ufunc == np::abs)
+        return self->type_ == Abs ? py_newref(py_self) : uni_expr(Abs);
+    if (ufunc == np::ceil)
+        return is_integer(self) ? py_newref(py_self) : uni_expr(Ceil);
+    if (ufunc == np::exp)
+        return uni_expr(Exp);
+    if (ufunc == np::expm1)
+        return uni_expr(Expm1);
+    if (ufunc == np::floor)
+        return is_integer(self) ? py_newref(py_self) : uni_expr(Floor);
+    if (ufunc == np::log)
+        return uni_expr(Log);
+    if (ufunc == np::log1p)
+        return uni_expr(Log1p);
+    if (ufunc == np::log2)
+        return uni_expr(Log2);
+    if (ufunc == np::log10)
+        return uni_expr(Log10);
+    if (ufunc == np::sqrt)
+        return uni_expr(Sqrt);
+    if (ufunc == np::arcsin)
+        return uni_expr(Asin);
+    if (ufunc == np::arccos)
+        return uni_expr(Acos);
+    if (ufunc == np::arctan)
+        return uni_expr(Atan);
+    if (ufunc == np::arctan2)
+        return bin_expr(Atan2);
+    if (ufunc == np::arcsinh)
+        return uni_expr(Asinh);
+    if (ufunc == np::arccosh)
+        return uni_expr(Acosh);
+    if (ufunc == np::arctanh)
+        return uni_expr(Atanh);
+    if (ufunc == np::sin)
+        return uni_expr(Sin);
+    if (ufunc == np::cos)
+        return uni_expr(Cos);
+    if (ufunc == np::tan)
+        return uni_expr(Tan);
+    if (ufunc == np::sinh)
+        return uni_expr(Sinh);
+    if (ufunc == np::cosh)
+        return uni_expr(Cosh);
+    if (ufunc == np::tanh)
+        return uni_expr(Tanh);
+    if (ufunc == np::hypot)
+        return bin_expr(Hypot);
+    if (ufunc == np::rint)
+        return is_integer(self) ? py_newref(py_self) : uni_expr(Rint);
+    Py_RETURN_NOTIMPLEMENTED;
+}
+catch (...) {
+    return nullptr;
+}
+
+static inline constexpr int operator_precedence(ValueType type_)
+{
+    if (type_ == Add || type_ == Sub)
+        return 3;
+    if (type_ == Mul || type_ == Div)
+        return 2;
+    if (type_ == CmpLT || type_ == CmpGT || type_ == CmpLE || type_ == CmpGE)
+        return 4;
+    if (type_ == CmpNE || type_ == CmpEQ)
+        return 5;
+    if (type_ == And)
+        return 6;
+    if (type_ == Or)
+        return 8;
+    if (type_ == Pow)
+        return 7;
+    return 0;
+}
+
+static inline bool needs_parenthesis(auto v, ValueType parent_type)
+{
+    auto op_self = operator_precedence(v->type_);
+    auto op_parent = operator_precedence(parent_type);
+    if (op_self == 0 || op_parent == 0 || op_self < op_parent)
+        return false;
+    if (op_self > op_parent)
+        return true;
+    return !(parent_type == Add || parent_type == Mul);
+}
+
+static inline void update_rtvalue()
+{
+    auto type = (PyTypeObject*)RTVal_Type;
+    static PyMethodDef rtvalue_array_ufunc_method = {
+        "__array_ufunc__", (PyCFunction)(void*)rtvalue_array_ufunc, METH_FASTCALL, 0};
+    pytype_add_method(type, &rtvalue_array_ufunc_method);
+    type->tp_as_number = &rtvalue_as_number;
+    type->tp_richcompare = rtvalue_richcmp;
+    PyType_Modified(type);
+}
+
 static TagVal rtprop_callback_func(auto *self, unsigned age)
 {
     py_object v(throw_if_not(PyObject_GetAttr(self->obj, self->fieldname)));

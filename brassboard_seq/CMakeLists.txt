@@ -2,7 +2,8 @@
 
 include_directories(${Python_NumPy_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_definitions(-DNPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION -fopenmp)
+add_definitions(-DNPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION -fopenmp
+  -Wno-missing-field-initializers)
 
 add_library(brassboard_seq_utils SHARED
   src/lib_rtval.cpp
