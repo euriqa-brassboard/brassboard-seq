@@ -29,7 +29,7 @@
 
 namespace brassboard_seq::artiq_backend {
 
-using brassboard_seq::rtval::_RuntimeValue;
+using brassboard_seq::rtval::RuntimeValue;
 
 struct ArtiqConsts {
     int COUNTER_ENABLE;
@@ -265,11 +265,11 @@ void generate_rtios(auto *ab, backend::CompiledSeq &cseq, unsigned age)
     auto seq = pyx_fld(ab, seq);
     for (size_t i = 0, nreloc = ab->bool_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = ab->bool_values[i];
-        val = !rtval::rtval_cache((_RuntimeValue*)rtval).is_zero();
+        val = !rtval::rtval_cache((RuntimeValue*)rtval).is_zero();
     }
     for (size_t i = 0, nreloc = ab->float_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = ab->float_values[i];
-        val = rtval::rtval_cache((_RuntimeValue*)rtval).template get<double>();
+        val = rtval::rtval_cache((RuntimeValue*)rtval).template get<double>();
     }
     int64_t max_delay = 0;
     auto relocate_delay = [&] (int64_t &delay, auto rt_delay) {
@@ -291,11 +291,11 @@ void generate_rtios(auto *ab, backend::CompiledSeq &cseq, unsigned age)
         delay = int64_t(fdelay * event_time::time_scale + 0.5);
     };
     for (auto &ttlchn: ab->channels.ttlchns) {
-        relocate_delay(ttlchn.delay, (_RuntimeValue*)ttlchn.rt_delay);
+        relocate_delay(ttlchn.delay, (RuntimeValue*)ttlchn.rt_delay);
         max_delay = std::max(max_delay, ttlchn.delay);
     }
     for (auto &ddschn: ab->channels.ddschns) {
-        relocate_delay(ddschn.delay, (_RuntimeValue*)ddschn.rt_delay);
+        relocate_delay(ddschn.delay, (RuntimeValue*)ddschn.rt_delay);
         max_delay = std::max(max_delay, ddschn.delay);
     }
     auto &time_values = pyx_fld(seq, seqinfo)->time_mgr->time_values;

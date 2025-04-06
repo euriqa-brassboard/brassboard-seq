@@ -34,7 +34,7 @@ static inline bool get_cond_val(PyObject *v, unsigned age)
     if (v == Py_False)
         return false;
     assert(rtval::is_rtval(v));
-    auto rv = (_RuntimeValue*)v;
+    auto rv = (RuntimeValue*)v;
     rtval::rt_eval_throw(rv, age);
     return !rtval::rtval_cache(rv).is_zero();
 }
@@ -191,7 +191,7 @@ static inline long long get_time_value(auto self, int base_id, unsigned age,
     auto cond = get_cond_val(self->cond, age);
     long long offset = 0;
     if (cond) {
-        auto rt_offset = (_RuntimeValue*)self->data.get_rt_offset();
+        auto rt_offset = (RuntimeValue*)self->data.get_rt_offset();
         if (rt_offset) {
             rtval::rt_eval_throw(rt_offset, age, event_time_key(self));
             offset = rt_offset->cache_val.i64_val;

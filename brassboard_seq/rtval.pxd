@@ -149,7 +149,7 @@ cdef extern from *:
     # Cython doesn't seem to allow namespace in the object property
     # for the imported extension class
     """
-    using _brassboard_seq_rtval_RuntimeValue = brassboard_seq::rtval::_RuntimeValue;
+    using _brassboard_seq_rtval_RuntimeValue = brassboard_seq::rtval::RuntimeValue;
     """
 
 cdef inline RuntimeValue new_arg(idx, ty):

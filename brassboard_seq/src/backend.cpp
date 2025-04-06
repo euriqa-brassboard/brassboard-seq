@@ -159,8 +159,8 @@ static inline auto action_get_condval(auto action, unsigned age)
         return false;
     assert(is_rtval(cond));
     try {
-        rt_eval_throw((_RuntimeValue*)cond, age);
-        return !rtval_cache((_RuntimeValue*)cond).is_zero();
+        rt_eval_throw((RuntimeValue*)cond, age);
+        return !rtval_cache((RuntimeValue*)cond).is_zero();
     }
     catch (...) {
         bb_rethrow(action_key(action->aid));
@@ -179,7 +179,7 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
     auto time_mgr = seqinfo->time_mgr;
     comp->cseq.total_time = time_mgr->__pyx_vtab->compute_all_times(time_mgr, age);
     for (auto [assert_id, a]: pylist_iter(seqinfo->assertions)) {
-        auto c = (_RuntimeValue*)PyTuple_GET_ITEM(a, 0);
+        auto c = (RuntimeValue*)PyTuple_GET_ITEM(a, 0);
         rt_eval_throw(c, age, assert_key(assert_id));
         if (rtval_cache(c).is_zero()) {
             bb_throw_format(PyExc_AssertionError, assert_key(assert_id),
@@ -204,12 +204,12 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
                          action_key(action->aid));
             }
             else if (is_rtval(action_value)) {
-                rt_eval_throw((_RuntimeValue*)action_value, age,
+                rt_eval_throw((RuntimeValue*)action_value, age,
                               action_key(action->aid));
             }
             auto action_end_val = action->end_val.get();
             if (action_end_val != action_value && is_rtval(action_end_val)) {
-                rt_eval_throw((_RuntimeValue*)action_end_val, age,
+                rt_eval_throw((RuntimeValue*)action_end_val, age,
                               action_key(action->aid));
             }
             // No need to evaluate action.length since the `compute_all_times`

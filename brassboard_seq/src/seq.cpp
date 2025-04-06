@@ -48,19 +48,19 @@ _combine_cond(PyObject *cond1, PyObject *new_cond)
             return { Py_False, false };
         }
     }
-    py_object cond2((PyObject*)rt_convert_bool((_RuntimeValue*)new_cond));
+    py_object cond2((PyObject*)rt_convert_bool((RuntimeValue*)new_cond));
     if (cond1 == Py_True)
         return { cond2.release(), true };
     assert(is_rtval(cond1));
     auto o = pytype_genericalloc(&RuntimeValue_Type);
-    auto self = (_RuntimeValue*)o;
+    auto self = (RuntimeValue*)o;
     self->datatype = DataType::Bool;
     // self->cache_err = EvalError::NoError;
     // self->cache_val = { .i64_val = 0 };
     self->type_ = And;
     self->age = (unsigned)-1;
-    self->arg0 = (_RuntimeValue*)py_newref(cond1);
-    self->arg1 = (_RuntimeValue*)cond2.release();
+    self->arg0 = (RuntimeValue*)py_newref(cond1);
+    self->arg1 = (RuntimeValue*)cond2.release();
     self->cb_arg2 = py_immref(Py_None);
     return { o, true };
 }
@@ -81,9 +81,9 @@ new_round_time(auto self, EventTime *prev, PyObject *offset, PyObject *cond,
 {
     if (is_rtval(offset)) {
         py_object rt_offset((PyObject*)event_time::round_time_rt(
-                                (_RuntimeValue*)offset, (_RuntimeValue*)rt_time_scale));
+                                (RuntimeValue*)offset, (RuntimeValue*)rt_time_scale));
         return event_time::_new_time_rt(self, event_time_type, prev,
-                                        (_RuntimeValue*)rt_offset.get(),
+                                        (RuntimeValue*)rt_offset.get(),
                                         cond, wait_for);
     }
     else {
