@@ -257,7 +257,7 @@ void collect_actions(auto *ab, backend::CompiledSeq &cseq, EventTime*)
 }
 
 static __attribute__((always_inline)) inline
-void generate_rtios(auto *ab, backend::CompiledSeq &cseq, unsigned age, py_object &pyage)
+void generate_rtios(auto *ab, backend::CompiledSeq &cseq, unsigned age)
 {
     bb_debug("generate_rtios: start\n");
     auto seq = pyx_fld(ab, seq);
@@ -273,7 +273,7 @@ void generate_rtios(auto *ab, backend::CompiledSeq &cseq, unsigned age, py_objec
     auto relocate_delay = [&] (int64_t &delay, rtval::_RuntimeValue *rt_delay) {
         if (!rt_delay)
             return;
-        rtval::rt_eval_throw(rt_delay, age, pyage);
+        rtval::rt_eval_throw(rt_delay, age);
         auto fdelay = rtval::rtval_cache(rt_delay).template get<double>();
         if (fdelay < 0) {
             py_object pyval(pyfloat_from_double(fdelay));

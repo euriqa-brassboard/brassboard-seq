@@ -151,7 +151,7 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
     }
 }
 
-static inline auto action_get_condval(auto action, unsigned age, py_object &pyage)
+static inline auto action_get_condval(auto action, unsigned age)
 {
     auto cond = action->cond.get();
     if (cond == Py_True)
@@ -160,7 +160,7 @@ static inline auto action_get_condval(auto action, unsigned age, py_object &pyag
         return false;
     assert(is_rtval(cond));
     try {
-        rt_eval_throw((_RuntimeValue*)cond, age, pyage);
+        rt_eval_throw((_RuntimeValue*)cond, age);
         return !rtval_cache((_RuntimeValue*)cond).is_zero();
     }
     catch (...) {
@@ -172,19 +172,16 @@ template<typename _RampFunctionBase, typename Backend>
 static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
                                              _RampFunctionBase*, Backend*)
 {
-    py_object pyage;
-    if (Py_TYPE(_age) == &PyLong_Type)
-        pyage.set_obj(_age);
     unsigned age = PyLong_AsLong(_age);
     throw_if(age == (unsigned)-1 && PyErr_Occurred());
     auto seq = comp->seq;
     auto seqinfo = pyx_fld(seq, seqinfo);
     auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);
     auto time_mgr = seqinfo->time_mgr;
-    comp->cseq.total_time = time_mgr->__pyx_vtab->compute_all_times(time_mgr, age, pyage);
+    comp->cseq.total_time = time_mgr->__pyx_vtab->compute_all_times(time_mgr, age);
     for (auto [assert_id, a]: pylist_iter(seqinfo->assertions)) {
         auto c = (_RuntimeValue*)PyTuple_GET_ITEM(a, 0);
-        rt_eval_throw(c, age, pyage, assert_key(assert_id));
+        rt_eval_throw(c, age, assert_key(assert_id));
         if (rtval_cache(c).is_zero()) {
             bb_throw_format(PyExc_AssertionError, assert_key(assert_id),
                             "%U", PyTuple_GET_ITEM(a, 1));
@@ -195,7 +192,7 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
         auto &actions = comp->cseq.all_actions[cid];
         long long prev_time = 0;
         for (auto action: actions) {
-            bool cond_val = action_get_condval(action, age, pyage);
+            bool cond_val = action_get_condval(action, age);
             action->cond_val = cond_val;
             if (!cond_val)
                 continue;
@@ -204,16 +201,16 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
                                                   rampfunctionbase_type);
             if (isramp) {
                 auto rampf = (_RampFunctionBase*)action_value;
-                throw_if(rampf->__pyx_vtab->set_runtime_params(rampf, age, pyage),
+                throw_if(rampf->__pyx_vtab->set_runtime_params(rampf, age),
                          action_key(action->aid));
             }
             else if (is_rtval(action_value)) {
-                rt_eval_throw((_RuntimeValue*)action_value, age, pyage,
+                rt_eval_throw((_RuntimeValue*)action_value, age,
                               action_key(action->aid));
             }
             auto action_end_val = action->end_val.get();
             if (action_end_val != action_value && is_rtval(action_end_val)) {
-                rt_eval_throw((_RuntimeValue*)action_end_val, age, pyage,
+                rt_eval_throw((_RuntimeValue*)action_end_val, age,
                               action_key(action->aid));
             }
             // No need to evaluate action.length since the `compute_all_times`
@@ -227,7 +224,7 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
         }
     }
     for (auto [name, backend]: pydict_iter<Backend>(comp->backends)) {
-        throw_if(backend->__pyx_vtab->runtime_finalize(backend, comp->cseq, age, pyage) < 0);
+        throw_if(backend->__pyx_vtab->runtime_finalize(backend, comp->cseq, age) < 0);
     }
 }
 

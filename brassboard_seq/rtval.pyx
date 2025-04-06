@@ -262,12 +262,9 @@ cdef np_tanh = np.tanh
 cdef np_hypot = np.hypot
 cdef np_rint = np.rint
 
-def get_value(v, age):
-    cdef py_object pyage
-    if isinstance(age, int):
-        pyage.set_obj(age)
+def get_value(v, unsigned age):
     if is_rtval(v):
-        rt_eval_cache(<RuntimeValue>v, age, pyage)
+        rt_eval_cache(<RuntimeValue>v, age)
         return rtval_cache(<RuntimeValue>v).to_py()
     return v
 
@@ -280,11 +277,8 @@ cdef class RuntimeValue:
         # `RuntimeValue.__new__` or its wrapper.
         PyErr_Format(PyExc_TypeError, "RuntimeValue cannot be created directly")
 
-    def eval(self, age, /):
-        cdef py_object pyage
-        if isinstance(age, int):
-            pyage.set_obj(age)
-        rt_eval_cache(self, <unsigned>age, pyage)
+    def eval(self, unsigned age, /):
+        rt_eval_cache(self, age)
         return rtval_cache(self).to_py()
 
     def __str__(self):

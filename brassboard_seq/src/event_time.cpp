@@ -27,7 +27,7 @@
 
 namespace brassboard_seq::event_time {
 
-static inline bool get_cond_val(PyObject *v, unsigned age, py_object &pyage)
+static inline bool get_cond_val(PyObject *v, unsigned age)
 {
     if (v == Py_True) [[likely]]
         return true;
@@ -35,7 +35,7 @@ static inline bool get_cond_val(PyObject *v, unsigned age, py_object &pyage)
         return false;
     assert(rtval::is_rtval(v));
     auto rv = (rtval::_RuntimeValue*)v;
-    rtval::rt_eval_throw(rv, age, pyage);
+    rtval::rt_eval_throw(rv, age);
     return !rtval::rtval_cache(rv).is_zero();
 }
 
@@ -162,7 +162,7 @@ static inline void update_chain_pos(auto self, auto prev, int nchains)
 // we can compute the diff without computing the base time,
 // while if the base time is known, we can use the static values in the computation
 static inline long long get_time_value(auto self, int base_id, unsigned age,
-                                       py_object &pyage, std::vector<long long> &cache)
+                                       std::vector<long long> &cache)
 {
     auto tid = self->data.id;
     if (tid == base_id)
@@ -186,14 +186,14 @@ static inline long long get_time_value(auto self, int base_id, unsigned age,
 
     long long prev_val = 0;
     if (auto prev = self->prev; (PyObject*)prev != Py_None)
-        prev_val = get_time_value(prev, base_id, age, pyage, cache);
+        prev_val = get_time_value(prev, base_id, age, cache);
 
-    auto cond = get_cond_val(self->cond, age, pyage);
+    auto cond = get_cond_val(self->cond, age);
     long long offset = 0;
     if (cond) {
         auto rt_offset = (rtval::_RuntimeValue*)self->data.get_rt_offset();
         if (rt_offset) {
-            rt_eval_throw(rt_offset, age, pyage, event_time_key(self));
+            rt_eval_throw(rt_offset, age, event_time_key(self));
             offset = rt_offset->cache_val.i64_val;
             if (offset < 0) {
                 bb_throw_format(PyExc_ValueError, event_time_key(self),
@@ -217,7 +217,7 @@ static inline long long get_time_value(auto self, int base_id, unsigned age,
         // this base if the condition isn't true.
         if (cond) {
             value = std::max(value, get_time_value(wait_for, base_id, age,
-                                                   pyage, cache) + offset);
+                                                   cache) + offset);
         }
     }
 
@@ -305,8 +305,7 @@ static inline void timemanager_finalize(auto self, EventTime*)
 }
 
 template<typename EventTime>
-static inline long long timemanager_compute_all_times(auto self, unsigned age,
-                                                      py_object &pyage, EventTime*)
+static inline long long timemanager_compute_all_times(auto self, unsigned age, EventTime*)
 {
     if (!self->status->finalized)
         py_throw_format(PyExc_RuntimeError, "Event times not finalized");
@@ -316,15 +315,13 @@ static inline long long timemanager_compute_all_times(auto self, unsigned age,
     self->time_values.resize(ntimes);
     std::ranges::fill(self->time_values, -1);
     for (auto [i, t]: pylist_iter<EventTime>(event_times))
-        max_time = std::max(max_time, get_time_value(t, -1, age, pyage,
-                                                     self->time_values));
+        max_time = std::max(max_time, get_time_value(t, -1, age, self->time_values));
     return max_time;
 }
 
 // Returns borrowed reference
 template<typename EventTime>
-static inline int eventtime_find_base_id(EventTime *t1, EventTime *t2,
-                                         unsigned age, py_object &pyage)
+static inline int eventtime_find_base_id(EventTime *t1, EventTime *t2, unsigned age)
 {
     std::map<int,EventTime*> frontier;
     if (!t1->manager_status->finalized)
@@ -340,7 +337,7 @@ static inline int eventtime_find_base_id(EventTime *t1, EventTime *t2,
             return -1; // Found the start of the experiment
         frontier[prev->data.id] = prev;
         if (auto wait_for = t->wait_for;
-            (PyObject*)wait_for != Py_None && get_cond_val(t->cond, age, pyage)) {
+            (PyObject*)wait_for != Py_None && get_cond_val(t->cond, age)) {
             frontier[wait_for->data.id] = wait_for;
         }
     }
@@ -355,11 +352,10 @@ static inline rtval::TagVal timediff_eval(auto self, unsigned age)
         py_throw_format(PyExc_ValueError, "Recursive value dependency detected.");
     self->in_eval = true;
     ScopeExit reset_eval([&] { self->in_eval = false; });
-    py_object pyage;
-    int base_id = eventtime_find_base_id(t1, t2, age, pyage);
+    int base_id = eventtime_find_base_id(t1, t2, age);
     std::vector<long long> cache(t1->manager_status->ntimes, -1);
-    return double(get_time_value(t1, base_id, age, pyage, cache) -
-                  get_time_value(t2, base_id, age, pyage, cache)) / time_scale;
+    return double(get_time_value(t1, base_id, age, cache) -
+                  get_time_value(t2, base_id, age, cache)) / time_scale;
 }
 
 static traverseproc event_time_base_traverse;

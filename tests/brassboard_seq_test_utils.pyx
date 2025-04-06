@@ -375,11 +375,10 @@ cdef class RampTest:
     def eval_compile_end(self):
         return self.func.eval_end(self.length, self.oldval)
 
-    def eval_runtime(self, age, ts):
-        cdef utils.py_object pyage
-        self.func.set_runtime_params(age, pyage)
-        self.func.spline_segments(rtval.get_value_f64(self.length, age, pyage),
-                                  rtval.get_value_f64(self.oldval, age, pyage))
+    def eval_runtime(self, unsigned age, ts):
+        self.func.set_runtime_params(age)
+        self.func.spline_segments(rtval.get_value_f64(self.length, age),
+                                  rtval.get_value_f64(self.oldval, age))
         return [tagval_to_float(self.func.runtime_eval(t)) for t in ts]
 
 def ramp_get_spline_segments(action._RampFunctionBase self, length, oldval):
@@ -415,8 +414,7 @@ def time_manager_finalize(event_time.TimeManager time_manager):
     time_manager.finalize()
 
 def time_manager_compute_all_times(event_time.TimeManager time_manager, unsigned age):
-    cdef utils.py_object pyage
-    max_time = time_manager.compute_all_times(age, pyage)
+    max_time = time_manager.compute_all_times(age)
     ntimes = time_manager.time_values.size()
     values = []
     for i in range(ntimes):

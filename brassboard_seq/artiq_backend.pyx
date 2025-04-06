@@ -23,7 +23,7 @@ from brassboard_seq.event_time cimport EventTime, round_time_int
 from brassboard_seq.rtval cimport ExternCallback, TagVal, is_rtval, new_extern
 from brassboard_seq.seq cimport Seq
 from brassboard_seq.utils cimport set_global_tracker, PyErr_Format, \
-  PyExc_RuntimeError, PyExc_TypeError, PyExc_ValueError, pyobject_call, py_object
+  PyExc_RuntimeError, PyExc_TypeError, PyExc_ValueError
 
 from cpython cimport PyMethod_Check, PyMethod_GET_FUNCTION, PyMethod_GET_SELF
 
@@ -72,7 +72,7 @@ cdef extern from "src/artiq_backend.cpp" namespace "brassboard_seq::artiq_backen
 
     void collect_actions(ArtiqBackend ab, CompiledSeq&, EventTime) except +
 
-    void generate_rtios(ArtiqBackend ab, CompiledSeq&, unsigned age, py_object&) except +
+    void generate_rtios(ArtiqBackend ab, CompiledSeq&, unsigned age) except +
     TagVal evalonce_callback(object) except +
 
 artiq_consts.COUNTER_ENABLE = <int?>edge_counter.CONFIG_COUNT_RISING | <int?>edge_counter.CONFIG_RESET_TO_ZERO
@@ -240,9 +240,8 @@ cdef class ArtiqBackend:
                          self.device_delay)
         collect_actions(self, cseq, None)
 
-    cdef int runtime_finalize(self, CompiledSeq &cseq,
-                              unsigned age, py_object &pyage) except -1:
-        generate_rtios(self, cseq, age, pyage)
+    cdef int runtime_finalize(self, CompiledSeq &cseq, unsigned age) except -1:
+        generate_rtios(self, cseq, age)
 
 @cython.internal
 @cython.auto_pickle(False)

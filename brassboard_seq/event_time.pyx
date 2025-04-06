@@ -32,7 +32,7 @@ cdef extern from "src/event_time.cpp" namespace "brassboard_seq::event_time":
     str str_time(long long) except +
     void timemanager_finalize(TimeManager self, EventTime) except +
     long long timemanager_compute_all_times(TimeManager self, unsigned age,
-                                            py_object &pyage, EventTime) except +
+                                            EventTime) except +
     TagVal timediff_eval(EventTimeDiff self, unsigned age) except +
     void update_event_time_gc_callback(object type, EventTime)
 
@@ -47,8 +47,8 @@ cdef class TimeManager:
     cdef int finalize(self) except -1:
         timemanager_finalize(self, None)
 
-    cdef long long compute_all_times(self, unsigned age, py_object &pyage) except -1:
-        return timemanager_compute_all_times(self, age, pyage, None)
+    cdef long long compute_all_times(self, unsigned age) except -1:
+        return timemanager_compute_all_times(self, age, None)
 
 @cython.auto_pickle(False)
 @cython.c_api_binop_methods(True)

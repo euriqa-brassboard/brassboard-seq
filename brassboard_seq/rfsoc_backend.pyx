@@ -23,7 +23,6 @@ from brassboard_seq.event_time cimport EventTime, round_time_f64
 from brassboard_seq.rtval cimport is_rtval, rtval_cache, rt_eval_throw, RuntimeValue
 from brassboard_seq.utils cimport set_global_tracker, \
   PyErr_Format, PyExc_ValueError, PyExc_TypeError, \
-  assume_not_none, _assume_not_none, py_object, \
   ostream, pybytes_ostream, pylong_from_long, pylong_from_longlong
 
 cimport cython
@@ -316,10 +315,9 @@ cdef class RFSOCBackend:
             self.channels.add_seq_channel(idx, chn_idx, param_enum)
         collect_actions(self, cseq, None)
 
-    cdef int runtime_finalize(self, CompiledSeq &cseq,
-                              unsigned age, py_object &pyage) except -1:
+    cdef int runtime_finalize(self, CompiledSeq &cseq, unsigned age) except -1:
         for dds, delay in self.rt_dds_delay.items():
-            rt_eval_throw(<RuntimeValue>delay, age, pyage)
+            rt_eval_throw(<RuntimeValue>delay, age)
             set_dds_delay(self, dds, rtval_cache(<RuntimeValue>delay).get[double]())
         gen_rfsoc_data(self, cseq, None, None)
 

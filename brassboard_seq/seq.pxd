@@ -19,7 +19,7 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.config cimport Config
 from brassboard_seq.event_time cimport TimeManager, EventTime
-from brassboard_seq.utils cimport BacktraceTracker, py_object
+from brassboard_seq.utils cimport BacktraceTracker
 from brassboard_seq.scan cimport ParamPack
 from brassboard_seq.action cimport Action, ActionAllocator
 

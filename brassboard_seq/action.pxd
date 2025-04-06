@@ -53,7 +53,7 @@ cdef class _RampFunctionBase:
     # Also note that this API mutates the object and currently means
     # we cannot compute multiple ramps concurrently.
     cdef spline_segments(self, double length, double oldval)
-    cdef int set_runtime_params(self, unsigned age, py_object &pyage) except -1
+    cdef int set_runtime_params(self, unsigned age) except -1
     cdef TagVal runtime_eval(self, double t) noexcept
 
 cdef class RampFunction(_RampFunctionBase):

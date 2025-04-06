@@ -276,7 +276,7 @@ using extern_cb_t = TagVal(_ExternCallback*);
 using extern_age_cb_t = TagVal(_ExternCallback*, unsigned);
 
 __attribute__((flatten,visibility("protected")))
-void _rt_eval_cache(_RuntimeValue *self, unsigned age, py_object &pyage)
+void _rt_eval_cache(_RuntimeValue *self, unsigned age)
 {
     if (self->age == age)
         return;
@@ -308,7 +308,7 @@ void _rt_eval_cache(_RuntimeValue *self, unsigned age, py_object &pyage)
     }
 
     auto rtarg0 = self->arg0;
-    _rt_eval_cache(rtarg0, age, pyage);
+    _rt_eval_cache(rtarg0, age);
     auto arg0 = rtval_cache(rtarg0);
     auto eval1 = [&] (auto op_cls) {
         if (arg0.err != EvalError::NoError) {
@@ -356,11 +356,11 @@ void _rt_eval_cache(_RuntimeValue *self, unsigned age, py_object &pyage)
     if (type == Select) {
         auto rtarg2 = (_RuntimeValue*)self->cb_arg2;
         auto rtres = arg0.template get<bool>() ? rtarg1 : rtarg2;
-        _rt_eval_cache(rtres, age, pyage);
+        _rt_eval_cache(rtres, age);
         set_cache(rtval_cache(rtres).convert(self->datatype));
         return;
     }
-    _rt_eval_cache(rtarg1, age, pyage);
+    _rt_eval_cache(rtarg1, age);
     auto arg1 = rtval_cache(rtarg1);
 
     auto eval2 = [&] (auto op_cls) {
@@ -754,7 +754,7 @@ InterpFunction::visit_value(_RuntimeValue *value, Builder &builder)
 }
 
 __attribute__((visibility("protected")))
-void InterpFunction::eval_all(unsigned age, py_object &pyage)
+void InterpFunction::eval_all(unsigned age)
 {
     for (size_t i = 0; i < rt_vals.size(); i++) {
         auto rt_val = (_RuntimeValue*)rt_vals[i];
@@ -762,7 +762,7 @@ void InterpFunction::eval_all(unsigned age, py_object &pyage)
             errors[i] = EvalError::NoError;
             continue;
         }
-        _rt_eval_cache(rt_val, age, pyage);
+        _rt_eval_cache(rt_val, age);
         data[i] = rt_val->cache_val;
         errors[i] = rt_val->cache_err;
     }

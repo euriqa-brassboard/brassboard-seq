@@ -39,8 +39,7 @@ cdef class Backend:
     cdef int finalize(self, CompiledSeq &cseq) except -1:
         pass
 
-    cdef int runtime_finalize(self, CompiledSeq &cseq,
-                              unsigned age, py_object &pyage) except -1:
+    cdef int runtime_finalize(self, CompiledSeq &cseq, unsigned age) except -1:
         pass
 
 @cython.auto_pickle(False)

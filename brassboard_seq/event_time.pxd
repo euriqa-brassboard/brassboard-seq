@@ -23,7 +23,7 @@ from libc.stdint cimport *
 
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.rtval cimport is_rtval, RuntimeValue
-from brassboard_seq.utils cimport PyErr_Format, PyExc_ValueError, py_object
+from brassboard_seq.utils cimport PyErr_Format, PyExc_ValueError
 
 from cpython cimport PyObject
 
@@ -92,7 +92,7 @@ cdef class TimeManager:
                                  False, cond, wait_for)
 
     cdef int finalize(self) except -1
-    cdef long long compute_all_times(self, unsigned age, py_object &pyage) except -1
+    cdef long long compute_all_times(self, unsigned age) except -1
 
 cdef inline TimeManager new_time_manager():
     self = <TimeManager>TimeManager.__new__(TimeManager)

@@ -17,7 +17,6 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.utils cimport py_object
 
 from libc.stdint cimport *
 from libcpp.vector cimport vector
@@ -126,15 +125,14 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
     RuntimeValue rt_convert_bool(RuntimeValue) except +
     RuntimeValue rt_round_int64(RuntimeValue) except +
 
-    void rt_eval_cache(RuntimeValue self, unsigned age, py_object &pyage) except +
-    void rt_eval_throw(RuntimeValue self, unsigned age, py_object &pyage) except +
-    void rt_eval_throw(RuntimeValue self, unsigned age, py_object &pyage,
-                       uintptr_t) except +
-    double get_value_f64(object, unsigned age, py_object &pyage) except +
+    void rt_eval_cache(RuntimeValue self, unsigned age) except +
+    void rt_eval_throw(RuntimeValue self, unsigned age) except +
+    void rt_eval_throw(RuntimeValue self, unsigned age, uintptr_t) except +
+    double get_value_f64(object, unsigned age) except +
 
     cppclass InterpFunction:
         void set_value(RuntimeValue, vector[DataType]&) except +
-        void eval_all(unsigned, py_object&) except +
+        void eval_all(unsigned) except +
         TagVal call()
 
 cdef class RuntimeValue:

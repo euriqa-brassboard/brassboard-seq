@@ -18,7 +18,6 @@
 
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.seq cimport Seq
-from brassboard_seq.utils cimport py_object
 
 cdef extern from "src/backend.h" namespace "brassboard_seq::backend":
     cppclass CompiledSeq:
@@ -29,7 +28,7 @@ cdef class Backend:
     cdef str prefix
 
     cdef int finalize(self, CompiledSeq&) except -1
-    cdef int runtime_finalize(self, CompiledSeq&, unsigned age, py_object &pyage) except -1
+    cdef int runtime_finalize(self, CompiledSeq&, unsigned age) except -1
 
 cdef class SeqCompiler:
     cdef readonly Seq seq

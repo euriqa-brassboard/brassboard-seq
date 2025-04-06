@@ -138,8 +138,7 @@ static TagVal rtprop_callback_func(auto *self, unsigned age)
     auto rv = (_RuntimeValue*)v.get();
     if (rv->type_ == ExternAge && rv->cb_arg2 == (PyObject*)self)
         py_throw_format(PyExc_ValueError, "RT property have not been assigned.");
-    py_object pyage;
-    rt_eval_cache(rv, age, pyage);
+    rt_eval_cache(rv, age);
     return rtval_cache(rv);
 }
 

@@ -1042,21 +1042,19 @@ static inline __attribute__((always_inline)) TagVal rtval_cache(RuntimeValue *rt
 
 bool rt_same_value(PyObject *v1, PyObject *v2);
 
-void _rt_eval_cache(_RuntimeValue *self, unsigned age, py_object &pyage);
+void _rt_eval_cache(_RuntimeValue *self, unsigned age);
 
 static inline __attribute__((always_inline))
-void rt_eval_cache(auto *self, unsigned age, py_object &pyage)
+void rt_eval_cache(auto *self, unsigned age)
 {
-    _rt_eval_cache((_RuntimeValue*)self, age, pyage);
+    _rt_eval_cache((_RuntimeValue*)self, age);
 }
 
-template<typename RuntimeValue>
 static inline __attribute__((always_inline))
-void rt_eval_throw(RuntimeValue *self, unsigned age, py_object &pyage,
-                   uintptr_t key=uintptr_t(-1))
+void rt_eval_throw(auto *self, unsigned age, uintptr_t key=uintptr_t(-1))
 {
     try {
-        rt_eval_cache(self, age, pyage);
+        rt_eval_cache(self, age);
     }
     catch (...) {
         if (key != uintptr_t(-1) && PyErr_Occurred())
@@ -1066,10 +1064,10 @@ void rt_eval_throw(RuntimeValue *self, unsigned age, py_object &pyage,
     throw_py_error(self->cache_err, key);
 }
 
-static inline double get_value_f64(PyObject *v, unsigned age, py_object &pyage)
+static inline double get_value_f64(PyObject *v, unsigned age)
 {
     if (is_rtval(v)) {
-        rt_eval_throw((_RuntimeValue*)v, age, pyage);
+        rt_eval_throw((_RuntimeValue*)v, age);
         return rtval_cache((_RuntimeValue*)v).get<double>();
     }
     return brassboard_seq::get_value_f64(v, -1);
@@ -1120,7 +1118,7 @@ struct InterpFunction {
     void _set_value(_RuntimeValue *value, std::vector<DataType> &args);
     Builder::ValueInfo &visit_value(_RuntimeValue *value, Builder &builder);
 
-    void eval_all(unsigned age, py_object &pyage);
+    void eval_all(unsigned age);
 
     TagVal call()
     {

@@ -58,7 +58,7 @@ cdef class _RampFunctionBase:
     cdef spline_segments(self, double length, double oldval):
         raise NotImplementedError
 
-    cdef int set_runtime_params(self, unsigned age, py_object &pyage) except -1:
+    cdef int set_runtime_params(self, unsigned age) except -1:
         raise NotImplementedError
 
     cdef TagVal runtime_eval(self, double t) noexcept:
@@ -125,11 +125,11 @@ cdef class RampFunction(_RampFunctionBase):
         args[2] = <PyObject*>pyoldval
         return _PyObject_Vectorcall(_spline_segments, args, 3, NULL)
 
-    cdef int set_runtime_params(self, unsigned age, py_object &pyage) except -1:
+    cdef int set_runtime_params(self, unsigned age) except -1:
         if self._fvalue is None:
             PyErr_Format(PyExc_RuntimeError, "RampFunction.__init__ not called")
         if self.interp_func:
-            deref(self.interp_func).eval_all(age, pyage)
+            deref(self.interp_func).eval_all(age)
 
     cdef TagVal runtime_eval(self, double t) noexcept:
         cdef void *fvalue
@@ -156,11 +156,11 @@ cdef class SeqCubicSpline(_RampFunctionBase):
         return ()
 
     @cython.cdivision(True)
-    cdef int set_runtime_params(self, unsigned age, py_object &pyage) except -1:
-        self.f_order0 = get_value_f64(self.order0, age, pyage)
-        self.f_order1 = get_value_f64(self.order1, age, pyage)
-        self.f_order2 = get_value_f64(self.order2, age, pyage)
-        self.f_order3 = get_value_f64(self.order3, age, pyage)
+    cdef int set_runtime_params(self, unsigned age) except -1:
+        self.f_order0 = get_value_f64(self.order0, age)
+        self.f_order1 = get_value_f64(self.order1, age)
+        self.f_order2 = get_value_f64(self.order2, age)
+        self.f_order3 = get_value_f64(self.order3, age)
 
     @cython.cdivision(True)
     cdef TagVal runtime_eval(self, double t) noexcept:
@@ -188,9 +188,9 @@ cdef class Blackman(_RampFunctionBase):
         self.f_t_scale = 0.0 if length == 0 else cmath.pi * 2 / length
 
     @cython.cdivision(True)
-    cdef int set_runtime_params(self, unsigned age, py_object &pyage) except -1:
-        self.f_amp = get_value_f64(self.amp, age, pyage)
-        self.f_offset = get_value_f64(self.offset, age, pyage)
+    cdef int set_runtime_params(self, unsigned age) except -1:
+        self.f_amp = get_value_f64(self.amp, age)
+        self.f_offset = get_value_f64(self.offset, age)
 
     @cython.cdivision(True)
     cdef TagVal runtime_eval(self, double t) noexcept:
@@ -216,9 +216,9 @@ cdef class BlackmanSquare(_RampFunctionBase):
         self.f_t_scale = 0.0 if length == 0 else cmath.pi * 2 / length
 
     @cython.cdivision(True)
-    cdef int set_runtime_params(self, unsigned age, py_object &pyage) except -1:
-        self.f_amp = get_value_f64(self.amp, age, pyage)
-        self.f_offset = get_value_f64(self.offset, age, pyage)
+    cdef int set_runtime_params(self, unsigned age) except -1:
+        self.f_amp = get_value_f64(self.amp, age)
+        self.f_offset = get_value_f64(self.offset, age)
 
     @cython.cdivision(True)
     cdef TagVal runtime_eval(self, double t) noexcept:
@@ -246,9 +246,9 @@ cdef class LinearRamp(_RampFunctionBase):
         return ()
 
     @cython.cdivision(True)
-    cdef int set_runtime_params(self, unsigned age, py_object &pyage) except -1:
-        self.f_start = get_value_f64(self.start, age, pyage)
-        self.f_end = get_value_f64(self.end, age, pyage)
+    cdef int set_runtime_params(self, unsigned age) except -1:
+        self.f_start = get_value_f64(self.start, age)
+        self.f_end = get_value_f64(self.end, age)
 
     @cython.cdivision(True)
     cdef TagVal runtime_eval(self, double t) noexcept:
