@@ -181,8 +181,6 @@ catch (...) {
     return nullptr;
 }
 
-static PyObject *py_root = pyunicode_from_string("root");
-
 template<typename ParamPack> static PyObject*
 parampack_new(PyObject *type, PyObject *const *args, size_t _nargs,
               PyObject *kwnames) try {
@@ -190,14 +188,14 @@ parampack_new(PyObject *type, PyObject *const *args, size_t _nargs,
     auto self = (ParamPack*)o.get();
     self->vectorcall_ptr = (void*)&parampack_vectorcall<ParamPack>;
     self->visited = pydict_new();
-    self->fieldname = py_newref(py_root);
+    self->fieldname = py_newref("root"_py);
     auto nargs = PyVectorcall_NARGS(_nargs);
     int nkws = kwnames ? PyTuple_GET_SIZE(kwnames) : 0;
     self->values = pydict_new();
     if (!nargs && !nkws)
         return o.release();
     py_object kwargs(pydict_new());
-    throw_if(PyDict_SetItem(self->values, py_root, kwargs.get()));
+    throw_if(PyDict_SetItem(self->values, "root"_py, kwargs.get()));
     for (size_t i = 0; i < nargs; i++) {
         auto arg = args[i];
         if (!PyDict_Check(arg))

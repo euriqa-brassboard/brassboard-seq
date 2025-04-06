@@ -530,11 +530,9 @@ apply_composite_ovr(PyObject *val, PyObject *ovr)
     py_throw_format(PyExc_TypeError, "Unknown value type '%S'", Py_TYPE(val));
 }
 
-static PyObject *_bb_rt_values_str = pyunicode_from_string("_bb_rt_values");
-
 static inline bool _object_compiled(PyObject *obj)
 {
-    py_object field(PyObject_GetAttr(obj, _bb_rt_values_str));
+    py_object field(PyObject_GetAttr(obj, "_bb_rt_values"_py));
     if (!field)
         PyErr_Clear();
     return field.get() == Py_None;

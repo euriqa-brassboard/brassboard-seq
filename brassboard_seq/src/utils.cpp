@@ -287,10 +287,9 @@ void pytype_add_method(PyTypeObject *type, PyMethodDef *meth)
                     (nexpected == 1) ? "" : "s", nfound);
 }
 
-static PyObject *py_slash = pyunicode_from_string("/");
 py_object channel_name_from_path(PyObject *path)
 {
-    return py_object(throw_if_not(PyUnicode_Join(py_slash, path)));
+    return py_object(throw_if_not(PyUnicode_Join("/"_py, path)));
 }
 
 std::streamsize buff_streambuf::xsputn(const char *s, std::streamsize count)

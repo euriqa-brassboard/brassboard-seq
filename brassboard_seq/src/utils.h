@@ -491,6 +491,24 @@ pyunicode_from_string(const char *str)
     return throw_if_not(PyUnicode_FromString(str));
 }
 
+template<size_t N>
+struct str_literal {
+    constexpr str_literal(const char (&str)[N])
+    {
+        std::copy_n(str, N, value);
+    }
+    char value[N];
+};
+
+template<str_literal lit>
+static PyObject *_py_string_cache = pyunicode_from_string(lit.value);
+
+template<str_literal lit>
+static inline PyObject *operator ""_py()
+{
+    return _py_string_cache<lit>;
+}
+
 py_object channel_name_from_path(PyObject *path);
 
 template<typename It>
