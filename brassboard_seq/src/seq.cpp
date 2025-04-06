@@ -143,16 +143,6 @@ add_custom_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *c
     return (SubSeq*)o.release();
 }
 
-[[noreturn]] static void raise_too_few_args(const char* func_name, bool exact,
-                                            Py_ssize_t num_min, Py_ssize_t num_found)
-{
-    const char *more_or_less = exact ? "exactly" : "at least";
-    py_throw_format(PyExc_TypeError,
-                    "%.200s() takes %.8s %zd positional argument%.1s (%zd given)",
-                    func_name, more_or_less, num_min,
-                    (num_min == 1) ? "" : "s", num_found);
-}
-
 struct CondCombiner {
     PyObject *cond{nullptr};
     bool needs_free{false};
@@ -217,8 +207,7 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
     auto subseq = condseq_get_subseq(self);
     auto cond = pyx_fld(self, cond);
     auto nargs_min = type == AddStepType::At ? 2 : 1;
-    if (nargs < nargs_min)
-        raise_too_few_args(add_step_name(type), false, nargs_min, nargs);
+    py_check_num_arg(add_step_name(type), nargs, nargs_min);
 
     auto first_arg = args[nargs_min - 1];
     using EventTime = std::remove_reference_t<decltype(*pyx_fld(subseq, end_time))>;
@@ -354,8 +343,7 @@ static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
                              Py_ssize_t nargs, PyObject *kwnames) try
 {
     static_assert(is_step || !is_pulse);
-    if (nargs != 2)
-        raise_too_few_args((is_pulse ? "pulse" : "set"), true, 2, nargs);
+    py_check_num_arg((is_pulse ? "pulse" : "set"), nargs, 2, 2);
     auto chn = args[0];
     auto value = args[1];
     bool exact_time{false};
@@ -396,8 +384,7 @@ template<typename CondSeq, typename ConditionalWrapper>
 static PyObject *condseq_conditional(PyObject *py_self, PyObject *const *args,
                                      Py_ssize_t nargs) try
 {
-    if (nargs != 1)
-        raise_too_few_args("conditional", true, 1, nargs);
+    py_check_num_arg("conditional", nargs, 1, 1);
     auto self = (CondSeq*)py_self;
     auto subseq = condseq_get_subseq(self);
     auto cond = pyx_fld(self, cond);

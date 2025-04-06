@@ -264,6 +264,29 @@ void pytype_add_method(PyTypeObject *type, PyMethodDef *meth)
     throw_if(PyDict_SetItemString(type->tp_dict, meth->ml_name, descr));
 }
 
+[[noreturn]] void py_num_arg_error(const char *func_name, ssize_t nfound,
+                                   ssize_t nmin, ssize_t nmax)
+{
+    ssize_t nexpected;
+    const char *more_or_less;
+    if (nmin == nmax) {
+        nexpected = nmin;
+        more_or_less = "exactly";
+    }
+    else if (nfound < nmin) {
+        nexpected = nmin;
+        more_or_less = "at least";
+    }
+    else {
+        nexpected = nmax;
+        more_or_less = "at most";
+    }
+    py_throw_format(PyExc_TypeError,
+                    "%.200s() takes %.8s %zd positional argument%.1s (%zd given)",
+                    func_name, more_or_less, nexpected,
+                    (nexpected == 1) ? "" : "s", nfound);
+}
+
 static PyObject *py_slash = pyunicode_from_string("/");
 py_object channel_name_from_path(PyObject *path)
 {

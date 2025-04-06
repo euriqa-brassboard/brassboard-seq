@@ -337,6 +337,16 @@ void bb_reraise_and_throw_if(bool cond, uintptr_t key)
     }
 }
 
+[[noreturn]] void py_num_arg_error(const char *func_name, ssize_t nfound,
+                                   ssize_t nmin, ssize_t nmax);
+static __attribute__((always_inline)) inline void
+py_check_num_arg(const char *func_name, ssize_t nfound, ssize_t nmin, ssize_t nmax=-1)
+{
+    if ((nfound <= nmax || nmax < 0) && nfound >= nmin)
+        return;
+    py_num_arg_error(func_name, nfound, nmin, nmax);
+}
+
 static __attribute__((always_inline)) inline
 bool get_value_bool(PyObject *obj, auto &&cb) requires requires { cb(); }
 {
