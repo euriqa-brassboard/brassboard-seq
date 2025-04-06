@@ -18,7 +18,7 @@
 
 #include "rfsoc_backend.h"
 
-#include "rtval.h"
+#include "lib_rtval.h"
 
 #include "event_time.h"
 #include "utils.h"

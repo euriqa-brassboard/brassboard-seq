@@ -16,7 +16,7 @@
  *   see <http://www.gnu.org/licenses/>.                                 *
  *************************************************************************/
 
-#include "rtval.h"
+#include "lib_rtval.h"
 
 namespace brassboard_seq::rtval {
 

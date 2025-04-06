@@ -21,7 +21,7 @@
 from libc.stdint cimport *
 from libcpp.vector cimport vector
 
-cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
+cdef extern from "src/lib_rtval.h" namespace "brassboard_seq::rtval":
     enum ValueType:
         Arg
         ExternAge

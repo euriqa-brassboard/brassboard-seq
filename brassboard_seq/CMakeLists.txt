@@ -32,7 +32,6 @@ install(FILES
   src/scan.h
   src/seq.h
   src/rfsoc_backend.h
-  src/rtval.h
   src/utils.h
   DESTINATION "${_PYTHON_SITE_INSTALL_DIR}/brassboard_seq/src")
 
