@@ -135,15 +135,22 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
         void eval_all(unsigned) except +
         TagVal call()
 
-cdef class RuntimeValue:
-    cdef ValueType type_
-    cdef DataType datatype
-    cdef EvalError cache_err
-    cdef unsigned age
-    cdef GenVal cache_val
-    cdef RuntimeValue arg0
-    cdef RuntimeValue arg1
-    cdef object cb_arg2 # Also used as argument index
+    ctypedef class brassboard_seq._utils.RuntimeValue [object _brassboard_seq_rtval_RuntimeValue, check_size ignore]:
+        cdef ValueType type_
+        cdef DataType datatype
+        cdef EvalError cache_err
+        cdef unsigned age
+        cdef GenVal cache_val
+        cdef RuntimeValue arg0
+        cdef RuntimeValue arg1
+        cdef object cb_arg2 # Also used as argument index
+
+cdef extern from *:
+    # Cython doesn't seem to allow namespace in the object property
+    # for the imported extension class
+    """
+    using _brassboard_seq_rtval_RuntimeValue = brassboard_seq::rtval::_RuntimeValue;
+    """
 
 cdef inline RuntimeValue new_arg(idx, ty):
     return new_cb_arg2(ValueType.Arg, idx, ty, None)

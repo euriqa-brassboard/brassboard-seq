@@ -26,35 +26,30 @@ import numpy as np
 cimport numpy as cnpy
 cnpy._import_array()
 
+# Manually set the field since I can't make cython automatically do this
+# without also declaring the c struct again...
+globals()['RuntimeValue'] = RuntimeValue
+
 init_library()
 
 cimport cython
 from cpython cimport PyObject, PyTuple_GET_ITEM
 
 cdef extern from "src/rtval.cpp" namespace "brassboard_seq::rtval":
-    PyObject *RTVal_Type
-    void update_rtvalue()
     TagVal rtprop_callback_func(rtprop_callback self, unsigned age) except +
     composite_rtprop_data get_composite_rtprop_data(CompositeRTProp prop, object obj,
                                                     object, composite_rtprop_data) except +
     object composite_rtprop_get_res(CompositeRTProp self, object obj,
                                     object, composite_rtprop_data) except +
-    void assert_layout_compatible(RuntimeValue, ExternCallback)
+    void assert_layout_compatible(ExternCallback)
 
-RTVal_Type = <PyObject*>RuntimeValue
-assert_layout_compatible(None, None)
-update_rtvalue()
+assert_layout_compatible(None)
 
 def get_value(v, unsigned age):
     if is_rtval(v):
         rt_eval_cache(<RuntimeValue>v, age)
         return rtval_cache(<RuntimeValue>v).to_py()
     return v
-
-@cython.auto_pickle(False)
-@cython.final
-cdef class RuntimeValue:
-    pass
 
 cdef np_logical_not = np.logical_not
 def inv(v, /):

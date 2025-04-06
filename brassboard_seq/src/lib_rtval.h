@@ -942,26 +942,17 @@ struct _RuntimeValue {
     _RuntimeValue *arg1;
     PyObject *cb_arg2;
 };
+
+extern PyTypeObject RuntimeValue_Type;
+
 struct _ExternCallback {
     PyObject_HEAD
     void *fptr;
 };
 
-template<typename RuntimeValue, typename ExternCallback>
-static inline constexpr void assert_layout_compatible(RuntimeValue*, ExternCallback*)
+template<typename ExternCallback>
+static inline constexpr void assert_layout_compatible(ExternCallback*)
 {
-    static_assert(sizeof(_RuntimeValue) == sizeof(RuntimeValue));
-#define ASSERT_FIELD_OFFSET(name) \
-    static_assert(offsetof(_RuntimeValue, name) == offsetof(RuntimeValue, name))
-    ASSERT_FIELD_OFFSET(type_);
-    ASSERT_FIELD_OFFSET(datatype);
-    ASSERT_FIELD_OFFSET(cache_err);
-    ASSERT_FIELD_OFFSET(age);
-    ASSERT_FIELD_OFFSET(cache_val);
-    ASSERT_FIELD_OFFSET(arg0);
-    ASSERT_FIELD_OFFSET(arg1);
-    ASSERT_FIELD_OFFSET(cb_arg2);
-#undef ASSERT_FIELD_OFFSET
     static_assert(sizeof(_ExternCallback) == sizeof(ExternCallback));
 #define ASSERT_FIELD_OFFSET(name) \
     static_assert(offsetof(_ExternCallback, name) == offsetof(ExternCallback, name))
@@ -969,11 +960,9 @@ static inline constexpr void assert_layout_compatible(RuntimeValue*, ExternCallb
 #undef ASSERT_FIELD_OFFSET
 }
 
-extern PyObject *RTVal_Type;
-
 static inline bool is_rtval(PyObject *v)
 {
-    return Py_TYPE(v) == (PyTypeObject*)RTVal_Type;
+    return Py_TYPE(v) == &RuntimeValue_Type;
 }
 
 __attribute__((returns_nonnull)) _RuntimeValue*
@@ -1084,8 +1073,6 @@ void rt_eval_throw(auto *self, unsigned age, uintptr_t key=uintptr_t(-1))
     }
     throw_py_error(self->cache_err, key);
 }
-
-void update_rtvalue();
 
 static inline double get_value_f64(PyObject *v, unsigned age)
 {

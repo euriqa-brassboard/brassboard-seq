@@ -193,7 +193,7 @@ static inline long long get_time_value(auto self, int base_id, unsigned age,
     if (cond) {
         auto rt_offset = (rtval::_RuntimeValue*)self->data.get_rt_offset();
         if (rt_offset) {
-            rt_eval_throw(rt_offset, age, event_time_key(self));
+            rtval::rt_eval_throw(rt_offset, age, event_time_key(self));
             offset = rt_offset->cache_val.i64_val;
             if (offset < 0) {
                 bb_throw_format(PyExc_ValueError, event_time_key(self),

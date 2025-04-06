@@ -24,14 +24,11 @@
 
 namespace brassboard_seq::rtval {
 
-__attribute__((visibility("protected")))
-PyObject *RTVal_Type;
-
 __attribute__((returns_nonnull,visibility("protected"))) _RuntimeValue*
 _new_cb_arg2(ValueType type, PyObject *cb_arg2, PyObject *ty)
 {
     auto datatype = pytype_to_datatype(ty);
-    auto o = pytype_genericalloc(RTVal_Type);
+    auto o = pytype_genericalloc(&RuntimeValue_Type);
     auto self = (_RuntimeValue*)o;
     self->datatype = datatype;
     // self->cache_err = EvalError::NoError;
@@ -47,7 +44,7 @@ _new_cb_arg2(ValueType type, PyObject *cb_arg2, PyObject *ty)
 __attribute__((returns_nonnull,visibility("protected"))) _RuntimeValue*
 _new_expr1(ValueType type, _RuntimeValue *arg0)
 {
-    auto o = pytype_genericalloc(RTVal_Type);
+    auto o = pytype_genericalloc(&RuntimeValue_Type);
     auto datatype = unary_return_type(type, arg0->datatype);
     auto self = (_RuntimeValue*)o;
     self->datatype = datatype;
@@ -64,7 +61,7 @@ _new_expr1(ValueType type, _RuntimeValue *arg0)
 __attribute__((returns_nonnull,visibility("protected"))) _RuntimeValue*
 _new_expr2(ValueType type, _RuntimeValue *arg0, _RuntimeValue *arg1)
 {
-    auto o = pytype_genericalloc(RTVal_Type);
+    auto o = pytype_genericalloc(&RuntimeValue_Type);
     auto datatype = binary_return_type(type, arg0->datatype, arg1->datatype);
     auto self = (_RuntimeValue*)o;
     self->datatype = datatype;
@@ -81,7 +78,7 @@ _new_expr2(ValueType type, _RuntimeValue *arg0, _RuntimeValue *arg1)
 __attribute__((returns_nonnull,visibility("protected"))) _RuntimeValue*
 _new_const(TagVal v)
 {
-    auto o = pytype_genericalloc(RTVal_Type);
+    auto o = pytype_genericalloc(&RuntimeValue_Type);
     auto self = (_RuntimeValue*)o;
     self->datatype = v.type;
     // self->cache_err = EvalError::NoError;
@@ -114,7 +111,7 @@ new_expr2_wrap1(ValueType type, PyObject *arg0, PyObject *arg1)
     }
     auto datatype = binary_return_type(type, ((_RuntimeValue*)rtarg0.get())->datatype,
                                        ((_RuntimeValue*)rtarg1.get())->datatype);
-    auto o = pytype_genericalloc(RTVal_Type);
+    auto o = pytype_genericalloc(&RuntimeValue_Type);
     auto self = (_RuntimeValue*)o;
     self->datatype = datatype;
     // self->cache_err = EvalError::NoError;
@@ -142,7 +139,7 @@ _new_select(_RuntimeValue *arg0, PyObject *arg1, PyObject *arg2)
     py_object rtarg2((PyObject*)_wrap_rtval(arg2));
     auto datatype = promote_type(((_RuntimeValue*)rtarg1.get())->datatype,
                                  ((_RuntimeValue*)rtarg2.get())->datatype);
-    auto o = pytype_genericalloc(RTVal_Type);
+    auto o = pytype_genericalloc(&RuntimeValue_Type);
     auto self = (_RuntimeValue*)o;
     self->datatype = datatype;
     // self->cache_err = EvalError::NoError;
@@ -1036,31 +1033,66 @@ static int rtvalue_init(PyObject *self, PyObject *args, PyObject *kwds)
     return -1;
 }
 
-void update_rtvalue()
+static int rtvalue_clear(PyObject *py_self)
 {
-    auto type = (PyTypeObject*)RTVal_Type;
-    static PyMethodDef rtvalue_array_ufunc_method = {
-        "__array_ufunc__", (PyCFunction)(void*)rtvalue_array_ufunc, METH_FASTCALL, 0};
-    static PyMethodDef rtvalue_eval_method = {
-        "eval", (PyCFunction)(void*)rtvalue_eval, METH_FASTCALL, 0};
-    static PyMethodDef rtvalue_ceil_method = {
-        "__ceil__", (PyCFunction)(void*)rtvalue_ceil, METH_FASTCALL, 0};
-    static PyMethodDef rtvalue_floor_method = {
-        "__floor__", (PyCFunction)(void*)rtvalue_floor, METH_FASTCALL, 0};
-    static PyMethodDef rtvalue_round_method = {
-        "__round__", (PyCFunction)(void*)rtvalue_round, METH_FASTCALL, 0};
-    pytype_add_method(type, &rtvalue_array_ufunc_method);
-    pytype_add_method(type, &rtvalue_eval_method);
-    pytype_add_method(type, &rtvalue_ceil_method);
-    pytype_add_method(type, &rtvalue_floor_method);
-    pytype_add_method(type, &rtvalue_round_method);
-    type->tp_init = rtvalue_init;
-    type->tp_repr = rtvalue_str;
-    type->tp_str = rtvalue_str;
-    type->tp_as_number = &rtvalue_as_number;
-    type->tp_richcompare = rtvalue_richcmp;
-    PyType_Modified(type);
+    auto self = (_RuntimeValue*)py_self;
+    Py_CLEAR(self->arg0);
+    Py_CLEAR(self->arg1);
+    Py_CLEAR(self->cb_arg2);
+    return 0;
 }
+
+static void rtvalue_dealloc(PyObject *py_self)
+{
+    PyObject_GC_UnTrack(py_self);
+    rtvalue_clear(py_self);
+    Py_TYPE(py_self)->tp_free(py_self);
+}
+
+static int rtvalue_traverse(PyObject *py_self, visitproc visit, void *arg)
+{
+    auto self = (_RuntimeValue*)py_self;
+    Py_VISIT(self->arg0);
+    Py_VISIT(self->arg1);
+    Py_VISIT(self->cb_arg2);
+    return 0;
+}
+
+static PyObject *rtvalue_new(PyTypeObject *t, PyObject*, PyObject*)
+{
+    auto py_self = PyType_GenericAlloc(t, 0);
+    auto self = (_RuntimeValue*)py_self;
+    self->arg0 = (_RuntimeValue*)py_immref(Py_None);
+    self->arg1 = (_RuntimeValue*)py_immref(Py_None);
+    self->cb_arg2 = py_immref(Py_None);
+    return py_self;
+}
+
+static PyMethodDef rtvalue_methods[] = {
+    {"__array_ufunc__", (PyCFunction)(void*)rtvalue_array_ufunc, METH_FASTCALL, 0},
+    {"eval", (PyCFunction)(void*)rtvalue_eval, METH_FASTCALL, 0},
+    {"__ceil__", (PyCFunction)(void*)rtvalue_ceil, METH_FASTCALL, 0},
+    {"__floor__", (PyCFunction)(void*)rtvalue_floor, METH_FASTCALL, 0},
+    {"__round__", (PyCFunction)(void*)rtvalue_round, METH_FASTCALL, 0},
+    {0, 0, 0, 0}
+};
+
+PyTypeObject RuntimeValue_Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.rtval.""RuntimeValue",
+    .tp_basicsize = sizeof(_RuntimeValue),
+    .tp_dealloc = rtvalue_dealloc,
+    .tp_repr = rtvalue_str,
+    .tp_as_number = &rtvalue_as_number,
+    .tp_str = rtvalue_str,
+    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
+    .tp_traverse = rtvalue_traverse,
+    .tp_clear = rtvalue_clear,
+    .tp_richcompare = rtvalue_richcmp,
+    .tp_methods = rtvalue_methods,
+    .tp_init = rtvalue_init,
+    .tp_new = rtvalue_new,
+};
 
 __attribute__((flatten, noinline, visibility("protected")))
 std::pair<EvalError,GenVal> interpret_func(const int *code, GenVal *data,

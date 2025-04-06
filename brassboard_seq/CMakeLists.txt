@@ -10,6 +10,19 @@ add_library(brassboard_seq_utils SHARED
   src/utils.cpp)
 target_include_directories(brassboard_seq_utils PRIVATE ${Python_INCLUDE_DIRS})
 install(TARGETS brassboard_seq_utils DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+
+add_library(brassboard_seq__utils_mod MODULE
+  _utils.cpp)
+target_include_directories(brassboard_seq__utils_mod PRIVATE ${Python_INCLUDE_DIRS})
+target_link_libraries(brassboard_seq__utils_mod brassboard_seq_utils -fopenmp)
+set_target_properties(brassboard_seq__utils_mod
+    PROPERTIES POSITION_INDEPENDENT_CODE ON
+    LIBRARY_OUTPUT_NAME "_utils"
+    PREFIX ""
+    SUFFIX "${PYTHON_EXTENSION_SUFFIX}")
+install(TARGETS brassboard_seq__utils_mod
+  DESTINATION "${_PYTHON_SITE_INSTALL_DIR}/brassboard_seq")
+
 install(FILES
   src/action.h
   src/backend.h
