@@ -395,6 +395,43 @@ catch (...) {
     return nullptr;
 }
 
+static PyObject *rtvalue_eval(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+{
+    return py_catch_error([&] {
+        py_check_num_arg("eval", nargs, 1);
+        auto age = PyLong_AsLong(args[0]);
+        throw_if(age == -1 && PyErr_Occurred());
+        rt_eval_cache(self, age);
+        return rtval_cache((_RuntimeValue*)self).to_py();
+    });
+}
+
+static PyObject *rtvalue_ceil(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+{
+    return py_catch_error([&] {
+        py_check_num_arg("__ceil__", nargs, 0);
+        return is_integer((_RuntimeValue*)self) ? py_newref(self) :
+            (PyObject*)new_expr1(Ceil, self);
+    });
+}
+
+static PyObject *rtvalue_floor(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+{
+    return py_catch_error([&] {
+        py_check_num_arg("__floor__", nargs, 0);
+        return is_integer((_RuntimeValue*)self) ? py_newref(self) :
+            (PyObject*)new_expr1(Floor, self);
+    });
+}
+
+static PyObject *rtvalue_round(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+{
+    return py_catch_error([&] {
+        py_check_num_arg("__round__", nargs, 0);
+        return rt_round_int64((_RuntimeValue*)self);
+    });
+}
+
 static inline constexpr int operator_precedence(ValueType type_)
 {
     if (type_ == Add || type_ == Sub)
@@ -592,12 +629,31 @@ static PyObject *rtvalue_str(PyObject *self)
     });
 }
 
+int rtvalue_init(PyObject *self, PyObject *args, PyObject *kwds)
+{
+    PyErr_Format(PyExc_TypeError, "RuntimeValue cannot be created directly");
+    return -1;
+}
+
 static inline void update_rtvalue()
 {
     auto type = (PyTypeObject*)RTVal_Type;
     static PyMethodDef rtvalue_array_ufunc_method = {
         "__array_ufunc__", (PyCFunction)(void*)rtvalue_array_ufunc, METH_FASTCALL, 0};
+    static PyMethodDef rtvalue_eval_method = {
+        "eval", (PyCFunction)(void*)rtvalue_eval, METH_FASTCALL, 0};
+    static PyMethodDef rtvalue_ceil_method = {
+        "__ceil__", (PyCFunction)(void*)rtvalue_ceil, METH_FASTCALL, 0};
+    static PyMethodDef rtvalue_floor_method = {
+        "__floor__", (PyCFunction)(void*)rtvalue_floor, METH_FASTCALL, 0};
+    static PyMethodDef rtvalue_round_method = {
+        "__round__", (PyCFunction)(void*)rtvalue_round, METH_FASTCALL, 0};
     pytype_add_method(type, &rtvalue_array_ufunc_method);
+    pytype_add_method(type, &rtvalue_eval_method);
+    pytype_add_method(type, &rtvalue_ceil_method);
+    pytype_add_method(type, &rtvalue_floor_method);
+    pytype_add_method(type, &rtvalue_round_method);
+    type->tp_init = rtvalue_init;
     type->tp_repr = rtvalue_str;
     type->tp_str = rtvalue_str;
     type->tp_as_number = &rtvalue_as_number;

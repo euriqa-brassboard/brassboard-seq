@@ -52,30 +52,9 @@ def get_value(v, unsigned age):
     return v
 
 @cython.auto_pickle(False)
-@cython.c_api_binop_methods(True)
 @cython.final
 cdef class RuntimeValue:
-    def __init__(self):
-        # All instances should be constructed within cython code via
-        # `RuntimeValue.__new__` or its wrapper.
-        PyErr_Format(PyExc_TypeError, "RuntimeValue cannot be created directly")
-
-    def eval(self, unsigned age, /):
-        rt_eval_cache(self, age)
-        return rtval_cache(self).to_py()
-
-    def __ceil__(self):
-        if self.type_ == ValueType.Ceil:
-            return self
-        return new_expr1(ValueType.Ceil, self)
-
-    def __floor__(self):
-        if self.type_ == ValueType.Floor:
-            return self
-        return new_expr1(ValueType.Floor, self)
-
-    def __round__(self):
-        return rt_round_int64(self)
+    pass
 
 cdef np_logical_not = np.logical_not
 def inv(v, /):
