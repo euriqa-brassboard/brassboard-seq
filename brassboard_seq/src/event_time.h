@@ -198,7 +198,7 @@ _new_time_rt(auto *self, PyObject *EventTimeType, EventTime *prev,
 
 static inline long long round_time_f64(double v)
 {
-    return (long long)(v * double(time_scale) + 0.5);
+    return round<long long>(v * double(time_scale));
 }
 
 static inline long long round_time_int(PyObject *v)
