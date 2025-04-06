@@ -23,7 +23,7 @@ from brassboard_seq.utils cimport PyExc_RuntimeError, PyExc_TypeError
 cimport cython
 
 cdef object py_time_scale = c_time_scale
-cdef RuntimeValue rt_time_scale = new_const(py_time_scale, <RuntimeValue>None)
+cdef RuntimeValue rt_time_scale = new_const(py_time_scale)
 
 def time_scale():
     return py_time_scale

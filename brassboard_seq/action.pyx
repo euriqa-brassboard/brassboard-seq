@@ -67,7 +67,7 @@ cdef class _RampFunctionBase:
 cdef RuntimeValue arg0 = new_arg(0, float)
 cdef RuntimeValue arg1 = new_arg(1, float)
 cdef RuntimeValue arg2 = new_arg(2, float)
-cdef RuntimeValue const0 = new_const(0.0, None)
+cdef RuntimeValue const0 = new_const(0.0)
 cdef dummy_spline_segments = []
 
 cdef rampfunction_eval(RampFunction self, t, length, oldval):

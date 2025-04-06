@@ -264,8 +264,8 @@ def new_invalid_rtval():
     rv.type_ = <rtval.ValueType>1000
     rv.datatype = rtval.DataType.Float64
     rv.age = -1
-    rv.arg0 = rtval.new_const(1, None)
-    rv.arg1 = rtval.new_const(1, None)
+    rv.arg0 = rtval.new_const(1)
+    rv.arg1 = rtval.new_const(1)
     return rv
 
 cdef class TestCallback(rtval.ExternCallback):
@@ -285,7 +285,7 @@ cdef TestCallback new_test_callback(cb, bint has_age):
     return self
 
 def new_const(c):
-    return rtval.new_const(c, None)
+    return rtval.new_const(c)
 
 def new_arg(idx):
     return rtval.new_arg(idx, float)

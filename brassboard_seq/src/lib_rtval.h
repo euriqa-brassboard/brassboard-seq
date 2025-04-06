@@ -943,6 +943,13 @@ struct _RuntimeValue {
     PyObject *cb_arg2;
 };
 
+template<class T>
+concept is_rtval_ptr = std::same_as<std::remove_cvref_t<T>,_RuntimeValue*>;
+template<class... T>
+concept all_rtval_ptr = (is_rtval_ptr<T> && ...);
+template<class T>
+concept not_rtval_ptr = !is_rtval_ptr<T>;
+
 extern PyTypeObject RuntimeValue_Type;
 
 struct _ExternCallback {
@@ -966,62 +973,45 @@ static inline bool is_rtval(PyObject *v)
 }
 
 __attribute__((returns_nonnull)) _RuntimeValue*
-_new_cb_arg2(ValueType type, PyObject *cb_arg2, PyObject *ty);
-template<typename RuntimeValue>
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-new_cb_arg2(ValueType type, PyObject *cb_arg2, PyObject *ty, RuntimeValue*)
+new_cb_arg2(ValueType type, PyObject *cb_arg2, PyObject *ty);
+
+__attribute__((returns_nonnull)) _RuntimeValue*
+new_expr1(ValueType type, _RuntimeValue *arg0);
+static inline __attribute__((returns_nonnull)) _RuntimeValue*
+new_expr1(ValueType type, not_rtval_ptr auto arg0)
 {
-    return (RuntimeValue*)_new_cb_arg2(type, cb_arg2, ty);
+    return new_expr1(type, (_RuntimeValue*)arg0);
 }
 
 __attribute__((returns_nonnull)) _RuntimeValue*
-_new_expr1(ValueType type, _RuntimeValue *arg0);
-template<typename RuntimeValue>
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-new_expr1(ValueType type, RuntimeValue *arg0)
+new_expr2(ValueType type, _RuntimeValue *arg0, _RuntimeValue *arg1);
+static inline __attribute__((returns_nonnull)) _RuntimeValue*
+new_expr2(ValueType type, auto arg0, auto arg1)
+    requires (!all_rtval_ptr<decltype(arg0),decltype(arg1)>)
 {
-    return (RuntimeValue*)_new_expr1(type, (_RuntimeValue*)arg0);
+    return new_expr2(type, (_RuntimeValue*)arg0, (_RuntimeValue*)arg1);
 }
 
-__attribute__((returns_nonnull)) _RuntimeValue*
-_new_expr2(ValueType type, _RuntimeValue *arg0, _RuntimeValue *arg1);
-template<typename RuntimeValue>
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-new_expr2(ValueType type, RuntimeValue *arg0, RuntimeValue *arg1)
+__attribute__((returns_nonnull)) _RuntimeValue *new_const(TagVal v);
+static inline __attribute__((returns_nonnull)) _RuntimeValue*
+new_const(PyObject *v)
 {
-    return (RuntimeValue*)_new_expr2(type, (_RuntimeValue*)arg0, (_RuntimeValue*)arg1);
-}
-
-__attribute__((returns_nonnull)) _RuntimeValue *_new_const(TagVal v);
-template<typename RuntimeValue>
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-new_const(TagVal v, RuntimeValue*)
-{
-    return (RuntimeValue*)_new_const(v);
-}
-
-template<typename RuntimeValue>
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-new_const(PyObject *v, RuntimeValue*)
-{
-    return (RuntimeValue*)_new_const(TagVal::from_py(v));
+    return new_const(TagVal::from_py(v));
 }
 
 __attribute__((returns_nonnull)) PyObject*
 new_expr2_wrap1(ValueType type, PyObject *arg0, PyObject *arg1);
 
 __attribute__((returns_nonnull)) _RuntimeValue*
-_new_select(_RuntimeValue *arg0, PyObject *arg1, PyObject *arg2);
-template<typename RuntimeValue>
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-new_select(RuntimeValue *arg0, PyObject *arg1, PyObject *arg2)
+new_select(_RuntimeValue *arg0, PyObject *arg1, PyObject *arg2);
+static inline __attribute__((returns_nonnull)) _RuntimeValue*
+new_select(not_rtval_ptr auto arg0, PyObject *arg1, PyObject *arg2)
 {
-    return (RuntimeValue*)_new_select((_RuntimeValue*)arg0, arg1, arg2);
+    return new_select((_RuntimeValue*)arg0, arg1, arg2);
 }
 
-template<typename RuntimeValue>
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-rt_convert_bool(RuntimeValue *v)
+static inline __attribute__((returns_nonnull)) _RuntimeValue*
+rt_convert_bool(_RuntimeValue *v)
 {
     if (v->type_ == Int64)
         v = v->arg0;
@@ -1030,17 +1020,15 @@ rt_convert_bool(RuntimeValue *v)
     return new_expr1(Bool, v);
 }
 
-template<typename RuntimeValue>
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-rt_round_int64(RuntimeValue *v)
+static inline __attribute__((returns_nonnull)) _RuntimeValue*
+rt_round_int64(_RuntimeValue *v)
 {
     if (v->type_ == Int64)
         return py_newref(v);
     return new_expr1(Int64, v);
 }
 
-template<typename RuntimeValue>
-static inline __attribute__((always_inline)) TagVal rtval_cache(RuntimeValue *rtval)
+static inline __attribute__((always_inline)) TagVal rtval_cache(_RuntimeValue *rtval)
 {
     TagVal cache;
     cache.type = rtval->datatype;
@@ -1052,10 +1040,8 @@ static inline __attribute__((always_inline)) TagVal rtval_cache(RuntimeValue *rt
 bool rt_same_value(PyObject *v1, PyObject *v2);
 
 void rt_eval_cache(_RuntimeValue *self, unsigned age);
-
 static inline __attribute__((always_inline))
-void rt_eval_cache(auto *self, unsigned age)
-    requires (!std::same_as<std::remove_cvref_t<decltype(*self)>,_RuntimeValue>)
+void rt_eval_cache(not_rtval_ptr auto self, unsigned age)
 {
     rt_eval_cache((_RuntimeValue*)self, age);
 }

@@ -117,10 +117,10 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
     bint is_rtval(object)
     bint rt_same_value(object, object)
 
-    RuntimeValue new_cb_arg2(ValueType, object, object ty, RuntimeValue) except +
+    RuntimeValue new_cb_arg2(ValueType, object, object ty) except +
     RuntimeValue new_expr1(ValueType, RuntimeValue) except +
     RuntimeValue new_expr2(ValueType, RuntimeValue, RuntimeValue) except +
-    RuntimeValue new_const(object, RuntimeValue) except +
+    RuntimeValue new_const(object) except +
     RuntimeValue new_select(RuntimeValue arg0, object, object) except +
     RuntimeValue rt_convert_bool(RuntimeValue) except +
     RuntimeValue rt_round_int64(RuntimeValue) except +
@@ -153,13 +153,13 @@ cdef extern from *:
     """
 
 cdef inline RuntimeValue new_arg(idx, ty):
-    return new_cb_arg2(ValueType.Arg, idx, ty, None)
+    return new_cb_arg2(ValueType.Arg, idx, ty)
 
 cdef inline RuntimeValue new_extern(ExternCallback cb, ty):
-    return new_cb_arg2(ValueType.Extern, cb, ty, None)
+    return new_cb_arg2(ValueType.Extern, cb, ty)
 
 cdef inline RuntimeValue new_extern_age(ExternCallback cb, ty):
-    return new_cb_arg2(ValueType.ExternAge, cb, ty, None)
+    return new_cb_arg2(ValueType.ExternAge, cb, ty)
 
 cdef class ExternCallback:
     cdef void *fptr

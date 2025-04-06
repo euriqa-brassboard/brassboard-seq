@@ -25,6 +25,8 @@
 
 namespace brassboard_seq::event_time {
 
+using brassboard_seq::rtval::_RuntimeValue;
+
 static constexpr long long time_scale = 1000000000000ll;
 
 enum TimeOrder {
@@ -167,10 +169,10 @@ _new_time_int(auto *self, PyObject *EventTimeType, EventTime *prev,
     return tp;
 }
 
-template<typename EventTime, typename RuntimeValue>
+template<typename EventTime>
 static inline __attribute__((returns_nonnull)) EventTime*
 _new_time_rt(auto *self, PyObject *EventTimeType, EventTime *prev,
-             RuntimeValue *offset, PyObject *cond, EventTime *wait_for)
+             _RuntimeValue *offset, PyObject *cond, EventTime *wait_for)
 {
     auto status = self->status.get();
     if (status->finalized)
@@ -209,12 +211,11 @@ static inline long long round_time_int(PyObject *v)
     return round_time_f64(get_value_f64(v, -1));
 }
 
-template<typename RuntimeValue>
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-round_time_rt(RuntimeValue *v, RuntimeValue *rt_time_scale)
+static inline __attribute__((returns_nonnull)) _RuntimeValue*
+round_time_rt(_RuntimeValue *v, _RuntimeValue *rt_time_scale)
 {
     py_object scaled_t((PyObject*)rtval::new_expr2(rtval::Mul, v, rt_time_scale));
-    return rtval::rt_round_int64((RuntimeValue*)scaled_t.get());
+    return rtval::rt_round_int64((_RuntimeValue*)scaled_t.get());
 }
 
 static inline TimeOrder is_ordered(auto *t1, auto *t2)
