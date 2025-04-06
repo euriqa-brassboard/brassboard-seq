@@ -509,6 +509,15 @@ static inline PyObject *operator ""_py()
     return _py_string_cache<lit>;
 }
 
+struct py_stringio {
+    py_stringio();
+
+    void write(PyObject*);
+    PyObject *getvalue();
+
+    py_object io;
+};
+
 py_object channel_name_from_path(PyObject *path);
 
 template<typename It>

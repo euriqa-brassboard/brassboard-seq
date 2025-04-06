@@ -287,6 +287,29 @@ void pytype_add_method(PyTypeObject *type, PyMethodDef *meth)
                     (nexpected == 1) ? "" : "s", nfound);
 }
 
+static auto const io_mod = throw_if_not(PyImport_ImportModule("io"));
+static auto const StringIO = throw_if_not(PyObject_GetAttrString(io_mod, "StringIO"));
+static auto const SIO_write = throw_if_not(PyObject_GetAttrString(StringIO, "write"));
+static auto const SIO_getvalue =
+    throw_if_not(PyObject_GetAttrString(StringIO, "getvalue"));
+
+py_stringio::py_stringio()
+{
+    io.reset(throw_if_not(PyObject_Vectorcall(StringIO, nullptr, 0, nullptr)));
+}
+
+void py_stringio::write(PyObject *obj)
+{
+    PyObject *callargs[] = { io, obj };
+    Py_DECREF(throw_if_not(PyObject_Vectorcall(SIO_write, callargs, 2, nullptr)));
+}
+
+PyObject *py_stringio::getvalue()
+{
+    PyObject *callargs[] = { io };
+    return throw_if_not(PyObject_Vectorcall(SIO_getvalue, callargs, 1, nullptr));
+}
+
 py_object channel_name_from_path(PyObject *path)
 {
     return py_object(throw_if_not(PyUnicode_Join("/"_py, path)));

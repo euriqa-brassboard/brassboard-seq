@@ -33,9 +33,6 @@ from cpython cimport PyObject, PyTuple_GET_ITEM
 
 cdef extern from "src/rtval.cpp" namespace "brassboard_seq::rtval":
     PyObject *RTVal_Type
-    object new_expr2_wrap1(ValueType, object, object) except +
-    object build_addsub(object v0, object v1, bint) except +
-    bint needs_parenthesis(RuntimeValue v, ValueType parent_type)
     void update_rtvalue()
     TagVal rtprop_callback_func(rtprop_callback self, unsigned age) except +
     composite_rtprop_data get_composite_rtprop_data(CompositeRTProp prop, object obj,
@@ -47,146 +44,6 @@ cdef extern from "src/rtval.cpp" namespace "brassboard_seq::rtval":
 RTVal_Type = <PyObject*>RuntimeValue
 assert_layout_compatible(None, None)
 update_rtvalue()
-
-cdef int show_arg(io, write, RuntimeValue v, ValueType parent_type) except -1:
-    cdef bint p = needs_parenthesis(v, parent_type)
-    if p:
-        write('(')
-    show(io, write, v)
-    if p:
-        write(')')
-
-cdef int show_binary(io, write, RuntimeValue v, str op, ValueType type_) except -1:
-    show_arg(io, write, v.arg0, type_)
-    write(op)
-    show_arg(io, write, v.arg1, type_)
-
-cdef int show_call1(io, write, RuntimeValue v, str f) except -1:
-    write(f)
-    write('(')
-    show(io, write, v.arg0)
-    write(')')
-
-cdef int show_call2(io, write, RuntimeValue v, str f) except -1:
-    write(f)
-    write('(')
-    show(io, write, v.arg0)
-    write(', ')
-    show(io, write, v.arg1)
-    write(')')
-
-cdef int show_call3(io, write, RuntimeValue v, str f) except -1:
-    write(f)
-    write('(')
-    show(io, write, v.arg0)
-    write(', ')
-    show(io, write, v.arg1)
-    write(', ')
-    show(io, write, <RuntimeValue>v.cb_arg2)
-    write(')')
-
-cdef int show(io, write, RuntimeValue v) except -1:
-    cdef ValueType type_ = v.type_
-    if type_ == ValueType.Extern or type_ == ValueType.ExternAge:
-        write(str(<ExternCallback>v.cb_arg2))
-    elif type_ == ValueType.Arg:
-        write(f'arg({v.cb_arg2})')
-    elif type_ == ValueType.Const:
-        print(rtval_cache(v).to_py(), end='', file=io)
-    elif type_ == ValueType.Add:
-        show_binary(io, write, v, ' + ', type_)
-    elif type_ == ValueType.Sub:
-        show_binary(io, write, v, ' - ', type_)
-    elif type_ == ValueType.Mul:
-        show_binary(io, write, v, ' * ', type_)
-    elif type_ == ValueType.Div:
-        show_binary(io, write, v, ' / ', type_)
-    elif type_ == ValueType.CmpLT:
-        show_binary(io, write, v, ' < ', type_)
-    elif type_ == ValueType.CmpGT:
-        show_binary(io, write, v, ' > ', type_)
-    elif type_ == ValueType.CmpLE:
-        show_binary(io, write, v, ' <= ', type_)
-    elif type_ == ValueType.CmpGE:
-        show_binary(io, write, v, ' >= ', type_)
-    elif type_ == ValueType.CmpEQ:
-        show_binary(io, write, v, ' == ', type_)
-    elif type_ == ValueType.CmpNE:
-        show_binary(io, write, v, ' != ', type_)
-    elif type_ == ValueType.And:
-        show_binary(io, write, v, ' & ', type_)
-    elif type_ == ValueType.Or:
-        show_binary(io, write, v, ' | ', type_)
-    elif type_ == ValueType.Xor:
-        show_binary(io, write, v, ' ^ ', type_)
-    elif type_ == ValueType.Mod:
-        show_binary(io, write, v, ' % ', type_)
-    elif type_ == ValueType.Pow:
-        show_binary(io, write, v, '**', type_)
-    elif type_ == ValueType.Not:
-        show_call1(io, write, v, 'inv')
-    elif type_ == ValueType.Abs:
-        show_call1(io, write, v, 'abs')
-    elif type_ == ValueType.Ceil:
-        show_call1(io, write, v, 'ceil')
-    elif type_ == ValueType.Exp:
-        show_call1(io, write, v, 'exp')
-    elif type_ == ValueType.Expm1:
-        show_call1(io, write, v, 'expm1')
-    elif type_ == ValueType.Floor:
-        show_call1(io, write, v, 'floor')
-    elif type_ == ValueType.Log:
-        show_call1(io, write, v, 'log')
-    elif type_ == ValueType.Log1p:
-        show_call1(io, write, v, 'log1p')
-    elif type_ == ValueType.Log2:
-        show_call1(io, write, v, 'log2')
-    elif type_ == ValueType.Log10:
-        show_call1(io, write, v, 'log10')
-    elif type_ == ValueType.Sqrt:
-        show_call1(io, write, v, 'sqrt')
-    elif type_ == ValueType.Asin:
-        show_call1(io, write, v, 'arcsin')
-    elif type_ == ValueType.Acos:
-        show_call1(io, write, v, 'arccos')
-    elif type_ == ValueType.Atan:
-        show_call1(io, write, v, 'arctan')
-    elif type_ == ValueType.Asinh:
-        show_call1(io, write, v, 'arcsinh')
-    elif type_ == ValueType.Acosh:
-        show_call1(io, write, v, 'arccosh')
-    elif type_ == ValueType.Atanh:
-        show_call1(io, write, v, 'arctanh')
-    elif type_ == ValueType.Sin:
-        show_call1(io, write, v, 'sin')
-    elif type_ == ValueType.Cos:
-        show_call1(io, write, v, 'cos')
-    elif type_ == ValueType.Tan:
-        show_call1(io, write, v, 'tan')
-    elif type_ == ValueType.Sinh:
-        show_call1(io, write, v, 'sinh')
-    elif type_ == ValueType.Cosh:
-        show_call1(io, write, v, 'cosh')
-    elif type_ == ValueType.Tanh:
-        show_call1(io, write, v, 'tanh')
-    elif type_ == ValueType.Rint:
-        show_call1(io, write, v, 'rint')
-    elif type_ == ValueType.Max:
-        show_call2(io, write, v, 'max')
-    elif type_ == ValueType.Min:
-        show_call2(io, write, v, 'min')
-    elif type_ == ValueType.Int64:
-        show_call1(io, write, v, 'int64')
-    elif type_ == ValueType.Bool:
-        show_call1(io, write, v, 'bool')
-    elif type_ == ValueType.Atan2:
-        show_call2(io, write, v, 'arctan2')
-    elif type_ == ValueType.Hypot:
-        show_call2(io, write, v, 'hypot')
-    elif type_ == ValueType.Select:
-        show_call3(io, write, v, 'ifelse')
-    else:
-        write('Unknown value')
 
 def get_value(v, unsigned age):
     if is_rtval(v):
@@ -206,16 +63,6 @@ cdef class RuntimeValue:
     def eval(self, unsigned age, /):
         rt_eval_cache(self, age)
         return rtval_cache(self).to_py()
-
-    def __str__(self):
-        io = StringIO()
-        show(io, io.write, self)
-        return io.getvalue()
-
-    def __repr__(self):
-        io = StringIO()
-        show(io, io.write, self)
-        return io.getvalue()
 
     def __ceil__(self):
         if self.type_ == ValueType.Ceil:

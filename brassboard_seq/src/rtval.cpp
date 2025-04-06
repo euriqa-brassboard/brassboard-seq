@@ -425,12 +425,181 @@ static inline bool needs_parenthesis(auto v, ValueType parent_type)
     return !(parent_type == Add || parent_type == Mul);
 }
 
+struct rtvalue_printer : py_stringio {
+    void show_arg(_RuntimeValue *v, ValueType parent_type)
+    {
+        auto p = needs_parenthesis(v, parent_type);
+        if (p) write("("_py);
+        show(v);
+        if (p) write(")"_py);
+    }
+    void show_binary(_RuntimeValue *v, PyObject *op, ValueType type_)
+    {
+        show_arg(v->arg0, type_);
+        write(op);
+        show_arg(v->arg1, type_);
+    }
+    void show_call1(_RuntimeValue *v, PyObject *f)
+    {
+        write(f);
+        write("("_py);
+        show(v->arg0);
+        write(")"_py);
+    }
+    void show_call2(_RuntimeValue *v, PyObject *f)
+    {
+        write(f);
+        write("("_py);
+        show(v->arg0);
+        write(", "_py);
+        show(v->arg1);
+        write(")"_py);
+    }
+    void show_call3(_RuntimeValue *v, PyObject *f)
+    {
+        write(f);
+        write("("_py);
+        show(v->arg0);
+        write(", "_py);
+        show(v->arg1);
+        write(", "_py);
+        show((_RuntimeValue*)v->cb_arg2);
+        write(")"_py);
+    }
+    void write_str(PyObject *obj)
+    {
+        py_object s(throw_if_not(PyObject_Str(obj)));
+        write(s);
+    }
+    void show(_RuntimeValue *v)
+    {
+        switch (v->type_) {
+        case Extern:
+        case ExternAge:
+            return write_str(v->cb_arg2);
+        case Arg: {
+            py_object str(throw_if_not(PyUnicode_FromFormat("arg(%S)", v->cb_arg2)));
+            return write(str);
+        }
+        case Const: {
+            py_object obj(rtval_cache(v).to_py());
+            return write_str(obj);
+        }
+        case Add:
+            return show_binary(v, " + "_py, v->type_);
+        case Sub:
+            return show_binary(v, " - "_py, v->type_);
+        case Mul:
+            return show_binary(v, " * "_py, v->type_);
+        case Div:
+            return show_binary(v, " / "_py, v->type_);
+        case CmpLT:
+            return show_binary(v, " < "_py, v->type_);
+        case CmpGT:
+            return show_binary(v, " > "_py, v->type_);
+        case CmpLE:
+            return show_binary(v, " <= "_py, v->type_);
+        case CmpGE:
+            return show_binary(v, " >= "_py, v->type_);
+        case CmpEQ:
+            return show_binary(v, " == "_py, v->type_);
+        case CmpNE:
+            return show_binary(v, " != "_py, v->type_);
+        case And:
+            return show_binary(v, " & "_py, v->type_);
+        case Or:
+            return show_binary(v, " | "_py, v->type_);
+        case Xor:
+            return show_binary(v, " ^ "_py, v->type_);
+        case Mod:
+            return show_binary(v, " % "_py, v->type_);
+        case Pow:
+            return show_binary(v, "**"_py, v->type_);
+        case Not:
+            return show_call1(v, "inv"_py);
+        case Abs:
+            return show_call1(v, "abs"_py);
+        case Ceil:
+            return show_call1(v, "ceil"_py);
+        case Exp:
+            return show_call1(v, "exp"_py);
+        case Expm1:
+            return show_call1(v, "expm1"_py);
+        case Floor:
+            return show_call1(v, "floor"_py);
+        case Log:
+            return show_call1(v, "log"_py);
+        case Log1p:
+            return show_call1(v, "log1p"_py);
+        case Log2:
+            return show_call1(v, "log2"_py);
+        case Log10:
+            return show_call1(v, "log10"_py);
+        case Sqrt:
+            return show_call1(v, "sqrt"_py);
+        case Asin:
+            return show_call1(v, "arcsin"_py);
+        case Acos:
+            return show_call1(v, "arccos"_py);
+        case Atan:
+            return show_call1(v, "arctan"_py);
+        case Asinh:
+            return show_call1(v, "arcsinh"_py);
+        case Acosh:
+            return show_call1(v, "arccosh"_py);
+        case Atanh:
+            return show_call1(v, "arctanh"_py);
+        case Sin:
+            return show_call1(v, "sin"_py);
+        case Cos:
+            return show_call1(v, "cos"_py);
+        case Tan:
+            return show_call1(v, "tan"_py);
+        case Sinh:
+            return show_call1(v, "sinh"_py);
+        case Cosh:
+            return show_call1(v, "cosh"_py);
+        case Tanh:
+            return show_call1(v, "tanh"_py);
+        case Rint:
+            return show_call1(v, "rint"_py);
+        case Max:
+            return show_call2(v, "max"_py);
+        case Min:
+            return show_call2(v, "min"_py);
+        case Int64:
+            return show_call1(v, "int64"_py);
+        case Bool:
+            return show_call1(v, "bool"_py);
+        case Atan2:
+            return show_call2(v, "arctan2"_py);
+        case Hypot:
+            return show_call2(v, "hypot"_py);
+        case Select:
+            return show_call3(v, "ifelse"_py);
+        default:
+            return write("Unknown value"_py);
+        }
+    }
+};
+
+static PyObject *rtvalue_str(PyObject *self)
+{
+    return py_catch_error([&] {
+        rtvalue_printer io;
+        io.show((_RuntimeValue*)self);
+        return io.getvalue();
+    });
+}
+
 static inline void update_rtvalue()
 {
     auto type = (PyTypeObject*)RTVal_Type;
     static PyMethodDef rtvalue_array_ufunc_method = {
         "__array_ufunc__", (PyCFunction)(void*)rtvalue_array_ufunc, METH_FASTCALL, 0};
     pytype_add_method(type, &rtvalue_array_ufunc_method);
+    type->tp_repr = rtvalue_str;
+    type->tp_str = rtvalue_str;
     type->tp_as_number = &rtvalue_as_number;
     type->tp_richcompare = rtvalue_richcmp;
     PyType_Modified(type);
