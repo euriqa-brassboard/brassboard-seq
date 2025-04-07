@@ -26,5 +26,3 @@ cdef extern from "src/config.h" namespace "brassboard_seq::config":
         cdef dict channel_alias
         cdef dict alias_cache
         cdef set supported_prefix
-
-    cdef tuple translate_channel(Config self, str name)

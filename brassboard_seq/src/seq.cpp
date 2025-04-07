@@ -41,7 +41,7 @@ static inline int get_channel_id(auto self, PyObject *name)
     if (auto chn = PyDict_GetItemWithError(channel_name_map, name)) [[likely]]
         return PyLong_AsLong(chn);
     throw_if(PyErr_Occurred());
-    py_object path(config::translate_channel(self->config, name));
+    py_object path(self->config->translate_channel(name));
     auto channel_path_map = self->channel_path_map;
     if (auto chn = PyDict_GetItemWithError(channel_path_map, path)) {
         throw_if(PyDict_SetItem(channel_name_map, name, chn));

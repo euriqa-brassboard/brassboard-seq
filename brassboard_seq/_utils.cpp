@@ -46,7 +46,7 @@ PyInit__utils(void)
         throw_if(PyModule_AddObjectRef(m, "ExternCallback",
                                        (PyObject*)&rtval::ExternCallback_Type) < 0);
         throw_if(PyModule_AddObjectRef(m, "Config",
-                                       (PyObject*)&config::Config_Type) < 0);
+                                       (PyObject*)&config::Config::Type) < 0);
         throw_if(PyModule_AddObjectRef(m, "CompositeRTProp",
                                        (PyObject*)&rtprop::CompositeRTProp_Type) < 0);
         throw_if(PyModule_AddObjectRef(m, "RTProp",

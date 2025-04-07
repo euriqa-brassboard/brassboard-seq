@@ -68,9 +68,9 @@ static PyObject *add_channel_alias(PyObject *py_self, PyObject *const *args,
     });
 }
 
-static PyObject *_translate_channel(Config *self, PyObject *path)
+inline PyObject *Config::_translate_channel(PyObject *path)
 {
-    if (auto resolved = PyDict_GetItemWithError(self->alias_cache, path))
+    if (auto resolved = PyDict_GetItemWithError(alias_cache, path))
         return py_newref(resolved);
     throw_if(PyErr_Occurred());
     // Hardcoded limit for loop detection
@@ -78,7 +78,7 @@ static PyObject *_translate_channel(Config *self, PyObject *path)
         py_throw_format(PyExc_ValueError, "Channel alias loop detected: %U",
                         channel_name_from_path(path).get());
     auto prefix = PyTuple_GET_ITEM(path, 0);
-    if (auto new_prefix = PyDict_GetItemWithError(self->channel_alias, prefix)) {
+    if (auto new_prefix = PyDict_GetItemWithError(channel_alias, prefix)) {
         auto prefix_len = PyTuple_GET_SIZE(new_prefix);
         py_object newpath(pytuple_new(prefix_len + PyTuple_GET_SIZE(path) - 1));
         for (auto [i, v]: pytuple_iter(new_prefix))
@@ -86,23 +86,23 @@ static PyObject *_translate_channel(Config *self, PyObject *path)
         for (auto [i, v]: pytuple_iter(path))
             if (i != 0)
                 PyTuple_SET_ITEM(newpath.get(), i + prefix_len - 1, py_newref(v));
-        py_object resolved(_translate_channel(self, newpath));
-        throw_if(PyDict_SetItem(self->alias_cache, path, resolved));
+        py_object resolved(_translate_channel(newpath));
+        throw_if(PyDict_SetItem(alias_cache, path, resolved));
         return resolved.release();
     }
     throw_if(PyErr_Occurred());
-    if (!py_check_int(PySet_Contains(self->supported_prefix, prefix)))
+    if (!py_check_int(PySet_Contains(supported_prefix, prefix)))
         py_throw_format(PyExc_ValueError, "Unsupported channel name: %U",
                         channel_name_from_path(path).get());
-    throw_if(PyDict_SetItem(self->alias_cache, path, path));
+    throw_if(PyDict_SetItem(alias_cache, path, path));
     return py_newref(path);
 }
 
 __attribute__((visibility("protected")))
-PyObject *translate_channel(Config *self, PyObject *name)
+PyObject *Config::translate_channel(PyObject *name)
 {
     py_object path(split_string_tuple(name));
-    return _translate_channel(self, path);
+    return _translate_channel(path);
 }
 
 static PyObject *py_translate_channel(PyObject *self, PyObject *const *args,
@@ -110,12 +110,12 @@ static PyObject *py_translate_channel(PyObject *self, PyObject *const *args,
 {
     return py_catch_error([&] {
         py_check_num_arg("translate_channel", nargs, 1);
-        return translate_channel((Config*)self, args[0]);
+        return ((Config*)self)->translate_channel(args[0]);
     });
 }
 
 __attribute__((visibility("protected")))
-PyTypeObject Config_Type = {
+PyTypeObject Config::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.config.Config",
     .tp_basicsize = sizeof(Config),
@@ -151,7 +151,7 @@ PyTypeObject Config_Type = {
 __attribute__((visibility("protected")))
 void init()
 {
-    throw_if(PyType_Ready(&Config_Type) < 0);
+    throw_if(PyType_Ready(&Config::Type) < 0);
 }
 
 }

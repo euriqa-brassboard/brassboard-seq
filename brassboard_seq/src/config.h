@@ -28,9 +28,13 @@ struct Config {
     PyObject *channel_alias;
     PyObject *alias_cache;
     PyObject *supported_prefix;
+
+    PyObject *translate_channel(PyObject *name);
+
+    static PyTypeObject Type;
+private:
+    PyObject *_translate_channel(PyObject *path);
 };
-extern PyTypeObject Config_Type;
-PyObject *translate_channel(Config *self, PyObject *name);
 
 void init();
 
