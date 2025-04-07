@@ -23,12 +23,8 @@
 
 namespace brassboard_seq::rtprop {
 
-struct CompositeRTProp {
-    PyObject_HEAD
-    PyObject *fieldname;
-    PyObject *cb;
-};
 extern PyTypeObject CompositeRTProp_Type;
+extern PyTypeObject RTProp_Type;
 void init();
 
 }

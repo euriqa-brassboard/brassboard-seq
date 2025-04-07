@@ -49,6 +49,8 @@ PyInit__utils(void)
                                        (PyObject*)&config::Config_Type) < 0);
         throw_if(PyModule_AddObjectRef(m, "CompositeRTProp",
                                        (PyObject*)&rtprop::CompositeRTProp_Type) < 0);
+        throw_if(PyModule_AddObjectRef(m, "RTProp",
+                                       (PyObject*)&rtprop::RTProp_Type) < 0);
         return m.release();
     });
 }
