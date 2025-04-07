@@ -110,6 +110,7 @@ static PyObject *py_translate_channel(PyObject *self, PyObject *const *args,
 {
     return py_catch_error([&] {
         py_check_num_arg("translate_channel", nargs, 1);
+        check_string_arg(args[0], "name");
         return ((Config*)self)->translate_channel(args[0]);
     });
 }

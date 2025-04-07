@@ -371,6 +371,15 @@ def test_rtprop():
     assert isinstance(C.p1, rtval.RTProp)
     assert isinstance(C.p2, rtval.RTProp)
 
+    with pytest.raises(TypeError):
+        rtval.RTProp(1)
+    with pytest.raises(TypeError):
+        rtval.RTProp(a=2)
+    with pytest.raises(TypeError):
+        rtval.CompositeRTProp()
+    with pytest.raises(TypeError):
+        rtval.CompositeRTProp(a=2)
+
     c1 = C()
     c2 = C()
 
@@ -442,6 +451,11 @@ def test_rtprop():
     c1.p2 = v4
     assert c1.p1 == 2.3
     assert c1.p2 is v4
+
+    del c1.p1
+    del c1.p2
+    assert isinstance(c1.p1, rtval.RuntimeValue)
+    assert isinstance(c1.p2, rtval.RuntimeValue)
 
 def test_composite_rtprop():
     C.cp_scalar_count = 0
@@ -731,6 +745,9 @@ def test_composite_rtprop():
     assert C.cp_nest_count == 3
     assert c2.cp_nest is c2_cp_nest1
     assert C.cp_nest_count == 3
+
+    # Create a cycle involving composite rtprop data
+    C.cp_nest.set_state(c1, c1)
 
 def test_invalid():
     r = test_utils.new_invalid_rtval()
