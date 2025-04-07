@@ -16,20 +16,21 @@
  *   see <http://www.gnu.org/licenses/>.                                 *
  *************************************************************************/
 
-#include "rtval.h"
+#ifndef BRASSBOARD_SEQ_SRC_RTPROP_H
+#define BRASSBOARD_SEQ_SRC_RTPROP_H
 
-namespace brassboard_seq::rtval {
+#include "utils.h"
 
-static TagVal rtprop_callback_func(auto *self, unsigned age)
-{
-    py_object v(throw_if_not(PyObject_GetAttr(self->obj, self->fieldname)));
-    if (!is_rtval(v))
-        return TagVal::from_py(v);
-    auto rv = (RuntimeValue*)v.get();
-    if (rv->type_ == ExternAge && rv->cb_arg2 == (PyObject*)self)
-        py_throw_format(PyExc_ValueError, "RT property have not been assigned.");
-    rt_eval_cache(rv, age);
-    return rtval_cache(rv);
+namespace brassboard_seq::rtprop {
+
+struct CompositeRTProp {
+    PyObject_HEAD
+    PyObject *fieldname;
+    PyObject *cb;
+};
+extern PyTypeObject CompositeRTProp_Type;
+void init();
+
 }
 
-}
+#endif

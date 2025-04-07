@@ -7,6 +7,7 @@ add_definitions(-DNPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION -fopenmp
 
 add_library(brassboard_seq_utils SHARED
   src/config.cpp
+  src/rtprop.cpp
   src/rtval.cpp
   src/utils.cpp)
 target_include_directories(brassboard_seq_utils PRIVATE ${Python_INCLUDE_DIRS})

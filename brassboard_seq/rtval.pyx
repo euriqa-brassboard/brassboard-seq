@@ -19,6 +19,7 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.utils cimport PyErr_Format, PyExc_ValueError
 
+from brassboard_seq._utils import CompositeRTProp
 # Manually set the field since I can't make cython automatically do this
 # without also declaring the c struct again...
 globals()['RuntimeValue'] = RuntimeValue
@@ -27,10 +28,6 @@ cimport cython
 
 cdef extern from "src/_rtprop.cpp" namespace "brassboard_seq::rtval":
     TagVal rtprop_callback_func(rtprop_callback self, unsigned age) except +
-    composite_rtprop_data get_composite_rtprop_data(CompositeRTProp prop, object obj,
-                                                    object, composite_rtprop_data) except +
-    object composite_rtprop_get_res(CompositeRTProp self, object obj,
-                                    object, composite_rtprop_data) except +
     void assert_layout_compatible(ExternCallback)
 
 assert_layout_compatible(None)
@@ -129,33 +126,3 @@ cdef class RTProp:
         value = new_extern_age(new_rtprop_callback(obj, fieldname), float)
         setattr(obj, fieldname, value)
         return value
-
-@cython.final
-@cython.internal
-cdef class composite_rtprop_data:
-    cdef object ovr
-    cdef object cache
-    cdef uint8_t compiled
-    cdef uint8_t filled
-
-@cython.final
-cdef class CompositeRTProp:
-    cdef str fieldname
-    cdef object cb
-
-    def __init__(self, cb):
-        self.cb = cb
-
-    def get_state(self, obj):
-        return get_composite_rtprop_data(self, obj, composite_rtprop_data, None).ovr
-
-    def set_state(self, obj, val):
-        get_composite_rtprop_data(self, obj, composite_rtprop_data, None).ovr = val
-
-    def __set_name__(self, owner, name):
-        self.fieldname = '__CompositeRTProp__' + name
-
-    def __get__(self, obj, objtype):
-        if obj is None:
-            return self
-        return composite_rtprop_get_res(self, obj, composite_rtprop_data, None)

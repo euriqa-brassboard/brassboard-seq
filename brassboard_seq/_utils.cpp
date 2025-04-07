@@ -21,6 +21,7 @@
 #include <Python.h>
 
 #include "src/utils.h"
+#include "src/rtprop.h"
 #include "src/rtval.h"
 #include "src/config.h"
 
@@ -38,12 +39,15 @@ PyInit__utils(void)
     return py_catch_error([&] {
         init_library();
         throw_if(PyType_Ready(&rtval::RuntimeValue_Type) < 0);
+        rtprop::init();
         throw_if(PyType_Ready(&config::Config_Type) < 0);
         py_object m(throw_if_not(PyModule_Create(&_utils_module)));
         throw_if(PyModule_AddObjectRef(m, "RuntimeValue",
                                        (PyObject*)&rtval::RuntimeValue_Type) < 0);
         throw_if(PyModule_AddObjectRef(m, "Config",
                                        (PyObject*)&config::Config_Type) < 0);
+        throw_if(PyModule_AddObjectRef(m, "CompositeRTProp",
+                                       (PyObject*)&rtprop::CompositeRTProp_Type) < 0);
         return m.release();
     });
 }
