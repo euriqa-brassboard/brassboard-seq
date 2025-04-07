@@ -127,25 +127,15 @@ PyTypeObject Config_Type = {
     .tp_name = "brassboard_seq.config.Config",
     .tp_basicsize = sizeof(Config),
     .tp_dealloc = [] (PyObject *py_self) {
-        PyObject_GC_UnTrack(py_self);
-        Config_Type.tp_clear(py_self);
-        Py_TYPE(py_self)->tp_free(py_self);
-    },
-    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = [] (PyObject *py_self, visitproc visit, void *arg) -> int {
-        auto self = (Config*)py_self;
-        Py_VISIT(self->channel_alias);
-        Py_VISIT(self->alias_cache);
-        Py_VISIT(self->supported_prefix);
-        return 0;
-    },
-    .tp_clear = [] (PyObject *py_self) -> int {
         auto self = (Config*)py_self;
         Py_CLEAR(self->channel_alias);
         Py_CLEAR(self->alias_cache);
         Py_CLEAR(self->supported_prefix);
-        return 0;
+        Py_TYPE(py_self)->tp_free(py_self);
     },
+    // All fields are containers of immutable types.
+    // No reference loop possible.
+    .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_methods = config_methods,
     .tp_new = [] (PyTypeObject *t, PyObject*, PyObject*) -> PyObject* {
         return py_catch_error([&] {
