@@ -29,10 +29,10 @@ def time_scale():
     return py_time_scale
 
 cdef extern from "src/event_time.cpp" namespace "brassboard_seq::event_time":
-    str str_time(long long) except +
+    str str_time(int64_t) except +
     void timemanager_finalize(TimeManager self, EventTime) except +
-    long long timemanager_compute_all_times(TimeManager self, unsigned age,
-                                            EventTime) except +
+    int64_t timemanager_compute_all_times(TimeManager self, unsigned age,
+                                          EventTime) except +
     TagVal timediff_eval(EventTimeDiff self, unsigned age) except +
     void update_event_time_gc_callback(object type, EventTime)
 
@@ -47,7 +47,7 @@ cdef class TimeManager:
     cdef int finalize(self) except -1:
         timemanager_finalize(self, None)
 
-    cdef long long compute_all_times(self, unsigned age) except -1:
+    cdef int64_t compute_all_times(self, unsigned age) except -1:
         return timemanager_compute_all_times(self, age, None)
 
 @cython.auto_pickle(False)
@@ -76,7 +76,7 @@ cdef class EventTime:
         prev = self.prev
         p_rt_offset = self.data.get_rt_offset()
         if p_rt_offset == NULL:
-            offset = str_time(<long long>self.data.get_c_offset())
+            offset = str_time(<int64_t>self.data.get_c_offset())
         else:
             offset = str(<RuntimeValue>p_rt_offset)
         cond = self.cond

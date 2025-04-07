@@ -204,7 +204,7 @@ cdef class ArtiqBackend:
             PyErr_Format(PyExc_ValueError, "Unknown output type: '%U'",
                          <PyObject*>output_format)
 
-    cdef int add_start_trigger_ttl(self, uint32_t tgt, long long time,
+    cdef int add_start_trigger_ttl(self, uint32_t tgt, int64_t time,
                                    int min_time, bint raising_edge) except -1:
         cdef StartTrigger start_trigger
         start_trigger.target = tgt

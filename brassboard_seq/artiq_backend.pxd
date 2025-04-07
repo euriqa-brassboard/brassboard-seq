@@ -104,7 +104,7 @@ cdef extern from "src/artiq_backend.h" namespace "brassboard_seq::artiq_backend"
     cppclass TimeChecker:
         pass
 
-    int64_t seq_time_to_mu(long long time)
+    int64_t seq_time_to_mu(int64_t time)
 
 
 cdef class ArtiqBackend(Backend):
@@ -126,5 +126,5 @@ cdef class ArtiqBackend(Backend):
     cdef vector[StartTrigger] start_triggers
     cdef dict device_delay
 
-    cdef int add_start_trigger_ttl(self, uint32_t tgt, long long time,
+    cdef int add_start_trigger_ttl(self, uint32_t tgt, int64_t time,
                                    int min_time, bint raising_edge) except -1

@@ -85,7 +85,7 @@ static void foreach_max_range_min_val(std::span<int> value, int min_val, auto &&
     }
 }
 
-static inline int64_t seq_time_to_cycle(long long time)
+static inline int64_t seq_time_to_cycle(int64_t time)
 {
     // Each cycle is 1 / 1ps / 409.6MHz sequence time unit
     // or 78125/32 sequence unit.

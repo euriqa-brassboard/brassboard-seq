@@ -27,7 +27,7 @@ namespace brassboard_seq::event_time {
 
 using brassboard_seq::rtval::RuntimeValue;
 
-static constexpr long long time_scale = 1000000000000ll;
+static constexpr int64_t time_scale = 1000000000000ll;
 
 enum TimeOrder {
     NoOrder,
@@ -75,35 +75,35 @@ public:
         return _is_static;
     }
 
-    inline long long _get_static() const
+    inline int64_t _get_static() const
     {
         assume(_is_static && !_is_rt_offset);
-        return (long long)_c_offset;
+        return (int64_t)_c_offset;
     }
-    inline long long get_static() const
+    inline int64_t get_static() const
     {
         if (_is_static) {
             assert(!_is_rt_offset);
-            assume((long long)_c_offset != -1);
-            return (long long)_c_offset;
+            assume((int64_t)_c_offset != -1);
+            return (int64_t)_c_offset;
         }
         return -1;
     }
 
-    inline void set_static(long long value)
+    inline void set_static(int64_t value)
     {
         clear_rt_offset();
         _is_static = true;
         _c_offset = (uint64_t)value;
     }
 
-    inline long long get_c_offset() const
+    inline int64_t get_c_offset() const
     {
         assume(!_is_static && !_is_rt_offset);
-        return (long long)_c_offset;
+        return (int64_t)_c_offset;
     }
 
-    inline void set_c_offset(long long value)
+    inline void set_c_offset(int64_t value)
     {
         assume(!_is_static && !_is_rt_offset);
         _c_offset = (uint64_t)value;
@@ -143,7 +143,7 @@ struct TimeManagerStatus {
 template<typename EventTime>
 static inline __attribute__((returns_nonnull)) EventTime*
 _new_time_int(auto *self, PyObject *EventTimeType, EventTime *prev,
-              long long offset, bool floating, PyObject *cond, EventTime *wait_for)
+              int64_t offset, bool floating, PyObject *cond, EventTime *wait_for)
 {
     auto status = self->status.get();
     if (status->finalized)
@@ -196,12 +196,12 @@ _new_time_rt(auto *self, PyObject *EventTimeType, EventTime *prev,
     return tp;
 }
 
-static inline long long round_time_f64(double v)
+static inline int64_t round_time_f64(double v)
 {
-    return round<long long>(v * double(time_scale));
+    return round<int64_t>(v * double(time_scale));
 }
 
-static inline long long round_time_int(PyObject *v)
+static inline int64_t round_time_int(PyObject *v)
 {
     if (Py_TYPE(v) == &PyLong_Type) {
         auto vi = PyLong_AsLongLong(v);

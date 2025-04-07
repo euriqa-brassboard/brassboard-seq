@@ -220,7 +220,7 @@ struct TimeChecker {
 
 static constexpr int coarse_time_mu = 8;
 
-static inline int64_t seq_time_to_mu(long long time)
+static inline int64_t seq_time_to_mu(int64_t time)
 {
     // Hard code for now.
     return (time + 1000 * coarse_time_mu / 2) / (1000 * coarse_time_mu) * coarse_time_mu;

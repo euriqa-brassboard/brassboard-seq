@@ -39,7 +39,7 @@ static inline bool get_cond_val(PyObject *v, unsigned age)
     return !rtval::rtval_cache(rv).is_zero();
 }
 
-static PyObject *str_time(long long t)
+static PyObject *str_time(int64_t t)
 {
     assert(time_scale == 1e12);
     assert(t >= 0);
@@ -107,7 +107,7 @@ static inline void visit_time(auto self, auto t, auto &visited)
     if (visited.contains(id))
         bb_throw_format(PyExc_ValueError, event_time_key(t), "Time loop detected");
     visited.insert(id);
-    long long static_offset;
+    int64_t static_offset;
     auto rt_offset = t->data.get_rt_offset();
     auto cond = t->cond;
     if (cond == Py_True) {
@@ -119,8 +119,8 @@ static inline void visit_time(auto self, auto t, auto &visited)
     else {
         static_offset = -1;
     }
-    long long static_prev = 0;
-    long long static_wait_for = 0;
+    int64_t static_prev = 0;
+    int64_t static_wait_for = 0;
     if (auto prev = t->prev; (PyObject*)prev != Py_None) {
         visit_time(self, prev, visited);
         static_prev = prev->data.get_static();
@@ -161,8 +161,8 @@ static inline void update_chain_pos(auto self, auto prev, int nchains)
 // This is so that if the base time is not statically known,
 // we can compute the diff without computing the base time,
 // while if the base time is known, we can use the static values in the computation
-static inline long long get_time_value(auto self, int base_id, unsigned age,
-                                       std::vector<long long> &cache)
+static inline int64_t get_time_value(auto self, int base_id, unsigned age,
+                                       std::vector<int64_t> &cache)
 {
     auto tid = self->data.id;
     if (tid == base_id)
@@ -184,12 +184,12 @@ static inline long long get_time_value(auto self, int base_id, unsigned age,
         return static_value;
     }
 
-    long long prev_val = 0;
+    int64_t prev_val = 0;
     if (auto prev = self->prev; (PyObject*)prev != Py_None)
         prev_val = get_time_value(prev, base_id, age, cache);
 
     auto cond = get_cond_val(self->cond, age);
-    long long offset = 0;
+    int64_t offset = 0;
     if (cond) {
         auto rt_offset = (RuntimeValue*)self->data.get_rt_offset();
         if (rt_offset) {
@@ -305,11 +305,11 @@ static inline void timemanager_finalize(auto self, EventTime*)
 }
 
 template<typename EventTime>
-static inline long long timemanager_compute_all_times(auto self, unsigned age, EventTime*)
+static inline int64_t timemanager_compute_all_times(auto self, unsigned age, EventTime*)
 {
     if (!self->status->finalized)
         py_throw_format(PyExc_RuntimeError, "Event times not finalized");
-    long long max_time = 0;
+    int64_t max_time = 0;
     auto event_times = self->event_times;
     int ntimes = PyList_GET_SIZE(event_times);
     self->time_values.resize(ntimes);
@@ -353,7 +353,7 @@ static inline rtval::TagVal timediff_eval(auto self, unsigned age)
     self->in_eval = true;
     ScopeExit reset_eval([&] { self->in_eval = false; });
     int base_id = eventtime_find_base_id(t1, t2, age);
-    std::vector<long long> cache(t1->manager_status->ntimes, -1);
+    std::vector<int64_t> cache(t1->manager_status->ntimes, -1);
     return double(get_time_value(t1, base_id, age, cache) -
                   get_time_value(t2, base_id, age, cache)) / time_scale;
 }

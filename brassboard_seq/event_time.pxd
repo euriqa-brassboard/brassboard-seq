@@ -29,17 +29,17 @@ from cpython cimport PyObject
 
 # 1ps for internal time unit
 cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
-    long long c_time_scale "brassboard_seq::event_time::time_scale"
+    int64_t c_time_scale "brassboard_seq::event_time::time_scale"
     cppclass EventTimeData:
         int id
         bint floating
         int chain_id # ID of the chain this time is part of
         bint is_static()
-        long long _get_static()
-        long long get_static()
-        void set_static(long long value)
-        long long get_c_offset()
-        void set_c_offset(long long value)
+        int64_t _get_static()
+        int64_t get_static()
+        void set_static(int64_t value)
+        int64_t get_c_offset()
+        void set_c_offset(int64_t value)
         PyObject *get_rt_offset()
         void set_rt_offset(RuntimeValue)
 
@@ -48,13 +48,13 @@ cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
         bint finalized
 
     EventTime _new_time_int(TimeManager self, object EventTimeType,
-                            EventTime prev, long long offset,
+                            EventTime prev, int64_t offset,
                             bint floating, object cond, EventTime wait_for) except +
     EventTime _new_time_rt(TimeManager self, object EventTimeType, EventTime prev,
                            RuntimeValue offset, object cond, EventTime wait_for) except +
 
-    long long round_time_f64(double v)
-    long long round_time_int(v) except +
+    int64_t round_time_f64(double v)
+    int64_t round_time_int(v) except +
     RuntimeValue round_time_rt(RuntimeValue, RuntimeValue) except +
 
     enum TimeOrder:
@@ -71,9 +71,9 @@ cdef RuntimeValue rt_time_scale
 cdef class TimeManager:
     cdef shared_ptr[TimeManagerStatus] status
     cdef list event_times
-    cdef vector[long long] time_values
+    cdef vector[int64_t] time_values
 
-    cdef inline EventTime new_time_int(self, EventTime prev, long long offset,
+    cdef inline EventTime new_time_int(self, EventTime prev, int64_t offset,
                                        bint floating, cond, EventTime wait_for):
         return _new_time_int(self, EventTime, prev, offset, floating, cond, wait_for)
 
@@ -92,7 +92,7 @@ cdef class TimeManager:
                                  False, cond, wait_for)
 
     cdef int finalize(self) except -1
-    cdef long long compute_all_times(self, unsigned age) except -1
+    cdef int64_t compute_all_times(self, unsigned age) except -1
 
 cdef inline TimeManager new_time_manager():
     self = <TimeManager>TimeManager.__new__(TimeManager)
@@ -117,8 +117,7 @@ cdef class EventTime:
     cdef vector[int] chain_pos
 
 # All values are in units of `1/time_scale` seconds
-cdef inline int set_base_int(EventTime self, EventTime base,
-                             long long offset) except -1:
+cdef inline int set_base_int(EventTime self, EventTime base, int64_t offset) except -1:
     if not self.data.floating:
         PyErr_Format(PyExc_ValueError, "Cannot modify non-floating time")
     self.prev = base

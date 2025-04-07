@@ -189,7 +189,7 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
     auto nchn = (int)PyList_GET_SIZE(seqinfo->channel_paths);
     for (int cid = 0; cid < nchn; cid++) {
         auto &actions = comp->cseq.all_actions[cid];
-        long long prev_time = 0;
+        int64_t prev_time = 0;
         for (auto action: actions) {
             bool cond_val = action_get_condval(action, age);
             action->cond_val = cond_val;
