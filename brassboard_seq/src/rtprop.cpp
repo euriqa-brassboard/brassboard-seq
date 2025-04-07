@@ -37,7 +37,7 @@ struct composite_rtprop_data {
 };
 PyTypeObject composite_rtprop_data::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
-        .tp_name = "brassboard_seq.rtval.composite_rtprop_data",
+    .tp_name = "brassboard_seq.rtval.composite_rtprop_data",
     .tp_basicsize = sizeof(composite_rtprop_data),
     .tp_dealloc = [] (PyObject *py_self) {
         PyObject_GC_UnTrack(py_self);
@@ -162,46 +162,42 @@ struct CompositeRTProp {
             return py_newref(data->cache);
         return apply_composite_ovr(data->cache, data->ovr);
     }
+
+    static PyObject *get_state(PyObject *py_self, PyObject *const *args, Py_ssize_t nargs)
+    {
+        return py_catch_error([&] {
+            auto self = (CompositeRTProp*)py_self;
+            py_check_num_arg("get_state", nargs, 1, 1);
+            auto data = self->get_data(args[0]);
+            auto res = py_newref(data->ovr);
+            Py_DECREF(data);
+            return res;
+        });
+    }
+    static PyObject *set_state(PyObject *py_self, PyObject *const *args, Py_ssize_t nargs)
+    {
+        return py_catch_error([&] {
+            auto self = (CompositeRTProp*)py_self;
+            py_check_num_arg("set_state", nargs, 2, 2);
+            auto data = self->get_data(args[0]);
+            pyassign(data->ovr, args[1]);
+            Py_DECREF(data);
+            Py_RETURN_NONE;
+        });
+    }
+
+    static PyObject *set_name(PyObject *py_self, PyObject *const *args, Py_ssize_t nargs)
+    {
+        return py_catch_error([&] {
+            auto self = (CompositeRTProp*)py_self;
+            py_check_num_arg("__set_name__", nargs, 2, 2);
+            auto fieldname = throw_if_not(PyUnicode_Concat("__CompositeRTProp__"_py, args[1]));
+            Py_DECREF(self->fieldname);
+            self->fieldname = fieldname;
+            Py_RETURN_NONE;
+        });
+    }
 };
-
-static PyObject *composite_rtprop_get_state(PyObject *py_self, PyObject *const *args,
-                                            Py_ssize_t nargs)
-{
-    return py_catch_error([&] {
-        auto self = (CompositeRTProp*)py_self;
-        py_check_num_arg("get_state", nargs, 1, 1);
-        auto data = self->get_data(args[0]);
-        auto res = py_newref(data->ovr);
-        Py_DECREF(data);
-        return res;
-    });
-}
-
-static PyObject *composite_rtprop_set_state(PyObject *py_self, PyObject *const *args,
-                                            Py_ssize_t nargs)
-{
-    return py_catch_error([&] {
-        auto self = (CompositeRTProp*)py_self;
-        py_check_num_arg("set_state", nargs, 2, 2);
-        auto data = self->get_data(args[0]);
-        pyassign(data->ovr, args[1]);
-        Py_DECREF(data);
-        Py_RETURN_NONE;
-    });
-}
-
-static PyObject *composite_rtprop_set_name(PyObject *py_self, PyObject *const *args,
-                                           Py_ssize_t nargs)
-{
-    return py_catch_error([&] {
-        auto self = (CompositeRTProp*)py_self;
-        py_check_num_arg("__set_name__", nargs, 2, 2);
-        auto fieldname = throw_if_not(PyUnicode_Concat("__CompositeRTProp__"_py, args[1]));
-        Py_DECREF(self->fieldname);
-        self->fieldname = fieldname;
-        Py_RETURN_NONE;
-    });
-}
 
 }
 
@@ -228,9 +224,9 @@ PyTypeObject CompositeRTProp_Type = {
         return 0;
     },
     .tp_methods = (PyMethodDef[]){
-        {"get_state", (PyCFunction)(void*)composite_rtprop_get_state, METH_FASTCALL, 0},
-        {"set_state", (PyCFunction)(void*)composite_rtprop_set_state, METH_FASTCALL, 0},
-        {"__set_name__", (PyCFunction)(void*)composite_rtprop_set_name, METH_FASTCALL, 0},
+        {"get_state", (PyCFunction)(void*)CompositeRTProp::get_state, METH_FASTCALL, 0},
+        {"set_state", (PyCFunction)(void*)CompositeRTProp::set_state, METH_FASTCALL, 0},
+        {"__set_name__", (PyCFunction)(void*)CompositeRTProp::set_name, METH_FASTCALL, 0},
         {0, 0, 0, 0}
     },
     .tp_descr_get = [] (PyObject *self, PyObject *obj, PyObject*) -> PyObject* {
@@ -349,49 +345,46 @@ struct RTProp {
         else
             throw_if(PyObject_DelAttr(obj, fieldname));
     }
+
+    static PyObject *get_state(PyObject *py_self, PyObject *const *args, Py_ssize_t nargs)
+    {
+        return py_catch_error([&] {
+            auto self = (RTProp*)py_self;
+            py_check_num_arg("get_state", nargs, 1, 1);
+            if (auto res = PyObject_GetAttr(args[0], self->fieldname))
+                return res;
+            PyErr_Clear();
+            Py_RETURN_NONE;
+        });
+    }
+
+    static PyObject *set_state(PyObject *py_self, PyObject *const *args, Py_ssize_t nargs)
+    {
+        return py_catch_error([&] {
+            auto self = (RTProp*)py_self;
+            py_check_num_arg("set_state", nargs, 2, 2);
+            auto obj = args[0];
+            auto val = args[1];
+            if (val == Py_None)
+                throw_if(PyObject_DelAttr(obj, self->fieldname));
+            else
+                throw_if(PyObject_SetAttr(obj, self->fieldname, val));
+            Py_RETURN_NONE;
+        });
+    }
+
+    static PyObject *set_name(PyObject *py_self, PyObject *const *args, Py_ssize_t nargs)
+    {
+        return py_catch_error([&] {
+            auto self = (RTProp*)py_self;
+            py_check_num_arg("__set_name__", nargs, 2, 2);
+            auto fieldname = throw_if_not(PyUnicode_Concat(RTPROP_PREFIX_STR ""_py, args[1]));
+            Py_DECREF(self->fieldname);
+            self->fieldname = fieldname;
+            Py_RETURN_NONE;
+        });
+    }
 };
-
-static PyObject *rtprop_get_state(PyObject *py_self, PyObject *const *args,
-                                  Py_ssize_t nargs)
-{
-    return py_catch_error([&] {
-        auto self = (RTProp*)py_self;
-        py_check_num_arg("get_state", nargs, 1, 1);
-        if (auto res = PyObject_GetAttr(args[0], self->fieldname))
-            return res;
-        PyErr_Clear();
-        Py_RETURN_NONE;
-    });
-}
-
-static PyObject *rtprop_set_state(PyObject *py_self, PyObject *const *args,
-                                  Py_ssize_t nargs)
-{
-    return py_catch_error([&] {
-        auto self = (RTProp*)py_self;
-        py_check_num_arg("set_state", nargs, 2, 2);
-        auto obj = args[0];
-        auto val = args[1];
-        if (val == Py_None)
-            throw_if(PyObject_DelAttr(obj, self->fieldname));
-        else
-            throw_if(PyObject_SetAttr(obj, self->fieldname, val));
-        Py_RETURN_NONE;
-    });
-}
-
-static PyObject *rtprop_set_name(PyObject *py_self, PyObject *const *args,
-                                 Py_ssize_t nargs)
-{
-    return py_catch_error([&] {
-        auto self = (RTProp*)py_self;
-        py_check_num_arg("__set_name__", nargs, 2, 2);
-        auto fieldname = throw_if_not(PyUnicode_Concat(RTPROP_PREFIX_STR ""_py, args[1]));
-        Py_DECREF(self->fieldname);
-        self->fieldname = fieldname;
-        Py_RETURN_NONE;
-    });
-}
 
 }
 
@@ -407,9 +400,9 @@ PyTypeObject RTProp_Type = {
     },
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_methods = (PyMethodDef[]){
-        {"get_state", (PyCFunction)(void*)rtprop_get_state, METH_FASTCALL, 0},
-        {"set_state", (PyCFunction)(void*)rtprop_set_state, METH_FASTCALL, 0},
-        {"__set_name__", (PyCFunction)(void*)rtprop_set_name, METH_FASTCALL, 0},
+        {"get_state", (PyCFunction)(void*)RTProp::get_state, METH_FASTCALL, 0},
+        {"set_state", (PyCFunction)(void*)RTProp::set_state, METH_FASTCALL, 0},
+        {"__set_name__", (PyCFunction)(void*)RTProp::set_name, METH_FASTCALL, 0},
         {0, 0, 0, 0}
     },
     .tp_descr_get = [] (PyObject *py_self, PyObject *obj, PyObject*) {
