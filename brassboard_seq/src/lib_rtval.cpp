@@ -425,7 +425,7 @@ static inline TagVal tagval_add_or_sub(TagVal v1, TagVal v2, bool issub)
     return (issub ? Sub_op::generic_eval(v1, v2) : Add_op::generic_eval(v1, v2));
 }
 
-static inline PyObject *_new_addsub(TagVal c, RuntimeValue *v, bool s)
+static inline PyObject *new_addsub(TagVal c, RuntimeValue *v, bool s)
 {
     if (c.is_zero() && !s)
         return py_newref((PyObject*)v);
@@ -507,10 +507,10 @@ static inline PyObject *build_addsub(PyObject *v0, PyObject *v1, bool issub)
     if (!nv0) {
         if (!nv1)
             return (PyObject*)new_const(nc);
-        return _new_addsub(nc, nv1, ns1);
+        return new_addsub(nc, nv1, ns1);
     }
     if (!nv1)
-        return _new_addsub(nc, nv0, ns0);
+        return new_addsub(nc, nv0, ns0);
     bool ns = false;
     py_object nv;
     if (!ns0) {
@@ -523,7 +523,7 @@ static inline PyObject *build_addsub(PyObject *v0, PyObject *v1, bool issub)
     else {
         nv.reset((PyObject*)new_expr2(Sub, nv1, nv0));
     }
-    return _new_addsub(nc, (RuntimeValue*)nv.get(), ns);
+    return new_addsub(nc, (RuntimeValue*)nv.get(), ns);
 }
 
 namespace np {
