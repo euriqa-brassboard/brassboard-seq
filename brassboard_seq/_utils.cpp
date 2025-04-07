@@ -15,19 +15,13 @@ static PyModuleDef _utils_module = {
 PyMODINIT_FUNC
 PyInit__utils(void)
 {
+    using namespace brassboard_seq;
     using namespace brassboard_seq::rtval;
-
-    if (PyType_Ready(&RuntimeValue_Type) < 0)
-        return nullptr;
-
-    PyObject *m = PyModule_Create(&_utils_module);
-    if (!m)
-        return nullptr;
-
-    if (PyModule_AddObjectRef(m, "RuntimeValue", (PyObject*)&RuntimeValue_Type) < 0) {
-        Py_DECREF(m);
-        return nullptr;
-    }
-
-    return m;
+    return py_catch_error([&] {
+        throw_if(PyType_Ready(&RuntimeValue_Type) < 0);
+        py_object m(throw_if_not(PyModule_Create(&_utils_module)));
+        throw_if(PyModule_AddObjectRef(m, "RuntimeValue",
+                                       (PyObject*)&RuntimeValue_Type) < 0);
+        return m.release();
+    });
 }
