@@ -24,20 +24,24 @@ namespace brassboard_seq::rtprop {
 
 using namespace brassboard_seq::rtval;
 
+namespace {
+
 struct composite_rtprop_data {
     PyObject_HEAD
     PyObject *ovr;
     PyObject *cache;
     bool compiled;
     bool filled;
+
+    static PyTypeObject Type;
 };
-static PyTypeObject composite_rtprop_data_Type = {
+PyTypeObject composite_rtprop_data::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
-    .tp_name = "brassboard_seq.rtval.composite_rtprop_data",
+        .tp_name = "brassboard_seq.rtval.composite_rtprop_data",
     .tp_basicsize = sizeof(composite_rtprop_data),
     .tp_dealloc = [] (PyObject *py_self) {
         PyObject_GC_UnTrack(py_self);
-        composite_rtprop_data_Type.tp_clear(py_self);
+        Type.tp_clear(py_self);
         Py_TYPE(py_self)->tp_free(py_self);
     },
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
@@ -54,32 +58,6 @@ static PyTypeObject composite_rtprop_data_Type = {
         return 0;
     },
 };
-
-struct CompositeRTProp {
-    PyObject_HEAD
-    PyObject *fieldname;
-    PyObject *cb;
-};
-
-static inline composite_rtprop_data*
-get_composite_rtprop_data(CompositeRTProp *prop, PyObject *obj)
-{
-    auto fieldname = prop->fieldname;
-    if (fieldname == Py_None)
-        py_throw_format(PyExc_ValueError, "Cannot determine runtime property name");
-    if (py_object val(PyObject_GetAttr(obj, fieldname)); !val) {
-        PyErr_Clear();
-    }
-    else if (Py_TYPE(val.get()) == &composite_rtprop_data_Type) {
-        return (composite_rtprop_data*)val.release();
-    }
-    py_object o(pytype_genericalloc(&composite_rtprop_data_Type));
-    auto data = (composite_rtprop_data*)o.get();
-    data->ovr = py_immref(Py_None);
-    data->cache = py_immref(Py_None);
-    throw_if(PyObject_SetAttr(obj, fieldname, o.get()));
-    return (composite_rtprop_data*)o.release();
-}
 
 static inline PyObject *apply_composite_ovr(PyObject *val, PyObject *ovr);
 
@@ -146,21 +124,45 @@ static inline bool _object_compiled(PyObject *obj)
     return field.get() == Py_None;
 }
 
-static inline PyObject *composite_rtprop_get_res(CompositeRTProp *self, PyObject *obj)
-{
-    auto data = get_composite_rtprop_data(self, obj);
-    py_object py_data((PyObject*)data);
-    if (!data->filled || (!data->compiled && _object_compiled(obj))) {
-        py_object res(throw_if_not(PyObject_Vectorcall(self->cb, &obj, 1, nullptr)));
-        Py_DECREF(data->cache);
-        data->cache = res.release();
-        data->filled = true;
-        data->compiled = _object_compiled(obj);
+struct CompositeRTProp {
+    PyObject_HEAD
+    PyObject *fieldname;
+    PyObject *cb;
+
+    composite_rtprop_data *get_data(PyObject *obj)
+    {
+        if (fieldname == Py_None)
+            py_throw_format(PyExc_ValueError, "Cannot determine runtime property name");
+        if (py_object val(PyObject_GetAttr(obj, fieldname)); !val) {
+            PyErr_Clear();
+        }
+        else if (Py_TYPE(val.get()) == &composite_rtprop_data::Type) {
+            return (composite_rtprop_data*)val.release();
+        }
+        py_object o(pytype_genericalloc(&composite_rtprop_data::Type));
+        auto data = (composite_rtprop_data*)o.get();
+        data->ovr = py_immref(Py_None);
+        data->cache = py_immref(Py_None);
+        throw_if(PyObject_SetAttr(obj, fieldname, o.get()));
+        return (composite_rtprop_data*)o.release();
     }
-    if (data->ovr == Py_None)
-        return py_newref(data->cache);
-    return apply_composite_ovr(data->cache, data->ovr);
-}
+
+    PyObject *get_res(PyObject *obj)
+    {
+        auto data = get_data(obj);
+        py_object py_data((PyObject*)data);
+        if (!data->filled || (!data->compiled && _object_compiled(obj))) {
+            py_object res(throw_if_not(PyObject_Vectorcall(cb, &obj, 1, nullptr)));
+            Py_DECREF(data->cache);
+            data->cache = res.release();
+            data->filled = true;
+            data->compiled = _object_compiled(obj);
+        }
+        if (data->ovr == Py_None)
+            return py_newref(data->cache);
+        return apply_composite_ovr(data->cache, data->ovr);
+    }
+};
 
 static PyObject *composite_rtprop_get_state(PyObject *py_self, PyObject *const *args,
                                             Py_ssize_t nargs)
@@ -168,7 +170,7 @@ static PyObject *composite_rtprop_get_state(PyObject *py_self, PyObject *const *
     return py_catch_error([&] {
         auto self = (CompositeRTProp*)py_self;
         py_check_num_arg("get_state", nargs, 1, 1);
-        auto data = get_composite_rtprop_data(self, args[0]);
+        auto data = self->get_data(args[0]);
         auto res = py_newref(data->ovr);
         Py_DECREF(data);
         return res;
@@ -181,7 +183,7 @@ static PyObject *composite_rtprop_set_state(PyObject *py_self, PyObject *const *
     return py_catch_error([&] {
         auto self = (CompositeRTProp*)py_self;
         py_check_num_arg("set_state", nargs, 2, 2);
-        auto data = get_composite_rtprop_data(self, args[0]);
+        auto data = self->get_data(args[0]);
         pyassign(data->ovr, args[1]);
         Py_DECREF(data);
         Py_RETURN_NONE;
@@ -199,6 +201,8 @@ static PyObject *composite_rtprop_set_name(PyObject *py_self, PyObject *const *a
         self->fieldname = fieldname;
         Py_RETURN_NONE;
     });
+}
+
 }
 
 __attribute__((visibility("protected")))
@@ -232,8 +236,7 @@ PyTypeObject CompositeRTProp_Type = {
     .tp_descr_get = [] (PyObject *self, PyObject *obj, PyObject*) -> PyObject* {
         if (!obj) [[unlikely]]
             return py_newref(self);
-        return py_catch_error([&] {
-            return composite_rtprop_get_res((CompositeRTProp*)self, obj); });
+        return py_catch_error([&] { return ((CompositeRTProp*)self)->get_res(obj); });
     },
     .tp_vectorcall = [] (PyObject *type, PyObject *const *args, size_t _nargs,
                          PyObject *kwnames) -> PyObject* {
@@ -254,20 +257,46 @@ PyTypeObject CompositeRTProp_Type = {
     },
 };
 
+namespace {
+
 #define RTPROP_PREFIX_STR "_RTProp_value_"
 static constexpr int rtprop_prefix_len = strlen(RTPROP_PREFIX_STR);
 
 struct rtprop_callback : ExternCallback {
     PyObject *obj;
     PyObject *fieldname;
+
+    static TagVal callback(rtprop_callback *self, unsigned age)
+    {
+        py_object v(throw_if_not(PyObject_GetAttr(self->obj, self->fieldname)));
+        if (!is_rtval(v))
+            return TagVal::from_py(v);
+        auto rv = (RuntimeValue*)v.get();
+        if (rv->type_ == ExternAge && rv->cb_arg2 == (PyObject*)self)
+            py_throw_format(PyExc_ValueError, "RT property have not been assigned.");
+        rt_eval_cache(rv, age);
+        return rtval_cache(rv);
+    }
+
+    static inline PyObject *alloc(PyObject *obj, PyObject *fieldname)
+    {
+        auto py_self = pytype_genericalloc(&Type);
+        auto self = (rtprop_callback*)py_self;
+        self->fptr = (void*)callback;
+        self->obj = py_newref(obj);
+        self->fieldname = py_newref(fieldname);
+        return py_self;
+    }
+    static PyTypeObject Type;
 };
-static PyTypeObject rtprop_callback_Type = {
+
+PyTypeObject rtprop_callback::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rtval.rtprop_callback",
     .tp_basicsize = sizeof(rtprop_callback),
     .tp_dealloc = [] (PyObject *py_self) {
         PyObject_GC_UnTrack(py_self);
-        rtprop_callback_Type.tp_clear(py_self);
+        Type.tp_clear(py_self);
         Py_TYPE(py_self)->tp_free(py_self);
     },
     .tp_str = [] (PyObject *py_self) {
@@ -294,31 +323,32 @@ static PyTypeObject rtprop_callback_Type = {
     .tp_base = &ExternCallback_Type,
 };
 
-static TagVal rtprop_callback_func(rtprop_callback *self, unsigned age)
-{
-    py_object v(throw_if_not(PyObject_GetAttr(self->obj, self->fieldname)));
-    if (!is_rtval(v))
-        return TagVal::from_py(v);
-    auto rv = (RuntimeValue*)v.get();
-    if (rv->type_ == ExternAge && rv->cb_arg2 == (PyObject*)self)
-        py_throw_format(PyExc_ValueError, "RT property have not been assigned.");
-    rt_eval_cache(rv, age);
-    return rtval_cache(rv);
-}
-
-static inline rtprop_callback *new_rtprop_callback(PyObject *obj, PyObject *fieldname)
-{
-    auto py_self = pytype_genericalloc(&rtprop_callback_Type);
-    auto self = (rtprop_callback*)py_self;
-    self->fptr = (void*)rtprop_callback_func;
-    self->obj = py_newref(obj);
-    self->fieldname = py_newref(fieldname);
-    return self;
-}
-
 struct RTProp {
     PyObject_HEAD
     PyObject *fieldname;
+
+    PyObject *get_res(PyObject *obj)
+    {
+        if (fieldname == Py_None)
+            py_throw_format(PyExc_ValueError, "Cannot determine runtime property name");
+        if (auto res = PyObject_GetAttr(obj, fieldname))
+            return res;
+        PyErr_Clear();
+        py_object cb(rtprop_callback::alloc(obj, fieldname));
+        py_object val((PyObject*)new_extern_age(cb.get(), (PyObject*)&PyFloat_Type));
+        throw_if(PyObject_SetAttr(obj, fieldname, val));
+        return val.release();
+    }
+
+    void set_res(PyObject *obj, PyObject *val)
+    {
+        if (fieldname == Py_None)
+            py_throw_format(PyExc_ValueError, "Cannot determine runtime property name");
+        if (val && val != Py_None)
+            throw_if(PyObject_SetAttr(obj, fieldname, val));
+        else
+            throw_if(PyObject_DelAttr(obj, fieldname));
+    }
 };
 
 static PyObject *rtprop_get_state(PyObject *py_self, PyObject *const *args,
@@ -363,29 +393,6 @@ static PyObject *rtprop_set_name(PyObject *py_self, PyObject *const *args,
     });
 }
 
-static inline PyObject *rtprop_get_res(RTProp *self, PyObject *obj)
-{
-    auto fieldname = self->fieldname;
-    if (fieldname == Py_None)
-        py_throw_format(PyExc_ValueError, "Cannot determine runtime property name");
-    if (auto res = PyObject_GetAttr(obj, fieldname))
-        return res;
-    PyErr_Clear();
-    py_object cb((PyObject*)new_rtprop_callback(obj, fieldname));
-    py_object val((PyObject*)new_extern_age(cb.get(), (PyObject*)&PyFloat_Type));
-    throw_if(PyObject_SetAttr(obj, fieldname, val));
-    return val.release();
-}
-
-static inline void rtprop_set_res(RTProp *self, PyObject *obj, PyObject *val)
-{
-    auto fieldname = self->fieldname;
-    if (fieldname == Py_None)
-        py_throw_format(PyExc_ValueError, "Cannot determine runtime property name");
-    if (val && val != Py_None)
-        throw_if(PyObject_SetAttr(obj, self->fieldname, val));
-    else
-        throw_if(PyObject_DelAttr(obj, self->fieldname));
 }
 
 __attribute__((visibility("protected")))
@@ -408,11 +415,11 @@ PyTypeObject RTProp_Type = {
     .tp_descr_get = [] (PyObject *py_self, PyObject *obj, PyObject*) {
         if (!obj) [[unlikely]]
             return py_newref(py_self);
-        return py_catch_error([&] { return rtprop_get_res((RTProp*)py_self, obj); });
+        return py_catch_error([&] { return ((RTProp*)py_self)->get_res(obj); });
     },
     .tp_descr_set = [] (PyObject *py_self, PyObject *obj, PyObject *val) {
         try {
-            rtprop_set_res((RTProp*)py_self, obj, val);
+            ((RTProp*)py_self)->set_res(obj, val);
         }
         catch (...) {
             return -1;
@@ -439,9 +446,9 @@ PyTypeObject RTProp_Type = {
 __attribute__((visibility("protected")))
 void init()
 {
-    throw_if(PyType_Ready(&composite_rtprop_data_Type) < 0);
+    throw_if(PyType_Ready(&composite_rtprop_data::Type) < 0);
     throw_if(PyType_Ready(&CompositeRTProp_Type) < 0);
-    throw_if(PyType_Ready(&rtprop_callback_Type) < 0);
+    throw_if(PyType_Ready(&rtprop_callback::Type) < 0);
     throw_if(PyType_Ready(&RTProp_Type) < 0);
 }
 
