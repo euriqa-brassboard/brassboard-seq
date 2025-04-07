@@ -264,6 +264,7 @@ void pytype_add_method(PyTypeObject *type, PyMethodDef *meth)
     throw_if(PyDict_SetItemString(type->tp_dict, meth->ml_name, descr));
 }
 
+__attribute__((visibility("protected")))
 [[noreturn]] void py_num_arg_error(const char *func_name, ssize_t nfound,
                                    ssize_t nmin, ssize_t nmax)
 {
@@ -293,17 +294,20 @@ static auto const SIO_write = throw_if_not(PyObject_GetAttrString(StringIO, "wri
 static auto const SIO_getvalue =
     throw_if_not(PyObject_GetAttrString(StringIO, "getvalue"));
 
+__attribute__((visibility("protected")))
 py_stringio::py_stringio()
 {
     io.reset(throw_if_not(PyObject_Vectorcall(StringIO, nullptr, 0, nullptr)));
 }
 
+__attribute__((visibility("protected")))
 void py_stringio::write(PyObject *obj)
 {
     PyObject *callargs[] = { io, obj };
     Py_DECREF(throw_if_not(PyObject_Vectorcall(SIO_write, callargs, 2, nullptr)));
 }
 
+__attribute__((visibility("protected")))
 PyObject *py_stringio::getvalue()
 {
     PyObject *callargs[] = { io };

@@ -243,6 +243,7 @@ static bool _rt_same_value(RuntimeValue *v1, RuntimeValue *v2)
     }
 }
 
+__attribute__((visibility("protected")))
 bool rt_same_value(PyObject *v1, PyObject *v2) try {
     if (!is_rtval(v1)) {
         if (!is_rtval(v2)) {
@@ -857,6 +858,8 @@ static inline bool needs_parenthesis(auto v, ValueType parent_type)
     return !(parent_type == Add || parent_type == Mul);
 }
 
+namespace {
+
 struct rtvalue_printer : py_stringio {
     void show_arg(RuntimeValue *v, ValueType parent_type)
     {
@@ -1014,6 +1017,8 @@ struct rtvalue_printer : py_stringio {
         }
     }
 };
+
+}
 
 static PyObject *rtvalue_str(PyObject *self)
 {
