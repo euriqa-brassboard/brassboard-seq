@@ -975,17 +975,17 @@ static inline bool is_rtval(PyObject *v)
 __attribute__((returns_nonnull)) RuntimeValue*
 new_cb_arg2(ValueType type, PyObject *cb_arg2, PyObject *ty);
 
-__attribute__((returns_nonnull)) RuntimeValue*
+static inline __attribute__((returns_nonnull)) RuntimeValue*
 new_arg(PyObject *idx, PyObject *ty)
 {
     return new_cb_arg2(Arg, idx, ty);
 }
-__attribute__((returns_nonnull)) RuntimeValue*
+static inline __attribute__((returns_nonnull)) RuntimeValue*
 new_extern(auto *cb, PyObject *ty)
 {
     return new_cb_arg2(Extern, (PyObject*)cb, ty);
 }
-__attribute__((returns_nonnull)) RuntimeValue*
+static inline __attribute__((returns_nonnull)) RuntimeValue*
 new_extern_age(auto *cb, PyObject *ty)
 {
     return new_cb_arg2(ExternAge, (PyObject*)cb, ty);
