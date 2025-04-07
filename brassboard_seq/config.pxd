@@ -17,16 +17,14 @@
 # see <http://www.gnu.org/licenses/>.
 
 cdef extern from "src/config.h" namespace "brassboard_seq::config":
+    # Cython doesn't seem to allow namespace in the object property
+    # for the imported extension class
+    """
+    using _brassboard_seq_config_Config = brassboard_seq::config::Config;
+    """
     ctypedef class brassboard_seq._utils.Config [object _brassboard_seq_config_Config, check_size ignore]:
         cdef dict channel_alias
         cdef dict alias_cache
         cdef set supported_prefix
 
     cdef tuple translate_channel(Config self, str name)
-
-cdef extern from *:
-    # Cython doesn't seem to allow namespace in the object property
-    # for the imported extension class
-    """
-    using _brassboard_seq_config_Config = brassboard_seq::config::Config;
-    """
