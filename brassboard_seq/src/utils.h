@@ -501,12 +501,20 @@ struct str_literal {
 };
 
 template<str_literal lit>
-static PyObject *_py_string_cache = pyunicode_from_string(lit.value);
-
+static PyObject *const _py_string_cache = pyunicode_from_string(lit.value);
 template<str_literal lit>
 static inline PyObject *operator ""_py()
 {
     return _py_string_cache<lit>;
+}
+
+template<str_literal lit>
+static inline PyObject *operator ""_pymod()
+{
+    // Use a local static variable to make sure the initialization order
+    // is correct when this is used to initialize another global variable
+    static PyObject *mod = throw_if_not(PyImport_ImportModule(lit.value));
+    return mod;
 }
 
 struct py_stringio {

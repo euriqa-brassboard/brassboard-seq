@@ -277,8 +277,7 @@ __attribute__((visibility("protected")))
                     (nexpected == 1) ? "" : "s", nfound);
 }
 
-static auto const io_mod = throw_if_not(PyImport_ImportModule("io"));
-static auto const StringIO = throw_if_not(PyObject_GetAttrString(io_mod, "StringIO"));
+static auto const StringIO = throw_if_not(PyObject_GetAttrString("io"_pymod, "StringIO"));
 static auto const SIO_write = throw_if_not(PyObject_GetAttrString(StringIO, "write"));
 static auto const SIO_getvalue =
     throw_if_not(PyObject_GetAttrString(StringIO, "getvalue"));

@@ -529,9 +529,8 @@ static inline PyObject *build_addsub(PyObject *v0, PyObject *v1, bool issub)
 }
 
 namespace np {
-static auto const mod = throw_if_not(PyImport_ImportModule("numpy"));
 #define GET_NP(name)                                                    \
-    static auto const name = throw_if_not(PyObject_GetAttrString(mod, #name))
+    static auto const name = throw_if_not(PyObject_GetAttrString("numpy"_pymod, #name))
 GET_NP(add);
 GET_NP(subtract);
 GET_NP(multiply);
