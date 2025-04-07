@@ -28,7 +28,7 @@ __attribute__((returns_nonnull,visibility("protected"))) RuntimeValue*
 new_cb_arg2(ValueType type, PyObject *cb_arg2, PyObject *ty)
 {
     auto datatype = pytype_to_datatype(ty);
-    auto o = pytype_genericalloc(&RuntimeValue_Type);
+    auto o = pytype_genericalloc(&RuntimeValue::Type);
     auto self = (RuntimeValue*)o;
     self->datatype = datatype;
     // self->cache_err = EvalError::NoError;
@@ -44,7 +44,7 @@ new_cb_arg2(ValueType type, PyObject *cb_arg2, PyObject *ty)
 __attribute__((returns_nonnull,visibility("protected"))) RuntimeValue*
 new_expr1(ValueType type, RuntimeValue *arg0)
 {
-    auto o = pytype_genericalloc(&RuntimeValue_Type);
+    auto o = pytype_genericalloc(&RuntimeValue::Type);
     auto datatype = unary_return_type(type, arg0->datatype);
     auto self = (RuntimeValue*)o;
     self->datatype = datatype;
@@ -61,7 +61,7 @@ new_expr1(ValueType type, RuntimeValue *arg0)
 __attribute__((returns_nonnull,visibility("protected"))) RuntimeValue*
 new_expr2(ValueType type, RuntimeValue *arg0, RuntimeValue *arg1)
 {
-    auto o = pytype_genericalloc(&RuntimeValue_Type);
+    auto o = pytype_genericalloc(&RuntimeValue::Type);
     auto datatype = binary_return_type(type, arg0->datatype, arg1->datatype);
     auto self = (RuntimeValue*)o;
     self->datatype = datatype;
@@ -78,7 +78,7 @@ new_expr2(ValueType type, RuntimeValue *arg0, RuntimeValue *arg1)
 __attribute__((returns_nonnull,visibility("protected"))) RuntimeValue*
 new_const(TagVal v)
 {
-    auto o = pytype_genericalloc(&RuntimeValue_Type);
+    auto o = pytype_genericalloc(&RuntimeValue::Type);
     auto self = (RuntimeValue*)o;
     self->datatype = v.type;
     // self->cache_err = EvalError::NoError;
@@ -110,7 +110,7 @@ static PyObject *new_expr2_wrap1(ValueType type, PyObject *arg0, PyObject *arg1)
     }
     auto datatype = binary_return_type(type, ((RuntimeValue*)rtarg0.get())->datatype,
                                        ((RuntimeValue*)rtarg1.get())->datatype);
-    auto o = pytype_genericalloc(&RuntimeValue_Type);
+    auto o = pytype_genericalloc(&RuntimeValue::Type);
     auto self = (RuntimeValue*)o;
     self->datatype = datatype;
     // self->cache_err = EvalError::NoError;
@@ -138,7 +138,7 @@ new_select(RuntimeValue *arg0, PyObject *arg1, PyObject *arg2)
     py_object rtarg2((PyObject*)wrap_rtval(arg2));
     auto datatype = promote_type(((RuntimeValue*)rtarg1.get())->datatype,
                                  ((RuntimeValue*)rtarg2.get())->datatype);
-    auto o = pytype_genericalloc(&RuntimeValue_Type);
+    auto o = pytype_genericalloc(&RuntimeValue::Type);
     auto self = (RuntimeValue*)o;
     self->datatype = datatype;
     // self->cache_err = EvalError::NoError;
@@ -267,8 +267,8 @@ __attribute__((visibility("protected")))
 void init()
 {
     _import_array();
-    throw_if(PyType_Ready(&RuntimeValue_Type) < 0);
-    throw_if(PyType_Ready(&ExternCallback_Type) < 0);
+    throw_if(PyType_Ready(&RuntimeValue::Type) < 0);
+    throw_if(PyType_Ready(&ExternCallback::Type) < 0);
 }
 
 using extern_cb_t = TagVal(ExternCallback*);
@@ -968,13 +968,13 @@ static PyObject *rtvalue_str(PyObject *self)
 }
 
 __attribute__((visibility("protected")))
-PyTypeObject RuntimeValue_Type = {
+PyTypeObject RuntimeValue::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rtval.RuntimeValue",
     .tp_basicsize = sizeof(RuntimeValue),
     .tp_dealloc = [] (PyObject *py_self) {
         PyObject_GC_UnTrack(py_self);
-        RuntimeValue_Type.tp_clear(py_self);
+        Type.tp_clear(py_self);
         Py_TYPE(py_self)->tp_free(py_self);
     },
     .tp_repr = rtvalue_str,
@@ -1031,7 +1031,7 @@ PyTypeObject RuntimeValue_Type = {
 };
 
 __attribute__((visibility("protected")))
-PyTypeObject ExternCallback_Type = {
+PyTypeObject ExternCallback::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rtval.ExternCallback",
     .tp_basicsize = sizeof(struct ExternCallback),

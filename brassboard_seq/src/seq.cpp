@@ -74,7 +74,7 @@ _combine_cond(PyObject *cond1, PyObject *new_cond)
     if (cond1 == Py_True)
         return { cond2.release(), true };
     assert(is_rtval(cond1));
-    auto o = pytype_genericalloc(&RuntimeValue_Type);
+    auto o = pytype_genericalloc(&RuntimeValue::Type);
     auto self = (RuntimeValue*)o;
     self->datatype = DataType::Bool;
     // self->cache_err = EvalError::NoError;

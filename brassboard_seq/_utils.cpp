@@ -42,9 +42,9 @@ PyInit__utils(void)
         config::init();
         py_object m(throw_if_not(PyModule_Create(&_utils_module)));
         throw_if(PyModule_AddObjectRef(m, "RuntimeValue",
-                                       (PyObject*)&rtval::RuntimeValue_Type) < 0);
+                                       (PyObject*)&rtval::RuntimeValue::Type) < 0);
         throw_if(PyModule_AddObjectRef(m, "ExternCallback",
-                                       (PyObject*)&rtval::ExternCallback_Type) < 0);
+                                       (PyObject*)&rtval::ExternCallback::Type) < 0);
         throw_if(PyModule_AddObjectRef(m, "Config",
                                        (PyObject*)&config::Config::Type) < 0);
         throw_if(PyModule_AddObjectRef(m, "CompositeRTProp",

@@ -941,6 +941,8 @@ struct RuntimeValue {
     RuntimeValue *arg0;
     RuntimeValue *arg1;
     PyObject *cb_arg2;
+
+    static PyTypeObject Type;
 };
 
 template<class T>
@@ -950,17 +952,15 @@ concept all_rtval_ptr = (is_rtval_ptr<T> && ...);
 template<class T>
 concept not_rtval_ptr = !is_rtval_ptr<T>;
 
-extern PyTypeObject RuntimeValue_Type;
-
 struct ExternCallback {
     PyObject_HEAD
     void *fptr;
+    static PyTypeObject Type;
 };
-extern PyTypeObject ExternCallback_Type;
 
 static inline bool is_rtval(PyObject *v)
 {
-    return Py_TYPE(v) == &RuntimeValue_Type;
+    return Py_TYPE(v) == &RuntimeValue::Type;
 }
 
 __attribute__((returns_nonnull)) RuntimeValue*

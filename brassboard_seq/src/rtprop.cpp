@@ -320,7 +320,7 @@ PyTypeObject rtprop_callback::Type = {
         Py_CLEAR(self->fieldname);
         return 0;
     },
-    .tp_base = &ExternCallback_Type,
+    .tp_base = &ExternCallback::Type,
 };
 
 struct RTProp {
