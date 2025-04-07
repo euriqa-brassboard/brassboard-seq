@@ -148,4 +148,10 @@ PyTypeObject Config_Type = {
     },
 };
 
+__attribute__((visibility("protected")))
+void init()
+{
+    throw_if(PyType_Ready(&Config_Type) < 0);
+}
+
 }

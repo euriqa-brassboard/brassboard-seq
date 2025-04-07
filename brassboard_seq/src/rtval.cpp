@@ -263,10 +263,11 @@ catch (...) {
     return false;
 }
 
-__attribute__((visibility("hidden")))
+__attribute__((visibility("protected")))
 void init()
 {
     _import_array();
+    throw_if(PyType_Ready(&RuntimeValue_Type) < 0);
 }
 
 using extern_cb_t = TagVal(_ExternCallback*);

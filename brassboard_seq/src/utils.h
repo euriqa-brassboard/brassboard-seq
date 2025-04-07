@@ -1225,8 +1225,6 @@ static inline char *to_chars(std::span<char> buf, T &&t)
     return ptr;
 }
 
-void init_library();
-
 }
 
 #endif

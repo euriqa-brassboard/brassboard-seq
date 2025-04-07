@@ -37,10 +37,9 @@ PyInit__utils(void)
 {
     using namespace brassboard_seq;
     return py_catch_error([&] {
-        init_library();
-        throw_if(PyType_Ready(&rtval::RuntimeValue_Type) < 0);
+        rtval::init();
         rtprop::init();
-        throw_if(PyType_Ready(&config::Config_Type) < 0);
+        config::init();
         py_object m(throw_if_not(PyModule_Create(&_utils_module)));
         throw_if(PyModule_AddObjectRef(m, "RuntimeValue",
                                        (PyObject*)&rtval::RuntimeValue_Type) < 0);

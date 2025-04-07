@@ -32,6 +32,8 @@ struct Config {
 extern PyTypeObject Config_Type;
 PyObject *translate_channel(Config *self, PyObject *name);
 
+void init();
+
 }
 
 #endif

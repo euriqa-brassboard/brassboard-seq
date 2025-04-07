@@ -23,7 +23,6 @@
 #include <strings.h>
 
 #include <algorithm>
-#include <mutex>
 
 namespace brassboard_seq {
 
@@ -937,19 +936,6 @@ void get_height_array(std::span<int> height, std::span<int> S,
             k++;
         height[rk - 2] = k;
     }
-}
-
-static std::once_flag init_flag;
-
-namespace rtval {
-void init(); // Too lazy to create a private header just for this...
-}
-
-void init_library()
-{
-    std::call_once(init_flag, [] {
-        rtval::init();
-    });
 }
 
 }
