@@ -35,6 +35,28 @@ static PyObject *rt_time_scale;
 
 using namespace rtval;
 
+static inline int get_channel_id(auto self, PyObject *name)
+{
+    auto channel_name_map = self->channel_name_map;
+    if (auto chn = PyDict_GetItemWithError(channel_name_map, name)) [[likely]]
+        return PyLong_AsLong(chn);
+    throw_if(PyErr_Occurred());
+    py_object path(config::translate_channel(self->config, name));
+    auto channel_path_map = self->channel_path_map;
+    if (auto chn = PyDict_GetItemWithError(channel_path_map, path)) {
+        throw_if(PyDict_SetItem(channel_name_map, name, chn));
+        return PyLong_AsLong(chn);
+    }
+    throw_if(PyErr_Occurred());
+    auto channel_paths = self->channel_paths;
+    int cid = PyList_GET_SIZE(channel_paths);
+    pylist_append(channel_paths, path);
+    py_object pycid(pylong_from_long(cid));
+    throw_if(PyDict_SetItem(channel_path_map, path, pycid));
+    throw_if(PyDict_SetItem(channel_name_map, name, pycid));
+    return cid;
+}
+
 static inline std::pair<PyObject*,bool>
 _combine_cond(PyObject *cond1, PyObject *new_cond)
 {
@@ -293,8 +315,7 @@ timestep_set(auto *self, PyObject *chn, PyObject *value, PyObject *cond,
         cid = lcid;
     }
     else {
-        cid = __pyx_f_14brassboard_seq_3seq__get_channel_id(seqinfo, chn);
-        throw_if_not(cid >= 0);
+        cid = get_channel_id(seqinfo, chn);
     }
     if (cid >= self->actions.size()) {
         self->actions.resize(cid + 1);

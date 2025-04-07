@@ -348,6 +348,13 @@ py_check_num_arg(const char *func_name, ssize_t nfound, ssize_t nmin, ssize_t nm
 }
 
 static __attribute__((always_inline)) inline
+int py_check_int(int v)
+{
+    throw_if(v < 0);
+    return v;
+}
+
+static __attribute__((always_inline)) inline
 bool get_value_bool(PyObject *obj, auto &&cb) requires requires { cb(); }
 {
     if (obj == Py_True)

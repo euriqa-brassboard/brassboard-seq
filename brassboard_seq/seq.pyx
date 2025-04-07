@@ -18,19 +18,18 @@
 
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.action cimport action_str
-from brassboard_seq.config cimport translate_channel
 from brassboard_seq.event_time cimport round_time_int, round_time_rt, \
   set_base_int, set_base_rt, rt_time_scale, new_time_manager
 from brassboard_seq.rtval cimport is_rtval, RuntimeValue
 from brassboard_seq.scan cimport new_param_pack
-from brassboard_seq.utils cimport assume_not_none, \
-  assert_key, event_time_key, PyErr_Format, PyExc_TypeError
+from brassboard_seq.utils cimport assert_key, event_time_key, \
+  PyErr_Format, PyExc_TypeError
 
 cdef StringIO # hide import
 from io import StringIO
 
 cimport cython
-from cpython cimport PyObject, PyDict_GetItemWithError, PyList_GET_SIZE
+from cpython cimport PyObject
 
 cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
     PyObject *event_time_type
@@ -41,6 +40,7 @@ cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
     void update_timestep(TimeStep) except +
     void update_subseq(SubSeq, ConditionalWrapper, TimeSeq, TimeStep) except +
     void update_conditional(ConditionalWrapper, TimeSeq, TimeStep) except +
+    int get_channel_id(SeqInfo self, str name) except +
     object combine_cond(object cond1, object new_cond) except +
     SubSeq add_custom_step(SubSeq, object cond, EventTime, object) except +
 
@@ -61,7 +61,7 @@ cdef class TimeSeq:
         PyErr_Format(PyExc_TypeError, "TimeSeq cannot be created directly")
 
     def get_channel_id(self, str name, /):
-        return _get_channel_id(self.seqinfo, name)
+        return get_channel_id(self.seqinfo, name)
 
     def set_time(self, EventTime time, /, offset=0): # offset in seconds
         if is_rtval(offset):
@@ -239,27 +239,6 @@ cdef int subseq_show(SubSeq self, write, int indent) except -1:
 cdef class SeqInfo:
     def __init__(self):
         PyErr_Format(PyExc_TypeError, "SeqInfo cannot be created directly")
-
-cdef int _get_channel_id(SeqInfo self, str name) except -1:
-    channel_name_map = self.channel_name_map
-    cdef PyObject *chnp = PyDict_GetItemWithError(channel_name_map, name)
-    if chnp != NULL:
-        return <int><object>chnp
-    path = translate_channel(self.config, name)
-    channel_path_map = self.channel_path_map
-    chnp = PyDict_GetItemWithError(channel_path_map, path)
-    if chnp != NULL:
-        return <int><object>chnp
-    channel_paths = self.channel_paths
-    cid = PyList_GET_SIZE(channel_paths)
-    assume_not_none(channel_paths)
-    channel_paths.append(path)
-    assume_not_none(channel_path_map)
-    cdef object pycid = cid
-    channel_path_map[path] = pycid
-    assume_not_none(channel_name_map)
-    channel_name_map[name] = pycid
-    return cid
 
 @cython.auto_pickle(False)
 @cython.final

@@ -794,7 +794,7 @@ catch (...) {
 static PyObject *rtvalue_eval(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
     return py_catch_error([&] {
-        py_check_num_arg("eval", nargs, 1);
+        py_check_num_arg("eval", nargs, 1, 1);
         auto age = PyLong_AsLong(args[0]);
         throw_if(age == -1 && PyErr_Occurred());
         rt_eval_cache(self, age);
@@ -805,7 +805,7 @@ static PyObject *rtvalue_eval(PyObject *self, PyObject *const *args, Py_ssize_t 
 static PyObject *rtvalue_ceil(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
     return py_catch_error([&] {
-        py_check_num_arg("__ceil__", nargs, 0);
+        py_check_num_arg("__ceil__", nargs, 0, 0);
         return is_integer((RuntimeValue*)self) ? py_newref(self) :
             (PyObject*)new_expr1(Ceil, self);
     });
@@ -814,7 +814,7 @@ static PyObject *rtvalue_ceil(PyObject *self, PyObject *const *args, Py_ssize_t 
 static PyObject *rtvalue_floor(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
     return py_catch_error([&] {
-        py_check_num_arg("__floor__", nargs, 0);
+        py_check_num_arg("__floor__", nargs, 0, 0);
         return is_integer((RuntimeValue*)self) ? py_newref(self) :
             (PyObject*)new_expr1(Floor, self);
     });
@@ -823,7 +823,7 @@ static PyObject *rtvalue_floor(PyObject *self, PyObject *const *args, Py_ssize_t
 static PyObject *rtvalue_round(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
     return py_catch_error([&] {
-        py_check_num_arg("__round__", nargs, 0);
+        py_check_num_arg("__round__", nargs, 0, 0);
         return rt_round_int64((RuntimeValue*)self);
     });
 }
@@ -1079,6 +1079,7 @@ static PyMethodDef rtvalue_methods[] = {
     {0, 0, 0, 0}
 };
 
+__attribute__((visibility("protected")))
 PyTypeObject RuntimeValue_Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rtval.RuntimeValue",
