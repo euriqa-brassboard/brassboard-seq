@@ -241,7 +241,7 @@ def test_output2(max_bt):
     s.conditional(test_utils.new_extern(lambda: b1)) \
       .add_step(test_utils.new_extern(lambda: 0.01)) \
       .pulse('rfsoc/dds0/1/amp', test_utils.new_extern(lambda: 0.2)) \
-      .set('rfsoc/dds0/1/freq', test_utils.new_extern(lambda: 100e6), sync=True) \
+      .set('rfsoc/dds0/1/freq', test_utils.new_extern(lambda: 100e6), sync=1) \
       .set('rfsoc/dds0/1/phase', test_utils.new_extern(lambda: 0.1)) \
       .set('rfsoc/dds0/1/ff', test_utils.new_extern(lambda: True), sync=False)
     comp.finalize()
@@ -315,7 +315,7 @@ def test_output3(max_bt):
     s.conditional(False) \
       .add_step(test_utils.new_extern(lambda: 0.01)) \
       .pulse('rfsoc/dds0/1/amp', test_utils.new_extern(lambda: 0.2)) \
-      .set('rfsoc/dds0/1/freq', test_utils.new_extern(lambda: 100e6), sync=True) \
+      .set('rfsoc/dds0/1/freq', test_utils.new_extern(lambda: 100e6), sync=1) \
       .set('rfsoc/dds0/1/phase', test_utils.new_extern(lambda: 0.1)) \
       .set('rfsoc/dds0/1/ff', test_utils.new_extern(lambda: True), sync=False)
     comp.finalize()
