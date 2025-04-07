@@ -293,7 +293,6 @@ uintptr_t assert_key(int aid)
 }
 
 void bb_reraise(uintptr_t key);
-void _bb_err_format(PyObject *exc, uintptr_t key, const char *format, ...);
 
 [[noreturn]] void bb_rethrow(uintptr_t key);
 [[noreturn]] void bb_throw_format(PyObject *exc, uintptr_t key,
@@ -316,12 +315,6 @@ static inline __attribute__((always_inline)) auto throw_if(auto &&v, uintptr_t k
 
 // Wrapper inline function to make it more clear to the C compiler
 // that the function returns 0
-static inline __attribute__((always_inline))
-int bb_err_format(PyObject *exc, uintptr_t key, const char *format, auto... args)
-{
-    _bb_err_format(exc, key, format, args...);
-    return 0;
-}
 static inline __attribute__((always_inline))
 PyObject *PyErr_Format(PyObject *exc, const char *format, auto... args)
 {

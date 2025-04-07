@@ -255,6 +255,8 @@ cdef extern from *:
         bint fail() const
     vector[action.Action*] *compiledseq_get_all_actions(backend.CompiledSeq &cseq)
     int64_t compiledseq_get_total_time(backend.CompiledSeq &cseq)
+    void py_check_num_arg "brassboard_seq::py_check_num_arg" (
+        const char *func_name, ssize_t nfound, ssize_t nmin, ssize_t nmax) except +
 
 def new_invalid_rtval():
     # This should only happen if something really wrong happens.
@@ -1282,3 +1284,6 @@ def test_istream_ba_seek(ssize_t p, _dir=None):
         raise ValueError(f"Invalid seek direction {_dir}")
     stm.seekg2(p, dir)
     return stm.fail()
+
+def check_num_arg(func_name, nfound, nmin, nmax):
+    py_check_num_arg(func_name, nfound, nmin, nmax)

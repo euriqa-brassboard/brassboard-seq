@@ -54,7 +54,6 @@ cdef extern from "src/utils.h" namespace "brassboard_seq":
     uintptr_t action_key(int)
     uintptr_t assert_key(int)
 
-    int bb_err_format(object exc, uintptr_t key, const char *format, ...) except 0
     PyObject *PyErr_Format(PyObject *exception, char *format, ...) except NULL
 
     cppclass py_object:

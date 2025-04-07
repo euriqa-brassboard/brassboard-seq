@@ -175,16 +175,6 @@ void bb_reraise(uintptr_t key)
     PyErr_Restore(type, exc, combine_traceback(old_tb, get_global_backtrace(key)));
 }
 
-void _bb_err_format(PyObject *exc, uintptr_t key, const char *format, ...)
-{
-    // This is slightly less efficient but much simpler to implement.
-    va_list vargs;
-    va_start(vargs, format);
-    PyErr_FormatV(exc, format, vargs);
-    va_end(vargs);
-    bb_reraise(key);
-}
-
 [[noreturn]] void bb_rethrow(uintptr_t key)
 {
     bb_reraise(key);
