@@ -578,107 +578,43 @@ GET_NP(rint);
 #undef GET_NP
 };
 
-static PyObject *rtvalue_add(PyObject *v1, PyObject *v2)
-{
-    return py_catch_error([&] { return build_addsub(v1, v2, false); });
-}
-
-static PyObject *rtvalue_sub(PyObject *v1, PyObject *v2)
-{
-    return py_catch_error([&] { return build_addsub(v1, v2, true); });
-}
-
-static PyObject *rtvalue_mul(PyObject *v1, PyObject *v2)
-{
-    return py_catch_error([&] { return new_expr2_wrap1(Mul, v1, v2); });
-}
-
-static PyObject *rtvalue_div(PyObject *v1, PyObject *v2)
-{
-    return py_catch_error([&] { return new_expr2_wrap1(Div, v1, v2); });
-}
-
-static PyObject *rtvalue_mod(PyObject *v1, PyObject *v2)
-{
-    return py_catch_error([&] { return new_expr2_wrap1(Mod, v1, v2); });
-}
-
-static PyObject *rtvalue_pow(PyObject *v1, PyObject *v2, PyObject *v3)
-{
-    if (v3 != Py_None) [[unlikely]]
-        Py_RETURN_NOTIMPLEMENTED;
-    return py_catch_error([&] { return new_expr2_wrap1(Pow, v1, v2); });
-}
-
-static PyObject *rtvalue_neg(PyObject *self)
-{
-    return py_catch_error([&] { return build_addsub(pylong_cached(0), self, true); });
-}
-
-static PyObject *rtvalue_pos(PyObject *self)
-{
-    return py_newref(self);
-}
-
-static PyObject *rtvalue_abs(PyObject *self)
-{
-    if (((RuntimeValue*)self)->type_ == Abs)
-        return py_newref(self);
-    return py_catch_error([&] { return new_expr1(Abs, self); });
-}
-
-static int rtvalue_bool(PyObject*)
-{
-    // It's too easy to accidentally use this in control flow/assertion
-    PyErr_Format(PyExc_TypeError, "Cannot convert runtime value to boolean");
-    return -1;
-}
-
-static PyObject *rtvalue_and(PyObject *v1, PyObject *v2)
-{
-    return py_catch_error([&] { return new_expr2_wrap1(And, v1, v2); });
-}
-
-static PyObject *rtvalue_xor(PyObject *v1, PyObject *v2)
-{
-    return py_catch_error([&] { return new_expr2_wrap1(Xor, v1, v2); });
-}
-
-static PyObject *rtvalue_or(PyObject *v1, PyObject *v2)
-{
-    return py_catch_error([&] { return new_expr2_wrap1(Or, v1, v2); });
-}
-
 static PyNumberMethods rtvalue_as_number = {
-    .nb_add = rtvalue_add,
-    .nb_subtract = rtvalue_sub,
-    .nb_multiply = rtvalue_mul,
-    .nb_remainder = rtvalue_mod,
-    .nb_power = rtvalue_pow,
-    .nb_negative = rtvalue_neg,
-    .nb_positive = rtvalue_pos,
-    .nb_absolute = rtvalue_abs,
-    .nb_bool = rtvalue_bool,
-    .nb_and = rtvalue_and,
-    .nb_xor = rtvalue_xor,
-    .nb_or = rtvalue_or,
-    .nb_true_divide = rtvalue_div,
+    .nb_add = [] (PyObject *v1, PyObject *v2) {
+        return py_catch_error([&] { return build_addsub(v1, v2, false); }); },
+    .nb_subtract = [] (PyObject *v1, PyObject *v2) {
+        return py_catch_error([&] { return build_addsub(v1, v2, true); }); },
+    .nb_multiply = [] (PyObject *v1, PyObject *v2) {
+        return py_catch_error([&] { return new_expr2_wrap1(Mul, v1, v2); }); },
+    .nb_remainder = [] (PyObject *v1, PyObject *v2) {
+        return py_catch_error([&] { return new_expr2_wrap1(Mod, v1, v2); }); },
+    .nb_power = [] (PyObject *v1, PyObject *v2, PyObject *v3) {
+        if (v3 != Py_None) [[unlikely]]
+            Py_RETURN_NOTIMPLEMENTED;
+        return py_catch_error([&] { return new_expr2_wrap1(Pow, v1, v2); });
+    },
+    .nb_negative = [] (PyObject *self) {
+        return py_catch_error([&] { return build_addsub(pylong_cached(0), self, true); });
+    },
+    .nb_positive = [] (PyObject *self) { return py_newref(self); },
+    .nb_absolute = [] (PyObject *self) {
+        if (((RuntimeValue*)self)->type_ == Abs)
+            return py_newref(self);
+        return py_catch_error([&] { return new_expr1(Abs, self); });
+    },
+    .nb_bool = [] (PyObject *self) {
+        // It's too easy to accidentally use this in control flow/assertion
+        PyErr_Format(PyExc_TypeError, "Cannot convert runtime value to boolean");
+        return -1;
+    },
+    .nb_and = [] (PyObject *v1, PyObject *v2) {
+        return py_catch_error([&] { return new_expr2_wrap1(And, v1, v2); }); },
+    .nb_xor = [] (PyObject *v1, PyObject *v2) {
+        return py_catch_error([&] { return new_expr2_wrap1(Xor, v1, v2); }); },
+    .nb_or = [] (PyObject *v1, PyObject *v2) {
+        return py_catch_error([&] { return new_expr2_wrap1(Or, v1, v2); }); },
+    .nb_true_divide =  [] (PyObject *v1, PyObject *v2) {
+        return py_catch_error([&] { return new_expr2_wrap1(Div, v1, v2); }); },
 };
-
-static PyObject *rtvalue_richcmp(PyObject *v1, PyObject *v2, int op)
-{
-    return py_catch_error([&] {
-        auto typ = pycmp2valcmp(op);
-        if (is_rtval(v2)) {
-            if (v1 == v2)
-                return ((typ == CmpLE || typ == CmpGE || typ == CmpEQ) ?
-                        py_immref(Py_True) : py_immref(Py_False));
-            return (PyObject*)new_expr2(typ, v1, v2);
-        }
-        py_object rv2((PyObject*)new_const(TagVal::from_py(v2)));
-        return (PyObject*)new_expr2(typ, v1, rv2.get());
-    });
-}
 
 static inline bool is_integer(auto v)
 {
@@ -1029,47 +965,6 @@ static PyObject *rtvalue_str(PyObject *self)
     });
 }
 
-static int rtvalue_init(PyObject *self, PyObject *args, PyObject *kwds)
-{
-    PyErr_Format(PyExc_TypeError, "RuntimeValue cannot be created directly");
-    return -1;
-}
-
-static int rtvalue_clear(PyObject *py_self)
-{
-    auto self = (RuntimeValue*)py_self;
-    Py_CLEAR(self->arg0);
-    Py_CLEAR(self->arg1);
-    Py_CLEAR(self->cb_arg2);
-    return 0;
-}
-
-static void rtvalue_dealloc(PyObject *py_self)
-{
-    PyObject_GC_UnTrack(py_self);
-    rtvalue_clear(py_self);
-    Py_TYPE(py_self)->tp_free(py_self);
-}
-
-static int rtvalue_traverse(PyObject *py_self, visitproc visit, void *arg)
-{
-    auto self = (RuntimeValue*)py_self;
-    Py_VISIT(self->arg0);
-    Py_VISIT(self->arg1);
-    Py_VISIT(self->cb_arg2);
-    return 0;
-}
-
-static PyObject *rtvalue_new(PyTypeObject *t, PyObject*, PyObject*)
-{
-    auto py_self = PyType_GenericAlloc(t, 0);
-    auto self = (RuntimeValue*)py_self;
-    self->arg0 = (RuntimeValue*)py_immref(Py_None);
-    self->arg1 = (RuntimeValue*)py_immref(Py_None);
-    self->cb_arg2 = py_immref(Py_None);
-    return py_self;
-}
-
 static PyMethodDef rtvalue_methods[] = {
     {"__array_ufunc__", (PyCFunction)(void*)rtvalue_array_ufunc, METH_FASTCALL, 0},
     {"eval", (PyCFunction)(void*)rtvalue_eval, METH_FASTCALL, 0},
@@ -1084,17 +979,55 @@ PyTypeObject RuntimeValue_Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rtval.RuntimeValue",
     .tp_basicsize = sizeof(RuntimeValue),
-    .tp_dealloc = rtvalue_dealloc,
+    .tp_dealloc = [] (PyObject *py_self) {
+        PyObject_GC_UnTrack(py_self);
+        RuntimeValue_Type.tp_clear(py_self);
+        Py_TYPE(py_self)->tp_free(py_self);
+    },
     .tp_repr = rtvalue_str,
     .tp_as_number = &rtvalue_as_number,
     .tp_str = rtvalue_str,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = rtvalue_traverse,
-    .tp_clear = rtvalue_clear,
-    .tp_richcompare = rtvalue_richcmp,
+    .tp_traverse = [] (PyObject *py_self, visitproc visit, void *arg) {
+        auto self = (RuntimeValue*)py_self;
+        Py_VISIT(self->arg0);
+        Py_VISIT(self->arg1);
+        Py_VISIT(self->cb_arg2);
+        return 0;
+    },
+    .tp_clear = [] (PyObject *py_self) {
+        auto self = (RuntimeValue*)py_self;
+        Py_CLEAR(self->arg0);
+        Py_CLEAR(self->arg1);
+        Py_CLEAR(self->cb_arg2);
+        return 0;
+    },
+    .tp_richcompare = [] (PyObject *v1, PyObject *v2, int op) {
+        return py_catch_error([&] {
+            auto typ = pycmp2valcmp(op);
+            if (is_rtval(v2)) {
+                if (v1 == v2)
+                    return ((typ == CmpLE || typ == CmpGE || typ == CmpEQ) ?
+                            py_immref(Py_True) : py_immref(Py_False));
+                return (PyObject*)new_expr2(typ, v1, v2);
+            }
+            py_object rv2((PyObject*)new_const(TagVal::from_py(v2)));
+            return (PyObject*)new_expr2(typ, v1, rv2.get());
+        });
+    },
     .tp_methods = rtvalue_methods,
-    .tp_init = rtvalue_init,
-    .tp_new = rtvalue_new,
+    .tp_init = [] (PyObject *self, PyObject *args, PyObject *kwds) {
+        PyErr_Format(PyExc_TypeError, "RuntimeValue cannot be created directly");
+        return -1;
+    },
+    .tp_new = [] (PyTypeObject *t, PyObject*, PyObject*) {
+        auto py_self = PyType_GenericAlloc(t, 0);
+        auto self = (RuntimeValue*)py_self;
+        self->arg0 = (RuntimeValue*)py_immref(Py_None);
+        self->arg1 = (RuntimeValue*)py_immref(Py_None);
+        self->cb_arg2 = py_immref(Py_None);
+        return py_self;
+    },
 };
 
 static __attribute__((flatten, noinline))

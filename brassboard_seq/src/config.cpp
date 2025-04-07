@@ -20,43 +20,6 @@
 
 namespace brassboard_seq::config {
 
-static int config_clear(PyObject *py_self)
-{
-    auto self = (Config*)py_self;
-    Py_CLEAR(self->channel_alias);
-    Py_CLEAR(self->alias_cache);
-    Py_CLEAR(self->supported_prefix);
-    return 0;
-}
-
-static void config_dealloc(PyObject *py_self)
-{
-    PyObject_GC_UnTrack(py_self);
-    config_clear(py_self);
-    Py_TYPE(py_self)->tp_free(py_self);
-}
-
-static int config_traverse(PyObject *py_self, visitproc visit, void *arg)
-{
-    auto self = (Config*)py_self;
-    Py_VISIT(self->channel_alias);
-    Py_VISIT(self->alias_cache);
-    Py_VISIT(self->supported_prefix);
-    return 0;
-}
-
-static PyObject *config_new(PyTypeObject *t, PyObject*, PyObject*)
-{
-    return py_catch_error([&] {
-        auto py_self = pytype_genericalloc(t);
-        auto self = (Config*)py_self;
-        self->channel_alias = pydict_new();
-        self->alias_cache = pydict_new();
-        self->supported_prefix = throw_if_not(PySet_New(nullptr));
-        return py_self;
-    });
-}
-
 static inline void check_string_arg(PyObject *arg, const char *name)
 {
     if (PyUnicode_CheckExact(arg))
@@ -162,13 +125,38 @@ __attribute__((visibility("protected")))
 PyTypeObject Config_Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.config.Config",
-    .tp_basicsize = sizeof(struct Config),
-    .tp_dealloc = config_dealloc,
+    .tp_basicsize = sizeof(Config),
+    .tp_dealloc = [] (PyObject *py_self) {
+        PyObject_GC_UnTrack(py_self);
+        Config_Type.tp_clear(py_self);
+        Py_TYPE(py_self)->tp_free(py_self);
+    },
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = config_traverse,
-    .tp_clear = config_clear,
+    .tp_traverse = [] (PyObject *py_self, visitproc visit, void *arg) -> int {
+        auto self = (Config*)py_self;
+        Py_VISIT(self->channel_alias);
+        Py_VISIT(self->alias_cache);
+        Py_VISIT(self->supported_prefix);
+        return 0;
+    },
+    .tp_clear = [] (PyObject *py_self) -> int {
+        auto self = (Config*)py_self;
+        Py_CLEAR(self->channel_alias);
+        Py_CLEAR(self->alias_cache);
+        Py_CLEAR(self->supported_prefix);
+        return 0;
+    },
     .tp_methods = config_methods,
-    .tp_new = config_new,
+    .tp_new = [] (PyTypeObject *t, PyObject*, PyObject*) -> PyObject* {
+        return py_catch_error([&] {
+            auto py_self = pytype_genericalloc(t);
+            auto self = (Config*)py_self;
+            self->channel_alias = pydict_new();
+            self->alias_cache = pydict_new();
+            self->supported_prefix = throw_if_not(PySet_New(nullptr));
+            return py_self;
+        });
+    },
 };
 
 }
