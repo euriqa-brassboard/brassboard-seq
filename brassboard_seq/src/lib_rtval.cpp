@@ -965,15 +965,6 @@ static PyObject *rtvalue_str(PyObject *self)
     });
 }
 
-static PyMethodDef rtvalue_methods[] = {
-    {"__array_ufunc__", (PyCFunction)(void*)rtvalue_array_ufunc, METH_FASTCALL, 0},
-    {"eval", (PyCFunction)(void*)rtvalue_eval, METH_FASTCALL, 0},
-    {"__ceil__", (PyCFunction)(void*)rtvalue_ceil, METH_FASTCALL, 0},
-    {"__floor__", (PyCFunction)(void*)rtvalue_floor, METH_FASTCALL, 0},
-    {"__round__", (PyCFunction)(void*)rtvalue_round, METH_FASTCALL, 0},
-    {0, 0, 0, 0}
-};
-
 __attribute__((visibility("protected")))
 PyTypeObject RuntimeValue_Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
@@ -1015,7 +1006,14 @@ PyTypeObject RuntimeValue_Type = {
             return (PyObject*)new_expr2(typ, v1, rv2.get());
         });
     },
-    .tp_methods = rtvalue_methods,
+    .tp_methods = (PyMethodDef[]){
+        {"__array_ufunc__", (PyCFunction)(void*)rtvalue_array_ufunc, METH_FASTCALL, 0},
+        {"eval", (PyCFunction)(void*)rtvalue_eval, METH_FASTCALL, 0},
+        {"__ceil__", (PyCFunction)(void*)rtvalue_ceil, METH_FASTCALL, 0},
+        {"__floor__", (PyCFunction)(void*)rtvalue_floor, METH_FASTCALL, 0},
+        {"__round__", (PyCFunction)(void*)rtvalue_round, METH_FASTCALL, 0},
+        {0, 0, 0, 0}
+    },
     .tp_init = [] (PyObject *self, PyObject *args, PyObject *kwds) {
         PyErr_Format(PyExc_TypeError, "RuntimeValue cannot be created directly");
         return -1;

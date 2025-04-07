@@ -114,13 +114,6 @@ static PyObject *py_translate_channel(PyObject *self, PyObject *const *args,
     });
 }
 
-static PyMethodDef config_methods[] = {
-    {"add_supported_prefix", (PyCFunction)(void*)add_supported_prefix, METH_FASTCALL, 0},
-    {"add_channel_alias", (PyCFunction)(void*)add_channel_alias, METH_FASTCALL, 0},
-    {"translate_channel", (PyCFunction)(void*)py_translate_channel, METH_FASTCALL, 0},
-    {0, 0, 0, 0}
-};
-
 __attribute__((visibility("protected")))
 PyTypeObject Config_Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
@@ -136,7 +129,13 @@ PyTypeObject Config_Type = {
     // All fields are containers of immutable types.
     // No reference loop possible.
     .tp_flags = Py_TPFLAGS_DEFAULT,
-    .tp_methods = config_methods,
+    .tp_methods = (PyMethodDef[]){
+        {"add_supported_prefix", (PyCFunction)(void*)add_supported_prefix,
+         METH_FASTCALL, 0},
+        {"add_channel_alias", (PyCFunction)(void*)add_channel_alias, METH_FASTCALL, 0},
+        {"translate_channel", (PyCFunction)(void*)py_translate_channel, METH_FASTCALL, 0},
+        {0, 0, 0, 0}
+    },
     .tp_new = [] (PyTypeObject *t, PyObject*, PyObject*) -> PyObject* {
         return py_catch_error([&] {
             auto py_self = pytype_genericalloc(t);
