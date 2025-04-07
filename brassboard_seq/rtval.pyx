@@ -17,13 +17,11 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.utils cimport PyErr_Format, PyExc_ValueError, init_library
+from brassboard_seq.utils cimport PyErr_Format, PyExc_ValueError
 
 # Manually set the field since I can't make cython automatically do this
 # without also declaring the c struct again...
 globals()['RuntimeValue'] = RuntimeValue
-
-init_library()
 
 cimport cython
 
