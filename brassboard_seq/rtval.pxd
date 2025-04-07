@@ -26,6 +26,7 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
     # for the imported extension class
     """
     using _brassboard_seq_rtval_RuntimeValue = brassboard_seq::rtval::RuntimeValue;
+    using _brassboard_seq_rtval_ExternCallback = brassboard_seq::rtval::ExternCallback;
     """
     enum ValueType:
         Arg
@@ -146,5 +147,5 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
         cdef RuntimeValue arg1
         cdef object cb_arg2 # Also used as argument index
 
-cdef class ExternCallback:
-    cdef void *fptr
+    ctypedef class brassboard_seq._utils.ExternCallback [object _brassboard_seq_rtval_ExternCallback, check_size ignore]:
+        cdef void *fptr

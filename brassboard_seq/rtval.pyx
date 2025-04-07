@@ -28,9 +28,6 @@ cimport cython
 
 cdef extern from "src/_rtprop.cpp" namespace "brassboard_seq::rtval":
     TagVal rtprop_callback_func(rtprop_callback self, unsigned age) except +
-    void assert_layout_compatible(ExternCallback)
-
-assert_layout_compatible(None)
 
 def get_value(v, unsigned age):
     if is_rtval(v):
@@ -63,10 +60,6 @@ def ifelse(b, v1, v2):
 
 def same_value(v1, v2):
     return rt_same_value(v1, v2)
-
-@cython.auto_pickle(False)
-cdef class ExternCallback:
-    pass
 
 cdef str rtprop_prefix = '_RTProp_value_'
 cdef int rtprop_prefix_len = len(rtprop_prefix)

@@ -952,20 +952,11 @@ concept not_rtval_ptr = !is_rtval_ptr<T>;
 
 extern PyTypeObject RuntimeValue_Type;
 
-struct _ExternCallback {
+struct ExternCallback {
     PyObject_HEAD
     void *fptr;
 };
-
-template<typename ExternCallback>
-static inline constexpr void assert_layout_compatible(ExternCallback*)
-{
-    static_assert(sizeof(_ExternCallback) == sizeof(ExternCallback));
-#define ASSERT_FIELD_OFFSET(name) \
-    static_assert(offsetof(_ExternCallback, name) == offsetof(ExternCallback, name))
-    ASSERT_FIELD_OFFSET(fptr);
-#undef ASSERT_FIELD_OFFSET
-}
+extern PyTypeObject ExternCallback_Type;
 
 static inline bool is_rtval(PyObject *v)
 {

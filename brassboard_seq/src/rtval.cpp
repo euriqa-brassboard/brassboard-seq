@@ -268,10 +268,11 @@ void init()
 {
     _import_array();
     throw_if(PyType_Ready(&RuntimeValue_Type) < 0);
+    throw_if(PyType_Ready(&ExternCallback_Type) < 0);
 }
 
-using extern_cb_t = TagVal(_ExternCallback*);
-using extern_age_cb_t = TagVal(_ExternCallback*, unsigned);
+using extern_cb_t = TagVal(ExternCallback*);
+using extern_age_cb_t = TagVal(ExternCallback*, unsigned);
 
 __attribute__((flatten,visibility("protected")))
 void rt_eval_cache(RuntimeValue *self, unsigned age)
@@ -295,7 +296,7 @@ void rt_eval_cache(RuntimeValue *self, unsigned age)
         return;
     case Extern:
     case ExternAge: {
-        auto ecb = (_ExternCallback*)self->cb_arg2;
+        auto ecb = (ExternCallback*)self->cb_arg2;
         auto val = (type == Extern ? ((extern_cb_t*)ecb->fptr)(ecb) :
                     ((extern_age_cb_t*)ecb->fptr)(ecb, age));
         set_cache(val.convert(self->datatype));
@@ -1026,6 +1027,20 @@ PyTypeObject RuntimeValue_Type = {
         self->arg1 = (RuntimeValue*)py_immref(Py_None);
         self->cb_arg2 = py_immref(Py_None);
         return py_self;
+    },
+};
+
+__attribute__((visibility("protected")))
+PyTypeObject ExternCallback_Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.rtval.ExternCallback",
+    .tp_basicsize = sizeof(struct ExternCallback),
+    .tp_dealloc = [] (PyObject *py_self) {
+        Py_TYPE(py_self)->tp_free(py_self);
+    },
+    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,
+    .tp_new = [] (PyTypeObject *t, PyObject*, PyObject*) {
+        return PyType_GenericAlloc(t, 0);
     },
 };
 
