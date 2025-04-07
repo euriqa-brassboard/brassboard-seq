@@ -17,8 +17,7 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.utils cimport PyErr_Format, Py_NotImplemented, \
-  PyExc_TypeError, PyExc_ValueError, init_library
+from brassboard_seq.utils cimport PyErr_Format, PyExc_ValueError, init_library
 
 cdef np # hide import
 import numpy as np
@@ -32,7 +31,6 @@ globals()['RuntimeValue'] = RuntimeValue
 init_library()
 
 cimport cython
-from cpython cimport PyObject, PyTuple_GET_ITEM
 
 cdef extern from "src/rtval.cpp" namespace "brassboard_seq::rtval":
     TagVal rtprop_callback_func(rtprop_callback self, unsigned age) except +
