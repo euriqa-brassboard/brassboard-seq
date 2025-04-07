@@ -295,7 +295,7 @@ void py_stringio::write(PyObject *obj)
     Py_DECREF(throw_if_not(PyObject_Vectorcall(SIO_write, callargs, 2, nullptr)));
 }
 
-__attribute__((visibility("protected")))
+__attribute__((returns_nonnull,visibility("protected")))
 PyObject *py_stringio::getvalue()
 {
     PyObject *callargs[] = { io };

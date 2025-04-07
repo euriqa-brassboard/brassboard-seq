@@ -22,11 +22,8 @@ from brassboard_seq.event_time cimport round_time_int, round_time_rt, \
   set_base_int, set_base_rt, rt_time_scale, new_time_manager
 from brassboard_seq.rtval cimport is_rtval, RuntimeValue
 from brassboard_seq.scan cimport new_param_pack
-from brassboard_seq.utils cimport assert_key, event_time_key, \
+from brassboard_seq.utils cimport assert_key, event_time_key, py_stringio, \
   PyErr_Format, PyExc_TypeError
-
-cdef StringIO # hide import
-from io import StringIO
 
 cimport cython
 from cpython cimport PyObject
@@ -95,29 +92,29 @@ cdef class TimeStep(TimeSeq):
     # def pulse(self, chn, value, /, *, cond=True, bint exact_time=False, **kws)
 
     def __str__(self):
-        io = StringIO()
-        timestep_show(self, io.write, 0)
+        cdef py_stringio io
+        timestep_show(self, io, 0)
         return io.getvalue()
 
     def __repr__(self):
         return str(self)
 
-cdef int timestep_show(TimeStep self, write, int indent) except -1:
-    write(' ' * indent)
-    write(f'TimeStep({self.length})@T[{self.start_time.data.id}]')
+cdef int timestep_show(TimeStep self, py_stringio &io, int indent) except -1:
+    io.write(' ' * indent)
+    io.write(f'TimeStep({self.length})@T[{self.start_time.data.id}]')
     cond = self.cond
     if cond is not True:
-        write(f' if {cond}\n')
+        io.write(f' if {cond}\n')
     else:
-        write('\n')
+        io.write('\n')
     nactions = self.actions.size()
     for chn_idx in range(nactions):
         action = self.actions[chn_idx]
         if action == NULL:
             continue
         chn = '/'.join(self.seqinfo.channel_paths[chn_idx])
-        write(' ' * (indent + 2))
-        write(f'{chn}: {action_str(action)}\n')
+        io.write(' ' * (indent + 2))
+        io.write(f'{chn}: {action_str(action)}\n')
     return 0
 
 @cython.auto_pickle(False)
@@ -147,8 +144,8 @@ cdef class ConditionalWrapper:
         return step
 
     def __str__(self):
-        io = StringIO()
-        conditionalwrapper_show(self, io.write, 0)
+        cdef py_stringio io
+        conditionalwrapper_show(self, io, 0)
         return io.getvalue()
 
     def __repr__(self):
@@ -158,12 +155,12 @@ cdef class ConditionalWrapper:
     def C(self):
         return self.seq.seqinfo.C
 
-cdef int conditionalwrapper_show(ConditionalWrapper self, write, int indent) except -1:
-    write(' ' * indent)
-    write(f'ConditionalWrapper({self.cond}) for\n')
+cdef int conditionalwrapper_show(ConditionalWrapper self, py_stringio &io, int indent) except -1:
+    io.write(' ' * indent)
+    io.write(f'ConditionalWrapper({self.cond}) for\n')
     if type(self.seq) == Seq:
-        return seq_show(self.seq, write, indent + 2)
-    return subseq_show(self.seq, write, indent + 2)
+        return seq_show(self.seq, io, indent + 2)
+    return subseq_show(self.seq, io, indent + 2)
 
 @cython.auto_pickle(False)
 cdef class SubSeq(TimeSeq):
@@ -189,8 +186,8 @@ cdef class SubSeq(TimeSeq):
     # def set(self, chn, value, /, *, cond=True, bint exact_time=False, **kws)
 
     def __str__(self):
-        io = StringIO()
-        subseq_show(self, io.write, 0)
+        cdef py_stringio io
+        subseq_show(self, io, 0)
         return io.getvalue()
 
     def __repr__(self):
@@ -213,24 +210,24 @@ cdef int wait_for_cond(SubSeq self, _tp0, offset, cond) except -1:
     self.seqinfo.bt_tracker.record(event_time_key(<void*>self.end_time))
     return 0
 
-cdef int subseq_show_subseqs(SubSeq self, write, int indent) except -1:
+cdef int subseq_show_subseqs(SubSeq self, py_stringio &io, int indent) except -1:
     for _subseq in self.sub_seqs:
         subseq = <TimeSeq>_subseq
         if type(subseq) is TimeStep:
-            timestep_show(<TimeStep>subseq, write, indent)
+            timestep_show(<TimeStep>subseq, io, indent)
         else:
-            subseq_show(<SubSeq>subseq, write, indent)
+            subseq_show(<SubSeq>subseq, io, indent)
     return 0
 
-cdef int subseq_show(SubSeq self, write, int indent) except -1:
-    write(' ' * indent)
-    write(f'SubSeq@T[{self.start_time.data.id}] - T[{self.end_time.data.id}]')
+cdef int subseq_show(SubSeq self, py_stringio &io, int indent) except -1:
+    io.write(' ' * indent)
+    io.write(f'SubSeq@T[{self.start_time.data.id}] - T[{self.end_time.data.id}]')
     cond = self.cond
     if cond is not True:
-        write(f' if {cond}\n')
+        io.write(f' if {cond}\n')
     else:
-        write('\n')
-    subseq_show_subseqs(self, write, indent + 2)
+        io.write('\n')
+    subseq_show_subseqs(self, io, indent + 2)
     return 0
 
 @cython.auto_pickle(False)
@@ -261,21 +258,21 @@ cdef class Seq(SubSeq):
         self.seqinfo.bt_tracker.record(event_time_key(<void*>self.end_time))
 
     def __str__(self):
-        io = StringIO()
-        seq_show(self, io.write, 0)
+        cdef py_stringio io
+        seq_show(self, io, 0)
         return io.getvalue()
 
     def __repr__(self):
         return str(self)
 
-cdef int seq_show(Seq self, write, int indent) except -1:
-    write(' ' * indent)
-    write(f'Seq - T[{self.end_time.data.id}]\n')
+cdef int seq_show(Seq self, py_stringio &io, int indent) except -1:
+    io.write(' ' * indent)
+    io.write(f'Seq - T[{self.end_time.data.id}]\n')
     cdef int i = 0
     for t in self.seqinfo.time_mgr.event_times:
-        write(' ' * (indent + 1))
-        write(f'T[{i}]: ')
-        write(str(t))
-        write('\n')
+        io.write(' ' * (indent + 1))
+        io.write(f'T[{i}]: ')
+        io.write(str(t))
+        io.write('\n')
         i += 1
-    return subseq_show_subseqs(self, write, indent + 2)
+    return subseq_show_subseqs(self, io, indent + 2)

@@ -20,11 +20,8 @@
 from brassboard_seq.utils cimport PyErr_Format, PyExc_AttributeError, \
   PyExc_IndexError, PyExc_SyntaxError, PyExc_TypeError, \
   PyExc_ValueError, assume_not_none, _assume_not_none, pytuple_append1, \
-  pydict_deepcopy, PyDict_GET_SIZE
+  pydict_deepcopy, PyDict_GET_SIZE, py_stringio
 from brassboard_seq.yaml cimport sprint as yaml_print
-
-cdef StringIO # hide import
-from io import StringIO
 
 cdef np
 import numpy as np
@@ -408,20 +405,19 @@ cdef class ScanWrapper:
         return cat_scan(self, other)
 
     def __str__(self):
-        io = StringIO()
-        write = io.write
+        cdef py_stringio io
         if PyTuple_GET_SIZE(self.path):
             path_str = ".".join(self.path)
             if self.idx == -1:
-                write(f'Scan Base [.{path_str}]:\n')
+                io.write(f'Scan Base [.{path_str}]:\n')
             else:
-                write(f'Scan {self.idx} [.{path_str}]:\n')
+                io.write(f'Scan {self.idx} [.{path_str}]:\n')
         else:
             if self.idx == -1:
-                write('Scan Base:\n')
+                io.write('Scan Base:\n')
             else:
-                write(f'Scan {self.idx}:\n')
-        print_scan(self.scan, write, 2, self.path)
+                io.write(f'Scan {self.idx}:\n')
+        print_scan(self.scan, io, 2, self.path)
         return io.getvalue()
 
     def __repr__(self):
@@ -695,16 +691,15 @@ cdef class ScanGroup:
         set_dirty(self, idx)
 
     def __str__(self):
-        io = StringIO()
-        write = io.write
-        write('ScanGroup\n')
+        cdef py_stringio io
+        io.write('ScanGroup\n')
         if not scannd_is_default(self.base):
-            write('  Scan Base:\n')
-            print_scan(self.base, write, 4, ())
+            io.write('  Scan Base:\n')
+            print_scan(self.base, io, 4, ())
         if len(self.scans) > 1 or not scannd_is_default(<ScanND>self.scans[0]):
             for i in range(len(self.scans)):
-                write(f'  Scan {i}:\n')
-                print_scan(<ScanND>self.scans[i], write, 4, ())
+                io.write(f'  Scan {i}:\n')
+                print_scan(<ScanND>self.scans[i], io, 4, ())
         return io.getvalue()
 
     def __repr__(self):
@@ -872,39 +867,39 @@ cdef load_scangroup_v1(dict data):
     self.scanscache = [None for _ in range(nscans)]
     return self
 
-cdef int print_scan(ScanND scan, write, int indent, tuple path) except -1:
+cdef int print_scan(ScanND scan, py_stringio &io, int indent, tuple path) except -1:
     prefix = ' ' * indent
     empty = True
     if scan.baseidx != -1:
         empty = False
-        write(prefix)
-        write(f'Base index: {scan.baseidx}\n')
+        io.write(prefix)
+        io.write(f'Base index: {scan.baseidx}\n')
     fixed = recursive_get(scan.fixed, path)
     new_prefix = prefix + '   '
     if fixed:
         empty = False
-        write(prefix)
-        write('Fixed parameters:\n');
-        write(new_prefix)
-        write(yaml_print(fixed, indent + 3))
-        write('\n')
+        io.write(prefix)
+        io.write('Fixed parameters:\n');
+        io.write(new_prefix)
+        io.write(yaml_print(fixed, indent + 3))
+        io.write('\n')
     for i in range(len(scan.vars)):
         var = <Scan1D>scan.vars[i]
         if var.size == 0:
             continue
         empty = False
-        write(prefix)
-        write(f'Scan dimension {i}: (size {var.size})\n')
+        io.write(prefix)
+        io.write(f'Scan dimension {i}: (size {var.size})\n')
         params = recursive_get(var.params, path)
-        write(new_prefix)
+        io.write(new_prefix)
         if params is _missing_value:
-            write('<empty>\n')
+            io.write('<empty>\n')
         else:
-            write(yaml_print(params, indent + 3))
-            write('\n')
+            io.write(yaml_print(params, indent + 3))
+            io.write('\n')
     if empty:
-        write(prefix)
-        write('<empty>\n')
+        io.write(prefix)
+        io.write('<empty>\n')
 
 cdef inline int set_dirty(ScanGroup sg, int idx) except -1:
     scanscache = sg.scanscache

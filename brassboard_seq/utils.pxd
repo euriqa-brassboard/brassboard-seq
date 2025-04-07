@@ -68,6 +68,13 @@ cdef extern from "src/utils.h" namespace "brassboard_seq":
     tuple pytuple_append1(tuple, object) except +
     object pydict_deepcopy(object) except +
 
+    cppclass py_stringio:
+        py_object io
+
+        py_stringio() except +
+        void write(str) except +
+        str getvalue() except +
+
     cppclass pybytes_ostream(ostream):
         object get_buf() except +
 

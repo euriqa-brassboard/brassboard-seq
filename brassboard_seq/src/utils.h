@@ -519,9 +519,11 @@ static inline PyObject *operator ""_pymod()
 
 struct py_stringio {
     py_stringio();
+    py_stringio(const py_stringio&) = delete;
+    py_stringio &operator=(const py_stringio&) = delete;
 
     void write(PyObject*);
-    PyObject *getvalue();
+    __attribute__((returns_nonnull)) PyObject *getvalue();
 
     py_object io;
 };
