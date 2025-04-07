@@ -811,6 +811,9 @@ def test_pow():
     r1 = test_utils.new_extern(lambda: v1)
     r2 = test_utils.new_extern(lambda: v2)
 
+    with pytest.raises(TypeError):
+        pow(r2, 2, 2)
+
     rpow = r1**r2
     with pytest.raises(ValueError, match="power of negative number"):
         rpow.eval(0)
