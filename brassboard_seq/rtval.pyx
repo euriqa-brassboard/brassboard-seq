@@ -19,11 +19,6 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.utils cimport PyErr_Format, PyExc_ValueError, init_library
 
-cdef np # hide import
-import numpy as np
-cimport numpy as cnpy
-cnpy._import_array()
-
 # Manually set the field since I can't make cython automatically do this
 # without also declaring the c struct again...
 globals()['RuntimeValue'] = RuntimeValue
@@ -48,7 +43,6 @@ def get_value(v, unsigned age):
         return rtval_cache(<RuntimeValue>v).to_py()
     return v
 
-cdef np_logical_not = np.logical_not
 def inv(v, /):
     if type(v) is bool:
         return v is False
@@ -58,21 +52,14 @@ def inv(v, /):
         if _v.type_ == ValueType.Not:
             return rt_convert_bool(_v.arg0)
         return new_expr1(ValueType.Not, _v)
-    if isinstance(v, cnpy.ndarray):
-        return np_logical_not(v)
     return not v
 
 def convert_bool(_v):
     if is_rtval(_v):
         return rt_convert_bool(<RuntimeValue>_v)
-    if isinstance(_v, cnpy.ndarray):
-        return cnpy.PyArray_Cast(_v, cnpy.NPY_BOOL)
     return bool(_v)
 
 def ifelse(b, v1, v2):
-    if (isinstance(b, cnpy.ndarray) or isinstance(v1, cnpy.ndarray) or
-        isinstance(v2, cnpy.ndarray)):
-        return cnpy.PyArray_Where(b, v1, v2)
     if rt_same_value(v1, v2):
         return v1
     if is_rtval(b):

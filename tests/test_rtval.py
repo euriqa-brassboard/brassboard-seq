@@ -336,31 +336,6 @@ def test_ops():
         run_check_ternary(f)
     np.seterr(**olderr)
 
-def test_np_ops():
-    assert list(rtval.inv(np.array([True, False]))) == [False, True]
-    assert list(rtval.inv(np.array([-2, -1, 0, 1, 2]))) == [False, False, True, False, False]
-    assert list(rtval.convert_bool(np.array([True, False]))) == [True, False]
-    assert list(rtval.convert_bool(np.array([0, -1, 1]))) == [False, True, True]
-    assert list(rtval.convert_bool(np.array([0.0, 1.0, -1.0]))) == [False, True, True]
-
-    assert list(rtval.ifelse(True, np.array([1, 2]),
-                             np.array([0.1, 0.2]))) == [1.0, 2.0]
-    assert list(rtval.ifelse(False, np.array([1, 2]),
-                             np.array([0.1, 0.2]))) == [0.1, 0.2]
-    assert list(rtval.ifelse(np.array([True, False]), np.array([1, 2]),
-                             np.array([0.1, 0.2]))) == [1.0, 0.2]
-
-    assert list(rtval.ifelse(True, 1, np.array([0.1, 0.2]))) == [1.0, 1.0]
-    assert list(rtval.ifelse(False, 1, np.array([0.1, 0.2]))) == [0.1, 0.2]
-    assert list(rtval.ifelse(np.array([True, False]), 2,
-                             np.array([0.1, 0.2]))) == [2.0, 0.2]
-
-    assert list(rtval.ifelse(True, np.array([1, 2]), 0.2)) == [1.0, 2.0]
-    assert list(rtval.ifelse(False, np.array([1, 2]), 0.2)) == [0.2, 0.2]
-    assert list(rtval.ifelse(np.array([True, False]), np.array([1, 2]),
-                             0.2)) == [1.0, 0.2]
-    assert list(rtval.ifelse(np.array([True, False]), 2, 2.3)) == [2.0, 2.3]
-
 class C:
     p1 = rtval.RTProp()
     p2 = rtval.RTProp()
