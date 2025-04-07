@@ -25,7 +25,7 @@ globals()['RuntimeValue'] = RuntimeValue
 
 cimport cython
 
-cdef extern from "src/rtval.cpp" namespace "brassboard_seq::rtval":
+cdef extern from "src/_rtprop.cpp" namespace "brassboard_seq::rtval":
     TagVal rtprop_callback_func(rtprop_callback self, unsigned age) except +
     composite_rtprop_data get_composite_rtprop_data(CompositeRTProp prop, object obj,
                                                     object, composite_rtprop_data) except +

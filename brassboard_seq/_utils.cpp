@@ -21,7 +21,7 @@
 #include <Python.h>
 
 #include "src/utils.h"
-#include "src/lib_rtval.h"
+#include "src/rtval.h"
 #include "src/config.h"
 
 static PyModuleDef _utils_module = {

@@ -7,7 +7,7 @@ add_definitions(-DNPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION -fopenmp
 
 add_library(brassboard_seq_utils SHARED
   src/config.cpp
-  src/lib_rtval.cpp
+  src/rtval.cpp
   src/utils.cpp)
 target_include_directories(brassboard_seq_utils PRIVATE ${Python_INCLUDE_DIRS})
 install(TARGETS brassboard_seq_utils DESTINATION "${CMAKE_INSTALL_LIBDIR}")
@@ -30,7 +30,7 @@ install(FILES
   src/config.h
   src/artiq_backend.h
   src/event_time.h
-  src/lib_rtval.h
+  src/rtval.h
   src/scan.h
   src/seq.h
   src/rfsoc_backend.h

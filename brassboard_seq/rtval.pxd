@@ -21,7 +21,7 @@
 from libc.stdint cimport *
 from libcpp.vector cimport vector
 
-cdef extern from "src/lib_rtval.h" namespace "brassboard_seq::rtval":
+cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
     # Cython doesn't seem to allow namespace in the object property
     # for the imported extension class
     """
