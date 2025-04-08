@@ -100,20 +100,20 @@ cdef class TimeStep(TimeSeq):
         return str(self)
 
 cdef int timestep_show(TimeStep self, py_stringio &io, int indent) except -1:
-    io.write(' ' * indent)
+    io.write_rep_ascii(indent, b' ')
     io.write(f'TimeStep({self.length})@T[{self.start_time.data.id}]')
     cond = self.cond
     if cond is not True:
         io.write(f' if {cond}\n')
     else:
-        io.write('\n')
+        io.write_ascii(b'\n')
     nactions = self.actions.size()
     for chn_idx in range(nactions):
         action = self.actions[chn_idx]
         if action == NULL:
             continue
         chn = '/'.join(self.seqinfo.channel_paths[chn_idx])
-        io.write(' ' * (indent + 2))
+        io.write_rep_ascii(indent + 2, b' ')
         io.write(f'{chn}: {action_str(action)}\n')
     return 0
 
@@ -156,7 +156,7 @@ cdef class ConditionalWrapper:
         return self.seq.seqinfo.C
 
 cdef int conditionalwrapper_show(ConditionalWrapper self, py_stringio &io, int indent) except -1:
-    io.write(' ' * indent)
+    io.write_rep_ascii(indent, b' ')
     io.write(f'ConditionalWrapper({self.cond}) for\n')
     if type(self.seq) == Seq:
         return seq_show(self.seq, io, indent + 2)
@@ -220,13 +220,13 @@ cdef int subseq_show_subseqs(SubSeq self, py_stringio &io, int indent) except -1
     return 0
 
 cdef int subseq_show(SubSeq self, py_stringio &io, int indent) except -1:
-    io.write(' ' * indent)
+    io.write_rep_ascii(indent, b' ')
     io.write(f'SubSeq@T[{self.start_time.data.id}] - T[{self.end_time.data.id}]')
     cond = self.cond
     if cond is not True:
         io.write(f' if {cond}\n')
     else:
-        io.write('\n')
+        io.write_ascii(b'\n')
     subseq_show_subseqs(self, io, indent + 2)
     return 0
 
@@ -266,13 +266,13 @@ cdef class Seq(SubSeq):
         return str(self)
 
 cdef int seq_show(Seq self, py_stringio &io, int indent) except -1:
-    io.write(' ' * indent)
+    io.write_rep_ascii(indent, b' ')
     io.write(f'Seq - T[{self.end_time.data.id}]\n')
     cdef int i = 0
     for t in self.seqinfo.time_mgr.event_times:
-        io.write(' ' * (indent + 1))
+        io.write_rep_ascii(indent + 1, b' ')
         io.write(f'T[{i}]: ')
         io.write(str(t))
-        io.write('\n')
+        io.write_ascii('\n')
         i += 1
     return subseq_show_subseqs(self, io, indent + 2)

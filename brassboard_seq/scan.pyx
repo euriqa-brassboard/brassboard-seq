@@ -414,7 +414,7 @@ cdef class ScanWrapper:
                 io.write(f'Scan {self.idx} [.{path_str}]:\n')
         else:
             if self.idx == -1:
-                io.write('Scan Base:\n')
+                io.write_ascii(b'Scan Base:\n')
             else:
                 io.write(f'Scan {self.idx}:\n')
         print_scan(self.scan, io, 2, self.path)
@@ -692,9 +692,9 @@ cdef class ScanGroup:
 
     def __str__(self):
         cdef py_stringio io
-        io.write('ScanGroup\n')
+        io.write_ascii(b'ScanGroup\n')
         if not scannd_is_default(self.base):
-            io.write('  Scan Base:\n')
+            io.write_ascii(b'  Scan Base:\n')
             print_scan(self.base, io, 4, ())
         if len(self.scans) > 1 or not scannd_is_default(<ScanND>self.scans[0]):
             for i in range(len(self.scans)):
@@ -879,10 +879,10 @@ cdef int print_scan(ScanND scan, py_stringio &io, int indent, tuple path) except
     if fixed:
         empty = False
         io.write(prefix)
-        io.write('Fixed parameters:\n');
+        io.write_ascii(b'Fixed parameters:\n');
         io.write(new_prefix)
         io.write(yaml_print(fixed, indent + 3))
-        io.write('\n')
+        io.write_ascii(b'\n')
     for i in range(len(scan.vars)):
         var = <Scan1D>scan.vars[i]
         if var.size == 0:
@@ -893,13 +893,13 @@ cdef int print_scan(ScanND scan, py_stringio &io, int indent, tuple path) except
         params = recursive_get(var.params, path)
         io.write(new_prefix)
         if params is _missing_value:
-            io.write('<empty>\n')
+            io.write_ascii(b'<empty>\n')
         else:
             io.write(yaml_print(params, indent + 3))
-            io.write('\n')
+            io.write_ascii(b'\n')
     if empty:
         io.write(prefix)
-        io.write('<empty>\n')
+        io.write_ascii(b'<empty>\n')
 
 cdef inline int set_dirty(ScanGroup sg, int idx) except -1:
     scanscache = sg.scanscache
