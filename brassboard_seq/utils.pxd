@@ -69,10 +69,10 @@ cdef extern from "src/utils.h" namespace "brassboard_seq":
     object pydict_deepcopy(object) except +
 
     cppclass py_stringio:
-        py_object io
-
-        py_stringio() except +
-        void write(str) except +
+        py_stringio()
+        void write(str)
+        void write_ascii(const char*)
+        void write_rep_ascii(int, const char*)
         str getvalue() except +
 
     cppclass pybytes_ostream(ostream):

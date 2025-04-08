@@ -1240,6 +1240,21 @@ cdef class PyByteArrayStream:
     def clear(self):
         self.stm.clear()
 
+cdef class IOBuff:
+    cdef utils.py_stringio io
+
+    def write(self, str s):
+        self.io.write(s)
+
+    def write_ascii(self, bytes s):
+        self.io.write_ascii(s)
+
+    def write_rep_ascii(self, int nrep, bytes s):
+        self.io.write_rep_ascii(nrep, s)
+
+    def getvalue(self):
+        return self.io.getvalue()
+
 def int_to_chars(int i):
     cdef char buff[5]
     ptr = to_chars(buff, i)

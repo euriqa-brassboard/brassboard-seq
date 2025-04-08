@@ -32,3 +32,32 @@ def test_check_num_arg():
         test_utils.check_num_arg(b"jowie8uasdf", 1, 2, 2)
     with pytest.raises(TypeError, match="jajsd89iwuer89\\(\\) takes exactly 2 positional arguments \\(3 given\\)"):
         test_utils.check_num_arg(b"jajsd89iwuer89", 3, 2, 2)
+
+def test_stringio():
+    io = test_utils.IOBuff()
+    assert io.getvalue() == ""
+
+    io.write("aaa")
+    io.write("bbb")
+    io.write("ccc")
+    io.write("ddd")
+    assert io.getvalue() == "aaabbbcccddd"
+
+    io.write_ascii(b"ee")
+    assert io.getvalue() == "aaabbbcccdddee"
+    io.write_rep_ascii(3, b"df")
+    assert io.getvalue() == "aaabbbcccdddeedfdfdf"
+
+    io.write("α")
+    io.write("z")
+    assert io.getvalue() == "aaabbbcccdddeedfdfdfαz"
+
+    io.write("啊")
+    assert io.getvalue() == "aaabbbcccdddeedfdfdfαz啊"
+
+    io.write_ascii(b"mmm")
+    assert io.getvalue() == "aaabbbcccdddeedfdfdfαz啊mmm"
+    io.write_rep_ascii(0, b"adf")
+    assert io.getvalue() == "aaabbbcccdddeedfdfdfαz啊mmm"
+    io.write_rep_ascii(2, b"asdf")
+    assert io.getvalue() == "aaabbbcccdddeedfdfdfαz啊mmmasdfasdf"

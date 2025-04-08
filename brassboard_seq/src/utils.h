@@ -517,15 +517,37 @@ static inline PyObject *operator ""_pymod()
     return mod;
 }
 
+struct CDeleter {
+    template<typename T>
+    void operator()(T *p) {
+        free((void*)p);
+    }
+};
+
 struct py_stringio {
-    py_stringio();
-    py_stringio(const py_stringio&) = delete;
     py_stringio &operator=(const py_stringio&) = delete;
 
     void write(PyObject*);
+    void write_ascii(const char *s, ssize_t len);
+    void write_ascii(const char *s)
+    {
+        write_ascii(s, strlen(s));
+    }
+    void write_rep_ascii(int nrep, const char *s, ssize_t len);
+    void write_rep_ascii(int nrep, const char *s)
+    {
+        write_rep_ascii(nrep, s, strlen(s));
+    }
     __attribute__((returns_nonnull)) PyObject *getvalue();
 
-    py_object io;
+private:
+    void write_kind(const void *data, int kind, ssize_t len);
+    void check_size(size_t sz, int kind);
+
+    std::unique_ptr<char,CDeleter> m_buff;
+    size_t m_size{0};
+    size_t m_pos{0};
+    int m_kind{PyUnicode_1BYTE_KIND};
 };
 
 py_object channel_name_from_path(PyObject *path);

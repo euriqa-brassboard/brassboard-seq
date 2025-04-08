@@ -277,29 +277,94 @@ __attribute__((visibility("protected")))
                     (nexpected == 1) ? "" : "s", nfound);
 }
 
-static auto const StringIO = throw_if_not(PyObject_GetAttrString("io"_pymod, "StringIO"));
-static auto const SIO_write = throw_if_not(PyObject_GetAttrString(StringIO, "write"));
-static auto const SIO_getvalue =
-    throw_if_not(PyObject_GetAttrString(StringIO, "getvalue"));
-
-__attribute__((visibility("protected")))
-py_stringio::py_stringio()
+static inline void _copy_pystr_same_kind(void *tgt, const void *src, int kind, ssize_t len)
 {
-    io.reset(throw_if_not(PyObject_Vectorcall(StringIO, nullptr, 0, nullptr)));
+    memcpy(tgt, src, len * kind);
+}
+
+static inline void _copy_pystr_change_kind(void *tgt, int tgt_kind,
+                                           const void *src, int src_kind, ssize_t len)
+{
+    for (ssize_t i = 0; i < len; i++) {
+        PyUnicode_WRITE(tgt_kind, tgt, i, PyUnicode_READ(src_kind, src, i));
+    }
+}
+
+static inline void _copy_pystr_buffer(void *tgt, int tgt_kind,
+                                      const void *src, int src_kind, ssize_t len)
+{
+    if (tgt_kind == src_kind) [[likely]] {
+        _copy_pystr_same_kind(tgt, src, tgt_kind, len);
+    }
+    else {
+        _copy_pystr_change_kind(tgt, tgt_kind, src, src_kind, len);
+    }
+}
+
+inline void py_stringio::check_size(size_t sz, int kind)
+{
+    if (kind > m_kind) [[unlikely]] {
+        auto new_buff = (char*)malloc(sz * kind);
+        _copy_pystr_change_kind(new_buff, kind, m_buff.get(), m_kind, m_pos);
+        m_kind = kind;
+        m_size = sz;
+        m_buff.reset(new_buff);
+        return;
+    }
+    if (m_size >= sz)
+        return;
+    m_size = sz * 3 / 2;
+    m_buff.reset((char*)realloc(m_buff.release(), m_size * m_kind));
+}
+
+inline void py_stringio::write_kind(const void *data, int kind, ssize_t len)
+{
+    static_assert(PyUnicode_1BYTE_KIND == 1 &&
+                  PyUnicode_2BYTE_KIND == 2 &&
+                  PyUnicode_4BYTE_KIND == 4);
+    check_size(m_pos + len, kind);
+    _copy_pystr_buffer(m_buff.get() + m_pos * m_kind, m_kind, data, kind, len);
+    m_pos += len;
 }
 
 __attribute__((visibility("protected")))
-void py_stringio::write(PyObject *obj)
+void py_stringio::write(PyObject *str)
 {
-    PyObject *callargs[] = { io, obj };
-    Py_DECREF(throw_if_not(PyObject_Vectorcall(SIO_write, callargs, 2, nullptr)));
+    write_kind(PyUnicode_DATA(str), PyUnicode_KIND(str), PyUnicode_GET_LENGTH(str));
+}
+
+__attribute__((visibility("protected")))
+void py_stringio::write_ascii(const char *s, ssize_t len)
+{
+    write_kind(s, PyUnicode_1BYTE_KIND, len);
+}
+
+__attribute__((visibility("protected")))
+void py_stringio::write_rep_ascii(int nrep, const char *s, ssize_t len)
+{
+    static_assert(PyUnicode_1BYTE_KIND == 1);
+    check_size(m_pos + len * nrep, PyUnicode_1BYTE_KIND);
+    if (m_kind == PyUnicode_1BYTE_KIND) [[likely]] {
+        for (int i = 0; i < nrep; i++) {
+            _copy_pystr_same_kind(m_buff.get() + m_pos + len * i,
+                                  s, PyUnicode_1BYTE_KIND, len);
+        }
+    }
+    else {
+        for (int i = 0; i < nrep; i++) {
+            _copy_pystr_change_kind(m_buff.get() + (m_pos + len * i) * m_kind, m_kind,
+                                    s, PyUnicode_1BYTE_KIND, len);
+        }
+    }
+    m_pos += len * nrep;
 }
 
 __attribute__((returns_nonnull,visibility("protected")))
 PyObject *py_stringio::getvalue()
 {
-    PyObject *callargs[] = { io };
-    return throw_if_not(PyObject_Vectorcall(SIO_getvalue, callargs, 1, nullptr));
+    if (!m_pos)
+        return py_newref(""_py);
+    return throw_if_not(PyUnicode_FromKindAndData(m_kind, m_buff.get(), m_pos));
 }
 
 py_object channel_name_from_path(PyObject *path)
