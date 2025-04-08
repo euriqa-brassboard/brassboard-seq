@@ -604,12 +604,37 @@ private:
     Py_ssize_t pos{0};
 };
 
+struct _pystr_iterator {
+    _pystr_iterator(PyObject *str)
+        : data(PyUnicode_DATA(str)),
+          kind(PyUnicode_KIND(str))
+    {
+    }
+    _pystr_iterator &operator++()
+    {
+        ++idx;
+        return *this;
+    }
+    std::pair<Py_ssize_t,Py_UCS4> operator*()
+    {
+        return { idx, PyUnicode_READ(kind, data, idx) };
+    }
+    bool operator==(Py_ssize_t n) { return idx == n; }
+    static Py_ssize_t end(PyObject *str) { return PyUnicode_GET_LENGTH(str); }
+
+private:
+    void *data;
+    int kind;
+    Py_ssize_t idx{0};
+};
+
 template<typename Value=PyObject, typename Key=PyObject>
 using pydict_iter = py_iter<_pydict_iterator<Value,Key>>;
 template<typename Value=PyObject>
 using pylist_iter = py_iter<_pylist_iterator<Value>>;
 template<typename Value=PyObject>
 using pytuple_iter = py_iter<_pytuple_iterator<Value>>;
+using pystr_iter = py_iter<_pystr_iterator>;
 
 template<typename T>
 struct ValueIndexer {
