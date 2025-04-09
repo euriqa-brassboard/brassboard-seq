@@ -23,8 +23,7 @@
 
 namespace brassboard_seq::config {
 
-struct Config {
-    PyObject_HEAD
+struct Config : PyObject {
     PyObject *channel_alias;
     PyObject *alias_cache;
     PyObject *supported_prefix;

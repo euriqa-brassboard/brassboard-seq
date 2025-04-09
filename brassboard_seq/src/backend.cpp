@@ -134,8 +134,7 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
                     }
                     else if (new_value.get() != value.get()) {
                         assert(is_rtval(cond));
-                        auto endval = new_select(cond, new_value, value);
-                        value.reset((PyObject*)endval);
+                        value.reset(new_select(cond, new_value, value));
                     }
                 }
             }

@@ -70,7 +70,7 @@ _combine_cond(PyObject *cond1, PyObject *new_cond)
             return { Py_False, false };
         }
     }
-    py_object cond2((PyObject*)rt_convert_bool((RuntimeValue*)new_cond));
+    py_object cond2(rt_convert_bool((RuntimeValue*)new_cond));
     if (cond1 == Py_True)
         return { cond2.release(), true };
     assert(is_rtval(cond1));

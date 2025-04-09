@@ -931,8 +931,7 @@ static inline DataType binary_return_type(ValueType type, DataType t1, DataType 
     }
 }
 
-struct RuntimeValue {
-    PyObject_HEAD
+struct RuntimeValue : PyObject {
     ValueType type_;
     DataType datatype;
     EvalError cache_err;
@@ -952,8 +951,7 @@ concept all_rtval_ptr = (is_rtval_ptr<T> && ...);
 template<class T>
 concept not_rtval_ptr = !is_rtval_ptr<T>;
 
-struct ExternCallback {
-    PyObject_HEAD
+struct ExternCallback : PyObject {
     void *fptr;
     static PyTypeObject Type;
 };

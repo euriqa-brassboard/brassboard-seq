@@ -38,22 +38,21 @@ static inline PyObject *split_string_tuple(PyObject *s)
     return tuple.release();
 }
 
-static PyObject *add_supported_prefix(PyObject *self, PyObject *const *args,
+static PyObject *add_supported_prefix(Config *self, PyObject *const *args,
                                       Py_ssize_t nargs)
 {
     return py_catch_error([&] {
         py_check_num_arg("add_supported_prefix", nargs, 1, 1);
         check_string_arg(args[0], "prefix");
-        throw_if(PySet_Add(((Config*)self)->supported_prefix, args[0]));
+        throw_if(PySet_Add(self->supported_prefix, args[0]));
         Py_RETURN_NONE;
     });
 }
 
-static PyObject *add_channel_alias(PyObject *py_self, PyObject *const *args,
+static PyObject *add_channel_alias(Config *self, PyObject *const *args,
                                    Py_ssize_t nargs)
 {
     return py_catch_error([&] {
-        auto self = (Config*)py_self;
         py_check_num_arg("add_channel_alias", nargs, 2, 2);
         auto name = args[0];
         auto target = args[1];
@@ -105,13 +104,13 @@ PyObject *Config::translate_channel(PyObject *name)
     return _translate_channel(path);
 }
 
-static PyObject *py_translate_channel(PyObject *self, PyObject *const *args,
+static PyObject *py_translate_channel(Config *self, PyObject *const *args,
                                       Py_ssize_t nargs)
 {
     return py_catch_error([&] {
         py_check_num_arg("translate_channel", nargs, 1);
         check_string_arg(args[0], "name");
-        return ((Config*)self)->translate_channel(args[0]);
+        return self->translate_channel(args[0]);
     });
 }
 

@@ -120,7 +120,7 @@ public:
         assume(rv && !_is_static && !_is_rt_offset);
         _is_rt_offset = true;
         assert(rv->datatype == rtval::DataType::Int64);
-        _rt_offset = py_newref((PyObject*)rv);
+        _rt_offset = py_newref(rv);
         // Assume PyObject alignment
         assert(!_is_static);
     }
@@ -214,7 +214,7 @@ static inline int64_t round_time_int(PyObject *v)
 static inline __attribute__((returns_nonnull)) RuntimeValue*
 round_time_rt(RuntimeValue *v, RuntimeValue *rt_time_scale)
 {
-    py_object scaled_t((PyObject*)rtval::new_expr2(rtval::Mul, v, rt_time_scale));
+    py_object scaled_t(rtval::new_expr2(rtval::Mul, v, rt_time_scale));
     return rtval::rt_round_int64((RuntimeValue*)scaled_t.get());
 }
 
