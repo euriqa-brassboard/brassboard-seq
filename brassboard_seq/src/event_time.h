@@ -32,6 +32,23 @@ static constexpr int64_t time_scale = 1000000000000ll;
 // Return borrowed reference
 __attribute__((returns_nonnull)) PyObject *py_time_scale();
 
+static inline int64_t round_time_f64(double v)
+{
+    return round<int64_t>(v * double(time_scale));
+}
+
+static inline int64_t round_time_int(PyObject *v)
+{
+    if (Py_TYPE(v) == &PyLong_Type) {
+        auto vi = PyLong_AsLongLong(v);
+        throw_if(vi == -1 && PyErr_Occurred());
+        return vi * time_scale;
+    }
+    return round_time_f64(get_value_f64(v, -1));
+}
+
+__attribute__((returns_nonnull)) RuntimeValue *round_time_rt(RuntimeValue *v);
+
 enum TimeOrder {
     NoOrder,
     OrderBefore,
@@ -158,6 +175,18 @@ struct TimeManager : PyObject {
             PyObject *cond, EventTime *wait_for);
     __attribute__((returns_nonnull)) EventTime*
     new_rt(EventTime *prev, RuntimeValue *offset, PyObject *cond, EventTime *wait_for);
+    __attribute__((returns_nonnull)) EventTime*
+    new_round(EventTime *prev, PyObject *offset, PyObject *cond, EventTime *wait_for)
+    {
+        if (rtval::is_rtval(offset)) {
+            py_object rt_offset(round_time_rt((RuntimeValue*)offset));
+            return new_rt(prev, (RuntimeValue*)rt_offset.get(), cond, wait_for);
+        }
+        else {
+            auto coffset = round_time_int(offset);
+            return new_int(prev, coffset, false, cond, wait_for);
+        }
+    }
 
     static PyTypeObject Type;
     static __attribute__((returns_nonnull)) TimeManager *alloc();
@@ -174,6 +203,7 @@ struct EventTime : PyObject {
     std::vector<int> chain_pos;
 
     static PyTypeObject Type;
+    int64_t get_value(int base_id, unsigned age, std::vector<int64_t> &cache);
 private:
     void update_chain_pos(EventTime *prev, int nchains);
     friend class TimeManager;
@@ -206,38 +236,7 @@ TimeManager::new_int(EventTime *prev, int64_t offset, bool floating,
     return tp;
 }
 
-static inline __attribute__((returns_nonnull)) EventTime*
-_new_time_int(TimeManager *self, EventTime *prev, int64_t offset, bool floating,
-              PyObject *cond, EventTime *wait_for)
-{
-    return self->new_int(prev, offset, floating, cond, wait_for);
-}
-
-static inline __attribute__((returns_nonnull)) EventTime*
-_new_time_rt(TimeManager *self, EventTime *prev,
-             RuntimeValue *offset, PyObject *cond, EventTime *wait_for)
-{
-    return self->new_rt(prev, offset, cond, wait_for);
-}
-
-static inline int64_t round_time_f64(double v)
-{
-    return round<int64_t>(v * double(time_scale));
-}
-
-static inline int64_t round_time_int(PyObject *v)
-{
-    if (Py_TYPE(v) == &PyLong_Type) {
-        auto vi = PyLong_AsLongLong(v);
-        throw_if(vi == -1 && PyErr_Occurred());
-        return vi * time_scale;
-    }
-    return round_time_f64(get_value_f64(v, -1));
-}
-
-__attribute__((returns_nonnull)) RuntimeValue *round_time_rt(RuntimeValue *v);
-
-static inline TimeOrder is_ordered(auto *t1, auto *t2)
+static inline TimeOrder is_ordered(EventTime *t1, EventTime *t2)
 {
     auto manager_status = t1->manager_status.get();
     assert(manager_status == t2->manager_status.get());

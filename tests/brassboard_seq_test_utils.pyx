@@ -178,6 +178,10 @@ cdef extern from *:
     {
         return self->compute_all_times(age);
     }
+    auto new_time_rt(auto self, auto prev, auto offset, auto cond, auto wait_for)
+    {
+        return self->new_rt(prev, offset, cond, wait_for);
+    }
     """
     rtval.TagVal test_callback_extern(TestCallback) except +
     rtval.TagVal test_callback_extern_age(TestCallback, unsigned) except +
@@ -267,6 +271,10 @@ cdef extern from *:
         const char *func_name, ssize_t nfound, ssize_t nmin, ssize_t nmax) except +
     void _timemanager_finalize(event_time.TimeManager) except +
     int64_t _timemanager_compute_all_times(event_time.TimeManager, unsigned) except +
+    event_time.EventTime new_time_rt(event_time.TimeManager self,
+                                     event_time.EventTime prev,
+                                     rtval.RuntimeValue offset, object cond,
+                                     event_time.EventTime wait_for) except +
 
 def new_invalid_rtval():
     # This should only happen if something really wrong happens.
@@ -413,9 +421,9 @@ def time_manager_new_time(event_time.TimeManager time_manager,
                           bint floating, cond, event_time.EventTime wait_for):
     if rtval.is_rtval(offset):
         assert not floating
-        return event_time._new_time_rt(time_manager, prev, offset, cond, wait_for)
+        return new_time_rt(time_manager, prev, offset, cond, wait_for)
     else:
-        return event_time._new_time_int(time_manager, prev, offset, floating, cond, wait_for)
+        return event_time.new_time_int(time_manager, prev, offset, floating, cond, wait_for)
 
 def time_manager_new_round_time(event_time.TimeManager time_manager,
                                 event_time.EventTime prev, offset,

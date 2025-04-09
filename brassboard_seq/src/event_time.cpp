@@ -183,76 +183,6 @@ EventTime *TimeManager::new_rt(EventTime *prev, RuntimeValue *offset,
     return tp;
 }
 
-// If the base time has a static value, the returned time values will be the actual
-// time point of the EventTime. If the base time does not have a static value
-// the time offset relative to the base time is returned.
-// This is so that if the base time is not statically known,
-// we can compute the diff without computing the base time,
-// while if the base time is known, we can use the static values in the computation
-static inline int64_t get_time_value(auto self, int base_id, unsigned age,
-                                       std::vector<int64_t> &cache)
-{
-    auto tid = self->data.id;
-    if (tid == base_id)
-        return self->data.is_static() ? self->data._get_static() : 0;
-    assert(tid > base_id);
-    auto value = cache[tid];
-    if (value >= 0)
-        return value;
-    // The time manager should've been finalized and
-    // no time should be floating anymore
-    assert(!self->data.floating);
-
-    if (self->data.is_static()) {
-        // If we have a static value it means that the base time has a static value
-        // In this case, we are returning the full time and there's no need to
-        // compute the offset from the base time.
-        auto static_value = self->data._get_static();
-        cache[tid] = static_value;
-        return static_value;
-    }
-
-    int64_t prev_val = 0;
-    if (auto prev = self->prev; prev != Py_None)
-        prev_val = get_time_value(prev, base_id, age, cache);
-
-    auto cond = get_cond_val(self->cond, age);
-    int64_t offset = 0;
-    if (cond) {
-        auto rt_offset = (RuntimeValue*)self->data.get_rt_offset();
-        if (rt_offset) {
-            rtval::rt_eval_throw(rt_offset, age, event_time_key(self));
-            offset = rt_offset->cache_val.i64_val;
-            if (offset < 0) {
-                bb_throw_format(PyExc_ValueError, event_time_key(self),
-                                "Time delay cannot be negative");
-            }
-        }
-        else {
-            offset = self->data.get_c_offset();
-        }
-    }
-
-    if (auto wait_for = self->wait_for; wait_for == Py_None) {
-        // When wait_for is None, the offset is added to the previous time
-        value = prev_val + offset;
-    }
-    else {
-        // Otherwise, the wait_for is added to the wait_for time.
-        value = prev_val;
-        // Do not try to evaluate wait_for unless the condition is true
-        // When a base_id is supplied, the wait_for event time may not share
-        // this base if the condition isn't true.
-        if (cond) {
-            value = std::max(value, get_time_value(wait_for, base_id, age,
-                                                   cache) + offset);
-        }
-    }
-
-    cache[tid] = value;
-    return value;
-}
-
 __attribute__((visibility("protected")))
 void TimeManager::finalize()
 {
@@ -343,7 +273,7 @@ int64_t TimeManager::compute_all_times(unsigned age)
     time_values.resize(ntimes);
     std::ranges::fill(time_values, -1);
     for (auto [i, t]: pylist_iter<EventTime>(event_times))
-        max_time = std::max(max_time, get_time_value(t, -1, age, time_values));
+        max_time = std::max(max_time, t->get_value(-1, age, time_values));
     return max_time;
 }
 
@@ -458,8 +388,8 @@ struct EventTimeDiff : rtval::ExternCallback {
         ScopeExit reset_eval([&] { self->in_eval = false; });
         int base_id = eventtime_find_base_id(t1, t2, age);
         std::vector<int64_t> cache(t1->manager_status->ntimes, -1);
-        return double(get_time_value(t1, base_id, age, cache) -
-                      get_time_value(t2, base_id, age, cache)) / time_scale;
+        return double(t1->get_value(base_id, age, cache) -
+                      t2->get_value(base_id, age, cache)) / time_scale;
     }
 
     static PyTypeObject Type;
@@ -512,6 +442,74 @@ static PyNumberMethods EventTime_as_number = {
     },
 };
 
+}
+
+// If the base time has a static value, the returned time values will be the actual
+// time point of the EventTime. If the base time does not have a static value
+// the time offset relative to the base time is returned.
+// This is so that if the base time is not statically known,
+// we can compute the diff without computing the base time,
+// while if the base time is known, we can use the static values in the computation
+inline int64_t EventTime::get_value(int base_id, unsigned age, std::vector<int64_t> &cache)
+{
+    auto tid = data.id;
+    if (tid == base_id)
+        return data.is_static() ? data._get_static() : 0;
+    assert(tid > base_id);
+    auto value = cache[tid];
+    if (value >= 0)
+        return value;
+    // The time manager should've been finalized and
+    // no time should be floating anymore
+    assert(!data.floating);
+
+    if (data.is_static()) {
+        // If we have a static value it means that the base time has a static value
+        // In this case, we are returning the full time and there's no need to
+        // compute the offset from the base time.
+        auto static_value = data._get_static();
+        cache[tid] = static_value;
+        return static_value;
+    }
+
+    int64_t prev_val = 0;
+    if (prev != Py_None)
+        prev_val = prev->get_value(base_id, age, cache);
+
+    auto cond_val = get_cond_val(cond, age);
+    int64_t offset = 0;
+    if (cond_val) {
+        auto rt_offset = (RuntimeValue*)data.get_rt_offset();
+        if (rt_offset) {
+            rtval::rt_eval_throw(rt_offset, age, event_time_key(this));
+            offset = rt_offset->cache_val.i64_val;
+            if (offset < 0) {
+                bb_throw_format(PyExc_ValueError, event_time_key(this),
+                                "Time delay cannot be negative");
+            }
+        }
+        else {
+            offset = data.get_c_offset();
+        }
+    }
+
+    if (wait_for == Py_None) {
+        // When wait_for is None, the offset is added to the previous time
+        value = prev_val + offset;
+    }
+    else {
+        // Otherwise, the wait_for is added to the wait_for time.
+        value = prev_val;
+        // Do not try to evaluate wait_for unless the condition is true
+        // When a base_id is supplied, the wait_for event time may not share
+        // this base if the condition isn't true.
+        if (cond_val) {
+            value = std::max(value, wait_for->get_value(base_id, age, cache) + offset);
+        }
+    }
+
+    cache[tid] = value;
+    return value;
 }
 
 inline void EventTime::update_chain_pos(EventTime *prev, int nchains)

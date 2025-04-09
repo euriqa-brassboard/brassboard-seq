@@ -19,8 +19,7 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.action cimport action_str
 from brassboard_seq.event_time cimport round_time_int, round_time_rt, \
-  set_base_int, set_base_rt, new_time_manager, \
-  _new_time_int, new_round_time
+  set_base_int, set_base_rt, new_time_manager, new_time_int, new_round_time
 from brassboard_seq.rtval cimport is_rtval, RuntimeValue
 from brassboard_seq.scan cimport new_param_pack
 from brassboard_seq.utils cimport assert_key, event_time_key, py_stringio, \
@@ -250,7 +249,7 @@ cdef class Seq(SubSeq):
         seqinfo.C = new_param_pack(ParamPack, {}, {}, 'root', None)
         seqinfo.action_counter = 0
         self.seqinfo = seqinfo
-        self.end_time = _new_time_int(seqinfo.time_mgr, None, 0, False, True, None)
+        self.end_time = new_time_int(seqinfo.time_mgr, None, 0, False, True, None)
         self.seqinfo.bt_tracker.record(event_time_key(<void*>self.end_time))
 
     def __str__(self):

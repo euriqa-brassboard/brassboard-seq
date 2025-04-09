@@ -32,6 +32,7 @@ static PyObject *subseq_type;
 static PyObject *condwrapper_type;
 
 using namespace rtval;
+using event_time::EventTime;
 
 static inline int get_channel_id(auto self, PyObject *name)
 {
@@ -94,28 +95,13 @@ combine_cond(PyObject *cond1, PyObject *new_cond)
     return res;
 }
 
-template<typename EventTime>
-static inline __attribute__((returns_nonnull)) EventTime*
-new_round_time(auto self, EventTime *prev, PyObject *offset, PyObject *cond,
-               EventTime *wait_for)
-{
-    if (is_rtval(offset)) {
-        py_object rt_offset(event_time::round_time_rt((RuntimeValue*)offset));
-        return self->new_rt(prev, (RuntimeValue*)rt_offset.get(), cond, wait_for);
-    }
-    else {
-        auto coffset = event_time::round_time_int(offset);
-        return self->new_int(prev, coffset, false, cond, wait_for);
-    }
-}
-
 template<typename TimeStep, typename EventTime>
 static inline __attribute__((returns_nonnull)) TimeStep*
 add_time_step(auto self, PyObject *cond, EventTime *start_time, PyObject *length)
 {
     auto seqinfo = pyx_fld(self, seqinfo);
-    py_object end_time(new_round_time(seqinfo->time_mgr, start_time, length,
-                                      cond, (EventTime*)Py_None));
+    py_object end_time(seqinfo->time_mgr->new_round(start_time, length,
+                                                    cond, (EventTime*)Py_None));
     py_object o(pytype_genericalloc(timestep_type));
     auto step = (TimeStep*)o.get();
     new (&step->actions) std::vector<py_object>();
@@ -221,7 +207,6 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
     py_check_num_arg(add_step_name(type), nargs, nargs_min);
 
     auto first_arg = args[nargs_min - 1];
-    using EventTime = std::remove_reference_t<decltype(*pyx_fld(subseq, end_time))>;
     py_object start_time;
     if (type == AddStepType::Background) {
         start_time.reset(py_newref(pyx_fld(subseq, end_time)));

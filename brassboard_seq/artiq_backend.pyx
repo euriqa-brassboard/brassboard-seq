@@ -19,7 +19,7 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.action cimport _RampFunctionBase
 from brassboard_seq.backend cimport CompiledSeq
-from brassboard_seq.event_time cimport EventTime, round_time_int
+from brassboard_seq.event_time cimport round_time_int
 from brassboard_seq.rtval cimport ExternCallback, TagVal, is_rtval, new_extern
 from brassboard_seq.seq cimport Seq
 from brassboard_seq.utils cimport set_global_tracker, PyErr_Format, \
@@ -70,7 +70,7 @@ cdef extern from "src/artiq_backend.cpp" namespace "brassboard_seq::artiq_backen
     ArtiqConsts artiq_consts
     PyObject *rampfunctionbase_type
 
-    void collect_actions(ArtiqBackend ab, CompiledSeq&, EventTime) except +
+    void collect_actions(ArtiqBackend ab, CompiledSeq&) except +
 
     void generate_rtios(ArtiqBackend ab, CompiledSeq&, unsigned age) except +
     TagVal evalonce_callback(object) except +
@@ -238,7 +238,7 @@ cdef class ArtiqBackend:
     cdef int finalize(self, CompiledSeq &cseq) except -1:
         collect_channels(&self.channels, self.prefix, self.sys, self.seq,
                          self.device_delay)
-        collect_actions(self, cseq, None)
+        collect_actions(self, cseq)
 
     cdef int runtime_finalize(self, CompiledSeq &cseq, unsigned age) except -1:
         generate_rtios(self, cseq, age)

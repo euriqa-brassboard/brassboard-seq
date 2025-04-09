@@ -32,7 +32,8 @@
 
 namespace brassboard_seq::rfsoc_backend {
 
-using brassboard_seq::rtval::RuntimeValue;
+using rtval::RuntimeValue;
+using event_time::EventTime;
 
 struct output_flags_t {
     bool wait_trigger;
@@ -3884,9 +3885,8 @@ static inline bool parse_action_kws(PyObject *kws, int aid)
     return sync;
 }
 
-template<typename EventTime>
 static __attribute__((always_inline)) inline
-void collect_actions(auto *rb, backend::CompiledSeq &cseq, EventTime*)
+void collect_actions(auto *rb, backend::CompiledSeq &cseq)
 {
     auto seq = pyx_fld(rb, seq);
 

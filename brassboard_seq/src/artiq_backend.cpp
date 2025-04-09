@@ -29,7 +29,8 @@
 
 namespace brassboard_seq::artiq_backend {
 
-using brassboard_seq::rtval::RuntimeValue;
+using rtval::RuntimeValue;
+using event_time::EventTime;
 
 struct ArtiqConsts {
     int COUNTER_ENABLE;
@@ -100,9 +101,8 @@ inline void ChannelsInfo::add_dds_param_channel(int seqchn, uint32_t bus_id,
                                                     delay, rt_delay), param};
 }
 
-template<typename EventTime>
 static __attribute__((always_inline)) inline
-void collect_actions(auto *ab, backend::CompiledSeq &cseq, EventTime*)
+void collect_actions(auto *ab, backend::CompiledSeq &cseq)
 {
     auto seq = pyx_fld(ab, seq);
     std::vector<ArtiqAction> &artiq_actions = ab->all_actions;
