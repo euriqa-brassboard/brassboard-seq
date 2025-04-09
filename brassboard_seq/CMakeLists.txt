@@ -9,7 +9,8 @@ add_library(brassboard_seq_utils SHARED
   src/config.cpp
   src/rtprop.cpp
   src/rtval.cpp
-  src/utils.cpp)
+  src/utils.cpp
+  src/yaml.cpp)
 target_include_directories(brassboard_seq_utils PRIVATE ${Python_INCLUDE_DIRS})
 install(TARGETS brassboard_seq_utils DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 

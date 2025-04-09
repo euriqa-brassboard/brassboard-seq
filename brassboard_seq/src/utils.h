@@ -538,6 +538,7 @@ struct py_stringio {
     {
         write_rep_ascii(nrep, s, strlen(s));
     }
+    std::pair<int,void*> reserve_buffer(int kind, ssize_t len);
     __attribute__((returns_nonnull)) PyObject *getvalue();
 
 private:

@@ -359,6 +359,15 @@ void py_stringio::write_rep_ascii(int nrep, const char *s, ssize_t len)
     m_pos += len * nrep;
 }
 
+__attribute__((visibility("protected")))
+std::pair<int,void*> py_stringio::reserve_buffer(int kind, ssize_t len)
+{
+    check_size(m_pos + len, kind);
+    auto ptr = m_buff.get() + m_pos * m_kind;
+    m_pos += len;
+    return {m_kind, ptr};
+}
+
 __attribute__((returns_nonnull,visibility("protected")))
 PyObject *py_stringio::getvalue()
 {

@@ -24,6 +24,7 @@
 #include "src/rtprop.h"
 #include "src/rtval.h"
 #include "src/config.h"
+#include "src/yaml.h"
 
 static PyModuleDef _utils_module = {
     .m_base = PyModuleDef_HEAD_INIT,
@@ -37,6 +38,8 @@ PyInit__utils(void)
 {
     using namespace brassboard_seq;
     return py_catch_error([&] {
+        py_object yaml_sprint(PyCFunction_NewEx(&yaml::sprint_method, nullptr,
+                                                "brassboard_seq.yaml"_py));
         py_object m(throw_if_not(PyModule_Create(&_utils_module)));
         throw_if(PyModule_AddObjectRef(m, "RuntimeValue",
                                        (PyObject*)&rtval::RuntimeValue::Type) < 0);
@@ -48,6 +51,7 @@ PyInit__utils(void)
                                        (PyObject*)&rtprop::CompositeRTProp_Type) < 0);
         throw_if(PyModule_AddObjectRef(m, "RTProp",
                                        (PyObject*)&rtprop::RTProp_Type) < 0);
+        throw_if(PyModule_AddObjectRef(m, "yaml_sprint", yaml_sprint.get()) < 0);
         return m.release();
     });
 }
