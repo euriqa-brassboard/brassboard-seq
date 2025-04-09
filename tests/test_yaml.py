@@ -1,6 +1,7 @@
 #
 
 from brassboard_seq.yaml import sprint as yaml_print
+from py_test_utils import yaml_io_print
 
 import numpy as np
 
@@ -9,9 +10,14 @@ import pytest
 class ObjType:
     pass
 
-def test_print():
+@pytest.mark.parametrize("yaml_print", [yaml_print, yaml_io_print])
+def test_print(yaml_print):
     assert yaml_print(False) == 'false'
     assert yaml_print(True) == 'true'
+    assert yaml_print(1) == '1'
+    assert yaml_print(1.0) == '1.0'
+    assert yaml_print(np.int32(1)) == '1'
+    assert yaml_print(np.float64(1.0)) == '1.0'
     assert yaml_print("") == '""'
     assert yaml_print("a") == 'a'
     assert yaml_print("a\"") == '\"a\\\"\"'
@@ -23,6 +29,8 @@ def test_print():
     assert yaml_print("1 ") == '"1 "'
     assert yaml_print({}) == '{}'
     assert yaml_print([]) == '[]'
+    assert yaml_print(()) == '[]'
+    assert yaml_print((True, 1, 2.3, "a", {}, np.bool_(False))) == '[true, 1, 2.3, a, {}, false]'
     obj = ObjType()
     assert yaml_print(obj) == f"<unknown object {obj}>"
 
@@ -69,3 +77,22 @@ def test_print():
   a:
     x: 2
     y: 3"""
+
+    assert yaml_print(np.array([True, False, True, True])) == "[true, false, true, true]"
+    assert yaml_print(np.array([1, 2, 3, 10, 9, -3])) == "[1, 2, 3, 10, 9, -3]"
+    assert yaml_print(np.array([1.3, 2.4, 3.0, 9.8, -9.3, -3.3])) == "[1.3, 2.4, 3.0, 9.8, -9.3, -3.3]"
+
+    with pytest.raises(TypeError, match="yaml dict key must be str"):
+        yaml_print({1: 2})
+
+    with pytest.raises(TypeError, match="yaml only support ndarray of dimension 1"):
+        yaml_print(np.array([[1, 2], [3, 4]]))
+
+    with pytest.raises(TypeError, match="print\\(\\) takes at most 2 positional arguments \\(3 given\\)"):
+        yaml_print([], 1, 2)
+
+    with pytest.raises(TypeError, match="indent must be integer"):
+        yaml_print([], "aa")
+
+    with pytest.raises(TypeError, match="indent cannot be negative"):
+        yaml_print([], -2)

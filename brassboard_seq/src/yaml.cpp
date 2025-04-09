@@ -126,8 +126,8 @@ static inline void print_single_field_dict(py_stringio &io, PyObject *obj, int i
     py_stringio io2;
     print_generic(io2, obj, indent + 2, cur_indent);
     py_object strfield(io2.getvalue());
-    if (PyUnicode_GET_LENGTH(strfield.get()) &&
-        PyUnicode_READ_CHAR(strfield.get(), 0) != '\n')
+    assert(PyUnicode_GET_LENGTH(strfield.get()));
+    if (PyUnicode_READ_CHAR(strfield.get(), 0) != '\n')
         io.write_ascii(" ");
     io.write(strfield);
 }
@@ -142,8 +142,8 @@ static inline void print_dict_field(py_stringio &io, PyObject *k, PyObject *v, i
     py_stringio io2;
     print_generic(io2, v, indent + 2, indent + 2 + keylen);
     py_object strfield(io2.getvalue());
-    if (PyUnicode_GET_LENGTH(strfield.get()) &&
-        PyUnicode_READ_CHAR(strfield.get(), 0) != '\n')
+    assert(PyUnicode_GET_LENGTH(strfield.get()));
+    if (PyUnicode_READ_CHAR(strfield.get(), 0) != '\n')
         io.write_ascii(" ");
     io.write(strfield);
 }
@@ -299,9 +299,17 @@ static inline void print_array_numpy(py_stringio &io, PyArrayObject *ary,
     auto data = (char*)PyArray_DATA(ary);
     auto sz = PyArray_DIM(ary, 0);
     auto elsz = PyArray_ITEMSIZE(ary);
-    for (int i = 0; i < sz; i++) {
-        strary.emplace_back(pyobject_str(
-                                pyobj_checked(PyArray_GETITEM(ary, data + i * elsz))));
+    if (PyArray_ISBOOL(ary)) {
+        bool *values = (bool*)data;
+        for (int i = 0; i < sz; i++) {
+            strary.emplace_back(py_newref(values[i] ? "true"_py : "false"_py));
+        }
+    }
+    else {
+        for (int i = 0; i < sz; i++) {
+            strary.emplace_back(pyobject_str(
+                                    pyobj_checked(PyArray_GETITEM(ary, data + i * elsz))));
+        }
     }
     print_array_str(io, strary, true, indent, cur_indent);
 }

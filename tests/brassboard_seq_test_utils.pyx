@@ -1,6 +1,6 @@
 # cython: language_level=3
 
-from brassboard_seq cimport action, backend, event_time, rtval, seq, utils
+from brassboard_seq cimport action, backend, event_time, rtval, seq, utils, yaml
 
 import numpy as np
 
@@ -287,6 +287,7 @@ cdef extern from *:
                                  int64_t offset) except +
     void event_time_set_base_rt(event_time.EventTime self, event_time.EventTime base,
                                 rtval.RuntimeValue offset) except +
+    void _yaml_io_print "brassboard_seq::yaml::print" (utils.py_stringio &io, object, int indent) except +
 
 def new_invalid_rtval():
     # This should only happen if something really wrong happens.
@@ -1332,3 +1333,12 @@ def test_istream_ba_seek(ssize_t p, _dir=None):
 
 def check_num_arg(func_name, nfound, nmin, nmax):
     py_check_num_arg(func_name, nfound, nmin, nmax)
+
+def yaml_io_print(obj, indent=0):
+    if not isinstance(indent, int):
+        raise TypeError("indent must be integer")
+    if indent < 0:
+        raise TypeError("indent cannot be negative")
+    cdef utils.py_stringio io
+    _yaml_io_print(io, obj, indent)
+    return io.getvalue()
