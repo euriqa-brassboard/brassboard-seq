@@ -358,24 +358,25 @@ static inline rtval::TagVal timediff_eval(auto self, unsigned age)
                   get_time_value(t2, base_id, age, cache)) / time_scale;
 }
 
-static traverseproc event_time_base_traverse;
-static inquiry event_time_base_clear;
-
 template<typename EventTime>
 static inline void update_event_time_gc_callback(PyObject *_type, EventTime*)
 {
     auto type = (PyTypeObject*)_type;
-    event_time_base_traverse = type->tp_traverse;
-    event_time_base_clear = type->tp_clear;
     type->tp_traverse = [] (PyObject *obj, visitproc visit, void *arg) -> int {
         auto t = (EventTime*)obj;
+        Py_VISIT(t->prev);
+        Py_VISIT(t->wait_for);
+        Py_VISIT(t->cond);
         Py_VISIT(t->data.get_rt_offset());
-        return event_time_base_traverse(obj, visit, arg);
+        return 0;
     };
     type->tp_clear = [] (PyObject *obj) -> int {
         auto t = (EventTime*)obj;
         t->data.clear_rt_offset();
-        return event_time_base_clear(obj);
+        Py_CLEAR(t->prev);
+        Py_CLEAR(t->wait_for);
+        Py_CLEAR(t->cond);
+        return 0;
     };
 }
 
