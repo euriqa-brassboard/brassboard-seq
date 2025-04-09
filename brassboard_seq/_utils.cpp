@@ -26,6 +26,8 @@
 #include "src/config.h"
 #include "src/yaml.h"
 
+using namespace brassboard_seq;
+
 static PyModuleDef _utils_module = {
     .m_base = PyModuleDef_HEAD_INIT,
     .m_name = "brassboard_seq._utils",
@@ -33,25 +35,36 @@ static PyModuleDef _utils_module = {
     .m_size = -1,
 };
 
+#if PY_VERSION_HEX >= 0x030a0000
+static void pymodule_addobjectref(PyObject *m, const char *name, PyObject *value)
+{
+    throw_if(PyModule_AddObjectRef(m, name, value) < 0);
+}
+#else
+static void pymodule_addobjectref(PyObject *m, const char *name, PyObject *value)
+{
+    py_object v(py_newref(value));
+    throw_if(PyModule_AddObject(m, name, value) < 0);
+    v.release();
+}
+#endif
+
 PyMODINIT_FUNC
 PyInit__utils(void)
 {
-    using namespace brassboard_seq;
     return py_catch_error([&] {
         py_object yaml_sprint(PyCFunction_NewEx(&yaml::sprint_method, nullptr,
                                                 "brassboard_seq.yaml"_py));
         py_object m(throw_if_not(PyModule_Create(&_utils_module)));
-        throw_if(PyModule_AddObjectRef(m, "RuntimeValue",
-                                       (PyObject*)&rtval::RuntimeValue::Type) < 0);
-        throw_if(PyModule_AddObjectRef(m, "ExternCallback",
-                                       (PyObject*)&rtval::ExternCallback::Type) < 0);
-        throw_if(PyModule_AddObjectRef(m, "Config",
-                                       (PyObject*)&config::Config::Type) < 0);
-        throw_if(PyModule_AddObjectRef(m, "CompositeRTProp",
-                                       (PyObject*)&rtprop::CompositeRTProp_Type) < 0);
-        throw_if(PyModule_AddObjectRef(m, "RTProp",
-                                       (PyObject*)&rtprop::RTProp_Type) < 0);
-        throw_if(PyModule_AddObjectRef(m, "yaml_sprint", yaml_sprint.get()) < 0);
+        pymodule_addobjectref(m, "RuntimeValue",
+                              (PyObject*)&rtval::RuntimeValue::Type);
+        pymodule_addobjectref(m, "ExternCallback",
+                              (PyObject*)&rtval::ExternCallback::Type);
+        pymodule_addobjectref(m, "Config", (PyObject*)&config::Config::Type);
+        pymodule_addobjectref(m, "CompositeRTProp",
+                              (PyObject*)&rtprop::CompositeRTProp_Type);
+        pymodule_addobjectref(m, "RTProp", (PyObject*)&rtprop::RTProp_Type);
+        pymodule_addobjectref(m, "yaml_sprint", yaml_sprint.get());
         return m.release();
     });
 }

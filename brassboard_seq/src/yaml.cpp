@@ -126,7 +126,8 @@ static inline void print_single_field_dict(py_stringio &io, PyObject *obj, int i
     py_stringio io2;
     print_generic(io2, obj, indent + 2, cur_indent);
     py_object strfield(io2.getvalue());
-    if (PyUnicode_GET_LENGTH(strfield) && PyUnicode_READ_CHAR(strfield, 0) != '\n')
+    if (PyUnicode_GET_LENGTH(strfield.get()) &&
+        PyUnicode_READ_CHAR(strfield.get(), 0) != '\n')
         io.write_ascii(" ");
     io.write(strfield);
 }
@@ -141,7 +142,8 @@ static inline void print_dict_field(py_stringio &io, PyObject *k, PyObject *v, i
     py_stringio io2;
     print_generic(io2, v, indent + 2, indent + 2 + keylen);
     py_object strfield(io2.getvalue());
-    if (PyUnicode_GET_LENGTH(strfield) && PyUnicode_READ_CHAR(strfield, 0) != '\n')
+    if (PyUnicode_GET_LENGTH(strfield.get()) &&
+        PyUnicode_READ_CHAR(strfield.get(), 0) != '\n')
         io.write_ascii(" ");
     io.write(strfield);
 }
@@ -264,7 +266,7 @@ static inline void print_array_iter(py_stringio &io, auto &&iter,
             py_stringio io2;
             print_string(io2, v, 0, 0);
             py_object s(io2.getvalue());
-            if (PyUnicode_GET_LENGTH(s) > 16)
+            if (PyUnicode_GET_LENGTH(s.get()) > 16)
                 all_short_scalar = false;
             strary.push_back(std::move(s));
         }
