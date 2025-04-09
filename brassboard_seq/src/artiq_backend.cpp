@@ -278,15 +278,14 @@ void generate_rtios(auto *ab, backend::CompiledSeq &cseq, unsigned age)
         rtval::rt_eval_throw(rt_delay, age);
         auto fdelay = rtval::rtval_cache(rt_delay).template get<double>();
         if (fdelay < 0) {
-            py_object pyval(pyfloat_from_double(fdelay));
             py_throw_format(PyExc_ValueError,
-                            "Device time offset %S cannot be negative.", pyval.get());
+                            "Device time offset %S cannot be negative.",
+                            py_object(pyfloat_from_double(fdelay)).get());
         }
         else if (fdelay > 0.1) {
-            py_object pyval(pyfloat_from_double(fdelay));
             py_throw_format(PyExc_ValueError,
                             "Device time offset %S cannot be more than 100ms.",
-                            pyval.get());
+                            py_object(pyfloat_from_double(fdelay)).get());
         }
         delay = int64_t(fdelay * event_time::time_scale + 0.5);
     };

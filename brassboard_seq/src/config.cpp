@@ -29,7 +29,7 @@ static inline void check_string_arg(PyObject *arg, const char *name)
 
 static inline PyObject *split_string_tuple(PyObject *s)
 {
-    py_object list(throw_if_not(PyUnicode_Split(s, "/"_py, -1)));
+    auto list = pyobj_checked(PyUnicode_Split(s, "/"_py, -1));
     py_object tuple(pytuple_new(PyList_GET_SIZE(list.get())));
     for (auto [i, v]: pylist_iter(list)) {
         PyTuple_SET_ITEM(tuple.get(), i, v);
@@ -62,8 +62,8 @@ static PyObject *add_channel_alias(PyObject *py_self, PyObject *const *args,
         if (py_check_int(PyUnicode_Contains(name, "/"_py)))
             py_throw_format(PyExc_ValueError, "Channel alias name may not contain \"/\"");
         PyDict_Clear(self->alias_cache);
-        py_object path(split_string_tuple(target));
-        throw_if(PyDict_SetItem(self->channel_alias, name, path));
+        throw_if(PyDict_SetItem(self->channel_alias, name,
+                                py_object(split_string_tuple(target))));
         Py_RETURN_NONE;
     });
 }

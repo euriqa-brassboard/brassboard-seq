@@ -68,8 +68,8 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
         if (res > 0) [[likely]]
             continue;
         throw_if(res < 0);
-        auto name = channel_name_from_path(path);
-        py_throw_format(PyExc_ValueError, "Unhandled channel: %U", name.get());
+        py_throw_format(PyExc_ValueError, "Unhandled channel: %U",
+                        channel_name_from_path(path).get());
     }
     auto time_mgr = seqinfo->time_mgr;
     time_mgr->__pyx_vtab->finalize(time_mgr);
@@ -90,26 +90,24 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
         bool last_is_start = false;
         int tid = -1;
         for (auto action: actions) {
-            if (action->tid == tid) {
-                // It is difficult to decide the ordering of actions
-                // if multiple were added to exactly the same time points.
-                // We disallow this in the same timestep and we'll also disallow
-                // this here.
-                auto name = seq::channel_name_from_id(seqinfo, cid);
+            // It is difficult to decide the ordering of actions
+            // if multiple were added to exactly the same time points.
+            // We disallow this in the same timestep and we'll also disallow
+            // this here.
+            if (action->tid == tid)
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "Multiple actions added for the same channel "
-                                "at the same time on %U.", name.get());
-            }
+                                "at the same time on %U.",
+                                seq::channel_name_from_id(seqinfo, cid).get());
             tid = action->tid;
             auto start_time = get_time(tid);
             if (last_time) {
                 auto o = event_time::is_ordered(last_time, start_time);
                 if (o != event_time::OrderBefore &&
                     (o != event_time::OrderEqual || last_is_start)) {
-                    auto name = seq::channel_name_from_id(seqinfo, cid);
                     bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                     "Actions on %U is not statically ordered",
-                                    name.get());
+                                    seq::channel_name_from_id(seqinfo, cid).get());
                 }
             }
             auto action_value = action->value.get();
@@ -125,8 +123,8 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
                         auto rampf = (_RampFunctionBase*)action_value;
                         auto length = action->length;
                         auto vt = rampf->__pyx_vtab;
-                        new_value.reset(throw_if_not(vt->eval_end(rampf, length, value),
-                                                     action_key(action->aid)));
+                        new_value.reset_checked(vt->eval_end(rampf, length, value),
+                                                action_key(action->aid));
                     }
                     else {
                         new_value.reset(py_newref(action_value));

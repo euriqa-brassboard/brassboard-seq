@@ -47,8 +47,7 @@ static void set_dict(PyObject *tgt, PyObject *key, PyObject *value)
     }
     else {
         throw_if(PyErr_Occurred());
-        py_object copied(pydict_deepcopy(value));
-        throw_if(PyDict_SetItem(tgt, key, copied.get()));
+        throw_if(PyDict_SetItem(tgt, key, py_object(pydict_deepcopy(value)).get()));
     }
 }
 

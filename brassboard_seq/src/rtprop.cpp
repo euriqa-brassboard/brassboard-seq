@@ -65,8 +65,7 @@ static inline bool apply_dict_ovr(PyObject *dict, PyObject *k, PyObject *v)
 {
     auto field = PyDict_GetItemWithError(dict, k);
     if (field) {
-        py_object newfield(apply_composite_ovr(field, v));
-        throw_if(PyDict_SetItem(dict, k, newfield));
+        throw_if(PyDict_SetItem(dict, k, py_object(apply_composite_ovr(field, v))));
         return true;
     }
     throw_if(PyErr_Occurred());
@@ -80,7 +79,7 @@ static inline PyObject *apply_composite_ovr(PyObject *val, PyObject *ovr)
     if (!PyDict_Size(ovr))
         return py_newref(val);
     if (PyDict_Check(val)) {
-        py_object newval(throw_if_not(PyDict_Copy(val)));
+        auto newval = pyobj_checked(PyDict_Copy(val));
         for (auto [k, v]: pydict_iter(ovr)) {
             if (apply_dict_ovr(newval, k, v))
                 continue;
@@ -96,11 +95,10 @@ static inline PyObject *apply_composite_ovr(PyObject *val, PyObject *ovr)
         return newval.release();
     }
     if (PyList_Check(val)) {
-        py_object newval(throw_if_not(PySequence_List(val)));
+        auto newval = pyobj_checked(PySequence_List(val));
         for (auto [k, v]: pydict_iter(ovr)) {
             // for scangroup support since only string key is supported
-            py_object ik(throw_if_not(PyNumber_Long(k)));
-            auto idx = PyLong_AsLong(ik.get());
+            auto idx = PyLong_AsLong(pyobj_checked(PyNumber_Long(k)).get());
             if (idx < 0) {
                 throw_if(PyErr_Occurred());
                 py_throw_format(PyExc_IndexError, "list index out of range");
@@ -152,9 +150,9 @@ struct CompositeRTProp {
         auto data = get_data(obj);
         py_object py_data((PyObject*)data);
         if (!data->filled || (!data->compiled && _object_compiled(obj))) {
-            py_object res(throw_if_not(PyObject_Vectorcall(cb, &obj, 1, nullptr)));
+            auto res = throw_if_not(PyObject_Vectorcall(cb, &obj, 1, nullptr));
             Py_DECREF(data->cache);
-            data->cache = res.release();
+            data->cache = res;
             data->filled = true;
             data->compiled = _object_compiled(obj);
         }
@@ -264,7 +262,7 @@ struct rtprop_callback : ExternCallback {
 
     static TagVal callback(rtprop_callback *self, unsigned age)
     {
-        py_object v(throw_if_not(PyObject_GetAttr(self->obj, self->fieldname)));
+        auto v = pyobj_checked(PyObject_GetAttr(self->obj, self->fieldname));
         if (!is_rtval(v))
             return TagVal::from_py(v);
         auto rv = (RuntimeValue*)v.get();
@@ -298,10 +296,10 @@ PyTypeObject rtprop_callback::Type = {
     .tp_str = [] (PyObject *py_self) {
         return py_catch_error([&] {
             auto self = (rtprop_callback*)py_self;
-            py_object name(throw_if_not(PyUnicode_Substring(self->fieldname,
-                                                            rtprop_prefix_len,
-                                                            PY_SSIZE_T_MAX)));
-            return PyUnicode_FromFormat("<RTProp %U for %S>", name.get(), self->obj);
+            return PyUnicode_FromFormat(
+                "<RTProp %U for %S>",
+                pyobj_checked(PyUnicode_Substring(self->fieldname, rtprop_prefix_len,
+                                                  PY_SSIZE_T_MAX)).get(), self->obj);
         });
     },
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
@@ -330,8 +328,9 @@ struct RTProp {
         if (auto res = PyObject_GetAttr(obj, fieldname))
             return res;
         PyErr_Clear();
-        py_object cb(rtprop_callback::alloc(obj, fieldname));
-        py_object val((PyObject*)new_extern_age(cb.get(), (PyObject*)&PyFloat_Type));
+        py_object val((PyObject*)new_extern_age(
+                          py_object(rtprop_callback::alloc(obj, fieldname)).get(),
+                          (PyObject*)&PyFloat_Type));
         throw_if(PyObject_SetAttr(obj, fieldname, val));
         return val.release();
     }

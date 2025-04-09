@@ -402,11 +402,20 @@ struct PyDeleter {
 struct py_object : std::unique_ptr<PyObject,PyDeleter> {
     using std::unique_ptr<PyObject,PyDeleter>::unique_ptr;
     operator PyObject*() { return this->get(); };
+    void reset_checked(PyObject *obj, auto&&... args)
+    {
+        reset(throw_if_not(obj, args...));
+    }
     void set_obj(PyObject *p)
     {
         reset(py_newref(p));
     }
 };
+
+static inline py_object pyobj_checked(PyObject *obj)
+{
+    return py_object(throw_if_not(obj));
+}
 
 extern PyObject *pyfloat_m1;
 extern PyObject *pyfloat_m0_5;
@@ -491,6 +500,12 @@ pyunicode_from_string(const char *str)
     return throw_if_not(PyUnicode_FromString(str));
 }
 
+__attribute__((returns_nonnull)) static inline PyObject*
+pyobject_str(PyObject *obj)
+{
+    return throw_if_not(PyObject_Str(obj));
+}
+
 template<size_t N>
 struct str_literal {
     constexpr str_literal(const char (&str)[N])
@@ -528,6 +543,10 @@ struct py_stringio {
     py_stringio &operator=(const py_stringio&) = delete;
 
     void write(PyObject*);
+    void write_str(PyObject *obj)
+    {
+        write(py_object(pyobject_str(obj)));
+    }
     void write_ascii(const char *s, ssize_t len);
     void write_ascii(const char *s)
     {

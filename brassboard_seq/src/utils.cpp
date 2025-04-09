@@ -234,8 +234,7 @@ static PyObject *_pydict_deepcopy(PyObject *d)
             throw_if(PyDict_SetItem(res.get(), key, value));
             continue;
         }
-        py_object new_value(_pydict_deepcopy(value));
-        throw_if(PyDict_SetItem(res.get(), key, new_value.get()));
+        throw_if(PyDict_SetItem(res.get(), key, py_object(_pydict_deepcopy(value)).get()));
     }
     return res.release();
 }
@@ -249,8 +248,8 @@ PyObject *pydict_deepcopy(PyObject *d)
 
 void pytype_add_method(PyTypeObject *type, PyMethodDef *meth)
 {
-    py_object descr(throw_if_not(PyDescr_NewMethod(type, meth)));
-    throw_if(PyDict_SetItemString(type->tp_dict, meth->ml_name, descr));
+    throw_if(PyDict_SetItemString(type->tp_dict, meth->ml_name,
+                                  pyobj_checked(PyDescr_NewMethod(type, meth)).get()));
 }
 
 __attribute__((visibility("protected")))
@@ -378,7 +377,7 @@ PyObject *py_stringio::getvalue()
 
 py_object channel_name_from_path(PyObject *path)
 {
-    return py_object(throw_if_not(PyUnicode_Join("/"_py, path)));
+    return pyobj_checked(PyUnicode_Join("/"_py, path));
 }
 
 std::streamsize buff_streambuf::xsputn(const char *s, std::streamsize count)

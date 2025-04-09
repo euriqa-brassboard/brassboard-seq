@@ -183,11 +183,10 @@ static inline void print_scalar(py_stringio &io, PyObject *obj, int indent, int 
         return print_string(io, obj, indent, cur_indent);
     if (PyDict_Check(obj))
         return print_dict(io, obj, indent, cur_indent);
-    py_object s(throw_if_not(PyObject_Str(obj)));
     if (PyArray_IsPythonNumber(obj) || PyArray_IsScalar(obj, Number))
-        return io.write(s);
+        return io.write_str(obj);
     io.write_ascii("<unknown object ");
-    io.write(s);
+    io.write_str(obj);
     io.write_ascii(">");
 }
 
@@ -270,7 +269,7 @@ static inline void print_array_iter(py_stringio &io, auto &&iter,
             strary.push_back(std::move(s));
         }
         else if (PyArray_IsPythonNumber(v) || PyArray_IsScalar(v, Number)) {
-            strary.emplace_back(throw_if_not(PyObject_Str(v)));
+            strary.emplace_back(pyobject_str(v));
         }
         else if (PyDict_Check(v) && PyDict_GET_SIZE(v) == 0) {
             strary.emplace_back(py_newref("{}"_py));
@@ -299,8 +298,8 @@ static inline void print_array_numpy(py_stringio &io, PyArrayObject *ary,
     auto sz = PyArray_DIM(ary, 0);
     auto elsz = PyArray_ITEMSIZE(ary);
     for (int i = 0; i < sz; i++) {
-        py_object ele(throw_if_not(PyArray_GETITEM(ary, data + i * elsz)));
-        strary.emplace_back(throw_if_not(PyObject_Str(ele)));
+        strary.emplace_back(pyobject_str(
+                                pyobj_checked(PyArray_GETITEM(ary, data + i * elsz))));
     }
     print_array_str(io, strary, true, indent, cur_indent);
 }

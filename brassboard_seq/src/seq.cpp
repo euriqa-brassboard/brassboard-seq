@@ -154,8 +154,7 @@ add_custom_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *c
         PyObject *callargs[nargs + 1] = { o };
         for (auto i = 0; i < nargs; i++)
             callargs[i + 1] = args[i];
-        py_object res(throw_if_not(PyObject_VectorcallDict(cb, callargs,
-                                                           nargs + 1, kwargs)));
+        pyobj_checked(PyObject_VectorcallDict(cb, callargs, nargs + 1, kwargs));
     }
     pylist_append(self->sub_seqs, o);
     return (SubSeq*)o.release();
@@ -255,12 +254,12 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
     auto tuple_nargs = nargs - nargs_min;
     auto get_args_tuple = [&] {
         if (tuple_nargs == 0)
-            return py_newref(empty_tuple);
+            return py_object(py_newref(empty_tuple));
         auto res = pytuple_new(tuple_nargs);
         auto *tuple_args = args + nargs_min;
         for (auto i = 0; i < tuple_nargs; i++)
             PyTuple_SET_ITEM(res, i, py_newref(tuple_args[i]));
-        return res;
+        return py_object(res);
     };
 
     py_object kws;
@@ -279,20 +278,18 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
                                          kws.get());
     }
     else if (kws) {
-        py_object arg_tuple(get_args_tuple());
         return PyErr_Format(PyExc_ValueError,
                             "Unexpected arguments when creating new time step, %S, %S.",
-                            arg_tuple.get(), kws.get());
+                            get_args_tuple().get(), kws.get());
     }
     else if (tuple_nargs == 0) {
         res = (PyObject*)add_time_step<TimeStep>(
             subseq, cond, (EventTime*)start_time.get(), first_arg);
     }
     else {
-        py_object arg_tuple(get_args_tuple());
         return PyErr_Format(PyExc_ValueError,
                             "Unexpected arguments when creating new time step, %S.",
-                            arg_tuple.get());
+                            get_args_tuple().get());
     }
     if (type == AddStepType::Step)
         pyassign(pyx_fld(subseq, end_time), ((TimeSeq*)res)->end_time);
@@ -321,10 +318,9 @@ timestep_set(auto *self, PyObject *chn, PyObject *value, PyObject *cond,
         self->actions.resize(cid + 1);
     }
     else if (self->actions[cid]) {
-        auto name = channel_name_from_id(seqinfo, cid);
         py_throw_format(PyExc_ValueError,
                         "Multiple actions added for the same channel "
-                        "at the same time on %U.", name.get());
+                        "at the same time on %U.", channel_name_from_id(seqinfo, cid).get());
     }
     auto aid = seqinfo->action_counter;
     auto action = seqinfo->action_alloc.alloc(value, cond, is_pulse, exact_time,

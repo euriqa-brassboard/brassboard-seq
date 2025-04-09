@@ -2870,7 +2870,7 @@ struct PulseCompilerGen: SyncChannelGen {
                                 cubic_spline_t phase, output_flags_t flags)
         {
             py_object td(pytype_genericalloc(ToneData));
-            py_object td_dict(throw_if_not(PyObject_GenericGetDict(td, nullptr)));
+            auto td_dict = pyobj_checked(PyObject_GenericGetDict(td, nullptr));
             for (auto [key, value]: tonedata_fields)
                 dict_setitem(td_dict, key, value);
             static_assert(_pylong_cache_max >= 32);
@@ -2967,18 +2967,16 @@ Generator *new_pulse_compiler_generator()
 
 PulseCompilerGen::Info::Info()
 {
-    py_object tonedata_mod(
-        throw_if_not(PyImport_ImportModule("pulsecompiler.rfsoc.tones.tonedata")));
+    auto tonedata_mod =
+        pyobj_checked(PyImport_ImportModule("pulsecompiler.rfsoc.tones.tonedata"));
     ToneData = throw_if_not(PyObject_GetAttrString(tonedata_mod, "ToneData"));
-    py_object splines_mod(
-        throw_if_not(PyImport_ImportModule("pulsecompiler.rfsoc.structures.splines")));
+    auto splines_mod =
+        pyobj_checked(PyImport_ImportModule("pulsecompiler.rfsoc.structures.splines"));
     CubicSpline = throw_if_not(PyObject_GetAttrString(splines_mod, "CubicSpline"));
     cubic_0 = _new_cubic_spline({0, 0, 0, 0});
-    py_object pulse_mod(throw_if_not(PyImport_ImportModule("qiskit.pulse")));
-    py_object ControlChannel(throw_if_not(PyObject_GetAttrString(pulse_mod,
-                                                                 "ControlChannel")));
-    py_object DriveChannel(throw_if_not(PyObject_GetAttrString(pulse_mod,
-                                                               "DriveChannel")));
+    auto pulse_mod = pyobj_checked(PyImport_ImportModule("qiskit.pulse"));
+    auto ControlChannel = pyobj_checked(PyObject_GetAttrString(pulse_mod, "ControlChannel"));
+    auto DriveChannel = pyobj_checked(PyObject_GetAttrString(pulse_mod, "DriveChannel"));
 
     static_assert(_pylong_cache_max >= 64);
     PyObject *py_nums[64];
@@ -2993,8 +2991,7 @@ PulseCompilerGen::Info::Info()
         channel_list[i + 2] = throw_if_not(
             PyObject_Vectorcall(DriveChannel, &py_nums[i], 1, nullptr));
 
-    py_object orig_post_init(
-        throw_if_not(PyObject_GetAttrString(ToneData, "__post_init__")));
+    auto orig_post_init = pyobj_checked(PyObject_GetAttrString(ToneData, "__post_init__"));
     auto dummy_post_init_cb = [] (PyObject*, PyObject *const*, Py_ssize_t) {
         return py_immref(Py_None);
     };
@@ -3003,10 +3000,9 @@ PulseCompilerGen::Info::Info()
         METH_FASTCALL, 0};
     py_object dummy_post_init(PyCFunction_New(&dummy_post_init_method, nullptr));
     throw_if(PyObject_SetAttrString(ToneData, "__post_init__", dummy_post_init));
-    py_object dummy_tonedata(
-        throw_if_not(PyObject_Vectorcall(ToneData, py_nums, 6, nullptr)));
+    auto dummy_tonedata = pyobj_checked(PyObject_Vectorcall(ToneData, py_nums, 6, nullptr));
     throw_if(PyObject_SetAttrString(ToneData, "__post_init__", orig_post_init));
-    py_object td_dict(throw_if_not(PyObject_GenericGetDict(dummy_tonedata, nullptr)));
+    auto td_dict = pyobj_checked(PyObject_GenericGetDict(dummy_tonedata, nullptr));
     for (auto [key, value]: pydict_iter(td_dict)) {
         for (auto name: {"channel", "tone", "duration_cycles", "frequency_hz",
                 "amplitude", "phase_rad", "frame_rotation_rad", "wait_trigger",
@@ -3792,7 +3788,7 @@ struct Jaqalv1_3StreamGen: Jaqalv1_3Generator {
         auto &insts = board_insts[n];
         auto ninsts = insts.size();
         static constexpr auto instsz = sizeof(JaqalInst);
-        py_object res(throw_if_not(PyBytes_FromStringAndSize(nullptr, ninsts * instsz)));
+        auto res = pyobj_checked(PyBytes_FromStringAndSize(nullptr, ninsts * instsz));
         auto ptr = PyBytes_AS_STRING(res.get());
         for (size_t i = 0; i < ninsts; i++)
             memcpy(&ptr[i * instsz], &insts[i].inst, instsz);
@@ -4445,9 +4441,8 @@ void gen_rfsoc_data(auto *rb, backend::CompiledSeq &cseq,
                 double prev_v = eval_ramp(0);
                 bb_debug("Use ramp function provided segments on %s spline: "
                          "old cycle:%" PRId64 "\n", param_name(param), cur_cycle);
-                while (PyObject *_item = PyIter_Next(iter.get())) {
-                    py_object item(_item);
-                    double t = PyFloat_AsDouble(item.get());
+                while (PyObject *item = PyIter_Next(iter.get())) {
+                    double t = PyFloat_AsDouble(py_object(item).get());
                     if (!(t > prev_t)) [[unlikely]] {
                         if (!PyErr_Occurred()) {
                             if (t < 0) {
