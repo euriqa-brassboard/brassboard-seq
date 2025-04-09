@@ -17,14 +17,10 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.rtval cimport new_const
 
 # Manually set the field since I can't make cython automatically do this
 # without also declaring the c struct again...
 globals()['EventTime'] = EventTime
 
-cdef object py_time_scale = c_time_scale
-cdef RuntimeValue rt_time_scale = new_const(py_time_scale)
-
 def time_scale():
-    return py_time_scale
+    return <object>py_time_scale()

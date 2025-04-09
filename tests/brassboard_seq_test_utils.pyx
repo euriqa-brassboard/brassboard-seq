@@ -401,7 +401,7 @@ def ramp_runtime_eval(action._RampFunctionBase self, t):
 
 def round_time(v):
     if rtval.is_rtval(v):
-        return event_time.round_time_rt(<rtval.RuntimeValue>v, event_time.rt_time_scale)
+        return event_time.round_time_rt(<rtval.RuntimeValue>v)
     else:
         return event_time.round_time_int(v)
 

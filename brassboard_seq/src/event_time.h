@@ -29,6 +29,9 @@ using brassboard_seq::rtval::RuntimeValue;
 
 static constexpr int64_t time_scale = 1000000000000ll;
 
+// Return borrowed reference
+__attribute__((returns_nonnull)) PyObject *py_time_scale();
+
 enum TimeOrder {
     NoOrder,
     OrderBefore,
@@ -232,12 +235,7 @@ static inline int64_t round_time_int(PyObject *v)
     return round_time_f64(get_value_f64(v, -1));
 }
 
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-round_time_rt(RuntimeValue *v, RuntimeValue *rt_time_scale)
-{
-    py_object scaled_t(rtval::new_expr2(rtval::Mul, v, rt_time_scale));
-    return rtval::rt_round_int64((RuntimeValue*)scaled_t.get());
-}
+__attribute__((returns_nonnull)) RuntimeValue *round_time_rt(RuntimeValue *v);
 
 static inline TimeOrder is_ordered(auto *t1, auto *t2)
 {

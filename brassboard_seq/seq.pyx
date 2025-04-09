@@ -19,7 +19,7 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.action cimport action_str
 from brassboard_seq.event_time cimport round_time_int, round_time_rt, \
-  set_base_int, set_base_rt, rt_time_scale, new_time_manager, \
+  set_base_int, set_base_rt, new_time_manager, \
   _new_time_int, new_round_time
 from brassboard_seq.rtval cimport is_rtval, RuntimeValue
 from brassboard_seq.scan cimport new_param_pack
@@ -33,7 +33,6 @@ cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
     PyObject *timestep_type
     PyObject *subseq_type
     PyObject *condwrapper_type
-    PyObject *_rt_time_scale "brassboard_seq::seq::rt_time_scale"
     void update_timestep(TimeStep) except +
     void update_subseq(SubSeq, ConditionalWrapper, TimeSeq, TimeStep) except +
     void update_conditional(ConditionalWrapper, TimeSeq, TimeStep) except +
@@ -45,7 +44,6 @@ cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
 timestep_type = <PyObject*>TimeStep
 subseq_type = <PyObject*>SubSeq
 condwrapper_type = <PyObject*>ConditionalWrapper
-_rt_time_scale = <PyObject*>rt_time_scale
 
 update_timestep(None)
 update_subseq(None, None, None, None)
@@ -61,8 +59,7 @@ cdef class TimeSeq:
 
     def set_time(self, EventTime time, /, offset=0): # offset in seconds
         if is_rtval(offset):
-            set_base_rt(self.start_time, time,
-                        round_time_rt(<RuntimeValue>offset, rt_time_scale))
+            set_base_rt(self.start_time, time, round_time_rt(<RuntimeValue>offset))
         else:
             set_base_int(self.start_time, time, round_time_int(offset))
         self.seqinfo.bt_tracker.record(event_time_key(<void*>self.start_time))

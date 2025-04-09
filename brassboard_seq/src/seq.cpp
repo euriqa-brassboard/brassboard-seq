@@ -30,7 +30,6 @@ namespace brassboard_seq::seq {
 static PyObject *timestep_type;
 static PyObject *subseq_type;
 static PyObject *condwrapper_type;
-static PyObject *rt_time_scale;
 
 using namespace rtval;
 
@@ -101,8 +100,7 @@ new_round_time(auto self, EventTime *prev, PyObject *offset, PyObject *cond,
                EventTime *wait_for)
 {
     if (is_rtval(offset)) {
-        py_object rt_offset(event_time::round_time_rt(
-                                (RuntimeValue*)offset, (RuntimeValue*)rt_time_scale));
+        py_object rt_offset(event_time::round_time_rt((RuntimeValue*)offset));
         return self->new_rt(prev, (RuntimeValue*)rt_offset.get(), cond, wait_for);
     }
     else {

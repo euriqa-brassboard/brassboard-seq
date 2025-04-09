@@ -64,7 +64,7 @@ cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
 
     int64_t round_time_f64(double v)
     int64_t round_time_int(v) except +
-    RuntimeValue round_time_rt(RuntimeValue, RuntimeValue) except +
+    RuntimeValue round_time_rt(RuntimeValue) except +
 
     enum TimeOrder:
         NoOrder
@@ -94,8 +94,7 @@ cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
         # In particular for our own chain, this is the position we are in
         cdef vector[int] chain_pos
 
-cdef object py_time_scale
-cdef RuntimeValue rt_time_scale
+    PyObject *py_time_scale()
 
 # All values are in units of `1/time_scale` seconds
 cdef inline int set_base_int(EventTime self, EventTime base, int64_t offset) except -1:
@@ -121,7 +120,7 @@ cdef inline EventTime new_round_time(TimeManager self, EventTime prev, offset,
                                      cond, EventTime wait_for):
     if is_rtval(offset):
         return _new_time_rt(self, prev,
-                            round_time_rt(<RuntimeValue>offset, rt_time_scale),
+                            round_time_rt(<RuntimeValue>offset),
                             cond, wait_for)
     else:
         return _new_time_int(self, prev, round_time_int(offset),

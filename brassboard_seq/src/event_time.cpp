@@ -25,6 +25,21 @@
 
 namespace brassboard_seq::event_time {
 
+__attribute__((visibility("protected"),returns_nonnull))
+PyObject *py_time_scale()
+{
+    static PyObject *val = pylong_from_longlong(time_scale);
+    return val;
+}
+
+__attribute__((visibility("protected"),returns_nonnull))
+RuntimeValue *round_time_rt(RuntimeValue *v)
+{
+    static RuntimeValue *rt_scale = rtval::new_const(py_time_scale());
+    py_object scaled_t(rtval::new_expr2(rtval::Mul, v, rt_scale));
+    return rtval::rt_round_int64((RuntimeValue*)scaled_t.get());
+}
+
 static inline bool get_cond_val(PyObject *v, unsigned age)
 {
     if (v == Py_True) [[likely]]
