@@ -18,8 +18,7 @@
 
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.action cimport action_str
-from brassboard_seq.event_time cimport round_time_int, round_time_rt, \
-  set_base_int, set_base_rt, new_time_manager, new_time_int, new_round_time
+from brassboard_seq.event_time cimport new_time_manager, new_time_int, new_round_time
 from brassboard_seq.rtval cimport is_rtval, RuntimeValue
 from brassboard_seq.scan cimport new_param_pack
 from brassboard_seq.utils cimport assert_key, event_time_key, py_stringio, \
@@ -37,6 +36,7 @@ cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
     void update_conditional(ConditionalWrapper, TimeSeq, TimeStep) except +
     int get_channel_id(SeqInfo self, str name) except +
     object combine_cond(object cond1, object new_cond) except +
+    void timeseq_set_time(TimeSeq self, EventTime time, object offset) except +
     SubSeq add_custom_step(SubSeq, object cond, EventTime, object) except +
 
 
@@ -57,11 +57,7 @@ cdef class TimeSeq:
         return get_channel_id(self.seqinfo, name)
 
     def set_time(self, EventTime time, /, offset=0): # offset in seconds
-        if is_rtval(offset):
-            set_base_rt(self.start_time, time, round_time_rt(<RuntimeValue>offset))
-        else:
-            set_base_int(self.start_time, time, round_time_int(offset))
-        self.seqinfo.bt_tracker.record(event_time_key(<void*>self.start_time))
+        timeseq_set_time(self, time, offset)
 
     def rt_assert(self, c, /, str msg="Assertion failed"):
         if is_rtval(c):

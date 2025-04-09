@@ -95,6 +95,16 @@ combine_cond(PyObject *cond1, PyObject *new_cond)
     return res;
 }
 
+static inline void timeseq_set_time(auto self, EventTime *time, PyObject *offset)
+{
+    if (is_rtval(offset))
+        self->start_time->set_base_rt(
+            time, event_time::round_time_rt((RuntimeValue*)offset));
+    else
+        self->start_time->set_base_int(time, event_time::round_time_int(offset));
+    self->seqinfo->bt_tracker.record(event_time_key(self->start_time));
+}
+
 template<typename TimeStep, typename EventTime>
 static inline __attribute__((returns_nonnull)) TimeStep*
 add_time_step(auto self, PyObject *cond, EventTime *start_time, PyObject *length)

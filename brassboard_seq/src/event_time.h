@@ -27,6 +27,7 @@ namespace brassboard_seq::event_time {
 
 using brassboard_seq::rtval::RuntimeValue;
 
+// 1ps for internal time unit
 static constexpr int64_t time_scale = 1000000000000ll;
 
 // Return borrowed reference
@@ -60,6 +61,7 @@ struct EventTimeData {
     int id;
     bool floating: 1;
     bool _is_rt_offset: 1;
+    // ID of the chain this time is part of
     int chain_id: 30;
 private:
     union {
@@ -198,9 +200,32 @@ struct EventTime : PyObject {
     std::shared_ptr<TimeManagerStatus> manager_status;
     EventTime *prev;
     EventTime *wait_for;
+    // If cond is false, this time point is the same as prev
     PyObject *cond;
     EventTimeData data;
+    // The largest index in each chain that we are no earlier than,
+    // In particular for our own chain, this is the position we are in.
     std::vector<int> chain_pos;
+
+    // All values are in units of `1/time_scale` seconds
+    void set_base_int(EventTime *base, int64_t offset)
+    {
+        if (!data.floating)
+            py_throw_format(PyExc_ValueError, "Cannot modify non-floating time");
+        if (offset < 0)
+            py_throw_format(PyExc_ValueError, "Time delay cannot be negative");
+        pyassign(prev, base);
+        data.set_c_offset(offset);
+        data.floating = false;
+    }
+    void set_base_rt(EventTime *base, RuntimeValue *offset)
+    {
+        if (!data.floating)
+            py_throw_format(PyExc_ValueError, "Cannot modify non-floating time");
+        pyassign(prev, base);
+        data.set_rt_offset(offset);
+        data.floating = false;
+    }
 
     static PyTypeObject Type;
     int64_t get_value(int base_id, unsigned age, std::vector<int64_t> &cache);

@@ -182,6 +182,14 @@ cdef extern from *:
     {
         return self->new_rt(prev, offset, cond, wait_for);
     }
+    void event_time_set_base_int(auto self, auto base, int64_t offset)
+    {
+        self->set_base_int(base, offset);
+    }
+    void event_time_set_base_rt(auto self, auto base, auto offset)
+    {
+        self->set_base_rt(base, offset);
+    }
     """
     rtval.TagVal test_callback_extern(TestCallback) except +
     rtval.TagVal test_callback_extern_age(TestCallback, unsigned) except +
@@ -275,6 +283,10 @@ cdef extern from *:
                                      event_time.EventTime prev,
                                      rtval.RuntimeValue offset, object cond,
                                      event_time.EventTime wait_for) except +
+    void event_time_set_base_int(event_time.EventTime self, event_time.EventTime base,
+                                 int64_t offset) except +
+    void event_time_set_base_rt(event_time.EventTime self, event_time.EventTime base,
+                                rtval.RuntimeValue offset) except +
 
 def new_invalid_rtval():
     # This should only happen if something really wrong happens.
@@ -450,9 +462,9 @@ def time_manager_nchain(event_time.TimeManager time_manager):
 
 def event_time_set_base(event_time.EventTime self, event_time.EventTime base, offset):
     if rtval.is_rtval(offset):
-        event_time.set_base_rt(self, base, offset)
+        event_time_set_base_rt(self, base, offset)
     else:
-        event_time.set_base_int(self, base, offset)
+        event_time_set_base_int(self, base, offset)
 
 def event_time_id(event_time.EventTime self):
     return self.data.id

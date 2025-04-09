@@ -27,7 +27,6 @@ from brassboard_seq.utils cimport PyErr_Format, PyExc_ValueError
 
 from cpython cimport PyObject
 
-# 1ps for internal time unit
 cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
     # Cython doesn't seem to allow namespace in the object property
     # for the imported extension class
@@ -50,7 +49,7 @@ cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
     cppclass EventTimeData:
         int id
         bint floating
-        int chain_id # ID of the chain this time is part of
+        int chain_id
         bint is_static()
         int64_t _get_static()
         int64_t get_static()
@@ -93,31 +92,8 @@ cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
         cdef shared_ptr[TimeManagerStatus] manager_status
         cdef EventTime prev
         cdef EventTime wait_for
-        # If cond is false, this time point is the same as prev
         cdef object cond
 
         cdef EventTimeData data
 
-        # The largest index in each chain that we are no earlier than,
-        # In particular for our own chain, this is the position we are in
         cdef vector[int] chain_pos
-
-# All values are in units of `1/time_scale` seconds
-cdef inline int set_base_int(EventTime self, EventTime base, int64_t offset) except -1:
-    if not self.data.floating:
-        PyErr_Format(PyExc_ValueError, "Cannot modify non-floating time")
-    self.prev = base
-    if offset < 0:
-        PyErr_Format(PyExc_ValueError, "Time delay cannot be negative")
-    self.data.set_c_offset(offset)
-    self.data.floating = False
-    return 0
-
-cdef inline int set_base_rt(EventTime self, EventTime base,
-                            RuntimeValue offset) except -1:
-    if not self.data.floating:
-        PyErr_Format(PyExc_ValueError, "Cannot modify non-floating time")
-    self.prev = base
-    self.data.set_rt_offset(offset)
-    self.data.floating = False
-    return 0
