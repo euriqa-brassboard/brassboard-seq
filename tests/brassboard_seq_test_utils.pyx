@@ -170,6 +170,14 @@ cdef extern from *:
     {
         return cseq.total_time;
     }
+    auto _timemanager_finalize(auto *self)
+    {
+        self->finalize();
+    }
+    auto _timemanager_compute_all_times(auto *self, unsigned age)
+    {
+        return self->compute_all_times(age);
+    }
     """
     rtval.TagVal test_callback_extern(TestCallback) except +
     rtval.TagVal test_callback_extern_age(TestCallback, unsigned) except +
@@ -257,6 +265,8 @@ cdef extern from *:
     int64_t compiledseq_get_total_time(backend.CompiledSeq &cseq)
     void py_check_num_arg "brassboard_seq::py_check_num_arg" (
         const char *func_name, ssize_t nfound, ssize_t nmin, ssize_t nmax) except +
+    void _timemanager_finalize(event_time.TimeManager) except +
+    int64_t _timemanager_compute_all_times(event_time.TimeManager, unsigned) except +
 
 def new_invalid_rtval():
     # This should only happen if something really wrong happens.
@@ -403,20 +413,20 @@ def time_manager_new_time(event_time.TimeManager time_manager,
                           bint floating, cond, event_time.EventTime wait_for):
     if rtval.is_rtval(offset):
         assert not floating
-        return time_manager.new_time_rt(prev, offset, cond, wait_for)
+        return event_time._new_time_rt(time_manager, prev, offset, cond, wait_for)
     else:
-        return time_manager.new_time_int(prev, offset, floating, cond, wait_for)
+        return event_time._new_time_int(time_manager, prev, offset, floating, cond, wait_for)
 
 def time_manager_new_round_time(event_time.TimeManager time_manager,
                                 event_time.EventTime prev, offset,
                                 cond, event_time.EventTime wait_for):
-    return time_manager.new_round_time(prev, offset, cond, wait_for)
+    return event_time.new_round_time(time_manager, prev, offset, cond, wait_for)
 
 def time_manager_finalize(event_time.TimeManager time_manager):
-    time_manager.finalize()
+    _timemanager_finalize(time_manager)
 
 def time_manager_compute_all_times(event_time.TimeManager time_manager, unsigned age):
-    max_time = time_manager.compute_all_times(age)
+    max_time = _timemanager_compute_all_times(time_manager, age)
     ntimes = time_manager.time_values.size()
     values = []
     for i in range(ntimes):

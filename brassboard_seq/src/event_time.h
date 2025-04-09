@@ -19,7 +19,7 @@
 #ifndef BRASSBOARD_SEQ_SRC_EVENT_TIME_H
 #define BRASSBOARD_SEQ_SRC_EVENT_TIME_H
 
-#include "utils.h"
+#include "rtval.h"
 
 #include <assert.h>
 
@@ -140,60 +140,81 @@ struct TimeManagerStatus {
     bool finalized;
 };
 
-template<typename EventTime>
-static inline __attribute__((returns_nonnull)) EventTime*
-_new_time_int(auto *self, PyObject *EventTimeType, EventTime *prev,
-              int64_t offset, bool floating, PyObject *cond, EventTime *wait_for)
+struct EventTime;
+
+struct TimeManager : PyObject {
+    std::shared_ptr<TimeManagerStatus> status;
+    PyObject *event_times;
+    std::vector<int64_t> time_values;
+
+    void finalize();
+    int64_t compute_all_times(unsigned age);
+
+    __attribute__((returns_nonnull)) EventTime*
+    new_int(EventTime *prev, int64_t offset, bool floating,
+            PyObject *cond, EventTime *wait_for);
+    __attribute__((returns_nonnull)) EventTime*
+    new_rt(EventTime *prev, RuntimeValue *offset, PyObject *cond, EventTime *wait_for);
+
+    static PyTypeObject Type;
+    static __attribute__((returns_nonnull)) TimeManager *alloc();
+private:
+    void visit_time(EventTime *t, auto &visited);
+};
+
+struct EventTime : PyObject {
+    std::shared_ptr<TimeManagerStatus> manager_status;
+    EventTime *prev;
+    EventTime *wait_for;
+    PyObject *cond;
+    EventTimeData data;
+    std::vector<int> chain_pos;
+
+    static PyTypeObject Type;
+private:
+    void update_chain_pos(EventTime *prev, int nchains);
+    friend class TimeManager;
+};
+
+__attribute__((returns_nonnull)) inline EventTime*
+TimeManager::new_int(EventTime *prev, int64_t offset, bool floating,
+                     PyObject *cond, EventTime *wait_for)
 {
-    auto status = self->status.get();
     if (status->finalized)
         py_throw_format(PyExc_RuntimeError,
                         "Cannot allocate more time: already finalized");
     if (offset < 0)
         py_throw_format(PyExc_ValueError, "Time delay cannot be negative");
-    py_object o(pytype_genericalloc(EventTimeType));
+    py_object o(pytype_genericalloc(&EventTime::Type));
     auto tp = (EventTime*)o.get();
-    new (&tp->manager_status) std::shared_ptr<TimeManagerStatus>(self->status);
+    call_constructor(&tp->manager_status, status);
     auto ntimes = status->ntimes;
-    new (&tp->data) EventTimeData();
+    call_constructor(&tp->data);
     tp->data.set_c_offset(offset);
     tp->data.floating = floating;
     tp->data.id = ntimes;
-    new (&tp->chain_pos) std::vector<int> ();
+    call_constructor(&tp->chain_pos);
     tp->prev = py_newref(prev);
     tp->wait_for = py_newref(wait_for);
     tp->cond = py_newref(cond);
-    pylist_append(self->event_times, o.get());
+    pylist_append(event_times, o.get());
     status->ntimes = ntimes + 1;
     o.release();
     return tp;
 }
 
-template<typename EventTime>
 static inline __attribute__((returns_nonnull)) EventTime*
-_new_time_rt(auto *self, PyObject *EventTimeType, EventTime *prev,
+_new_time_int(TimeManager *self, EventTime *prev, int64_t offset, bool floating,
+              PyObject *cond, EventTime *wait_for)
+{
+    return self->new_int(prev, offset, floating, cond, wait_for);
+}
+
+static inline __attribute__((returns_nonnull)) EventTime*
+_new_time_rt(TimeManager *self, EventTime *prev,
              RuntimeValue *offset, PyObject *cond, EventTime *wait_for)
 {
-    auto status = self->status.get();
-    if (status->finalized)
-        py_throw_format(PyExc_RuntimeError,
-                        "Cannot allocate more time: already finalized");
-    py_object o(pytype_genericalloc(EventTimeType));
-    auto tp = (EventTime*)o.get();
-    new (&tp->manager_status) std::shared_ptr<TimeManagerStatus>(self->status);
-    auto ntimes = status->ntimes;
-    new (&tp->data) EventTimeData();
-    tp->data.set_rt_offset(offset);
-    tp->data.floating = false;
-    tp->data.id = ntimes;
-    new (&tp->chain_pos) std::vector<int> ();
-    tp->prev = py_newref(prev);
-    tp->wait_for = py_newref(wait_for);
-    tp->cond = py_newref(cond);
-    pylist_append(self->event_times, o.get());
-    status->ntimes = ntimes + 1;
-    o.release();
-    return tp;
+    return self->new_rt(prev, offset, cond, wait_for);
 }
 
 static inline int64_t round_time_f64(double v)

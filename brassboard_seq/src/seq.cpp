@@ -27,7 +27,6 @@
 
 namespace brassboard_seq::seq {
 
-static PyObject *event_time_type;
 static PyObject *timestep_type;
 static PyObject *subseq_type;
 static PyObject *condwrapper_type;
@@ -102,16 +101,13 @@ new_round_time(auto self, EventTime *prev, PyObject *offset, PyObject *cond,
                EventTime *wait_for)
 {
     if (is_rtval(offset)) {
-        py_object rt_offset((PyObject*)event_time::round_time_rt(
+        py_object rt_offset(event_time::round_time_rt(
                                 (RuntimeValue*)offset, (RuntimeValue*)rt_time_scale));
-        return event_time::_new_time_rt(self, event_time_type, prev,
-                                        (RuntimeValue*)rt_offset.get(),
-                                        cond, wait_for);
+        return self->new_rt(prev, (RuntimeValue*)rt_offset.get(), cond, wait_for);
     }
     else {
         auto coffset = event_time::round_time_int(offset);
-        return event_time::_new_time_int(self, event_time_type, prev,
-                                         coffset, false, cond, wait_for);
+        return self->new_int(prev, coffset, false, cond, wait_for);
     }
 }
 
@@ -120,8 +116,8 @@ static inline __attribute__((returns_nonnull)) TimeStep*
 add_time_step(auto self, PyObject *cond, EventTime *start_time, PyObject *length)
 {
     auto seqinfo = pyx_fld(self, seqinfo);
-    py_object end_time((PyObject*)new_round_time(seqinfo->time_mgr, start_time, length,
-                                                 cond, (EventTime*)Py_None));
+    py_object end_time(new_round_time(seqinfo->time_mgr, start_time, length,
+                                      cond, (EventTime*)Py_None));
     py_object o(pytype_genericalloc(timestep_type));
     auto step = (TimeStep*)o.get();
     new (&step->actions) std::vector<py_object>();
@@ -230,17 +226,16 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
     using EventTime = std::remove_reference_t<decltype(*pyx_fld(subseq, end_time))>;
     py_object start_time;
     if (type == AddStepType::Background) {
-        start_time.reset(py_newref((PyObject*)pyx_fld(subseq, end_time)));
+        start_time.reset(py_newref(pyx_fld(subseq, end_time)));
     }
     else if (type == AddStepType::Floating) {
         auto time_mgr = pyx_fld(subseq, seqinfo)->time_mgr;
-        auto new_time = event_time::_new_time_int(time_mgr, event_time_type,
-                                                  (EventTime*)Py_None, 0, true, cond,
-                                                  (EventTime*)Py_None);
-        start_time.reset((PyObject*)new_time);
+        auto new_time = time_mgr->new_int((EventTime*)Py_None, 0,
+                                          true, cond, (EventTime*)Py_None);
+        start_time.reset(new_time);
     }
     else if (type == AddStepType::At) {
-        if (args[0] != Py_None && Py_TYPE(args[0]) != (PyTypeObject*)event_time_type)
+        if (args[0] != Py_None && Py_TYPE(args[0]) != &event_time::EventTime::Type)
             return PyErr_Format(PyExc_TypeError,
                                 "Argument 'tp' has incorrect type (expected EventTime, "
                                 "got %.200s)", Py_TYPE(args[0])->tp_name);
@@ -248,7 +243,7 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
     }
     else {
         assert(type == AddStepType::Step);
-        start_time.reset(py_newref((PyObject*)pyx_fld(subseq, end_time)));
+        start_time.reset(py_newref(pyx_fld(subseq, end_time)));
     }
 
     auto tuple_nargs = nargs - nargs_min;

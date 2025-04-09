@@ -19,7 +19,8 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.action cimport action_str
 from brassboard_seq.event_time cimport round_time_int, round_time_rt, \
-  set_base_int, set_base_rt, rt_time_scale, new_time_manager
+  set_base_int, set_base_rt, rt_time_scale, new_time_manager, \
+  _new_time_int, new_round_time
 from brassboard_seq.rtval cimport is_rtval, RuntimeValue
 from brassboard_seq.scan cimport new_param_pack
 from brassboard_seq.utils cimport assert_key, event_time_key, py_stringio, \
@@ -29,7 +30,6 @@ cimport cython
 from cpython cimport PyObject
 
 cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
-    PyObject *event_time_type
     PyObject *timestep_type
     PyObject *subseq_type
     PyObject *condwrapper_type
@@ -42,7 +42,6 @@ cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
     SubSeq add_custom_step(SubSeq, object cond, EventTime, object) except +
 
 
-event_time_type = <PyObject*>EventTime
 timestep_type = <PyObject*>TimeStep
 subseq_type = <PyObject*>SubSeq
 condwrapper_type = <PyObject*>ConditionalWrapper
@@ -194,8 +193,8 @@ cdef class SubSeq(TimeSeq):
         return str(self)
 
 cdef int wait_cond(SubSeq self, length, cond) except -1:
-    self.end_time = self.seqinfo.time_mgr.new_round_time(self.end_time, length,
-                                                         cond, None)
+    self.end_time = new_round_time(self.seqinfo.time_mgr, self.end_time, length,
+                                   cond, None)
     self.seqinfo.bt_tracker.record(event_time_key(<void*>self.end_time))
     return 0
 
@@ -205,8 +204,8 @@ cdef int wait_for_cond(SubSeq self, _tp0, offset, cond) except -1:
         tp0 = <EventTime>_tp0
     else:
         tp0 = (<TimeSeq?>_tp0).end_time
-    self.end_time = self.seqinfo.time_mgr.new_round_time(self.end_time, offset,
-                                                         cond, tp0)
+    self.end_time = new_round_time(self.seqinfo.time_mgr, self.end_time, offset,
+                                   cond, tp0)
     self.seqinfo.bt_tracker.record(event_time_key(<void*>self.end_time))
     return 0
 
@@ -254,7 +253,7 @@ cdef class Seq(SubSeq):
         seqinfo.C = new_param_pack(ParamPack, {}, {}, 'root', None)
         seqinfo.action_counter = 0
         self.seqinfo = seqinfo
-        self.end_time = seqinfo.time_mgr.new_time_int(None, 0, False, True, None)
+        self.end_time = _new_time_int(seqinfo.time_mgr, None, 0, False, True, None)
         self.seqinfo.bt_tracker.record(event_time_key(<void*>self.end_time))
 
     def __str__(self):

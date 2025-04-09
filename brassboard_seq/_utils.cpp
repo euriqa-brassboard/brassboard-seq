@@ -24,6 +24,7 @@
 #include "src/rtprop.h"
 #include "src/rtval.h"
 #include "src/config.h"
+#include "src/event_time.h"
 #include "src/yaml.h"
 
 using namespace brassboard_seq;
@@ -60,6 +61,10 @@ PyInit__utils(void)
                               (PyObject*)&rtval::RuntimeValue::Type);
         pymodule_addobjectref(m, "ExternCallback",
                               (PyObject*)&rtval::ExternCallback::Type);
+        pymodule_addobjectref(m, "TimeManager",
+                              (PyObject*)&event_time::TimeManager::Type);
+        pymodule_addobjectref(m, "EventTime",
+                              (PyObject*)&event_time::EventTime::Type);
         pymodule_addobjectref(m, "Config", (PyObject*)&config::Config::Type);
         pymodule_addobjectref(m, "CompositeRTProp",
                               (PyObject*)&rtprop::CompositeRTProp_Type);

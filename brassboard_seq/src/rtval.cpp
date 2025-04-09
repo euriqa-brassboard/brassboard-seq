@@ -1001,7 +1001,7 @@ PyTypeObject RuntimeValue::Type = {
         {"__round__", (PyCFunction)(void*)rtvalue_round, METH_FASTCALL, 0},
         {0, 0, 0, 0}
     },
-    .tp_init = [] (PyObject *self, PyObject *args, PyObject *kwds) {
+    .tp_init = [] (PyObject*, PyObject*, PyObject*) {
         PyErr_Format(PyExc_TypeError, "RuntimeValue cannot be created directly");
         return -1;
     },

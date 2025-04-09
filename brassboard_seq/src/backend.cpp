@@ -72,7 +72,7 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
                         channel_name_from_path(path).get());
     }
     auto time_mgr = seqinfo->time_mgr;
-    time_mgr->__pyx_vtab->finalize(time_mgr);
+    time_mgr->finalize();
     pyassign(seqinfo->channel_name_map, Py_None); // Free up memory
     auto all_actions = new std::vector<action::Action*>[nchn];
     comp->cseq.all_actions.reset(all_actions);
@@ -174,7 +174,7 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
     auto seqinfo = pyx_fld(seq, seqinfo);
     auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);
     auto time_mgr = seqinfo->time_mgr;
-    comp->cseq.total_time = time_mgr->__pyx_vtab->compute_all_times(time_mgr, age);
+    comp->cseq.total_time = time_mgr->compute_all_times(age);
     for (auto [assert_id, a]: pylist_iter(seqinfo->assertions)) {
         auto c = (RuntimeValue*)PyTuple_GET_ITEM(a, 0);
         rt_eval_throw(c, age, assert_key(assert_id));

@@ -29,6 +29,16 @@ from cpython cimport PyObject
 
 # 1ps for internal time unit
 cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
+    # Cython doesn't seem to allow namespace in the object property
+    # for the imported extension class
+    """
+    using _brassboard_seq_event_time_TimeManager = brassboard_seq::event_time::TimeManager;
+    using _brassboard_seq_event_time_EventTime = brassboard_seq::event_time::EventTime;
+    brassboard_seq::event_time::TimeManager *new_time_manager()
+    {
+        return brassboard_seq::event_time::TimeManager::alloc();
+    }
+    """
     int64_t c_time_scale "brassboard_seq::event_time::time_scale"
     cppclass EventTimeData:
         int id
@@ -47,10 +57,9 @@ cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
         int ntimes
         bint finalized
 
-    EventTime _new_time_int(TimeManager self, object EventTimeType,
-                            EventTime prev, int64_t offset,
+    EventTime _new_time_int(TimeManager self, EventTime prev, int64_t offset,
                             bint floating, object cond, EventTime wait_for) except +
-    EventTime _new_time_rt(TimeManager self, object EventTimeType, EventTime prev,
+    EventTime _new_time_rt(TimeManager self, EventTime prev,
                            RuntimeValue offset, object cond, EventTime wait_for) except +
 
     int64_t round_time_f64(double v)
@@ -65,56 +74,28 @@ cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
 
     TimeOrder is_ordered(EventTime t1, EventTime t2) except +
 
+    ctypedef class brassboard_seq._utils.TimeManager [object _brassboard_seq_event_time_TimeManager]:
+        cdef shared_ptr[TimeManagerStatus] status
+        cdef list event_times
+        cdef vector[int64_t] time_values
+
+    TimeManager new_time_manager "new_time_manager"()
+
+    ctypedef class brassboard_seq._utils.EventTime [object _brassboard_seq_event_time_EventTime]:
+        cdef shared_ptr[TimeManagerStatus] manager_status
+        cdef EventTime prev
+        cdef EventTime wait_for
+        # If cond is false, this time point is the same as prev
+        cdef object cond
+
+        cdef EventTimeData data
+
+        # The largest index in each chain that we are no earlier than,
+        # In particular for our own chain, this is the position we are in
+        cdef vector[int] chain_pos
+
 cdef object py_time_scale
 cdef RuntimeValue rt_time_scale
-
-cdef class TimeManager:
-    cdef shared_ptr[TimeManagerStatus] status
-    cdef list event_times
-    cdef vector[int64_t] time_values
-
-    cdef inline EventTime new_time_int(self, EventTime prev, int64_t offset,
-                                       bint floating, cond, EventTime wait_for):
-        return _new_time_int(self, EventTime, prev, offset, floating, cond, wait_for)
-
-    cdef inline EventTime new_time_rt(self, EventTime prev, RuntimeValue offset,
-                                      cond, EventTime wait_for):
-        return _new_time_rt(self, EventTime, prev, offset, cond, wait_for)
-
-    cdef inline EventTime new_round_time(self, EventTime prev, offset,
-                                         cond, EventTime wait_for):
-        if is_rtval(offset):
-            return _new_time_rt(self, EventTime, prev,
-                                round_time_rt(<RuntimeValue>offset, rt_time_scale),
-                                cond, wait_for)
-        else:
-            return _new_time_int(self, EventTime, prev, round_time_int(offset),
-                                 False, cond, wait_for)
-
-    cdef int finalize(self) except -1
-    cdef int64_t compute_all_times(self, unsigned age) except -1
-
-cdef inline TimeManager new_time_manager():
-    self = <TimeManager>TimeManager.__new__(TimeManager)
-    self.event_times = []
-    status = new TimeManagerStatus()
-    status.finalized = False
-    status.ntimes = 0
-    self.status.reset(status)
-    return self
-
-cdef class EventTime:
-    cdef shared_ptr[TimeManagerStatus] manager_status
-    cdef EventTime prev
-    cdef EventTime wait_for
-    # If cond is false, this time point is the same as prev
-    cdef object cond
-
-    cdef EventTimeData data
-
-    # The largest index in each chain that we are no earlier than,
-    # In particular for our own chain, this is the position we are in
-    cdef vector[int] chain_pos
 
 # All values are in units of `1/time_scale` seconds
 cdef inline int set_base_int(EventTime self, EventTime base, int64_t offset) except -1:
@@ -135,3 +116,13 @@ cdef inline int set_base_rt(EventTime self, EventTime base,
     self.data.set_rt_offset(offset)
     self.data.floating = False
     return 0
+
+cdef inline EventTime new_round_time(TimeManager self, EventTime prev, offset,
+                                     cond, EventTime wait_for):
+    if is_rtval(offset):
+        return _new_time_rt(self, prev,
+                            round_time_rt(<RuntimeValue>offset, rt_time_scale),
+                            cond, wait_for)
+    else:
+        return _new_time_int(self, prev, round_time_int(offset),
+                             False, cond, wait_for)

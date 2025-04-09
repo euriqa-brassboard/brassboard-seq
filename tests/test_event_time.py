@@ -7,8 +7,6 @@ import pytest
 
 def test_event_time_constructors():
     with pytest.raises(TypeError):
-        event_time.TimeManager()
-    with pytest.raises(TypeError):
         event_time.EventTime()
 
 def test_round_time():

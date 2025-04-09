@@ -276,6 +276,17 @@ set_global_tracker(BacktraceTracker *tracker)
         std::exchange(BacktraceTracker::global_tracker, tracker));
 }
 
+template<typename T, typename ...Args>
+static inline void call_constructor(T *x, Args&&... args)
+{
+    new (x) T(std::forward<Args>(args)...);
+}
+template<typename T>
+static inline void call_destructor(T *x)
+{
+    x->~T();
+}
+
 static inline __attribute__((always_inline,pure))
 uintptr_t event_time_key(void *event_time)
 {
