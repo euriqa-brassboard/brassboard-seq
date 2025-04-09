@@ -128,7 +128,7 @@ PyTypeObject Config::Type = {
     },
     // All fields are containers of immutable types.
     // No reference loop possible.
-    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,
     .tp_methods = (PyMethodDef[]){
         {"add_supported_prefix", (PyCFunction)(void*)add_supported_prefix,
          METH_FASTCALL, 0},
