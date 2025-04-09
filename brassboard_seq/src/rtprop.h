@@ -25,7 +25,6 @@ namespace brassboard_seq::rtprop {
 
 extern PyTypeObject CompositeRTProp_Type;
 extern PyTypeObject RTProp_Type;
-void init();
 
 }
 

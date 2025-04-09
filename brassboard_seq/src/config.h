@@ -36,8 +36,6 @@ private:
     PyObject *_translate_channel(PyObject *path);
 };
 
-void init();
-
 }
 
 #endif

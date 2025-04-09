@@ -149,8 +149,8 @@ PyTypeObject Config::Type = {
     },
 };
 
-__attribute__((visibility("protected")))
-void init()
+__attribute__((constructor))
+static void init()
 {
     throw_if(PyType_Ready(&Config::Type) < 0);
 }

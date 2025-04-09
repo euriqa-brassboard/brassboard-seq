@@ -263,8 +263,8 @@ catch (...) {
     return false;
 }
 
-__attribute__((visibility("protected")))
-void init()
+__attribute__((constructor))
+static void init()
 {
     _import_array();
     throw_if(PyType_Ready(&RuntimeValue::Type) < 0);

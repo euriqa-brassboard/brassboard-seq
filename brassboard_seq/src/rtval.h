@@ -1119,8 +1119,6 @@ struct InterpFunction {
     TagVal call();
 };
 
-void init();
-
 }
 
 #endif
