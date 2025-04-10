@@ -625,13 +625,21 @@ static PyObject *rtvalue_array_ufunc(RuntimeValue *self, PyObject *const *args,
     auto methods = args[1];
     if (PyUnicode_CompareWithASCIIString(methods, "__call__"))
         Py_RETURN_NOTIMPLEMENTED;
-    // Needed for numpy type support
-    if (ufunc == np::add)
+    // numpy type support would dispatch arithmetic operations to this function
+    // so we need to implement the corresponding ufuncs to support these.
+    if (ufunc == np::add) {
+        py_check_num_arg("__array_ufunc__", nargs, 4, 4);
         return build_addsub(args[2], args[3], false);
-    if (ufunc == np::subtract)
+    }
+    if (ufunc == np::subtract) {
+        py_check_num_arg("__array_ufunc__", nargs, 4, 4);
         return build_addsub(args[2], args[3], true);
+    }
     auto uni_expr = [&] (auto type) { return new_expr1(type, self); };
-    auto bin_expr = [&] (auto type) { return new_expr2_wrap1(type, args[2], args[3]); };
+    auto bin_expr = [&] (auto type) {
+        py_check_num_arg("__array_ufunc__", nargs, 4, 4);
+        return new_expr2_wrap1(type, args[2], args[3]);
+    };
     if (ufunc == np::multiply)
         return bin_expr(Mul);
     if (ufunc == np::divide)
@@ -660,10 +668,14 @@ static PyObject *rtvalue_array_ufunc(RuntimeValue *self, PyObject *const *args,
         return bin_expr(CmpEQ);
     if (ufunc == np::not_equal)
         return bin_expr(CmpNE);
-    if (ufunc == np::fmin)
+    if (ufunc == np::fmin) {
+        py_check_num_arg("__array_ufunc__", nargs, 4, 4);
         return args[2] == args[3] ? py_newref(self) : bin_expr(Min);
-    if (ufunc == np::fmax)
+    }
+    if (ufunc == np::fmax) {
+        py_check_num_arg("__array_ufunc__", nargs, 4, 4);
         return args[2] == args[3] ? py_newref(self) : bin_expr(Max);
+    }
     if (ufunc == np::abs)
         return self->type_ == Abs ? py_newref(self) : uni_expr(Abs);
     if (ufunc == np::ceil)

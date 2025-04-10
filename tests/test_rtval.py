@@ -54,6 +54,15 @@ def test_rtval():
         assert v1
 
     with pytest.raises(TypeError):
+        v1.__array_ufunc__()
+    with pytest.raises(TypeError):
+        v1.__array_ufunc__(np.add, '__call__')
+    with pytest.raises(TypeError):
+        v1.__array_ufunc__(np.add, '__call__', 1)
+    with pytest.raises(TypeError):
+        v1.__array_ufunc__(np.add, '__call__', 1, 2, 3)
+
+    with pytest.raises(TypeError):
         np.sum(v1)
     with pytest.raises(TypeError):
         np.sin.at(v1, 0)
