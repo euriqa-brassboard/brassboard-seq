@@ -407,6 +407,7 @@ PyTypeObject RTProp_Type = {
             ((RTProp*)py_self)->set_res(obj, val);
         }
         catch (...) {
+            catch_cxx_error();
             return -1;
         }
         return 0;

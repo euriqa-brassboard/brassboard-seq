@@ -341,10 +341,13 @@ void bb_reraise_and_throw_if(bool cond, uintptr_t key)
     }
 }
 
+void catch_cxx_error();
+
 PyObject *py_catch_error(auto &&cb) try {
     return (PyObject*)cb();
 }
 catch (...) {
+    catch_cxx_error();
     return nullptr;
 }
 

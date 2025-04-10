@@ -201,6 +201,51 @@ void bb_reraise(uintptr_t key)
     throw0();
 }
 
+void catch_cxx_error()
+{
+    if (PyErr_Occurred())
+        return;
+    try {
+        throw;
+    }
+    catch (const std::bad_alloc& exn) {
+        PyErr_SetString(PyExc_MemoryError, exn.what());
+    }
+    catch (const std::bad_cast& exn) {
+        PyErr_SetString(PyExc_TypeError, exn.what());
+    }
+    catch (const std::bad_typeid& exn) {
+        PyErr_SetString(PyExc_TypeError, exn.what());
+    }
+    catch (const std::domain_error& exn) {
+        PyErr_SetString(PyExc_ValueError, exn.what());
+    }
+    catch (const std::invalid_argument& exn) {
+        PyErr_SetString(PyExc_ValueError, exn.what());
+    }
+    catch (const std::ios_base::failure& exn) {
+        PyErr_SetString(PyExc_IOError, exn.what());
+    }
+    catch (const std::out_of_range& exn) {
+        PyErr_SetString(PyExc_IndexError, exn.what());
+    }
+    catch (const std::overflow_error& exn) {
+        PyErr_SetString(PyExc_OverflowError, exn.what());
+    }
+    catch (const std::range_error& exn) {
+        PyErr_SetString(PyExc_ArithmeticError, exn.what());
+    }
+    catch (const std::underflow_error& exn) {
+        PyErr_SetString(PyExc_ArithmeticError, exn.what());
+    }
+    catch (const std::exception& exn) {
+        PyErr_SetString(PyExc_RuntimeError, exn.what());
+    }
+    catch (...) {
+        PyErr_SetString(PyExc_RuntimeError, "Unknown exception");
+    }
+}
+
 // We will leak these objects.
 // Otherwise, the destructor may be called after the libpython is already shut down.
 PyObject *pyfloat_m1(PyFloat_FromDouble(-1));

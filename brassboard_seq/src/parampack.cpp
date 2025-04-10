@@ -161,6 +161,7 @@ parampack_vectorcall(ParamPack *self, PyObject *const *args, size_t _nargs,
     return py_newref((PyObject*)self);
 }
 catch (...) {
+    catch_cxx_error();
     return nullptr;
 }
 
@@ -197,6 +198,7 @@ static PyObject *parampack_new(PyObject*, PyObject *const *args, size_t _nargs,
     return o.release();
 }
 catch (...) {
+    catch_cxx_error();
     return nullptr;
 }
 
@@ -243,6 +245,7 @@ static PySequenceMethods ParamPack_as_sequence = {
             return PyDict_Contains(field, key);
         }
         catch (...) {
+            catch_cxx_error();
             return -1;
         }
     },
@@ -278,6 +281,7 @@ static PyMappingMethods ParamPack_as_mapping = {
             return res.release();
         }
         catch (...) {
+            catch_cxx_error();
             return nullptr;
         }
     },
@@ -349,6 +353,7 @@ PyTypeObject ParamPack::Type = {
             return 0;
         }
         catch (...) {
+            catch_cxx_error();
             return -1;
         }
     },

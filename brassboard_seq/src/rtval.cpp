@@ -729,6 +729,7 @@ static PyObject *rtvalue_array_ufunc(RuntimeValue *self, PyObject *const *args,
     Py_RETURN_NOTIMPLEMENTED;
 }
 catch (...) {
+    catch_cxx_error();
     return nullptr;
 }
 

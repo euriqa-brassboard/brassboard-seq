@@ -284,6 +284,7 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
     return res;
 }
 catch (...) {
+    catch_cxx_error();
     return nullptr;
 }
 
@@ -378,6 +379,7 @@ static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
     return py_newref(py_self);
 }
 catch (...) {
+    catch_cxx_error();
     return nullptr;
 }
 
@@ -397,6 +399,7 @@ static PyObject *condseq_conditional(PyObject *py_self, PyObject *const *args,
     return o;
 }
 catch (...) {
+    catch_cxx_error();
     return nullptr;
 }
 
