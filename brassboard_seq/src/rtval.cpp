@@ -986,8 +986,8 @@ PyTypeObject RuntimeValue::Type = {
             auto typ = pycmp2valcmp(op);
             if (is_rtval(v2)) {
                 if (v1 == v2)
-                    return ((typ == CmpLE || typ == CmpGE || typ == CmpEQ) ?
-                            py_immref(Py_True) : py_immref(Py_False));
+                    return py_immref(typ == CmpLE || typ == CmpGE || typ == CmpEQ ?
+                                     Py_True : Py_False);
                 return new_expr2(typ, v1, v2);
             }
             return new_expr2(typ, v1, py_object(new_const(TagVal::from_py(v2))).get());
@@ -1000,17 +1000,6 @@ PyTypeObject RuntimeValue::Type = {
         {"__floor__", (PyCFunction)(void*)rtvalue_floor, METH_FASTCALL, 0},
         {"__round__", (PyCFunction)(void*)rtvalue_round, METH_FASTCALL, 0},
         {0, 0, 0, 0}
-    },
-    .tp_init = [] (PyObject*, PyObject*, PyObject*) {
-        PyErr_Format(PyExc_TypeError, "RuntimeValue cannot be created directly");
-        return -1;
-    },
-    .tp_new = [] (PyTypeObject *t, PyObject*, PyObject*) -> PyObject* {
-        auto self = (RuntimeValue*)PyType_GenericAlloc(t, 0);
-        self->arg0 = (RuntimeValue*)py_immref(Py_None);
-        self->arg1 = (RuntimeValue*)py_immref(Py_None);
-        self->cb_arg2 = py_immref(Py_None);
-        return self;
     },
 };
 

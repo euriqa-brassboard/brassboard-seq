@@ -193,6 +193,7 @@ cdef extern from *:
     """
     rtval.TagVal test_callback_extern(TestCallback) except +
     rtval.TagVal test_callback_extern_age(TestCallback, unsigned) except +
+    rtval.RuntimeValue _new_invalid_rtval() except +
     vector[int] _get_suffix_array(vector[int])
     vector[int] _get_height_array(vector[int], vector[int])
     cppclass MaxRange:
@@ -293,13 +294,9 @@ def new_invalid_rtval():
     # This should only happen if something really wrong happens.
     # We'll just test that we behave reasonably enough.
     # (it's unavoidable that we'll crash in some cases)
-    rv = <rtval.RuntimeValue>rtval.RuntimeValue.__new__(rtval.RuntimeValue)
-    rv.type_ = <rtval.ValueType>1000
-    rv.datatype = rtval.DataType.Float64
-    rv.age = -1
-    rv.arg0 = rtval.new_const(1)
-    rv.arg1 = rtval.new_const(1)
-    return rv
+    rt = rtval.new_expr2(rtval.ValueType.Add, rtval.new_const(1), rtval.new_const(1))
+    rt.type_ = <rtval.ValueType>1000
+    return rt
 
 cdef class TestCallback(rtval.ExternCallback):
     cdef object cb
