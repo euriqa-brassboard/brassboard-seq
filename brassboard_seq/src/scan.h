@@ -19,24 +19,26 @@
 #ifndef BRASSBOARD_SEQ_SRC_SCAN_H
 #define BRASSBOARD_SEQ_SRC_SCAN_H
 
-#include "Python.h"
-
 #include "utils.h"
 
 namespace brassboard_seq::scan {
 
-template<typename ParamPack>
-static inline __attribute__((returns_nonnull)) ParamPack*
-new_param_pack(PyObject *type, PyObject *values, PyObject *visited,
-               PyObject *fieldname, ParamPack*)
-{
-    auto o = throw_if_not(((PyTypeObject*)type)->tp_alloc((PyTypeObject*)type, 0));
-    auto self = (ParamPack*)o;
-    self->values = py_newref(values);
-    self->visited = py_newref(visited);
-    self->fieldname = py_newref(fieldname);
-    return self;
-}
+struct ParamPack : PyObject {
+    PyObject *values;
+    PyObject *visited;
+    PyObject *fieldname;
+
+    __attribute__((returns_nonnull)) PyObject *ensure_visited();
+    __attribute__((returns_nonnull)) PyObject *ensure_dict();
+    __attribute__((returns_nonnull)) PyObject *get_value();
+    __attribute__((returns_nonnull)) PyObject *get_value_default(PyObject *def_value);
+
+    static ParamPack *new_empty();
+    static PyTypeObject Type;
+};
+
+extern PyMethodDef parampack_get_visited_method;
+extern PyMethodDef parampack_get_param_method;
 
 }
 

@@ -28,8 +28,7 @@ import numpy as np
 
 cimport cython
 
-from cpython cimport PyObject, \
-  PyDict_GetItemWithError, PyDictProxy_New, \
+from cpython cimport PyObject, PyDict_GetItemWithError, \
   PyTuple_GET_SIZE, PyTuple_GET_ITEM, \
   PyList_GET_SIZE, PyList_GET_ITEM, \
   PyUnicode_CompareWithASCIIString, PyObject_GenericGetAttr
@@ -37,117 +36,14 @@ from cpython cimport PyObject, \
 from libcpp.vector cimport vector
 
 cdef extern from "src/scan.cpp" namespace "brassboard_seq::scan":
-    void merge_dict_ovr(object tgt, object src) except +
-    dict ensure_visited(ParamPack self) except +
-    dict ensure_dict(ParamPack self) except +
-    object get_value(ParamPack self) except +
-    object get_value_default(ParamPack self, object) except +
     bint check_field(dict d, tuple path) except +
-    void update_param_pack(object type, ParamPack)
 
-@cython.final
-cdef class ParamPack:
-    def __contains__(self, str key):
-        fieldname = self.fieldname
-        values = self.values
-        cdef PyObject *fieldp = PyDict_GetItemWithError(values, fieldname)
-        if fieldp == NULL:
-            return False
-        field = <object>fieldp
-        if type(field) is not dict:
-            PyErr_Format(PyExc_TypeError, "Scalar value does not have field")
-        return key in <dict>field
+# Manually set the field since I can't make cython automatically do this
+# without also declaring the c struct again...
+globals()['ParamPack'] = ParamPack
 
-    def __getitem__(self, key):
-        if key != slice(None):
-            PyErr_Format(PyExc_ValueError,
-                         "Invalid index for ParamPack: %S", <PyObject*>key)
-        fieldname = self.fieldname
-        values = self.values
-        cdef PyObject *fieldp = PyDict_GetItemWithError(values, fieldname)
-        if fieldp == NULL:
-            return {}
-        field = <object>fieldp
-        if type(field) is not dict:
-            PyErr_Format(PyExc_TypeError, "Cannot access value as parameter pack.")
-        return {k: pydict_deepcopy(v) for k, v in (<dict>field).items()}
-
-    def __getattribute__(self, str name):
-        assume_not_none(name)
-        if name.startswith('_'):
-            return PyObject_GenericGetAttr(self, name)
-        return new_param_pack(ParamPack, ensure_dict(self), ensure_visited(self),
-                              name, None)
-
-    def __setattr__(self, str name, value):
-        assume_not_none(name)
-        if name.startswith('_'):
-            # To be consistent with __getattribute__
-            PyErr_Format(PyExc_AttributeError,
-                         "'ParamPack' object has no attribute '%U'", <PyObject*>name)
-        self_values = ensure_dict(self)
-        cdef PyObject *oldvaluep = PyDict_GetItemWithError(self_values, name)
-        if oldvaluep != NULL:
-            was_dict = type(<object>oldvaluep) is dict
-            is_dict = isinstance(value, dict)
-            if was_dict and not is_dict:
-                PyErr_Format(PyExc_TypeError, "Cannot override parameter pack as value")
-            if not was_dict and is_dict:
-                PyErr_Format(PyExc_TypeError, "Cannot override value as parameter pack")
-            if is_dict:
-                merge_dict_ovr(<dict>oldvaluep, <dict>value)
-            else:
-                assume_not_none(self_values)
-                self_values[name] = value
-        else:
-            assume_not_none(self_values)
-            self_values[name] = pydict_deepcopy(value)
-
-    # Methods defined in c++
-    # def __init__(self, *args, **kwargs)
-    # def __call__(self, *args, **kwargs)
-    #   Supported syntax
-    #   () -> get value without default
-    #   (value) -> get value with default
-    #   (*dicts, **kwargs) -> get parameter pack with default
-
-    def __str__(self):
-        fieldname = self.fieldname
-        values = self.values
-        cdef PyObject *fieldp = PyDict_GetItemWithError(values, fieldname)
-        if fieldp == NULL:
-            return '<Undefined>'
-        field = <object>fieldp
-        if type(field) is not dict:
-            return str(field)
-        return yaml_print(field)
-
-    def __repr__(self):
-        return str(self)
-
-update_param_pack(ParamPack, None)
-
-def get_visited(ParamPack self, /):
-    fieldname = self.fieldname
-    visited = self.visited
-    cdef PyObject *resp = PyDict_GetItemWithError(visited, fieldname)
-    if resp != NULL:
-        res = <object>resp
-        if type(res) is dict:
-            return PyDictProxy_New(res)
-        return res
-    if type(self.values.get(fieldname)) is dict:
-        res = {}
-        assume_not_none(visited)
-        visited[fieldname] = res
-        return PyDictProxy_New(res)
-    return False
-
-# Helper function for functions that takes an optional parameter pack
-def get_param(param, /):
-    if param is None:
-        return new_param_pack(ParamPack, {}, {}, 'root', None)
-    return param
+from brassboard_seq._utils import (parampack_get_visited as get_visited,
+                                   parampack_get_param as get_param)
 
 cdef dict _missing_value = {}
 cdef recursive_get(dict d, tuple path):

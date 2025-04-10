@@ -20,7 +20,7 @@
 from brassboard_seq.action cimport action_str
 from brassboard_seq.event_time cimport new_time_manager, new_time_int, new_round_time
 from brassboard_seq.rtval cimport is_rtval, RuntimeValue
-from brassboard_seq.scan cimport new_param_pack
+from brassboard_seq.scan cimport new_empty_param_pack
 from brassboard_seq.utils cimport assert_key, event_time_key, py_stringio, \
   PyErr_Format, PyExc_TypeError
 
@@ -242,7 +242,7 @@ cdef class Seq(SubSeq):
         seqinfo.channel_name_map = {}
         seqinfo.channel_path_map = {}
         seqinfo.channel_paths = []
-        seqinfo.C = new_param_pack(ParamPack, {}, {}, 'root', None)
+        seqinfo.C = new_empty_param_pack()
         seqinfo.action_counter = 0
         self.seqinfo = seqinfo
         self.end_time = new_time_int(seqinfo.time_mgr, None, 0, False, True, None)
