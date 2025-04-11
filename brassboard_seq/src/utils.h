@@ -513,6 +513,12 @@ static inline void pydict_setitem(PyObject *dict, PyObject *key, PyObject *value
 }
 
 __attribute__((returns_nonnull)) static inline PyObject*
+pyset_new(PyObject *iter=nullptr)
+{
+    return throw_if_not(PySet_New(iter));
+}
+
+__attribute__((returns_nonnull)) static inline PyObject*
 pylist_new(Py_ssize_t n)
 {
     return throw_if_not(PyList_New(n));
@@ -522,6 +528,14 @@ __attribute__((returns_nonnull)) static inline PyObject*
 pytuple_new(Py_ssize_t n)
 {
     return throw_if_not(PyTuple_New(n));
+}
+
+extern PyObject *py_empty_bytes;
+
+__attribute__((returns_nonnull)) static inline PyObject*
+pybytes_from_data(const char *data, Py_ssize_t len)
+{
+    return throw_if_not(PyBytes_FromStringAndSize(data, len));
 }
 
 __attribute__((returns_nonnull)) static inline PyObject*
@@ -1035,8 +1049,7 @@ struct Bits {
     }
     PyObject *to_pybytes() const
     {
-        return throw_if_not(PyBytes_FromStringAndSize((const char*)&bits[0],
-                                                      sizeof(bits)));
+        return pybytes_from_data((const char*)&bits[0], sizeof(bits));
     }
     PyObject *to_pylong() const
     {

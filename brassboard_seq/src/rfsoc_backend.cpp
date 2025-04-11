@@ -3748,8 +3748,7 @@ struct Jaqalv1_3StreamGen: Jaqalv1_3Generator {
     {
         if (n < 0 || n >= 4)
             throw std::out_of_range("Board index should be in [0, 3]");
-        static auto empty_bytes = throw_if_not(PyBytes_FromStringAndSize(nullptr, 0));
-        return py_newref(empty_bytes);
+        return py_immref(py_empty_bytes);
     }
 
     __attribute__((returns_nonnull)) PyObject *get_sequence(int n) const
@@ -3759,7 +3758,7 @@ struct Jaqalv1_3StreamGen: Jaqalv1_3Generator {
         auto &insts = board_insts[n];
         auto ninsts = insts.size();
         static constexpr auto instsz = sizeof(JaqalInst);
-        auto res = pyobj_checked(PyBytes_FromStringAndSize(nullptr, ninsts * instsz));
+        py_object res(pybytes_from_data(nullptr, ninsts * instsz));
         auto ptr = PyBytes_AS_STRING(res.get());
         for (size_t i = 0; i < ninsts; i++)
             memcpy(&ptr[i * instsz], &insts[i].inst, instsz);

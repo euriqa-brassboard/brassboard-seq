@@ -140,7 +140,7 @@ PyTypeObject Config::Type = {
             auto self = (Config*)py_self;
             self->channel_alias = pydict_new();
             self->alias_cache = pydict_new();
-            self->supported_prefix = throw_if_not(PySet_New(nullptr));
+            self->supported_prefix = pyset_new();
             return py_self;
         });
     },

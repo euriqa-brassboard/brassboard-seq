@@ -254,6 +254,12 @@ PyObject *pyfloat_0(PyFloat_FromDouble(0));
 PyObject *pyfloat_0_5(PyFloat_FromDouble(0.5));
 PyObject *pyfloat_1(PyFloat_FromDouble(1));
 
+#if PY_VERSION_HEX >= 0x030d0000
+PyObject *py_empty_bytes = Py_GetConstant(Py_CONSTANT_EMPTY_BYTES);
+#else
+PyObject *py_empty_bytes = pybytes_from_data(nullptr, 0);
+#endif
+
 const std::array<PyObject*,_pylong_cache_max * 2> _pylongs_cache = [] {
     std::array<PyObject*,_pylong_cache_max * 2> res;
     for (int i = 0; i < _pylong_cache_max * 2; i++)
@@ -543,7 +549,7 @@ pybytes_streambuf::~pybytes_streambuf()
 __attribute__((returns_nonnull)) PyObject *pybytes_streambuf::get_buf()
 {
     if (!m_buf)
-        return throw_if_not(PyBytes_FromStringAndSize(nullptr, 0));
+        return py_immref(py_empty_bytes);
     auto sz = m_end;
     auto buf = m_buf;
     m_buf = nullptr;
@@ -563,7 +569,7 @@ char *pybytes_streambuf::extend(size_t sz)
     if (oldbase + new_sz <= epptr())
         return &PyBytes_AS_STRING(m_buf)[oldsz];
     if (!m_buf) {
-        m_buf = throw_if_not(PyBytes_FromStringAndSize(nullptr, new_sz));
+        m_buf = pybytes_from_data(nullptr, new_sz);
     }
     else {
         throw_if(_PyBytes_Resize(&m_buf, new_sz));
