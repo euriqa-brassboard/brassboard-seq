@@ -334,21 +334,32 @@ PyObject *PyErr_Format(PyObject *exc, const char *format, auto... args)
 }
 
 static inline __attribute__((always_inline))
-void bb_reraise_and_throw_if(bool cond, uintptr_t key)
+void bb_rethrow_if(bool cond, uintptr_t key)
 {
     if (cond) {
         bb_rethrow(key);
     }
 }
 
-void catch_cxx_error();
+void handle_cxx_exception();
 
-PyObject *py_catch_error(auto &&cb) try {
-    return (PyObject*)cb();
+auto cxx_catch(auto &&cb) try {
+    return cb();
 }
 catch (...) {
-    catch_cxx_error();
-    return nullptr;
+    handle_cxx_exception();
+    using ret_type = std::remove_cvref_t<decltype(cb())>;
+    if constexpr (std::is_pointer_v<ret_type>) {
+        return (ret_type)nullptr;
+    }
+    else {
+        return -1;
+    }
+}
+
+static inline void throw_pyerr(bool cond=true)
+{
+    throw_if(cond && PyErr_Occurred());
 }
 
 [[noreturn]] void py_num_arg_error(const char *func_name, ssize_t nfound,
@@ -415,7 +426,7 @@ struct PyDeleter {
 };
 struct py_object : std::unique_ptr<PyObject,PyDeleter> {
     using std::unique_ptr<PyObject,PyDeleter>::unique_ptr;
-    operator PyObject*() { return this->get(); };
+    template<typename T> operator T*() { return (T*)this->get(); };
     void reset_checked(PyObject *obj, auto&&... args)
     {
         reset(throw_if_not(obj, args...));
@@ -494,6 +505,11 @@ __attribute__((returns_nonnull)) static inline PyObject*
 pydict_new()
 {
     return throw_if_not(PyDict_New());
+}
+
+static inline void pydict_setitem(PyObject *dict, PyObject *key, PyObject *value)
+{
+    throw_if(PyDict_SetItem(dict, key, value));
 }
 
 __attribute__((returns_nonnull)) static inline PyObject*
@@ -763,6 +779,12 @@ __attribute__((returns_nonnull)) static inline PyObject*
 pytype_genericalloc(auto *ty, Py_ssize_t sz=0)
 {
     return throw_if_not(PyType_GenericAlloc((PyTypeObject*)ty, sz));
+}
+
+__attribute__((returns_nonnull)) static inline PyObject*
+pyobj_veccall(PyObject *obj, PyObject *const *args, size_t nargsf, PyObject *kwnames=nullptr)
+{
+    return throw_if_not(PyObject_Vectorcall(obj, args, nargsf, kwnames));
 }
 
 static inline bool py_issubtype_nontrivial(auto *a, auto *b)

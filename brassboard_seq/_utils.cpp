@@ -55,7 +55,7 @@ static void pymodule_addobjectref(PyObject *m, const char *name, PyObject *value
 PyMODINIT_FUNC
 PyInit__utils(void)
 {
-    return py_catch_error([&] {
+    return cxx_catch([&] {
         py_object yaml_sprint(PyCFunction_NewEx(&yaml::sprint_method, nullptr,
                                                 "brassboard_seq.yaml"_py));
         py_object parampack_get_visited(PyCFunction_NewEx(
@@ -78,9 +78,9 @@ PyInit__utils(void)
                               (PyObject*)&rtprop::CompositeRTProp_Type);
         pymodule_addobjectref(m, "RTProp", (PyObject*)&rtprop::RTProp_Type);
         pymodule_addobjectref(m, "ParamPack", (PyObject*)&scan::ParamPack::Type);
-        pymodule_addobjectref(m, "parampack_get_visited", parampack_get_visited.get());
-        pymodule_addobjectref(m, "parampack_get_param", parampack_get_param.get());
-        pymodule_addobjectref(m, "yaml_sprint", yaml_sprint.get());
+        pymodule_addobjectref(m, "parampack_get_visited", parampack_get_visited);
+        pymodule_addobjectref(m, "parampack_get_param", parampack_get_param);
+        pymodule_addobjectref(m, "yaml_sprint", yaml_sprint);
         return m.release();
     });
 }

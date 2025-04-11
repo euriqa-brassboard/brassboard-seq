@@ -28,7 +28,7 @@ static inline bool check_field(PyObject *d, PyObject *path)
     for (auto [_, name]: pytuple_iter(path)) {
         auto vp = PyDict_GetItemWithError(d, name);
         if (!vp) {
-            throw_if(PyErr_Occurred());
+            throw_pyerr();
             return false;
         }
         if (!PyDict_CheckExact(vp))

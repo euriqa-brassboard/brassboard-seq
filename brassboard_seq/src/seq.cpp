@@ -39,20 +39,20 @@ static inline int get_channel_id(auto self, PyObject *name)
     auto channel_name_map = self->channel_name_map;
     if (auto chn = PyDict_GetItemWithError(channel_name_map, name)) [[likely]]
         return PyLong_AsLong(chn);
-    throw_if(PyErr_Occurred());
+    throw_pyerr();
     py_object path(self->config->translate_channel(name));
     auto channel_path_map = self->channel_path_map;
     if (auto chn = PyDict_GetItemWithError(channel_path_map, path)) {
-        throw_if(PyDict_SetItem(channel_name_map, name, chn));
+        pydict_setitem(channel_name_map, name, chn);
         return PyLong_AsLong(chn);
     }
-    throw_if(PyErr_Occurred());
+    throw_pyerr();
     auto channel_paths = self->channel_paths;
     int cid = PyList_GET_SIZE(channel_paths);
     pylist_append(channel_paths, path);
     py_object pycid(pylong_from_long(cid));
-    throw_if(PyDict_SetItem(channel_path_map, path, pycid));
-    throw_if(PyDict_SetItem(channel_name_map, name, pycid));
+    pydict_setitem(channel_path_map, path, pycid);
+    pydict_setitem(channel_name_map, name, pycid);
     return cid;
 }
 
@@ -113,7 +113,7 @@ add_time_step(auto self, PyObject *cond, EventTime *start_time, PyObject *length
     py_object end_time(seqinfo->time_mgr->new_round(start_time, length,
                                                     cond, (EventTime*)Py_None));
     py_object o(pytype_genericalloc(timestep_type));
-    auto step = (TimeStep*)o.get();
+    auto step = (TimeStep*)o;
     new (&step->actions) std::vector<py_object>();
     pyx_fld(step, seqinfo) = py_newref(seqinfo);
     pyx_fld(step, start_time) = py_newref(start_time);
@@ -133,7 +133,7 @@ add_custom_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *c
     py_object sub_seqs(pylist_new(0));
     auto seqinfo = pyx_fld(self, seqinfo);
     py_object o(pytype_genericalloc(subseq_type));
-    auto subseq = (SubSeq*)o.get();
+    auto subseq = (SubSeq*)o;
     pyx_fld(subseq, seqinfo) = py_newref(seqinfo);
     pyx_fld(subseq, start_time) = py_newref(start_time);
     pyx_fld(subseq, end_time) = py_newref(start_time);
@@ -255,15 +255,14 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
         kws.reset(pydict_new());
         auto kwvalues = args + nargs;
         for (auto [i, name]: pytuple_iter(kwnames)) {
-            throw_if(PyDict_SetItem(kws, name, kwvalues[i]));
+            pydict_setitem(kws, name, kwvalues[i]);
         }
     }
 
     PyObject *res;
     if (Py_TYPE(first_arg)->tp_call) {
-        res = (PyObject*)add_custom_step(subseq, cond, (EventTime*)start_time.get(),
-                                         first_arg, tuple_nargs, args + nargs_min,
-                                         kws.get());
+        res = (PyObject*)add_custom_step(subseq, cond, (EventTime*)start_time,
+                                         first_arg, tuple_nargs, args + nargs_min, kws);
     }
     else if (kws) {
         return PyErr_Format(PyExc_ValueError,
@@ -271,8 +270,8 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
                             get_args_tuple().get(), kws.get());
     }
     else if (tuple_nargs == 0) {
-        res = (PyObject*)add_time_step<TimeStep>(
-            subseq, cond, (EventTime*)start_time.get(), first_arg);
+        res = (PyObject*)add_time_step<TimeStep>(subseq, cond, (EventTime*)start_time,
+                                                 first_arg);
     }
     else {
         return PyErr_Format(PyExc_ValueError,
@@ -284,7 +283,7 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
     return res;
 }
 catch (...) {
-    catch_cxx_error();
+    handle_cxx_exception();
     return nullptr;
 }
 
@@ -364,7 +363,7 @@ static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
             else {
                 if (!kws)
                     kws.reset(pydict_new());
-                throw_if(PyDict_SetItem(kws, name, value));
+                pydict_setitem(kws, name, value);
             }
         }
     }
@@ -379,7 +378,7 @@ static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
     return py_newref(py_self);
 }
 catch (...) {
-    catch_cxx_error();
+    handle_cxx_exception();
     return nullptr;
 }
 
@@ -399,7 +398,7 @@ static PyObject *condseq_conditional(PyObject *py_self, PyObject *const *args,
     return o;
 }
 catch (...) {
-    catch_cxx_error();
+    handle_cxx_exception();
     return nullptr;
 }
 

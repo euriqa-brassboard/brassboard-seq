@@ -36,8 +36,8 @@ __attribute__((visibility("protected"),returns_nonnull))
 RuntimeValue *round_time_rt(RuntimeValue *v)
 {
     static RuntimeValue *rt_scale = rtval::new_const(py_time_scale());
-    py_object scaled_t(rtval::new_expr2(rtval::Mul, v, rt_scale));
-    return rtval::rt_round_int64((RuntimeValue*)scaled_t.get());
+    return rtval::rt_round_int64(
+        (RuntimeValue*)py_object(rtval::new_expr2(rtval::Mul, v, rt_scale)));
 }
 
 static inline bool get_cond_val(PyObject *v, unsigned age)
@@ -166,7 +166,7 @@ EventTime *TimeManager::new_rt(EventTime *prev, RuntimeValue *offset,
         py_throw_format(PyExc_RuntimeError,
                         "Cannot allocate more time: already finalized");
     py_object o(pytype_genericalloc(&EventTime::Type));
-    auto tp = (EventTime*)o.get();
+    auto tp = (EventTime*)o;
     call_constructor(&tp->manager_status, status);
     auto ntimes = status->ntimes;
     call_constructor(&tp->data);
@@ -177,7 +177,7 @@ EventTime *TimeManager::new_rt(EventTime *prev, RuntimeValue *offset,
     tp->prev = py_newref(prev);
     tp->wait_for = py_newref(wait_for);
     tp->cond = py_newref(cond);
-    pylist_append(event_times, o.get());
+    pylist_append(event_times, o);
     status->ntimes = ntimes + 1;
     o.release();
     return tp;
@@ -195,7 +195,7 @@ void TimeManager::finalize()
 
     std::unordered_set<int> visited;
     // First, topologically order the times
-    for (auto [i, t]: pylist_iter<EventTime>(old_event_times.get()))
+    for (auto [i, t]: pylist_iter<EventTime>(old_event_times))
         visit_time(t, visited);
 
     std::vector<int> chain_lengths;
@@ -320,7 +320,7 @@ namespace {
 
 static PyObject *eventtime_str(PyObject *py_self)
 {
-    return py_catch_error([&] {
+    return cxx_catch([&] {
         auto self = (EventTime*)py_self;
         if (self->data.floating)
             return py_newref("<floating>"_py);
@@ -427,7 +427,7 @@ static PyNumberMethods EventTime_as_number = {
     .nb_subtract = [] (PyObject *v1, PyObject *v2) {
         auto self = (EventTime*)v1;
         auto other = (EventTime*)v2;
-        return py_catch_error([&] {
+        return cxx_catch([&] {
             if (self->manager_status != other->manager_status)
                 py_throw_format(PyExc_ValueError,
                                 "Cannot take the difference between unrelated times");
@@ -437,7 +437,7 @@ static PyNumberMethods EventTime_as_number = {
             diff->t2 = (EventTime*)py_newref(other);
             diff->in_eval = false;
             diff->fptr = (void*)EventTimeDiff::eval;
-            return rtval::new_extern_age(diff, (PyObject*)&PyFloat_Type);
+            return (PyObject*)rtval::new_extern_age(diff, (PyObject*)&PyFloat_Type);
         });
     },
 };

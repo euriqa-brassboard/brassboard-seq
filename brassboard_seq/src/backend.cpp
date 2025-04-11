@@ -132,14 +132,14 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
                     if (cond == Py_True) {
                         std::swap(value, new_value);
                     }
-                    else if (new_value.get() != value.get()) {
+                    else if (new_value != value) {
                         assert(is_rtval(cond));
                         value.reset(new_select(cond, new_value, value));
                     }
                 }
             }
             last_time = last_is_start ? start_time : get_time(action->end_tid);
-            action->end_val.reset(py_newref(value.get()));
+            action->end_val.set_obj(value.get());
         }
     }
     for (auto [name, backend]: pydict_iter<Backend>(comp->backends)) {
@@ -169,7 +169,7 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
                                              _RampFunctionBase*, Backend*)
 {
     unsigned age = PyLong_AsLong(_age);
-    throw_if(age == (unsigned)-1 && PyErr_Occurred());
+    throw_pyerr(age == (unsigned)-1);
     auto seq = comp->seq;
     auto seqinfo = pyx_fld(seq, seqinfo);
     auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);

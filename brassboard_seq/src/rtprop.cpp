@@ -64,10 +64,10 @@ static inline bool apply_dict_ovr(PyObject *dict, PyObject *k, PyObject *v)
 {
     auto field = PyDict_GetItemWithError(dict, k);
     if (field) {
-        throw_if(PyDict_SetItem(dict, k, py_object(apply_composite_ovr(field, v))));
+        pydict_setitem(dict, k, py_object(apply_composite_ovr(field, v)));
         return true;
     }
-    throw_if(PyErr_Occurred());
+    throw_pyerr();
     return false;
 }
 
@@ -89,7 +89,7 @@ static inline PyObject *apply_composite_ovr(PyObject *val, PyObject *ovr)
             else if (apply_dict_ovr(newval, ik, v)) {
                 continue;
             }
-            throw_if(PyDict_SetItem(newval, k, v));
+            pydict_setitem(newval, k, v);
         }
         return newval.release();
     }
@@ -97,9 +97,9 @@ static inline PyObject *apply_composite_ovr(PyObject *val, PyObject *ovr)
         auto newval = pyobj_checked(PySequence_List(val));
         for (auto [k, v]: pydict_iter(ovr)) {
             // for scangroup support since only string key is supported
-            auto idx = PyLong_AsLong(pyobj_checked(PyNumber_Long(k)).get());
+            auto idx = PyLong_AsLong(pyobj_checked(PyNumber_Long(k)));
             if (idx < 0) {
-                throw_if(PyErr_Occurred());
+                throw_pyerr();
                 py_throw_format(PyExc_IndexError, "list index out of range");
             }
             if (idx >= PyList_GET_SIZE(newval.get()))
@@ -118,7 +118,7 @@ static inline bool _object_compiled(PyObject *obj)
     py_object field(PyObject_GetAttr(obj, "_bb_rt_values"_py));
     if (!field)
         PyErr_Clear();
-    return field.get() == Py_None;
+    return field == Py_None;
 }
 
 struct CompositeRTProp : PyObject {
@@ -136,10 +136,10 @@ struct CompositeRTProp : PyObject {
             return (composite_rtprop_data*)val.release();
         }
         py_object o(pytype_genericalloc(&composite_rtprop_data::Type));
-        auto data = (composite_rtprop_data*)o.get();
+        auto data = (composite_rtprop_data*)o;
         data->ovr = py_immref(Py_None);
         data->cache = py_immref(Py_None);
-        throw_if(PyObject_SetAttr(obj, fieldname, o.get()));
+        throw_if(PyObject_SetAttr(obj, fieldname, o));
         return (composite_rtprop_data*)o.release();
     }
 
@@ -148,7 +148,7 @@ struct CompositeRTProp : PyObject {
         auto data = get_data(obj);
         py_object py_data(data);
         if (!data->filled || (!data->compiled && _object_compiled(obj))) {
-            auto res = throw_if_not(PyObject_Vectorcall(cb, &obj, 1, nullptr));
+            auto res = pyobj_veccall(cb, &obj, 1);
             Py_DECREF(data->cache);
             data->cache = res;
             data->filled = true;
@@ -162,7 +162,7 @@ struct CompositeRTProp : PyObject {
     static PyObject *get_state(CompositeRTProp *self,
                                PyObject *const *args, Py_ssize_t nargs)
     {
-        return py_catch_error([&] {
+        return cxx_catch([&] {
             py_check_num_arg("get_state", nargs, 1, 1);
             auto data = self->get_data(args[0]);
             auto res = py_newref(data->ovr);
@@ -173,7 +173,7 @@ struct CompositeRTProp : PyObject {
     static PyObject *set_state(CompositeRTProp *self,
                                PyObject *const *args, Py_ssize_t nargs)
     {
-        return py_catch_error([&] {
+        return cxx_catch([&] {
             py_check_num_arg("set_state", nargs, 2, 2);
             auto data = self->get_data(args[0]);
             pyassign(data->ovr, args[1]);
@@ -185,7 +185,7 @@ struct CompositeRTProp : PyObject {
     static PyObject *set_name(CompositeRTProp *self,
                               PyObject *const *args, Py_ssize_t nargs)
     {
-        return py_catch_error([&] {
+        return cxx_catch([&] {
             py_check_num_arg("__set_name__", nargs, 2, 2);
             auto fieldname = throw_if_not(PyUnicode_Concat("__CompositeRTProp__"_py, args[1]));
             Py_DECREF(self->fieldname);
@@ -228,7 +228,7 @@ PyTypeObject CompositeRTProp_Type = {
     .tp_descr_get = [] (PyObject *self, PyObject *obj, PyObject*) -> PyObject* {
         if (!obj) [[unlikely]]
             return py_newref(self);
-        return py_catch_error([&] { return ((CompositeRTProp*)self)->get_res(obj); });
+        return cxx_catch([&] { return ((CompositeRTProp*)self)->get_res(obj); });
     },
     .tp_vectorcall = [] (PyObject *type, PyObject *const *args, size_t _nargs,
                          PyObject *kwnames) -> PyObject* {
@@ -237,11 +237,11 @@ PyTypeObject CompositeRTProp_Type = {
             return PyErr_Format(PyExc_TypeError,
                                 "CompositeRTProp.__init__() got an unexpected "
                                 "keyword argument '%U'", PyTuple_GET_ITEM(kwnames, 0));
-        return py_catch_error([&] {
+        return cxx_catch([&] {
             py_check_num_arg("CompositeRTProp.__init__", nargs, 1, 1);
             auto cb = args[0];
             py_object o(pytype_genericalloc(&CompositeRTProp_Type));
-            auto data = (CompositeRTProp*)o.get();
+            auto data = (CompositeRTProp*)o;
             data->fieldname = py_immref(Py_None);
             data->cb = py_newref(cb);
             return o.release();
@@ -263,7 +263,7 @@ struct rtprop_callback : ExternCallback {
         auto v = pyobj_checked(PyObject_GetAttr(self->obj, self->fieldname));
         if (!is_rtval(v))
             return TagVal::from_py(v);
-        auto rv = (RuntimeValue*)v.get();
+        auto rv = (RuntimeValue*)v;
         if (rv->type_ == ExternAge && rv->cb_arg2 == self)
             py_throw_format(PyExc_ValueError, "RT property have not been assigned.");
         rt_eval_cache(rv, age);
@@ -291,7 +291,7 @@ PyTypeObject rtprop_callback::Type = {
         Py_TYPE(py_self)->tp_free(py_self);
     },
     .tp_str = [] (PyObject *py_self) {
-        return py_catch_error([&] {
+        return cxx_catch([&] {
             auto self = (rtprop_callback*)py_self;
             return PyUnicode_FromFormat(
                 "<RTProp %U for %S>",
@@ -343,7 +343,7 @@ struct RTProp : PyObject {
 
     static PyObject *get_state(RTProp *self, PyObject *const *args, Py_ssize_t nargs)
     {
-        return py_catch_error([&] {
+        return cxx_catch([&] {
             py_check_num_arg("get_state", nargs, 1, 1);
             if (auto res = PyObject_GetAttr(args[0], self->fieldname))
                 return res;
@@ -354,7 +354,7 @@ struct RTProp : PyObject {
 
     static PyObject *set_state(RTProp *self, PyObject *const *args, Py_ssize_t nargs)
     {
-        return py_catch_error([&] {
+        return cxx_catch([&] {
             py_check_num_arg("set_state", nargs, 2, 2);
             auto obj = args[0];
             auto val = args[1];
@@ -368,7 +368,7 @@ struct RTProp : PyObject {
 
     static PyObject *set_name(RTProp *self, PyObject *const *args, Py_ssize_t nargs)
     {
-        return py_catch_error([&] {
+        return cxx_catch([&] {
             py_check_num_arg("__set_name__", nargs, 2, 2);
             auto fieldname = throw_if_not(PyUnicode_Concat(RTPROP_PREFIX_STR ""_py, args[1]));
             Py_DECREF(self->fieldname);
@@ -400,14 +400,14 @@ PyTypeObject RTProp_Type = {
     .tp_descr_get = [] (PyObject *py_self, PyObject *obj, PyObject*) {
         if (!obj) [[unlikely]]
             return py_newref(py_self);
-        return py_catch_error([&] { return ((RTProp*)py_self)->get_res(obj); });
+        return cxx_catch([&] { return ((RTProp*)py_self)->get_res(obj); });
     },
     .tp_descr_set = [] (PyObject *py_self, PyObject *obj, PyObject *val) {
         try {
             ((RTProp*)py_self)->set_res(obj, val);
         }
         catch (...) {
-            catch_cxx_error();
+            handle_cxx_exception();
             return -1;
         }
         return 0;
@@ -419,7 +419,7 @@ PyTypeObject RTProp_Type = {
             return PyErr_Format(PyExc_TypeError,
                                 "RTProp.__init__() got an unexpected "
                                 "keyword argument '%U'", PyTuple_GET_ITEM(kwnames, 0));
-        return py_catch_error([&] {
+        return cxx_catch([&] {
             py_check_num_arg("RTProp.__init__", nargs, 0, 0);
             auto self = (RTProp*)pytype_genericalloc(&RTProp_Type);
             self->fieldname = py_immref(Py_None);

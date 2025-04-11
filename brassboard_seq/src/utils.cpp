@@ -201,7 +201,7 @@ void bb_reraise(uintptr_t key)
     throw0();
 }
 
-void catch_cxx_error()
+void handle_cxx_exception()
 {
     if (PyErr_Occurred())
         return;
@@ -276,10 +276,10 @@ static PyObject *_pydict_deepcopy(PyObject *d)
     py_object res(pydict_new());
     for (auto [key, value]: pydict_iter(d)) {
         if (!PyDict_Check(value)) {
-            throw_if(PyDict_SetItem(res.get(), key, value));
+            pydict_setitem(res, key, value);
             continue;
         }
-        throw_if(PyDict_SetItem(res.get(), key, py_object(_pydict_deepcopy(value)).get()));
+        pydict_setitem(res, key, py_object(_pydict_deepcopy(value)));
     }
     return res.release();
 }
@@ -294,7 +294,7 @@ PyObject *pydict_deepcopy(PyObject *d)
 void pytype_add_method(PyTypeObject *type, PyMethodDef *meth)
 {
     throw_if(PyDict_SetItemString(type->tp_dict, meth->ml_name,
-                                  pyobj_checked(PyDescr_NewMethod(type, meth)).get()));
+                                  pyobj_checked(PyDescr_NewMethod(type, meth))));
 }
 
 __attribute__((visibility("protected")))

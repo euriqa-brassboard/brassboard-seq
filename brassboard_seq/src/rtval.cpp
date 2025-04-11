@@ -104,8 +104,8 @@ static PyObject *new_expr2_wrap1(ValueType type, PyObject *arg0, PyObject *arg1)
         }
         rtarg0.reset(py_newref(arg0));
     }
-    auto datatype = binary_return_type(type, ((RuntimeValue*)rtarg0.get())->datatype,
-                                       ((RuntimeValue*)rtarg1.get())->datatype);
+    auto datatype = binary_return_type(type, ((RuntimeValue*)rtarg0)->datatype,
+                                       ((RuntimeValue*)rtarg1)->datatype);
     auto self = (RuntimeValue*)pytype_genericalloc(&RuntimeValue::Type);
     self->datatype = datatype;
     // self->cache_err = EvalError::NoError;
@@ -131,8 +131,8 @@ new_select(RuntimeValue *arg0, PyObject *arg1, PyObject *arg2)
 {
     py_object rtarg1(wrap_rtval(arg1));
     py_object rtarg2(wrap_rtval(arg2));
-    auto datatype = promote_type(((RuntimeValue*)rtarg1.get())->datatype,
-                                 ((RuntimeValue*)rtarg2.get())->datatype);
+    auto datatype = promote_type(((RuntimeValue*)rtarg1)->datatype,
+                                 ((RuntimeValue*)rtarg2)->datatype);
     auto self = (RuntimeValue*)pytype_genericalloc(&RuntimeValue::Type);
     self->datatype = datatype;
     // self->cache_err = EvalError::NoError;
@@ -408,7 +408,7 @@ TagVal TagVal::from_py(PyObject *value)
         return false;
     if (PyLong_Check(value) || is_numpy_int(value)) {
         auto val = PyLong_AsLongLong(value);
-        throw_if(val == -1 && PyErr_Occurred());
+        throw_pyerr(val == -1);
         return TagVal(val);
     }
     return TagVal(brassboard_seq::get_value_f64(value, -1));
@@ -425,8 +425,7 @@ static inline PyObject *new_addsub(TagVal c, RuntimeValue *v, bool s)
 {
     if (c.is_zero() && !s)
         return py_newref(v);
-    return new_expr2(s ? Sub : Add,
-                     (RuntimeValue*)py_object(new_const(c)).get(), v);
+    return new_expr2(s ? Sub : Add, (RuntimeValue*)py_object(new_const(c)), v);
 }
 
 static inline PyObject *build_addsub(PyObject *v0, PyObject *v1, bool issub)
@@ -519,7 +518,7 @@ static inline PyObject *build_addsub(PyObject *v0, PyObject *v1, bool issub)
     else {
         nv.reset(new_expr2(Sub, nv1, nv0));
     }
-    return new_addsub(nc, (RuntimeValue*)nv.get(), ns);
+    return new_addsub(nc, (RuntimeValue*)nv, ns);
 }
 
 namespace np {
@@ -575,26 +574,26 @@ GET_NP(rint);
 
 static PyNumberMethods rtvalue_as_number = {
     .nb_add = [] (PyObject *v1, PyObject *v2) {
-        return py_catch_error([&] { return build_addsub(v1, v2, false); }); },
+        return cxx_catch([&] { return build_addsub(v1, v2, false); }); },
     .nb_subtract = [] (PyObject *v1, PyObject *v2) {
-        return py_catch_error([&] { return build_addsub(v1, v2, true); }); },
+        return cxx_catch([&] { return build_addsub(v1, v2, true); }); },
     .nb_multiply = [] (PyObject *v1, PyObject *v2) {
-        return py_catch_error([&] { return new_expr2_wrap1(Mul, v1, v2); }); },
+        return cxx_catch([&] { return new_expr2_wrap1(Mul, v1, v2); }); },
     .nb_remainder = [] (PyObject *v1, PyObject *v2) {
-        return py_catch_error([&] { return new_expr2_wrap1(Mod, v1, v2); }); },
+        return cxx_catch([&] { return new_expr2_wrap1(Mod, v1, v2); }); },
     .nb_power = [] (PyObject *v1, PyObject *v2, PyObject *v3) {
         if (v3 != Py_None) [[unlikely]]
             Py_RETURN_NOTIMPLEMENTED;
-        return py_catch_error([&] { return new_expr2_wrap1(Pow, v1, v2); });
+        return cxx_catch([&] { return new_expr2_wrap1(Pow, v1, v2); });
     },
     .nb_negative = [] (PyObject *self) {
-        return py_catch_error([&] { return build_addsub(pylong_cached(0), self, true); });
+        return cxx_catch([&] { return build_addsub(pylong_cached(0), self, true); });
     },
     .nb_positive = [] (PyObject *self) { return py_newref(self); },
     .nb_absolute = [] (PyObject *self) {
         if (((RuntimeValue*)self)->type_ == Abs)
             return py_newref(self);
-        return py_catch_error([&] { return new_expr1(Abs, self); });
+        return cxx_catch([&] { return (PyObject*)new_expr1(Abs, self); });
     },
     .nb_bool = [] (PyObject *self) {
         // It's too easy to accidentally use this in control flow/assertion
@@ -602,13 +601,13 @@ static PyNumberMethods rtvalue_as_number = {
         return -1;
     },
     .nb_and = [] (PyObject *v1, PyObject *v2) {
-        return py_catch_error([&] { return new_expr2_wrap1(And, v1, v2); }); },
+        return cxx_catch([&] { return new_expr2_wrap1(And, v1, v2); }); },
     .nb_xor = [] (PyObject *v1, PyObject *v2) {
-        return py_catch_error([&] { return new_expr2_wrap1(Xor, v1, v2); }); },
+        return cxx_catch([&] { return new_expr2_wrap1(Xor, v1, v2); }); },
     .nb_or = [] (PyObject *v1, PyObject *v2) {
-        return py_catch_error([&] { return new_expr2_wrap1(Or, v1, v2); }); },
+        return cxx_catch([&] { return new_expr2_wrap1(Or, v1, v2); }); },
     .nb_true_divide =  [] (PyObject *v1, PyObject *v2) {
-        return py_catch_error([&] { return new_expr2_wrap1(Div, v1, v2); }); },
+        return cxx_catch([&] { return new_expr2_wrap1(Div, v1, v2); }); },
 };
 
 static inline bool is_integer(auto v)
@@ -729,17 +728,17 @@ static PyObject *rtvalue_array_ufunc(RuntimeValue *self, PyObject *const *args,
     Py_RETURN_NOTIMPLEMENTED;
 }
 catch (...) {
-    catch_cxx_error();
+    handle_cxx_exception();
     return nullptr;
 }
 
 static PyObject *rtvalue_eval(RuntimeValue *self,
                               PyObject *const *args, Py_ssize_t nargs)
 {
-    return py_catch_error([&] {
+    return cxx_catch([&] {
         py_check_num_arg("eval", nargs, 1, 1);
         auto age = PyLong_AsLong(args[0]);
-        throw_if(age == -1 && PyErr_Occurred());
+        throw_pyerr(age == -1);
         rt_eval_cache(self, age);
         return rtval_cache(self).to_py();
     });
@@ -748,7 +747,7 @@ static PyObject *rtvalue_eval(RuntimeValue *self,
 static PyObject *rtvalue_ceil(RuntimeValue *self,
                               PyObject *const *args, Py_ssize_t nargs)
 {
-    return py_catch_error([&] {
+    return cxx_catch([&] {
         py_check_num_arg("__ceil__", nargs, 0, 0);
         return is_integer(self) ? py_newref(self) : new_expr1(Ceil, self);
     });
@@ -757,7 +756,7 @@ static PyObject *rtvalue_ceil(RuntimeValue *self,
 static PyObject *rtvalue_floor(RuntimeValue *self,
                                PyObject *const *args, Py_ssize_t nargs)
 {
-    return py_catch_error([&] {
+    return cxx_catch([&] {
         py_check_num_arg("__floor__", nargs, 0, 0);
         return is_integer(self) ? py_newref(self) : new_expr1(Floor, self);
     });
@@ -766,7 +765,7 @@ static PyObject *rtvalue_floor(RuntimeValue *self,
 static PyObject *rtvalue_round(RuntimeValue *self,
                                PyObject *const *args, Py_ssize_t nargs)
 {
-    return py_catch_error([&] {
+    return cxx_catch([&] {
         py_check_num_arg("__round__", nargs, 0, 0);
         return rt_round_int64(self);
     });
@@ -959,7 +958,7 @@ struct rtvalue_printer : py_stringio {
 
 static PyObject *rtvalue_str(PyObject *self)
 {
-    return py_catch_error([&] {
+    return cxx_catch([&] {
         rtvalue_printer io;
         io.show((RuntimeValue*)self);
         return io.getvalue();
@@ -995,7 +994,7 @@ PyTypeObject RuntimeValue::Type = {
         return 0;
     },
     .tp_richcompare = [] (PyObject *v1, PyObject *v2, int op) {
-        return py_catch_error([&] () -> PyObject* {
+        return cxx_catch([&] () -> PyObject* {
             auto typ = pycmp2valcmp(op);
             if (is_rtval(v2)) {
                 if (v1 == v2)
@@ -1003,7 +1002,7 @@ PyTypeObject RuntimeValue::Type = {
                                      Py_True : Py_False);
                 return new_expr2(typ, v1, v2);
             }
-            return new_expr2(typ, v1, py_object(new_const(TagVal::from_py(v2))).get());
+            return new_expr2(typ, v1, py_object(new_const(TagVal::from_py(v2))));
         });
     },
     .tp_methods = (PyMethodDef[]){
@@ -1222,10 +1221,8 @@ InterpFunction::visit_value(RuntimeValue *value, Builder &builder)
     case Arg: {
         auto v = PyLong_AsLong(value->cb_arg2);
         if (v < 0 || v >= builder.nargs) {
-            if (!PyErr_Occurred())
-                PyErr_Format(PyExc_IndexError,
-                             "Argument index out of bound: %ld.", v);
-            throw0();
+            throw_pyerr();
+            py_throw_format(PyExc_IndexError, "Argument index out of bound: %ld.", v);
         }
         info.val.type = builder.types[v];
         info.dynamic = true;

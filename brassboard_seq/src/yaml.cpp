@@ -344,7 +344,7 @@ PyObject *sprint(PyObject *obj, int indent)
 
 static PyObject *py_sprint(PyObject*, PyObject *const *args, Py_ssize_t nargs)
 {
-    return py_catch_error([&] {
+    return cxx_catch([&] {
         py_check_num_arg("sprint", nargs, 1, 2);
         int indent = 0;
         if (nargs >= 2) {
@@ -352,7 +352,7 @@ static PyObject *py_sprint(PyObject*, PyObject *const *args, Py_ssize_t nargs)
                 py_throw_format(PyExc_TypeError, "indent must be integer");
             indent = PyLong_AsLong(args[1]);
             if (indent < 0) {
-                throw_if(PyErr_Occurred());
+                throw_pyerr();
                 py_throw_format(PyExc_TypeError, "indent cannot be negative");
             }
         }

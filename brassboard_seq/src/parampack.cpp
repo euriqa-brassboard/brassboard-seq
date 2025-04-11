@@ -51,12 +51,12 @@ static void set_dict(PyObject *tgt, PyObject *key, PyObject *value)
             merge_dict_into<ovr>(oldv, value);
         }
         else if (ovr) {
-            throw_if(PyDict_SetItem(tgt, key, value));
+            pydict_setitem(tgt, key, value);
         }
     }
     else {
-        throw_if(PyErr_Occurred());
-        throw_if(PyDict_SetItem(tgt, key, py_object(pydict_deepcopy(value)).get()));
+        throw_pyerr();
+        pydict_setitem(tgt, key, py_object(pydict_deepcopy(value)));
     }
 }
 
@@ -77,7 +77,7 @@ static inline __attribute__((returns_nonnull)) PyObject*
 set_new_dict(PyObject *dict, PyObject *fieldname)
 {
     py_object new_item(pydict_new());
-    throw_if(PyDict_SetItem(dict, fieldname, new_item.get()));
+    pydict_setitem(dict, fieldname, new_item);
     return new_item.release();
 }
 
@@ -85,7 +85,7 @@ inline __attribute__((returns_nonnull)) PyObject *ParamPack::ensure_visited()
 {
     if (auto res = PyDict_GetItemWithError(visited, fieldname))
         return py_newref(res);
-    throw_if(PyErr_Occurred());
+    throw_pyerr();
     return set_new_dict(visited, fieldname);
 }
 
@@ -96,7 +96,7 @@ inline __attribute__((returns_nonnull)) PyObject *ParamPack::ensure_dict()
             return py_newref(res);
         py_throw_format(PyExc_TypeError, "Cannot access value as parameter pack.");
     }
-    throw_if(PyErr_Occurred());
+    throw_pyerr();
     return set_new_dict(values, fieldname);
 }
 
@@ -107,7 +107,7 @@ inline __attribute__((returns_nonnull)) PyObject *ParamPack::get_value()
         py_throw_format(PyExc_KeyError, "Value is not assigned");
     if (PyDict_Check(res))
         py_throw_format(PyExc_TypeError, "Cannot get parameter pack as value");
-    throw_if(PyDict_SetItem(visited, fieldname, Py_True));
+    pydict_setitem(visited, fieldname, Py_True);
     return py_newref(res);
 }
 
@@ -117,14 +117,14 @@ ParamPack::get_value_default(PyObject *default_value)
     assert(!PyDict_Check(default_value));
     auto res = PyDict_GetItemWithError(values, fieldname);
     if (!res) {
-        throw_if(PyErr_Occurred());
-        throw_if(PyDict_SetItem(values, fieldname, default_value));
+        throw_pyerr();
+        pydict_setitem(values, fieldname, default_value);
         res = default_value;
     }
     else if (PyDict_Check(res)) {
         py_throw_format(PyExc_TypeError, "Cannot get parameter pack as value");
     }
-    throw_if(PyDict_SetItem(visited, fieldname, Py_True));
+    pydict_setitem(visited, fieldname, Py_True);
     return py_newref(res);
 }
 
@@ -161,7 +161,7 @@ parampack_vectorcall(ParamPack *self, PyObject *const *args, size_t _nargs,
     return py_newref((PyObject*)self);
 }
 catch (...) {
-    catch_cxx_error();
+    handle_cxx_exception();
     return nullptr;
 }
 
@@ -184,7 +184,7 @@ static PyObject *parampack_new(PyObject*, PyObject *const *args, size_t _nargs,
     if (!nargs && !nkws)
         return o.release();
     py_object kwargs(pydict_new());
-    throw_if(PyDict_SetItem(self->values, "root"_py, kwargs.get()));
+    pydict_setitem(self->values, "root"_py, kwargs);
     for (size_t i = 0; i < nargs; i++) {
         auto arg = args[i];
         if (!PyDict_Check(arg))
@@ -198,19 +198,19 @@ static PyObject *parampack_new(PyObject*, PyObject *const *args, size_t _nargs,
     return o.release();
 }
 catch (...) {
-    catch_cxx_error();
+    handle_cxx_exception();
     return nullptr;
 }
 
 static PyObject *parampack_str(PyObject *py_self)
 {
-    return py_catch_error([&] {
+    return cxx_catch([&] {
         auto self = (ParamPack*)py_self;
         auto fieldname = self->fieldname;
         auto values = self->values;
         auto field = PyDict_GetItemWithError(values, fieldname);
         if (!field) {
-            throw_if(PyErr_Occurred());
+            throw_pyerr();
             return py_newref("<Undefined>"_py);
         }
         if (!PyDict_CheckExact(field))
@@ -237,7 +237,7 @@ static PySequenceMethods ParamPack_as_sequence = {
         try {
             PyObject *field = PyDict_GetItemWithError(values, fieldname);
             if (!field) {
-                throw_if(PyErr_Occurred());
+                throw_pyerr();
                 return false;
             }
             if (!PyDict_CheckExact(field))
@@ -245,7 +245,7 @@ static PySequenceMethods ParamPack_as_sequence = {
             return PyDict_Contains(field, key);
         }
         catch (...) {
-            catch_cxx_error();
+            handle_cxx_exception();
             return -1;
         }
     },
@@ -269,19 +269,20 @@ static PyMappingMethods ParamPack_as_mapping = {
         try {
             PyObject *field = PyDict_GetItemWithError(values, fieldname);
             if (!field) {
-                throw_if(PyErr_Occurred());
+                throw_pyerr();
                 return PyDict_New();
             }
             if (!PyDict_CheckExact(field))
                 return PyErr_Format(PyExc_TypeError,
                                     "Cannot access value as parameter pack.");
             py_object res(pydict_new());
+
             for (auto [k, v]: pydict_iter(field))
-                throw_if(PyDict_SetItem(res, k, py_object(pydict_deepcopy(v))));
+                pydict_setitem(res, k, py_object(pydict_deepcopy(v)));
             return res.release();
         }
         catch (...) {
-            catch_cxx_error();
+            handle_cxx_exception();
             return nullptr;
         }
     },
@@ -305,7 +306,7 @@ PyTypeObject ParamPack::Type = {
     .tp_call = PyVectorcall_Call,
     .tp_str = parampack_str,
     .tp_getattro = [] (PyObject *py_self, PyObject *name) {
-        return py_catch_error([&] () -> PyObject* {
+        return cxx_catch([&] () -> PyObject* {
             check_non_empty_string_arg(name, "name");
             if (PyUnicode_READ_CHAR(name, 0) == '_')
                 return PyObject_GenericGetAttr(py_self, name);
@@ -342,18 +343,17 @@ PyTypeObject ParamPack::Type = {
                     merge_dict_ovr(oldvalue, value);
                 }
                 else {
-                    throw_if(PyDict_SetItem(self_values, name, value));
+                    pydict_setitem(self_values, name, value);
                 }
             }
             else {
-                throw_if(PyErr_Occurred());
-                throw_if(PyDict_SetItem(self_values, name,
-                                        py_object(pydict_deepcopy(value))));
+                throw_pyerr();
+                pydict_setitem(self_values, name, py_object(pydict_deepcopy(value)));
             }
             return 0;
         }
         catch (...) {
-            catch_cxx_error();
+            handle_cxx_exception();
             return -1;
         }
     },
@@ -375,7 +375,7 @@ PyTypeObject ParamPack::Type = {
 
 static PyObject *get_visited(PyObject*, PyObject *const *args, Py_ssize_t nargs)
 {
-    return py_catch_error([&] {
+    return cxx_catch([&] {
         py_check_num_arg("get_visited", nargs, 1, 1);
         if (Py_TYPE(args[0]) != &ParamPack::Type)
             py_throw_format(PyExc_TypeError, "Wrong type for ParamPack");
@@ -384,16 +384,16 @@ static PyObject *get_visited(PyObject*, PyObject *const *args, Py_ssize_t nargs)
         auto visited = self->visited;
         if (auto res = PyDict_GetItemWithError(visited, fieldname))
             return py_newref(res);
-        throw_if(PyErr_Occurred());
+        throw_pyerr();
         if (auto value = PyDict_GetItemWithError(self->values, fieldname)) {
             if (PyDict_CheckExact(value)) {
                 py_object res(pydict_new());
-                throw_if(PyDict_SetItem(visited, fieldname, res));
+                pydict_setitem(visited, fieldname, res);
                 return res.release();
             }
         }
         else {
-            throw_if(PyErr_Occurred());
+            throw_pyerr();
         }
         Py_RETURN_FALSE;
     });
@@ -405,7 +405,7 @@ PyMethodDef parampack_get_visited_method ={
 // Helper function for functions that takes an optional parameter pack
 static PyObject *get_param(PyObject*, PyObject *const *args, Py_ssize_t nargs)
 {
-    return py_catch_error([&] () -> PyObject* {
+    return cxx_catch([&] () -> PyObject* {
         py_check_num_arg("get_param", nargs, 1, 1);
         if (args[0] == Py_None)
             return ParamPack::new_empty();

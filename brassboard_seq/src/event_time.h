@@ -42,7 +42,7 @@ static inline int64_t round_time_int(PyObject *v)
 {
     if (Py_TYPE(v) == &PyLong_Type) {
         auto vi = PyLong_AsLongLong(v);
-        throw_if(vi == -1 && PyErr_Occurred());
+        throw_pyerr(vi == -1);
         return vi * time_scale;
     }
     return round_time_f64(get_value_f64(v, -1));
@@ -181,8 +181,8 @@ struct TimeManager : PyObject {
     new_round(EventTime *prev, PyObject *offset, PyObject *cond, EventTime *wait_for)
     {
         if (rtval::is_rtval(offset)) {
-            py_object rt_offset(round_time_rt((RuntimeValue*)offset));
-            return new_rt(prev, (RuntimeValue*)rt_offset.get(), cond, wait_for);
+            return new_rt(prev, (RuntimeValue*)py_object(
+                              round_time_rt((RuntimeValue*)offset)), cond, wait_for);
         }
         else {
             auto coffset = round_time_int(offset);
@@ -244,7 +244,7 @@ TimeManager::new_int(EventTime *prev, int64_t offset, bool floating,
     if (offset < 0)
         py_throw_format(PyExc_ValueError, "Time delay cannot be negative");
     py_object o(pytype_genericalloc(&EventTime::Type));
-    auto tp = (EventTime*)o.get();
+    auto tp = (EventTime*)o;
     call_constructor(&tp->manager_status, status);
     auto ntimes = status->ntimes;
     call_constructor(&tp->data);
@@ -255,7 +255,7 @@ TimeManager::new_int(EventTime *prev, int64_t offset, bool floating,
     tp->prev = py_newref(prev);
     tp->wait_for = py_newref(wait_for);
     tp->cond = py_newref(cond);
-    pylist_append(event_times, o.get());
+    pylist_append(event_times, o);
     status->ntimes = ntimes + 1;
     o.release();
     return tp;
