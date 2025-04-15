@@ -886,11 +886,11 @@ static inline auto generic_alloc(Py_ssize_t sz=0)
 
 template<typename It, typename T>
 struct _iter {
-    explicit _iter(T &obj) : obj(obj) {}
+    explicit _iter(T &&obj) : obj(obj) {}
     auto begin() { return It((PyObject*)obj); };
     auto end() { return It::end((PyObject*)obj); }
 private:
-    T &obj;
+    T obj;
 };
 
 template<typename Value, typename Key>
@@ -921,8 +921,7 @@ private:
 template<typename Value=PyObject, typename Key=PyObject,typename T>
 static inline auto dict_iter(T &&h)
 {
-    using _T = std::remove_cvref_t<T>;
-    return _iter<_dict_iterator<Value,Key>,_T>(h);
+    return _iter<_dict_iterator<Value,Key>,std::remove_cv_t<T>>(std::forward<T>(h));
 }
 
 template<typename Value>
@@ -948,8 +947,7 @@ private:
 template<typename Value=PyObject,typename T>
 static inline auto list_iter(T &&h)
 {
-    using _T = std::remove_cvref_t<T>;
-    return _iter<_list_iterator<Value>,_T>(h);
+    return _iter<_list_iterator<Value>,std::remove_cv_t<T>>(std::forward<T>(h));
 }
 
 template<typename Value>
@@ -975,8 +973,7 @@ private:
 template<typename Value=PyObject,typename T>
 static inline auto tuple_iter(T &&h)
 {
-    using _T = std::remove_cvref_t<T>;
-    return _iter<_tuple_iterator<Value>,_T>(h);
+    return _iter<_tuple_iterator<Value>,std::remove_cv_t<T>>(std::forward<T>(h));
 }
 
 struct _str_iterator {
@@ -1006,8 +1003,7 @@ private:
 template<typename T>
 static inline auto str_iter(T &&h)
 {
-    using _T = std::remove_cvref_t<T>;
-    return _iter<_str_iterator,_T>(h);
+    return _iter<_str_iterator,std::remove_cv_t<T>>(std::forward<T>(h));
 }
 
 }
