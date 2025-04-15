@@ -121,13 +121,14 @@ ParamPack::get_value_default(PyObject *default_value)
 
 static PyObject*
 parampack_vectorcall(ParamPack *self, PyObject *const *args, size_t _nargs,
-                     PyObject *kwnames) try {
+                     PyObject *_kwnames) try {
     // Supported syntax
     // () -> get value without default
     // (value) -> get value with default
     // (*dicts, **kwargs) -> get parameter pack with default
     auto nargs = PyVectorcall_NARGS(_nargs);
-    int nkws = kwnames ? PyTuple_GET_SIZE(kwnames) : 0;
+    auto kwnames = py::tuple(_kwnames);
+    int nkws = kwnames ? kwnames.size() : 0;
     if (nkws == 0) {
         if (nargs == 0)
             return self->get_value();
@@ -148,7 +149,7 @@ parampack_vectorcall(ParamPack *self, PyObject *const *args, size_t _nargs,
     }
     auto kwvalues = args + nargs;
     for (int i = 0; i < nkws; i++)
-        set_dict<false>(self_values, PyTuple_GET_ITEM(kwnames, i), kwvalues[i]);
+        set_dict<false>(self_values, kwnames.get(i), kwvalues[i]);
     return py::newref((PyObject*)self);
 }
 catch (...) {
@@ -164,12 +165,13 @@ static inline py::ref<ParamPack> parampack_alloc()
 }
 
 static PyObject *parampack_new(PyObject*, PyObject *const *args, size_t _nargs,
-                               PyObject *kwnames) try {
+                               PyObject *_kwnames) try {
     auto self = parampack_alloc();
     self->visited = py::new_dict().rel();
     self->fieldname = py::newref("root"_py);
     auto nargs = PyVectorcall_NARGS(_nargs);
-    int nkws = kwnames ? PyTuple_GET_SIZE(kwnames) : 0;
+    auto kwnames = py::tuple(_kwnames);
+    int nkws = kwnames ? kwnames.size() : 0;
     self->values = py::new_dict().rel();
     if (!nargs && !nkws)
         return self.rel();
@@ -184,7 +186,7 @@ static PyObject *parampack_new(PyObject*, PyObject *const *args, size_t _nargs,
     }
     auto kwvalues = args + nargs;
     for (int i = 0; i < nkws; i++)
-        set_dict<false>(kwargs.get(), PyTuple_GET_ITEM(kwnames, i), kwvalues[i]);
+        set_dict<false>(kwargs, kwnames.get(i), kwvalues[i]);
     return self.rel();
 }
 catch (...) {

@@ -231,7 +231,7 @@ void collect_actions(auto *ab, backend::CompiledSeq &cseq)
             if (py_issubtype_nontrivial(Py_TYPE(value), rampfunctionbase_type))
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "TTL Channel cannot be ramped");
-            if (action->cond.get() == Py_False)
+            if (action->cond == Py_False)
                 continue;
             add_action(action, type, ttl_idx);
         }
@@ -248,7 +248,7 @@ void collect_actions(auto *ab, backend::CompiledSeq &cseq)
             if (py_issubtype_nontrivial(Py_TYPE(value), rampfunctionbase_type))
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "DDS Channel cannot be ramped");
-            if (action->cond.get() == Py_False)
+            if (action->cond == Py_False)
                 continue;
             add_action(action, type, dds_idx);
         }
