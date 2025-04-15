@@ -527,6 +527,15 @@ struct common : _common {
         return py::ptr(PyTuple_GET_ITEM((PyObject*)_ptr(), i));
     }
 
+    Py_ssize_t size() const requires std::same_as<T,_bytes>
+    {
+        return PyBytes_GET_SIZE((PyObject*)_ptr());
+    }
+    char *data() requires std::same_as<T,_bytes>
+    {
+        return PyBytes_AS_STRING((PyObject*)_ptr());
+    }
+
     Py_ssize_t size() const requires std::same_as<T,_str>
     {
         return PyUnicode_GET_LENGTH((PyObject*)_ptr());

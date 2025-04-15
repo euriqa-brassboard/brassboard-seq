@@ -574,14 +574,14 @@ char *pybytes_streambuf::extend(size_t sz)
     // overallocate.
     auto new_sz = (oldsz + sz) * 3 / 2;
     if (oldbase + new_sz <= epptr())
-        return &PyBytes_AS_STRING(m_buf.get())[oldsz];
+        return &py::bytes(m_buf).data()[oldsz];
     if (!m_buf) {
         m_buf = py::new_bytes(nullptr, new_sz);
     }
     else {
         throw_if(_PyBytes_Resize(&m_buf._get_ptr_slot(), new_sz));
     }
-    auto buf = PyBytes_AS_STRING(m_buf.get());
+    auto buf = py::bytes(m_buf).data();
     setp(buf, &buf[new_sz]);
     pbump((int)oldsz);
     return &buf[oldsz];

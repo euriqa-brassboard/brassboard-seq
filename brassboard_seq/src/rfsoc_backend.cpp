@@ -3753,7 +3753,7 @@ struct Jaqalv1_3StreamGen: Jaqalv1_3Generator {
         auto ninsts = insts.size();
         static constexpr auto instsz = sizeof(JaqalInst);
         auto res = py::new_bytes(nullptr, ninsts * instsz);
-        auto ptr = PyBytes_AS_STRING(res.get());
+        auto ptr = res.data();
         for (size_t i = 0; i < ninsts; i++)
             memcpy(&ptr[i * instsz], &insts[i].inst, instsz);
         return res.rel();
