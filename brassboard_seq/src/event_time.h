@@ -48,7 +48,7 @@ static inline int64_t round_time_int(py::ptr<> v)
     return round_time_f64(get_value_f64(v, -1));
 }
 
-__attribute__((returns_nonnull)) RuntimeValue *round_time_rt(RuntimeValue *v);
+__attribute__((returns_nonnull)) RuntimeValue *round_time_rt(rtval::rtval_ptr v);
 
 enum TimeOrder {
     NoOrder,
@@ -181,8 +181,7 @@ struct TimeManager : PyObject {
     new_round(EventTime *prev, PyObject *offset, PyObject *cond, EventTime *wait_for)
     {
         if (rtval::is_rtval(offset)) {
-            return new_rt(prev, (RuntimeValue*)py_object(
-                              round_time_rt((RuntimeValue*)offset)), cond, wait_for);
+            return new_rt(prev, py::ref(round_time_rt(offset)).get(), cond, wait_for);
         }
         else {
             auto coffset = round_time_int(offset);

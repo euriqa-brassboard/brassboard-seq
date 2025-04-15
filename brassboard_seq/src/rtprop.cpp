@@ -303,11 +303,10 @@ struct RTProp : PyObject {
             py_throw_format(PyExc_ValueError, "Cannot determine runtime property name");
         if (auto res = py::ptr(obj).try_attr(fieldname))
             return res.rel();
-        py_object val(new_extern_age(
-                          py_object(rtprop_callback::alloc(obj, fieldname)).get(),
-                          (PyObject*)&PyFloat_Type));
+        py::ref val(new_extern_age(py::ref(rtprop_callback::alloc(obj, fieldname)),
+                                   &PyFloat_Type));
         py::ptr(obj).set_attr(fieldname, val);
-        return val.release();
+        return val.rel();
     }
 
     void set_res(PyObject *obj, PyObject *val)

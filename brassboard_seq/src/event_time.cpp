@@ -33,7 +33,7 @@ PyObject *py_time_scale()
 }
 
 __attribute__((visibility("protected"),returns_nonnull))
-RuntimeValue *round_time_rt(RuntimeValue *v)
+RuntimeValue *round_time_rt(rtval::rtval_ptr v)
 {
     static RuntimeValue *rt_scale = rtval::new_const(py_time_scale());
     return rtval::rt_round_int64(py::ref(rtval::new_expr2(rtval::Mul, v, rt_scale)));

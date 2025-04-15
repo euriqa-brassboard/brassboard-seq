@@ -95,8 +95,7 @@ combine_cond(PyObject *cond1, PyObject *new_cond)
 static inline void timeseq_set_time(auto self, EventTime *time, PyObject *offset)
 {
     if (is_rtval(offset))
-        self->start_time->set_base_rt(
-            time, event_time::round_time_rt((RuntimeValue*)offset));
+        self->start_time->set_base_rt(time, event_time::round_time_rt(offset));
     else
         self->start_time->set_base_int(time, event_time::round_time_int(offset));
     self->seqinfo->bt_tracker.record(event_time_key(self->start_time));
@@ -107,13 +106,13 @@ static inline __attribute__((returns_nonnull)) TimeStep*
 add_time_step(auto self, PyObject *cond, EventTime *start_time, PyObject *length)
 {
     auto seqinfo = pyx_fld(self, seqinfo);
-    py_object end_time(seqinfo->time_mgr->new_round(start_time, length,
-                                                    cond, (EventTime*)Py_None));
+    py::ref end_time(seqinfo->time_mgr->new_round(start_time, length,
+                                                  cond, (EventTime*)Py_None));
     auto step = py::generic_alloc<TimeStep>(timestep_type);
     new (&step->actions) std::vector<py_object>();
     pyx_fld(step, seqinfo) = py::newref(seqinfo);
     pyx_fld(step, start_time) = py::newref(start_time);
-    pyx_fld(step, end_time) = (EventTime*)end_time.release();
+    pyx_fld(step, end_time) = end_time.rel();
     pyx_fld(step, cond) = py::newref(cond);
     pyx_fld(step, length) = py::newref(length);
     seqinfo->bt_tracker.record(event_time_key(pyx_fld(step, end_time)));
