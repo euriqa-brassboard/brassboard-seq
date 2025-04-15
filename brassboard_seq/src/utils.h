@@ -1598,21 +1598,6 @@ static inline auto operator ""_pymod()
     return m;
 }
 
-struct py_stringio: py::stringio {
-    void write(PyObject *str)
-    {
-        return py::stringio::write(str);
-    }
-    void write_str(PyObject *obj)
-    {
-        return py::stringio::write_str(obj);
-    }
-    __attribute__((returns_nonnull)) PyObject *getvalue()
-    {
-        return py::stringio::getvalue().rel();
-    }
-};
-
 py::str_ref channel_name_from_path(PyObject *path);
 
 template<typename T>

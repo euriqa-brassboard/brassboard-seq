@@ -20,7 +20,7 @@
 from brassboard_seq.event_time cimport new_time_manager, new_time_int, new_round_time
 from brassboard_seq.rtval cimport is_rtval, RuntimeValue
 from brassboard_seq.scan cimport new_empty_param_pack
-from brassboard_seq.utils cimport assert_key, event_time_key, py_stringio, \
+from brassboard_seq.utils cimport assert_key, event_time_key, stringio, \
   PyErr_Format, PyExc_TypeError
 
 cimport cython
@@ -82,14 +82,14 @@ cdef class TimeStep(TimeSeq):
     # def pulse(self, chn, value, /, *, cond=True, bint exact_time=False, **kws)
 
     def __str__(self):
-        cdef py_stringio io
+        cdef stringio io
         timestep_show(self, io, 0)
-        return io.getvalue()
+        return io.getvalue().rel[PyObject]()
 
     def __repr__(self):
         return str(self)
 
-cdef int timestep_show(TimeStep self, py_stringio &io, int indent) except -1:
+cdef int timestep_show(TimeStep self, stringio &io, int indent) except -1:
     io.write_rep_ascii(indent, b' ')
     io.write(f'TimeStep({self.length})@T[{self.start_time.data.id}]')
     cond = self.cond
@@ -134,9 +134,9 @@ cdef class ConditionalWrapper:
         return step
 
     def __str__(self):
-        cdef py_stringio io
+        cdef stringio io
         conditionalwrapper_show(self, io, 0)
-        return io.getvalue()
+        return io.getvalue().rel[PyObject]()
 
     def __repr__(self):
         return str(self)
@@ -145,7 +145,7 @@ cdef class ConditionalWrapper:
     def C(self):
         return self.seq.seqinfo.C
 
-cdef int conditionalwrapper_show(ConditionalWrapper self, py_stringio &io, int indent) except -1:
+cdef int conditionalwrapper_show(ConditionalWrapper self, stringio &io, int indent) except -1:
     io.write_rep_ascii(indent, b' ')
     io.write(f'ConditionalWrapper({self.cond}) for\n')
     if type(self.seq) == Seq:
@@ -176,9 +176,9 @@ cdef class SubSeq(TimeSeq):
     # def set(self, chn, value, /, *, cond=True, bint exact_time=False, **kws)
 
     def __str__(self):
-        cdef py_stringio io
+        cdef stringio io
         subseq_show(self, io, 0)
-        return io.getvalue()
+        return io.getvalue().rel[PyObject]()
 
     def __repr__(self):
         return str(self)
@@ -200,7 +200,7 @@ cdef int wait_for_cond(SubSeq self, _tp0, offset, cond) except -1:
     self.seqinfo.bt_tracker.record(event_time_key(<void*>self.end_time))
     return 0
 
-cdef int subseq_show_subseqs(SubSeq self, py_stringio &io, int indent) except -1:
+cdef int subseq_show_subseqs(SubSeq self, stringio &io, int indent) except -1:
     for _subseq in self.sub_seqs:
         subseq = <TimeSeq>_subseq
         if type(subseq) is TimeStep:
@@ -209,7 +209,7 @@ cdef int subseq_show_subseqs(SubSeq self, py_stringio &io, int indent) except -1
             subseq_show(<SubSeq>subseq, io, indent)
     return 0
 
-cdef int subseq_show(SubSeq self, py_stringio &io, int indent) except -1:
+cdef int subseq_show(SubSeq self, stringio &io, int indent) except -1:
     io.write_rep_ascii(indent, b' ')
     io.write(f'SubSeq@T[{self.start_time.data.id}] - T[{self.end_time.data.id}]')
     cond = self.cond
@@ -248,14 +248,14 @@ cdef class Seq(SubSeq):
         self.seqinfo.bt_tracker.record(event_time_key(<void*>self.end_time))
 
     def __str__(self):
-        cdef py_stringio io
+        cdef stringio io
         seq_show(self, io, 0)
-        return io.getvalue()
+        return io.getvalue().rel[PyObject]()
 
     def __repr__(self):
         return str(self)
 
-cdef int seq_show(Seq self, py_stringio &io, int indent) except -1:
+cdef int seq_show(Seq self, stringio &io, int indent) except -1:
     io.write_rep_ascii(indent, b' ')
     io.write(f'Seq - T[{self.end_time.data.id}]\n')
     cdef int i = 0

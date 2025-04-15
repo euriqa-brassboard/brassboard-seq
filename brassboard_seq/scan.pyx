@@ -20,7 +20,7 @@
 from brassboard_seq.utils cimport PyErr_Format, PyExc_AttributeError, \
   PyExc_IndexError, PyExc_SyntaxError, PyExc_TypeError, \
   PyExc_ValueError, assume_not_none, _assume_not_none, pytuple_append1, \
-  pydict_deepcopy, PyDict_GET_SIZE, py_stringio
+  pydict_deepcopy, PyDict_GET_SIZE, stringio
 from brassboard_seq.yaml cimport sprint as yaml_print
 
 cdef np
@@ -301,7 +301,7 @@ cdef class ScanWrapper:
         return cat_scan(self, other)
 
     def __str__(self):
-        cdef py_stringio io
+        cdef stringio io
         if PyTuple_GET_SIZE(self.path):
             path_str = ".".join(self.path)
             if self.idx == -1:
@@ -314,7 +314,7 @@ cdef class ScanWrapper:
             else:
                 io.write(f'Scan {self.idx}:\n')
         print_scan(self.scan, io, 2, self.path)
-        return io.getvalue()
+        return io.getvalue().rel[PyObject]()
 
     def __repr__(self):
         return str(self)
@@ -587,7 +587,7 @@ cdef class ScanGroup:
         set_dirty(self, idx)
 
     def __str__(self):
-        cdef py_stringio io
+        cdef stringio io
         io.write_ascii(b'ScanGroup\n')
         if not scannd_is_default(self.base):
             io.write_ascii(b'  Scan Base:\n')
@@ -596,7 +596,7 @@ cdef class ScanGroup:
             for i in range(len(self.scans)):
                 io.write(f'  Scan {i}:\n')
                 print_scan(<ScanND>self.scans[i], io, 4, ())
-        return io.getvalue()
+        return io.getvalue().rel[PyObject]()
 
     def __repr__(self):
         return str(self)
@@ -763,7 +763,7 @@ cdef load_scangroup_v1(dict data):
     self.scanscache = [None for _ in range(nscans)]
     return self
 
-cdef int print_scan(ScanND scan, py_stringio &io, int indent, tuple path) except -1:
+cdef int print_scan(ScanND scan, stringio &io, int indent, tuple path) except -1:
     prefix = ' ' * indent
     empty = True
     if scan.baseidx != -1:

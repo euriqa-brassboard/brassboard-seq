@@ -286,7 +286,7 @@ cdef extern from *:
                                  int64_t offset) except +
     void event_time_set_base_rt(event_time.EventTime self, event_time.EventTime base,
                                 rtval.RuntimeValue offset) except +
-    void _yaml_io_print "brassboard_seq::yaml::print" (utils.py_stringio &io, object, int indent) except +
+    void _yaml_io_print "brassboard_seq::yaml::print" (utils.stringio &io, object, int indent) except +
 
 def new_invalid_rtval():
     # This should only happen if something really wrong happens.
@@ -1267,7 +1267,7 @@ cdef class PyByteArrayStream:
         self.stm.clear()
 
 cdef class IOBuff:
-    cdef utils.py_stringio io
+    cdef utils.stringio io
 
     def write(self, str s):
         self.io.write(s)
@@ -1279,7 +1279,7 @@ cdef class IOBuff:
         self.io.write_rep_ascii(nrep, s)
 
     def getvalue(self):
-        return self.io.getvalue()
+        return self.io.getvalue().rel[PyObject]()
 
 def int_to_chars(int i):
     cdef char buff[5]
@@ -1334,6 +1334,6 @@ def yaml_io_print(obj, indent=0):
         raise TypeError("indent must be integer")
     if indent < 0:
         raise TypeError("indent cannot be negative")
-    cdef utils.py_stringio io
+    cdef utils.stringio io
     _yaml_io_print(io, obj, indent)
-    return io.getvalue()
+    return io.getvalue().rel[PyObject]()

@@ -36,7 +36,17 @@ cdef extern from "<ostream>" namespace "std":
         bint fail() const
         void clear()
 
-cdef extern from "src/utils.h" namespace "brassboard_seq":
+cdef extern from "src/utils.h" namespace "brassboard_seq::py":
+    cppclass ref:
+        object rel[T]()
+
+    cppclass stringio:
+        void write(str)
+        void write_ascii(const char*)
+        void write_rep_ascii(int, const char*)
+        ref getvalue() except +
+
+cdef extern from * namespace "brassboard_seq":
     T assume[T](T) noexcept nogil
     void assume_not_none(object) noexcept nogil
     void _assume_not_none "brassboard_seq::assume_not_none"(void*) noexcept nogil
@@ -66,13 +76,6 @@ cdef extern from "src/utils.h" namespace "brassboard_seq":
     object pylong_from_longlong(long long v) except +
     tuple pytuple_append1(tuple, object) except +
     object pydict_deepcopy(object) except +
-
-    cppclass py_stringio:
-        py_stringio()
-        void write(str)
-        void write_ascii(const char*)
-        void write_rep_ascii(int, const char*)
-        str getvalue() except +
 
     cppclass pybytes_ostream(ostream):
         object get_buf() except +
