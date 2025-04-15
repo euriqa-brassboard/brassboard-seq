@@ -39,10 +39,10 @@ cdef extern from "src/action.h" namespace "brassboard_seq::action":
         PyObject *length
         py_object end_val
 
+        str py_str() except +
+
     cppclass ActionAllocator:
         pass
-
-cdef str action_str(Action*)
 
 cdef class _RampFunctionBase:
     cdef eval_end(self, length, oldval)

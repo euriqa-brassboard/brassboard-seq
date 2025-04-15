@@ -17,7 +17,6 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.action cimport action_str
 from brassboard_seq.event_time cimport new_time_manager, new_time_int, new_round_time
 from brassboard_seq.rtval cimport is_rtval, RuntimeValue
 from brassboard_seq.scan cimport new_empty_param_pack
@@ -105,7 +104,7 @@ cdef int timestep_show(TimeStep self, py_stringio &io, int indent) except -1:
             continue
         chn = '/'.join(self.seqinfo.channel_paths[chn_idx])
         io.write_rep_ascii(indent + 2, b' ')
-        io.write(f'{chn}: {action_str(action)}\n')
+        io.write(f'{chn}: {action.py_str()}\n')
     return 0
 
 @cython.auto_pickle(False)

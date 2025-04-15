@@ -30,26 +30,9 @@ from libc cimport math as cmath
 from libcpp.vector cimport vector
 from libcpp.utility cimport move
 
-cdef extern from "src/action.cpp" namespace "brassboard_seq::action":
+cdef extern from "src/_action.cpp" namespace "brassboard_seq::action":
     void rampfunc_set_time(RampFunction self, double t)
     void rampfunc_set_context(RampFunction self, double length, double oldval)
-
-cdef str action_str(Action *self):
-    name = 'Pulse' if self.is_pulse else 'Set'
-    if self.kws.get() == NULL:
-        kws = ''
-    else:
-        kws = ''.join(f', {name}={val}'
-                      for (name, val) in (<dict>self.kws.get()).items())
-    cond = <object>self.cond.get()
-    if cond is not True:
-        cond_str = f', cond={cond}'
-    else:
-        cond_str = ''
-    value = <object>self.value.get()
-    if self.exact_time:
-        return f'{name}({value}{cond_str}, exact_time=True{kws})'
-    return f'{name}({value}{cond_str}{kws})'
 
 cdef class _RampFunctionBase:
     cdef eval_end(self, length, oldval):

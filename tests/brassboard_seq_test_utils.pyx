@@ -332,10 +332,10 @@ cdef class Action:
     cdef object ref
 
     def __str__(self):
-        return action.action_str(self.action)
+        return self.action.py_str()
 
     def __repr__(self):
-        return action.action_str(self.action)
+        return self.action.py_str()
 
 cdef _ref_action(action.Action *p, parent):
     a = <Action>Action.__new__(Action)

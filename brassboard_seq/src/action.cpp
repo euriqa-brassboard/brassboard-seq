@@ -16,43 +16,31 @@
  *   see <http://www.gnu.org/licenses/>.                                 *
  *************************************************************************/
 
-#ifndef BRASSBOARD_SEQ_SRC_ACTION_H
-#define BRASSBOARD_SEQ_SRC_ACTION_H
-
-#include "utils.h"
+#include "action.h"
 
 namespace brassboard_seq::action {
 
-struct Action {
-    py_object value;
-    py_object cond;
-    py_object kws;
-    bool is_pulse;
-    bool exact_time;
-    bool cond_val;
-    int aid;
-    int tid;
-    int end_tid;
-    PyObject *length;
-    py_object end_val;
-
-    Action(PyObject *value, PyObject *cond,
-           bool is_pulse, bool exact_time, py_object &&kws, int aid)
-        : value(py::newref(value)),
-          cond(py::newref(cond)),
-          kws(std::move(kws)),
-          is_pulse(is_pulse),
-          exact_time(exact_time),
-          cond_val(false),
-          aid(aid)
-    {
+PyObject *Action::py_str()
+{
+    py::stringio io;
+    io.write_ascii(is_pulse ? "Pulse(" : "Set(");
+    io.write_str(value.get());
+    if (cond.get() != Py_True) {
+        io.write_ascii(", cond=");
+        io.write_str(cond.get());
     }
-
-    PyObject *py_str();
-};
-
-using ActionAllocator = PermAllocator<Action,146>;
-
+    if (exact_time)
+        io.write_ascii(", exact_time=True");
+    if (kws) {
+        for (auto [name, val]: py::dict_iter(kws)) {
+            io.write_ascii(", ");
+            io.write(name);
+            io.write_ascii("=");
+            io.write_str(val);
+        }
+    }
+    io.write_ascii(")");
+    return io.getvalue().rel();
 }
 
-#endif
+}
