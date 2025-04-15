@@ -1134,9 +1134,23 @@ uintptr_t assert_key(int aid)
 void bb_reraise(uintptr_t key);
 
 [[noreturn]] void bb_rethrow(uintptr_t key);
-[[noreturn]] void bb_throw_format(PyObject *exc, uintptr_t key,
-                                  const char *format, ...);
-[[noreturn]] void py_throw_format(PyObject *exc, const char *format, ...);
+[[noreturn]] void _bb_throw_format(PyObject *exc, uintptr_t key,
+                                   const char *format, ...);
+[[noreturn]] void _py_throw_format(PyObject *exc, const char *format, ...);
+
+template<typename... Args>
+[[noreturn]] static inline void bb_throw_format(PyObject *exc, uintptr_t key,
+                                                const char *format, Args&&... args)
+{
+    _bb_throw_format(exc, key, format, py::_vararg_decay(std::forward<Args>(args))...);
+}
+
+template<typename... Args>
+[[noreturn]] static inline void py_throw_format(PyObject *exc, const char *format,
+                                                Args&&... args)
+{
+    _py_throw_format(exc, format, py::_vararg_decay(std::forward<Args>(args))...);
+}
 
 static inline __attribute__((always_inline)) auto throw_if_not(auto &&v, uintptr_t key)
 {
@@ -1154,10 +1168,11 @@ static inline __attribute__((always_inline)) auto throw_if(auto &&v, uintptr_t k
 
 // Wrapper inline function to make it more clear to the C compiler
 // that the function returns 0
+template<typename... Args>
 static inline __attribute__((always_inline))
-PyObject *PyErr_Format(PyObject *exc, const char *format, auto... args)
+PyObject *PyErr_Format(PyObject *exc, const char *format, Args&&... args)
 {
-    ::PyErr_Format(exc, format, args...);
+    ::PyErr_Format(exc, format, py::_vararg_decay(std::forward<Args>(args))...);
     return nullptr;
 }
 

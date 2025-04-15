@@ -329,8 +329,8 @@ void bb_reraise(uintptr_t key)
     throw0();
 }
 
-[[noreturn]] void bb_throw_format(PyObject *exc, uintptr_t key,
-                                  const char *format, ...)
+[[noreturn]] void _bb_throw_format(PyObject *exc, uintptr_t key,
+                                   const char *format, ...)
 {
     // This is slightly less efficient but much simpler to implement.
     va_list vargs;
@@ -340,7 +340,7 @@ void bb_reraise(uintptr_t key)
     bb_rethrow(key);
 }
 
-[[noreturn]] void py_throw_format(PyObject *exc, const char *format, ...)
+[[noreturn]] void _py_throw_format(PyObject *exc, const char *format, ...)
 {
     // This is slightly less efficient but much simpler to implement.
     va_list vargs;

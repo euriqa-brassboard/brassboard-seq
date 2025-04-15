@@ -67,7 +67,7 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
         if (py::dict(comp->backends).contains(prefix)) [[likely]]
             continue;
         py_throw_format(PyExc_ValueError, "Unhandled channel: %U",
-                        channel_name_from_path(path).get());
+                        channel_name_from_path(path));
     }
     auto time_mgr = seqinfo->time_mgr;
     time_mgr->finalize();
@@ -96,7 +96,7 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "Multiple actions added for the same channel "
                                 "at the same time on %U.",
-                                seq::channel_name_from_id(seqinfo, cid).get());
+                                seq::channel_name_from_id(seqinfo, cid));
             tid = action->tid;
             auto start_time = get_time(tid);
             if (last_time) {
@@ -105,7 +105,7 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
                     (o != event_time::OrderEqual || last_is_start)) {
                     bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                     "Actions on %U is not statically ordered",
-                                    seq::channel_name_from_id(seqinfo, cid).get());
+                                    seq::channel_name_from_id(seqinfo, cid));
                 }
             }
             auto action_value = action->value.get();
@@ -177,8 +177,7 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
         auto c = py::ptr<RuntimeValue>(a.get(0));
         rt_eval_throw(c.get(), age, assert_key(assert_id));
         if (rtval_cache(c.get()).is_zero()) {
-            bb_throw_format(PyExc_AssertionError, assert_key(assert_id),
-                            "%U", a.get(1).get());
+            bb_throw_format(PyExc_AssertionError, assert_key(assert_id), "%U", a.get(1));
         }
     }
     auto nchn = (int)PyList_GET_SIZE(seqinfo->channel_paths);

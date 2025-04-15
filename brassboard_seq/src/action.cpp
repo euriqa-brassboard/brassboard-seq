@@ -25,7 +25,7 @@ PyObject *Action::py_str()
     py::stringio io;
     io.write_ascii(is_pulse ? "Pulse(" : "Set(");
     io.write_str(value.get());
-    if (cond.get() != Py_True) {
+    if (cond != Py_True) {
         io.write_ascii(", cond=");
         io.write_str(cond.get());
     }

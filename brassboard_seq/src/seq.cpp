@@ -259,7 +259,7 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
     else if (kws) {
         return PyErr_Format(PyExc_ValueError,
                             "Unexpected arguments when creating new time step, %S, %S.",
-                            get_args_tuple().get(), kws.get());
+                            get_args_tuple(), kws);
     }
     else if (tuple_nargs == 0) {
         res = (PyObject*)add_time_step<TimeStep>(subseq, cond, (EventTime*)start_time,
@@ -268,7 +268,7 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
     else {
         return PyErr_Format(PyExc_ValueError,
                             "Unexpected arguments when creating new time step, %S.",
-                            get_args_tuple().get());
+                            get_args_tuple());
     }
     if (type == AddStepType::Step)
         py::assign(pyx_fld(subseq, end_time), ((TimeSeq*)res)->end_time);
@@ -300,7 +300,7 @@ timestep_set(auto *self, PyObject *chn, PyObject *value, PyObject *cond,
     else if (self->actions[cid]) {
         py_throw_format(PyExc_ValueError,
                         "Multiple actions added for the same channel "
-                        "at the same time on %U.", channel_name_from_id(seqinfo, cid).get());
+                        "at the same time on %U.", channel_name_from_id(seqinfo, cid));
     }
     auto aid = seqinfo->action_counter;
     auto action = seqinfo->action_alloc.alloc(value, cond, is_pulse, exact_time,

@@ -75,7 +75,7 @@ inline py::tuple_ref Config::_translate_channel(py::tuple path)
     auto path_len = path.size();
     if (path_len > 10)
         py_throw_format(PyExc_ValueError, "Channel alias loop detected: %U",
-                        channel_name_from_path(path).get());
+                        channel_name_from_path(path));
     auto prefix = path.get(0);
     auto channel_alias_dict = py::dict(channel_alias);
     if (auto new_prefix = py::tuple(channel_alias_dict.try_get(prefix))) {
@@ -92,7 +92,7 @@ inline py::tuple_ref Config::_translate_channel(py::tuple path)
     }
     if (!py::set(supported_prefix).contains(prefix))
         py_throw_format(PyExc_ValueError, "Unsupported channel name: %U",
-                        channel_name_from_path(path).get());
+                        channel_name_from_path(path));
     py::dict(alias_cache).set(path, path);
     return path.ref();
 }

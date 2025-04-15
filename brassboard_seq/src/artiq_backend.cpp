@@ -280,12 +280,12 @@ void generate_rtios(auto *ab, backend::CompiledSeq &cseq, unsigned age)
         if (fdelay < 0) {
             py_throw_format(PyExc_ValueError,
                             "Device time offset %S cannot be negative.",
-                            py::new_float(fdelay).get());
+                            py::new_float(fdelay));
         }
         else if (fdelay > 0.1) {
             py_throw_format(PyExc_ValueError,
                             "Device time offset %S cannot be more than 100ms.",
-                            py::new_float(fdelay).get());
+                            py::new_float(fdelay));
         }
         delay = int64_t(fdelay * event_time::time_scale + 0.5);
     };
