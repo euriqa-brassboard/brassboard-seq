@@ -34,7 +34,7 @@ using namespace rtval;
 template<typename TimeStep, typename SubSeq>
 static void collect_actions(SubSeq *self, std::vector<action::Action*> *actions)
 {
-    for (auto [i, subseq]: pylist_iter(self->sub_seqs)) {
+    for (auto [i, subseq]: py::list_iter(self->sub_seqs)) {
         if (Py_TYPE(subseq) != (PyTypeObject*)timestep_type) {
             collect_actions<TimeStep>((SubSeq*)subseq, actions);
             continue;
@@ -62,18 +62,16 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
     auto seqinfo = pyx_fld(seq, seqinfo);
     auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);
     auto nchn = (int)PyList_GET_SIZE(seqinfo->channel_paths);
-    for (auto [i, path]: pylist_iter(seqinfo->channel_paths)) {
-        auto prefix = PyTuple_GET_ITEM(path, 0);
-        auto res = PyDict_Contains(comp->backends, prefix);
-        if (res > 0) [[likely]]
+    for (auto [i, path]: py::list_iter<py::tuple>(seqinfo->channel_paths)) {
+        auto prefix = path.get(0);
+        if (py::dict(comp->backends).contains(prefix)) [[likely]]
             continue;
-        throw_if(res < 0);
         py_throw_format(PyExc_ValueError, "Unhandled channel: %U",
                         channel_name_from_path(path).get());
     }
     auto time_mgr = seqinfo->time_mgr;
     time_mgr->finalize();
-    pyassign(seqinfo->channel_name_map, Py_None); // Free up memory
+    py::assign(seqinfo->channel_name_map, Py_None); // Free up memory
     auto all_actions = new std::vector<action::Action*>[nchn];
     comp->cseq.all_actions.reset(all_actions);
     collect_actions<TimeStep>(pyx_find_base(seq, sub_seqs), all_actions);
@@ -85,7 +83,7 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
         std::ranges::sort(actions, [] (auto *a1, auto *a2) {
             return a1->tid < a2->tid;
         });
-        py_object value(py_immref(Py_False));
+        auto value = py::ref(py::immref(Py_False));
         EventTime *last_time = nullptr;
         bool last_is_start = false;
         int tid = -1;
@@ -118,23 +116,23 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
             if (!action->is_pulse) {
                 last_is_start = !isramp;
                 if (cond != Py_False) {
-                    py_object new_value;
+                    py::ref<> new_value;
                     if (isramp) {
                         auto rampf = (_RampFunctionBase*)action_value;
                         auto length = action->length;
                         auto vt = rampf->__pyx_vtab;
-                        new_value.reset_checked(vt->eval_end(rampf, length, value),
-                                                action_key(action->aid));
+                        new_value.take_checked(vt->eval_end(rampf, length, value.get()),
+                                               action_key(action->aid));
                     }
                     else {
-                        new_value.reset(py_newref(action_value));
+                        new_value = py::ptr(action_value).ref();
                     }
                     if (cond == Py_True) {
-                        std::swap(value, new_value);
+                        value = std::move(new_value);
                     }
                     else if (new_value != value) {
                         assert(is_rtval(cond));
-                        value.reset(new_select(cond, new_value, value));
+                        value.take(new_select(cond, new_value.get(), value.get()));
                     }
                 }
             }
@@ -142,7 +140,7 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
             action->end_val.set_obj(value.get());
         }
     }
-    for (auto [name, backend]: pydict_iter<Backend>(comp->backends)) {
+    for (auto [name, backend]: py::dict_iter<Backend>(comp->backends)) {
         throw_if(backend->__pyx_vtab->finalize(backend, comp->cseq) < 0);
     }
 }
@@ -175,12 +173,12 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
     auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);
     auto time_mgr = seqinfo->time_mgr;
     comp->cseq.total_time = time_mgr->compute_all_times(age);
-    for (auto [assert_id, a]: pylist_iter(seqinfo->assertions)) {
-        auto c = (RuntimeValue*)PyTuple_GET_ITEM(a, 0);
-        rt_eval_throw(c, age, assert_key(assert_id));
-        if (rtval_cache(c).is_zero()) {
+    for (auto [assert_id, a]: py::list_iter<py::tuple>(seqinfo->assertions)) {
+        auto c = py::ptr<RuntimeValue>(a.get(0));
+        rt_eval_throw(c.get(), age, assert_key(assert_id));
+        if (rtval_cache(c.get()).is_zero()) {
             bb_throw_format(PyExc_AssertionError, assert_key(assert_id),
-                            "%U", PyTuple_GET_ITEM(a, 1));
+                            "%U", a.get(1).get());
         }
     }
     auto nchn = (int)PyList_GET_SIZE(seqinfo->channel_paths);
@@ -219,7 +217,7 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
             prev_time = (isramp || action->is_pulse) ? end_time : start_time;
         }
     }
-    for (auto [name, backend]: pydict_iter<Backend>(comp->backends)) {
+    for (auto [name, backend]: py::dict_iter<Backend>(comp->backends)) {
         throw_if(backend->__pyx_vtab->runtime_finalize(backend, comp->cseq, age) < 0);
     }
 }

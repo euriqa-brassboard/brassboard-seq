@@ -142,7 +142,7 @@ public:
         assume(rv && !_is_static && !_is_rt_offset);
         _is_rt_offset = true;
         assert(rv->datatype == rtval::DataType::Int64);
-        _rt_offset = py_newref(rv);
+        _rt_offset = py::newref(rv);
         // Assume PyObject alignment
         assert(!_is_static);
     }
@@ -214,7 +214,7 @@ struct EventTime : PyObject {
             py_throw_format(PyExc_ValueError, "Cannot modify non-floating time");
         if (offset < 0)
             py_throw_format(PyExc_ValueError, "Time delay cannot be negative");
-        pyassign(prev, base);
+        py::assign(prev, base);
         data.set_c_offset(offset);
         data.floating = false;
     }
@@ -222,7 +222,7 @@ struct EventTime : PyObject {
     {
         if (!data.floating)
             py_throw_format(PyExc_ValueError, "Cannot modify non-floating time");
-        pyassign(prev, base);
+        py::assign(prev, base);
         data.set_rt_offset(offset);
         data.floating = false;
     }
@@ -243,8 +243,7 @@ TimeManager::new_int(EventTime *prev, int64_t offset, bool floating,
                         "Cannot allocate more time: already finalized");
     if (offset < 0)
         py_throw_format(PyExc_ValueError, "Time delay cannot be negative");
-    py_object o(pytype_genericalloc(&EventTime::Type));
-    auto tp = (EventTime*)o;
+    auto tp = py::generic_alloc<EventTime>();
     call_constructor(&tp->manager_status, status);
     auto ntimes = status->ntimes;
     call_constructor(&tp->data);
@@ -252,13 +251,12 @@ TimeManager::new_int(EventTime *prev, int64_t offset, bool floating,
     tp->data.floating = floating;
     tp->data.id = ntimes;
     call_constructor(&tp->chain_pos);
-    tp->prev = py_newref(prev);
-    tp->wait_for = py_newref(wait_for);
-    tp->cond = py_newref(cond);
-    pylist_append(event_times, o);
+    tp->prev = py::newref(prev);
+    tp->wait_for = py::newref(wait_for);
+    tp->cond = py::newref(cond);
+    py::list(event_times).append(tp);
     status->ntimes = ntimes + 1;
-    o.release();
-    return tp;
+    return tp.rel();
 }
 
 static inline TimeOrder is_ordered(EventTime *t1, EventTime *t2)

@@ -23,7 +23,7 @@
 
 namespace brassboard_seq::seq {
 
-static py_object channel_name_from_id(auto *seqinfo, int cid)
+static inline py::str_ref channel_name_from_id(auto *seqinfo, int cid)
 {
     return channel_name_from_path(PyList_GET_ITEM(seqinfo->channel_paths, cid));
 }

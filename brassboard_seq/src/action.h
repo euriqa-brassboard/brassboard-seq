@@ -38,8 +38,8 @@ struct Action {
 
     Action(PyObject *value, PyObject *cond,
            bool is_pulse, bool exact_time, py_object &&kws, int aid)
-        : value(py_newref(value)),
-          cond(py_newref(cond)),
+        : value(py::newref(value)),
+          cond(py::newref(cond)),
           kws(std::move(kws)),
           is_pulse(is_pulse),
           exact_time(exact_time),

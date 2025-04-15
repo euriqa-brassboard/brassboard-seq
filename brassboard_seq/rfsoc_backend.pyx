@@ -44,7 +44,7 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
 
     Generator *new_pulse_compiler_generator() except +
     cppclass PulseCompilerGen(Generator):
-        PyObject *output
+        object get_output()
 
     Generator *new_jaqal_pulse_compiler_generator() except +
     cppclass JaqalPulseCompilerGen(Generator):
@@ -207,7 +207,7 @@ cdef class PulseCompilerGenerator(RFSOCGenerator):
 
     @property
     def output(self):
-        return <dict>(<PulseCompilerGen*>self.gen.get()).output
+        return <dict>(<PulseCompilerGen*>self.gen.get()).get_output()
 
 @cython.auto_pickle(False)
 @cython.final

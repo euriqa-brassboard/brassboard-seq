@@ -28,8 +28,8 @@ struct ParamPack : PyObject {
     PyObject *visited;
     PyObject *fieldname;
 
-    __attribute__((returns_nonnull)) PyObject *ensure_visited();
-    __attribute__((returns_nonnull)) PyObject *ensure_dict();
+    py::ref<> ensure_visited();
+    py::dict_ref ensure_dict();
     __attribute__((returns_nonnull)) PyObject *get_value();
     __attribute__((returns_nonnull)) PyObject *get_value_default(PyObject *def_value);
 

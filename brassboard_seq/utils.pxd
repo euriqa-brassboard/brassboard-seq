@@ -64,7 +64,6 @@ cdef extern from "src/utils.h" namespace "brassboard_seq":
     object pyfloat_from_double(double v) except +
     object pylong_from_long(long v) except +
     object pylong_from_longlong(long long v) except +
-    object pynum_add_or_sub(object a, object b, bint issub)
     tuple pytuple_append1(tuple, object) except +
     object pydict_deepcopy(object) except +
 

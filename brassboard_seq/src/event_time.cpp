@@ -28,7 +28,7 @@ namespace brassboard_seq::event_time {
 __attribute__((visibility("protected"),returns_nonnull))
 PyObject *py_time_scale()
 {
-    static PyObject *val = pylong_from_longlong(time_scale);
+    static auto val = py::new_int(time_scale).rel();
     return val;
 }
 
@@ -52,7 +52,7 @@ static inline bool get_cond_val(PyObject *v, unsigned age)
     return !rtval::rtval_cache(rv).is_zero();
 }
 
-static PyObject *str_time(int64_t t)
+static py::str_ref str_time(int64_t t)
 {
     assert(time_scale == 1e12);
     assert(t >= 0);
@@ -106,7 +106,7 @@ static PyObject *str_time(int64_t t)
     }
     *end = ' ';
     memcpy(&end[1], unit, strlen(unit) + 1);
-    return PyUnicode_FromString(str.data());
+    return py::new_str(str.data());
 }
 
 inline void TimeManager::visit_time(EventTime *t, auto &visited)
@@ -155,7 +155,7 @@ inline void TimeManager::visit_time(EventTime *t, auto &visited)
         t->data.set_static(static_prev + static_offset);
     }
     t->data.id = -1;
-    pylist_append(event_times, t);
+    py::list(event_times).append(t);
 }
 
 __attribute__((visibility("protected"),returns_nonnull))
@@ -165,8 +165,7 @@ EventTime *TimeManager::new_rt(EventTime *prev, RuntimeValue *offset,
     if (status->finalized)
         py_throw_format(PyExc_RuntimeError,
                         "Cannot allocate more time: already finalized");
-    py_object o(pytype_genericalloc(&EventTime::Type));
-    auto tp = (EventTime*)o;
+    auto tp = py::generic_alloc<EventTime>();
     call_constructor(&tp->manager_status, status);
     auto ntimes = status->ntimes;
     call_constructor(&tp->data);
@@ -174,13 +173,12 @@ EventTime *TimeManager::new_rt(EventTime *prev, RuntimeValue *offset,
     tp->data.floating = false;
     tp->data.id = ntimes;
     call_constructor(&tp->chain_pos);
-    tp->prev = py_newref(prev);
-    tp->wait_for = py_newref(wait_for);
-    tp->cond = py_newref(cond);
-    pylist_append(event_times, o);
+    tp->prev = py::newref(prev);
+    tp->wait_for = py::newref(wait_for);
+    tp->cond = py::newref(cond);
+    py::list(event_times).append(tp);
     status->ntimes = ntimes + 1;
-    o.release();
-    return tp;
+    return tp.rel();
 }
 
 __attribute__((visibility("protected")))
@@ -189,17 +187,17 @@ void TimeManager::finalize()
     if (status->finalized)
         py_throw_format(PyExc_RuntimeError, "Event times already finalized");
     status->finalized = true;
-    auto _event_times = pylist_new(0);
-    py_object old_event_times(event_times); // steal reference
-    event_times = _event_times;
+    auto _event_times = py::new_list(0);
+    py::ref old_event_times(event_times); // steal reference
+    event_times = _event_times.rel();
 
     std::unordered_set<int> visited;
     // First, topologically order the times
-    for (auto [i, t]: pylist_iter<EventTime>(old_event_times))
+    for (auto [i, t]: py::list_iter<EventTime>(old_event_times))
         visit_time(t, visited);
 
     std::vector<int> chain_lengths;
-    for (auto [tid, t]: pylist_iter<EventTime>(event_times)) {
+    for (auto [tid, t]: py::list_iter<EventTime>(event_times)) {
         t->data.id = tid;
         int chain_id1 = -1;
         int chain_pos1;
@@ -254,7 +252,7 @@ void TimeManager::finalize()
     }
 
     int nchains = chain_lengths.size();
-    for (auto [tid, t]: pylist_iter<EventTime>(event_times)) {
+    for (auto [tid, t]: py::list_iter<EventTime>(event_times)) {
         t->chain_pos.resize(nchains, -1);
         if (auto prev = t->prev; prev != Py_None)
             t->update_chain_pos(prev, nchains);
@@ -272,7 +270,7 @@ int64_t TimeManager::compute_all_times(unsigned age)
     int ntimes = PyList_GET_SIZE(event_times);
     time_values.resize(ntimes);
     std::ranges::fill(time_values, -1);
-    for (auto [i, t]: pylist_iter<EventTime>(event_times))
+    for (auto [i, t]: py::list_iter<EventTime>(event_times))
         max_time = std::max(max_time, t->get_value(-1, age, time_values));
     return max_time;
 }
@@ -280,14 +278,14 @@ int64_t TimeManager::compute_all_times(unsigned age)
 __attribute__((returns_nonnull,visibility("protected")))
 TimeManager *TimeManager::alloc()
 {
-    auto self = (TimeManager*)pytype_genericalloc(&Type);
-    self->event_times = pylist_new(0);
+    auto self = py::generic_alloc<TimeManager>();
+    self->event_times = py::new_list(0).rel();
     auto status = new TimeManagerStatus;
     status->finalized = false;
     status->ntimes = 0;
     call_constructor(&self->status, status);
     call_constructor(&self->time_values);
-    return self;
+    return self.rel();
 }
 
 __attribute__((visibility("protected")))
@@ -323,30 +321,28 @@ static PyObject *eventtime_str(PyObject *py_self)
     return cxx_catch([&] {
         auto self = (EventTime*)py_self;
         if (self->data.floating)
-            return py_newref("<floating>"_py);
+            return "<floating>"_py.ref();
         if (self->data.is_static())
             return str_time(self->data._get_static());
-        auto rt_offset = self->data.get_rt_offset();
-        py_object str_offset(rt_offset ? pyobject_str(rt_offset) :
-                             str_time(self->data.get_c_offset()));
+        auto rt_offset = py::ptr(self->data.get_rt_offset());
+        auto str_offset(rt_offset ? rt_offset.str() : str_time(self->data.get_c_offset()));
         auto prev = self->prev;
         auto cond = self->cond;
         if (prev == Py_None) {
             assert(cond == Py_True);
-            return str_offset.release();
+            return str_offset;
         }
         auto wait_for = self->wait_for;
         if (wait_for == Py_None) {
             if (cond == Py_True)
-                return PyUnicode_FromFormat("T[%u] + %U", prev->data.id, str_offset.get());
-            return PyUnicode_FromFormat("T[%u] + (%U; if %S)",
-                                        prev->data.id, str_offset.get(), cond);
+                return py::str_format("T[%u] + %U", prev->data.id, str_offset);
+            return py::str_format("T[%u] + (%U; if %S)", prev->data.id, str_offset, cond);
         }
         if (cond == Py_True)
-            return PyUnicode_FromFormat("T[%u]; wait_for(T[%u] + %U)",
-                                        prev->data.id, wait_for->data.id, str_offset.get());
-        return PyUnicode_FromFormat("T[%u]; wait_for(T[%u] + %U; if %S)",
-                                    prev->data.id, wait_for->data.id, str_offset.get(), cond);
+            return py::str_format("T[%u]; wait_for(T[%u] + %U)",
+                                  prev->data.id, wait_for->data.id, str_offset);
+        return py::str_format("T[%u]; wait_for(T[%u] + %U; if %S)",
+                              prev->data.id, wait_for->data.id, str_offset, cond);
     });
 }
 
@@ -431,13 +427,13 @@ static PyNumberMethods EventTime_as_number = {
             if (self->manager_status != other->manager_status)
                 py_throw_format(PyExc_ValueError,
                                 "Cannot take the difference between unrelated times");
-            auto diff = (EventTimeDiff*)pytype_genericalloc(&EventTimeDiff::Type);
-            py_object o(diff);
-            diff->t1 = (EventTime*)py_newref(self);
-            diff->t2 = (EventTime*)py_newref(other);
+            auto diff = py::generic_alloc<EventTimeDiff>();
+            diff->t1 = (EventTime*)py::newref(self);
+            diff->t2 = (EventTime*)py::newref(other);
             diff->in_eval = false;
             diff->fptr = (void*)EventTimeDiff::eval;
-            return (PyObject*)rtval::new_extern_age(diff, (PyObject*)&PyFloat_Type);
+            return (PyObject*)rtval::new_extern_age(diff.get(),
+                                                    (PyObject*)&PyFloat_Type);
         });
     },
 };

@@ -36,23 +36,21 @@ using event_time::EventTime;
 
 static inline int get_channel_id(auto self, PyObject *name)
 {
-    auto channel_name_map = self->channel_name_map;
-    if (auto chn = PyDict_GetItemWithError(channel_name_map, name)) [[likely]]
+    auto channel_name_map = py::dict(self->channel_name_map);
+    if (auto chn = channel_name_map.try_get(name)) [[likely]]
         return PyLong_AsLong(chn);
-    throw_pyerr();
-    py_object path(self->config->translate_channel(name));
-    auto channel_path_map = self->channel_path_map;
-    if (auto chn = PyDict_GetItemWithError(channel_path_map, path)) {
-        pydict_setitem(channel_name_map, name, chn);
+    auto path = py::tuple_ref(self->config->translate_channel(name));
+    auto channel_path_map = py::dict(self->channel_path_map);
+    if (auto chn = channel_path_map.try_get(path)) {
+        channel_name_map.set(name, chn);
         return PyLong_AsLong(chn);
     }
-    throw_pyerr();
-    auto channel_paths = self->channel_paths;
-    int cid = PyList_GET_SIZE(channel_paths);
-    pylist_append(channel_paths, path);
-    py_object pycid(pylong_from_long(cid));
-    pydict_setitem(channel_path_map, path, pycid);
-    pydict_setitem(channel_name_map, name, pycid);
+    auto channel_paths = py::list(self->channel_paths);
+    int cid = channel_paths.size();
+    channel_paths.append(path);
+    auto pycid = py::new_int(cid);
+    channel_path_map.set(path, pycid);
+    channel_name_map.set(name, pycid);
     return cid;
 }
 
@@ -73,17 +71,16 @@ _combine_cond(PyObject *cond1, PyObject *new_cond)
     if (cond1 == Py_True)
         return { cond2.release(), true };
     assert(is_rtval(cond1));
-    auto o = pytype_genericalloc(&RuntimeValue::Type);
-    auto self = (RuntimeValue*)o;
+    auto self = py::generic_alloc<RuntimeValue>();
     self->datatype = DataType::Bool;
     // self->cache_err = EvalError::NoError;
     // self->cache_val = { .i64_val = 0 };
     self->type_ = And;
     self->age = (unsigned)-1;
-    self->arg0 = (RuntimeValue*)py_newref(cond1);
+    self->arg0 = (RuntimeValue*)py::newref(cond1);
     self->arg1 = (RuntimeValue*)cond2.release();
-    self->cb_arg2 = py_immref(Py_None);
-    return { o, true };
+    self->cb_arg2 = py::immref(Py_None);
+    return { (PyObject*)self.rel(), true };
 }
 
 static inline __attribute__((returns_nonnull)) PyObject*
@@ -91,7 +88,7 @@ combine_cond(PyObject *cond1, PyObject *new_cond)
 {
     auto [res, needs_free] = _combine_cond(cond1, new_cond);
     if (!needs_free)
-        Py_INCREF(res);
+        return py::newref(res);
     return res;
 }
 
@@ -112,17 +109,16 @@ add_time_step(auto self, PyObject *cond, EventTime *start_time, PyObject *length
     auto seqinfo = pyx_fld(self, seqinfo);
     py_object end_time(seqinfo->time_mgr->new_round(start_time, length,
                                                     cond, (EventTime*)Py_None));
-    py_object o(pytype_genericalloc(timestep_type));
-    auto step = (TimeStep*)o;
+    auto step = py::generic_alloc<TimeStep>(timestep_type);
     new (&step->actions) std::vector<py_object>();
-    pyx_fld(step, seqinfo) = py_newref(seqinfo);
-    pyx_fld(step, start_time) = py_newref(start_time);
+    pyx_fld(step, seqinfo) = py::newref(seqinfo);
+    pyx_fld(step, start_time) = py::newref(start_time);
     pyx_fld(step, end_time) = (EventTime*)end_time.release();
-    pyx_fld(step, cond) = py_newref(cond);
-    pyx_fld(step, length) = py_newref(length);
+    pyx_fld(step, cond) = py::newref(cond);
+    pyx_fld(step, length) = py::newref(length);
     seqinfo->bt_tracker.record(event_time_key(pyx_fld(step, end_time)));
-    pylist_append(self->sub_seqs, o);
-    return (TimeStep*)o.release();
+    py::list(self->sub_seqs).append(step);
+    return step.rel();
 }
 
 template<typename SubSeq, typename EventTime>
@@ -130,24 +126,22 @@ static inline __attribute__((returns_nonnull)) SubSeq*
 add_custom_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *cb,
                 size_t nargs=0, PyObject *const *args=nullptr, PyObject *kwargs=nullptr)
 {
-    py_object sub_seqs(pylist_new(0));
     auto seqinfo = pyx_fld(self, seqinfo);
-    py_object o(pytype_genericalloc(subseq_type));
-    auto subseq = (SubSeq*)o;
-    pyx_fld(subseq, seqinfo) = py_newref(seqinfo);
-    pyx_fld(subseq, start_time) = py_newref(start_time);
-    pyx_fld(subseq, end_time) = py_newref(start_time);
-    pyx_fld(subseq, cond) = py_newref(cond);
-    pyx_fld(subseq, sub_seqs) = sub_seqs.release();
-    subseq->dummy_step = (decltype(subseq->dummy_step))py_immref(Py_None);
+    auto subseq = py::generic_alloc<SubSeq>(subseq_type);
+    pyx_fld(subseq, seqinfo) = py::newref(seqinfo);
+    pyx_fld(subseq, start_time) = py::newref(start_time);
+    pyx_fld(subseq, end_time) = py::newref(start_time);
+    pyx_fld(subseq, cond) = py::newref(cond);
+    pyx_fld(subseq, sub_seqs) = py::new_list(0).rel();
+    subseq->dummy_step = (decltype(subseq->dummy_step))py::immref(Py_None);
     {
-        PyObject *callargs[nargs + 1] = { o };
+        PyObject *callargs[nargs + 1] = { (PyObject*)subseq };
         for (auto i = 0; i < nargs; i++)
             callargs[i + 1] = args[i];
-        pyobj_checked(PyObject_VectorcallDict(cb, callargs, nargs + 1, kwargs));
+        py::ptr(cb).vcall_dict(callargs, nargs + 1, kwargs);
     }
-    pylist_append(self->sub_seqs, o);
-    return (SubSeq*)o.release();
+    py::list(self->sub_seqs).append(subseq);
+    return subseq.rel();
 }
 
 struct CondCombiner {
@@ -165,7 +159,7 @@ struct CondCombiner {
             needs_free = false;
             return cond;
         }
-        return py_newref(cond);
+        return py::newref(cond);
     }
     ~CondCombiner()
     {
@@ -204,8 +198,6 @@ const char *add_step_name(AddStepType type)
     return "add_step";
 }
 
-static auto empty_tuple = PyTuple_New(0);
-
 template<typename CondSeq, typename TimeSeq, typename TimeStep, AddStepType type>
 static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
                                Py_ssize_t nargs, PyObject *kwnames) try
@@ -219,7 +211,7 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
     auto first_arg = args[nargs_min - 1];
     py_object start_time;
     if (type == AddStepType::Background) {
-        start_time.reset(py_newref(pyx_fld(subseq, end_time)));
+        start_time.reset(py::newref(pyx_fld(subseq, end_time)));
     }
     else if (type == AddStepType::Floating) {
         auto time_mgr = pyx_fld(subseq, seqinfo)->time_mgr;
@@ -232,37 +224,37 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
             return PyErr_Format(PyExc_TypeError,
                                 "Argument 'tp' has incorrect type (expected EventTime, "
                                 "got %.200s)", Py_TYPE(args[0])->tp_name);
-        start_time.reset(py_newref(args[0]));
+        start_time.reset(py::newref(args[0]));
     }
     else {
         assert(type == AddStepType::Step);
-        start_time.reset(py_newref(pyx_fld(subseq, end_time)));
+        start_time.reset(py::newref(pyx_fld(subseq, end_time)));
     }
 
     auto tuple_nargs = nargs - nargs_min;
     auto get_args_tuple = [&] {
         if (tuple_nargs == 0)
-            return py_object(py_newref(empty_tuple));
-        auto res = pytuple_new(tuple_nargs);
+            return py::empty_tuple.immref();
+        auto res = py::new_tuple(tuple_nargs);
         auto *tuple_args = args + nargs_min;
         for (auto i = 0; i < tuple_nargs; i++)
-            PyTuple_SET_ITEM(res, i, py_newref(tuple_args[i]));
-        return py_object(res);
+            res.SET(i, py::ptr(tuple_args[i]));
+        return res;
     };
 
-    py_object kws;
+    py::dict_ref kws;
     if (kwnames) {
-        kws.reset(pydict_new());
+        kws = py::new_dict();
         auto kwvalues = args + nargs;
-        for (auto [i, name]: pytuple_iter(kwnames)) {
-            pydict_setitem(kws, name, kwvalues[i]);
+        for (auto [i, name]: py::tuple_iter(kwnames)) {
+            kws.set(name, kwvalues[i]);
         }
     }
 
     PyObject *res;
     if (Py_TYPE(first_arg)->tp_call) {
         res = (PyObject*)add_custom_step(subseq, cond, (EventTime*)start_time,
-                                         first_arg, tuple_nargs, args + nargs_min, kws);
+                                         first_arg, tuple_nargs, args + nargs_min, kws.get());
     }
     else if (kws) {
         return PyErr_Format(PyExc_ValueError,
@@ -279,7 +271,7 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
                             get_args_tuple().get());
     }
     if (type == AddStepType::Step)
-        pyassign(pyx_fld(subseq, end_time), ((TimeSeq*)res)->end_time);
+        py::assign(pyx_fld(subseq, end_time), ((TimeSeq*)res)->end_time);
     return res;
 }
 catch (...) {
@@ -289,7 +281,7 @@ catch (...) {
 
 static inline void
 timestep_set(auto *self, PyObject *chn, PyObject *value, PyObject *cond,
-             bool is_pulse, bool exact_time, py_object &&kws)
+             bool is_pulse, bool exact_time, py::dict_ref &&kws)
 {
     auto seqinfo = pyx_fld(self, seqinfo);
     int cid;
@@ -312,7 +304,7 @@ timestep_set(auto *self, PyObject *chn, PyObject *value, PyObject *cond,
     }
     auto aid = seqinfo->action_counter;
     auto action = seqinfo->action_alloc.alloc(value, cond, is_pulse, exact_time,
-                                              std::move(kws), aid);
+                                              py_object(kws.rel()), aid);
     action->length = self->length;
     seqinfo->bt_tracker.record(action_key(aid));
     seqinfo->action_counter = aid + 1;
@@ -321,20 +313,20 @@ timestep_set(auto *self, PyObject *chn, PyObject *value, PyObject *cond,
 
 static inline void
 subseq_set(auto *self, PyObject *chn, PyObject *value, PyObject *cond,
-           bool exact_time, py_object &&kws)
+           bool exact_time, py::dict_ref &&kws)
 {
     auto *step = self->dummy_step;
     using TimeStep = std::remove_reference_t<decltype(*step)>;
     auto *start_time = pyx_fld(self, end_time);
     if ((PyObject*)step == Py_None || pyx_fld(step, end_time) != start_time) {
         step = add_time_step<TimeStep>(self, pyx_fld(self, cond),
-                                       start_time, pylong_cached(0));
-        Py_DECREF(self->dummy_step);
-        self->dummy_step = step;
+                                       start_time, py::int_cached(0));
+        // Steals a reference while keeping step as a borrowed reference.
+        py::assign(self->dummy_step, py::ref(step));
         // Update the current time so that a normal step added later
         // this is treated as ordered after this set event
         // rather than at the same time.
-        pyassign(pyx_fld(self, end_time), pyx_fld(step, end_time));
+        py::assign(pyx_fld(self, end_time), pyx_fld(step, end_time));
     }
     timestep_set(step, chn, value, cond, false, exact_time, std::move(kws));
 }
@@ -349,10 +341,10 @@ static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
     auto value = args[1];
     bool exact_time{false};
     PyObject *arg_cond{Py_True};
-    py_object kws;
+    py::dict_ref kws;
     if (kwnames) {
         auto kwvalues = args + nargs;
-        for (auto [i, name]: pytuple_iter(kwnames)) {
+        for (auto [i, name]: py::tuple_iter(kwnames)) {
             auto value = kwvalues[i];
             if (PyUnicode_CompareWithASCIIString(name, "cond") == 0) {
                 arg_cond = value;
@@ -362,8 +354,8 @@ static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
             }
             else {
                 if (!kws)
-                    kws.reset(pydict_new());
-                pydict_setitem(kws, name, value);
+                    kws = py::new_dict();
+                kws.set(name, value);
             }
         }
     }
@@ -375,7 +367,7 @@ static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
         timestep_set(subseq, chn, value, cc.cond, is_pulse, exact_time, std::move(kws));
     else
         subseq_set(subseq, chn, value, cc.cond, exact_time, std::move(kws));
-    return py_newref(py_self);
+    return py::newref(py_self);
 }
 catch (...) {
     handle_cxx_exception();
@@ -391,11 +383,10 @@ static PyObject *condseq_conditional(PyObject *py_self, PyObject *const *args,
     auto subseq = condseq_get_subseq(self);
     auto cond = pyx_fld(self, cond);
     CondCombiner cc(cond, args[0]);
-    auto o = pytype_genericalloc(condwrapper_type);
-    auto wrapper = (ConditionalWrapper*)o;
-    wrapper->seq = py_newref(subseq);
+    auto wrapper = py::generic_alloc<ConditionalWrapper>(condwrapper_type);
+    wrapper->seq = py::newref(subseq);
     wrapper->cond = cc.take_cond();
-    return o;
+    return (PyObject*)wrapper.rel();
 }
 catch (...) {
     handle_cxx_exception();

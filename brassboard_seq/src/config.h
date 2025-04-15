@@ -32,7 +32,7 @@ struct Config : PyObject {
 
     static PyTypeObject Type;
 private:
-    PyObject *_translate_channel(PyObject *path);
+    py::tuple_ref _translate_channel(py::tuple path);
 };
 
 }

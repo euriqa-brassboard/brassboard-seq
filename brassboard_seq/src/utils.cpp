@@ -38,11 +38,164 @@ BBLogLevel bb_logging_level = [] {
     return BB_LOG_INFO;
 }();
 
+namespace py {
+
+#if PY_VERSION_HEX >= 0x030d0000
+__attribute__((visibility("protected")))
+tuple empty_tuple(Py_GetConstant(Py_CONSTANT_EMPTY_TUPLE));
+__attribute__((visibility("protected")))
+bytes empty_bytes(Py_GetConstant(Py_CONSTANT_EMPTY_BYTES));
+#else
+__attribute__((visibility("protected")))
+tuple empty_tuple(new_tuple(0).rel());
+__attribute__((visibility("protected")))
+bytes empty_bytes(new_bytes(nullptr, 0).rel());
+#endif
+
+__attribute__((visibility("protected")))
+float_ float_m1(throw_if_not(PyFloat_FromDouble(-1)));
+__attribute__((visibility("protected")))
+float_ float_m0_5(throw_if_not(PyFloat_FromDouble(-0.5)));
+__attribute__((visibility("protected")))
+float_ float_0(throw_if_not(PyFloat_FromDouble(0)));
+__attribute__((visibility("protected")))
+float_ float_0_5(throw_if_not(PyFloat_FromDouble(0.5)));
+__attribute__((visibility("protected")))
+float_ float_1(throw_if_not(PyFloat_FromDouble(1)));
+
+const std::array<int_,_int_cache_max * 2> _int_cache = [] {
+    std::array<int_,_int_cache_max * 2> res;
+    for (int i = 0; i < _int_cache_max * 2; i++)
+        res[i] = throw_if_not(PyLong_FromLong(i - _int_cache_max));
+    return res;
+} ();
+
+static dict_ref _dict_deepcopy(dict d)
+{
+    auto res = new_dict();
+    for (auto [key, value]: dict_iter(d)) {
+        if (!PyDict_Check(value)) {
+            res.set(key, value);
+            continue;
+        }
+        res.set(key, _dict_deepcopy(value));
+    }
+    return res;
+}
+
+ref<> dict_deepcopy(ptr<> d)
+{
+    if (!PyDict_Check(d))
+        return d.ref();
+    return _dict_deepcopy(d);
+}
+
+static inline void _copy_pystr_same_kind(void *tgt, const void *src, int kind, ssize_t len)
+{
+    memcpy(tgt, src, len * kind);
+}
+
+static inline void _copy_pystr_change_kind(void *tgt, int tgt_kind,
+                                           const void *src, int src_kind, ssize_t len)
+{
+    for (ssize_t i = 0; i < len; i++) {
+        PyUnicode_WRITE(tgt_kind, tgt, i, PyUnicode_READ(src_kind, src, i));
+    }
+}
+
+static inline void _copy_pystr_buffer(void *tgt, int tgt_kind,
+                                      const void *src, int src_kind, ssize_t len)
+{
+    if (tgt_kind == src_kind) [[likely]] {
+        _copy_pystr_same_kind(tgt, src, tgt_kind, len);
+    }
+    else {
+        _copy_pystr_change_kind(tgt, tgt_kind, src, src_kind, len);
+    }
+}
+
+inline void stringio::check_size(size_t sz, int kind)
+{
+    if (kind > m_kind) [[unlikely]] {
+        auto new_buff = (char*)malloc(sz * kind);
+        _copy_pystr_change_kind(new_buff, kind, m_buff.get(), m_kind, m_pos);
+        m_kind = kind;
+        m_size = sz;
+        m_buff.reset(new_buff);
+        return;
+    }
+    if (m_size >= sz)
+        return;
+    m_size = sz * 3 / 2;
+    m_buff.reset((char*)realloc(m_buff.release(), m_size * m_kind));
+}
+
+inline void stringio::write_kind(const void *data, int kind, ssize_t len)
+{
+    static_assert(PyUnicode_1BYTE_KIND == 1 &&
+                  PyUnicode_2BYTE_KIND == 2 &&
+                  PyUnicode_4BYTE_KIND == 4);
+    check_size(m_pos + len, kind);
+    _copy_pystr_buffer(m_buff.get() + m_pos * m_kind, m_kind, data, kind, len);
+    m_pos += len;
+}
+
+__attribute__((visibility("protected")))
+void stringio::write(str s)
+{
+    write_kind(PyUnicode_DATA(s.get()), PyUnicode_KIND(s.get()), s.size());
+}
+
+__attribute__((visibility("protected")))
+void stringio::write_ascii(const char *s, ssize_t len)
+{
+    write_kind(s, PyUnicode_1BYTE_KIND, len);
+}
+
+__attribute__((visibility("protected")))
+void stringio::write_rep_ascii(int nrep, const char *s, ssize_t len)
+{
+    static_assert(PyUnicode_1BYTE_KIND == 1);
+    check_size(m_pos + len * nrep, PyUnicode_1BYTE_KIND);
+    if (m_kind == PyUnicode_1BYTE_KIND) [[likely]] {
+        for (int i = 0; i < nrep; i++) {
+            _copy_pystr_same_kind(m_buff.get() + m_pos + len * i,
+                                  s, PyUnicode_1BYTE_KIND, len);
+        }
+    }
+    else {
+        for (int i = 0; i < nrep; i++) {
+            _copy_pystr_change_kind(m_buff.get() + (m_pos + len * i) * m_kind, m_kind,
+                                    s, PyUnicode_1BYTE_KIND, len);
+        }
+    }
+    m_pos += len * nrep;
+}
+
+__attribute__((visibility("protected")))
+std::pair<int,void*> stringio::reserve_buffer(int kind, ssize_t len)
+{
+    check_size(m_pos + len, kind);
+    auto ptr = m_buff.get() + m_pos * m_kind;
+    m_pos += len;
+    return {m_kind, ptr};
+}
+
+__attribute__((visibility("protected")))
+str_ref stringio::getvalue()
+{
+    if (!m_pos)
+        return ""_py.ref();
+    return str_ref::checked(PyUnicode_FromKindAndData(m_kind, m_buff.get(), m_pos));
+}
+
+}
+
 #if PY_VERSION_HEX < 0x030b00f0
 
 static inline PyCodeObject *pyframe_getcode(PyFrameObject *frame)
 {
-    return (PyCodeObject*)py_xnewref((PyObject*)frame->f_code);
+    return (PyCodeObject*)py::xnewref((PyObject*)frame->f_code);
 }
 static inline int pyframe_getlasti(PyFrameObject *frame)
 {
@@ -50,7 +203,7 @@ static inline int pyframe_getlasti(PyFrameObject *frame)
 }
 static inline PyFrameObject *pyframe_getback(PyFrameObject *frame)
 {
-    return (PyFrameObject*)py_xnewref((PyObject*)frame->f_back);
+    return (PyFrameObject*)py::xnewref((PyObject*)frame->f_back);
 }
 
 #else
@@ -84,15 +237,13 @@ BacktraceTracker::FrameInfo::FrameInfo(PyFrameObject *frame)
 PyObject *BacktraceTracker::FrameInfo::get_traceback(PyObject *next)
 {
     PyThreadState *tstate = PyThreadState_Get();
-    py_object globals(pydict_new());
-    py_object args(pytuple_new(4));
-
-    PyTuple_SET_ITEM(args.get(), 0, py_newref(next));
-    PyTuple_SET_ITEM(args.get(), 1, (PyObject*)throw_if_not(
-                         PyFrame_New(tstate, code, globals, nullptr)));
-    PyTuple_SET_ITEM(args.get(), 2, pylong_from_long(lasti));
-    PyTuple_SET_ITEM(args.get(), 3, pylong_from_long(lineno));
-    return throw_if_not(traceback_new(&PyTraceBack_Type, args, nullptr));
+    auto globals = py::new_dict();
+    auto args = py::new_tuple(4);
+    args.SET(0, py::ptr(next));
+    args.SET(1, py::ref<>(throw_if_not(PyFrame_New(tstate, code, globals.get(), nullptr))));
+    args.SET(2, py::new_int(lasti));
+    args.SET(3, py::new_int(lineno));
+    return throw_if_not(traceback_new(&PyTraceBack_Type, args.get(), nullptr));
 }
 
 void BacktraceTracker::_record(uintptr_t key)
@@ -126,19 +277,17 @@ PyObject *BacktraceTracker::get_backtrace(uintptr_t key)
     if (it == traces.end())
         return nullptr;
     auto &trace = it->second;
-    PyObject *py_trace = nullptr;
+    py::ref py_trace;
     for (auto &info: trace) {
         try {
-            auto new_trace = info.get_traceback(py_trace ? py_trace : Py_None);
-            Py_XDECREF(py_trace);
-            py_trace = new_trace;
+            py_trace.take(info.get_traceback(py_trace ? py_trace.get() : Py_None));
         }
         catch (...) {
             // Skip a frame if we couldn't construct it.
             PyErr_Clear();
         }
     }
-    return py_trace;
+    return py_trace.rel();
 }
 
 static PyObject *combine_traceback(PyObject *old_tb, PyObject *tb)
@@ -246,61 +395,20 @@ void handle_cxx_exception()
     }
 }
 
-// We will leak these objects.
-// Otherwise, the destructor may be called after the libpython is already shut down.
-PyObject *pyfloat_m1(PyFloat_FromDouble(-1));
-PyObject *pyfloat_m0_5(PyFloat_FromDouble(-0.5));
-PyObject *pyfloat_0(PyFloat_FromDouble(0));
-PyObject *pyfloat_0_5(PyFloat_FromDouble(0.5));
-PyObject *pyfloat_1(PyFloat_FromDouble(1));
-
-#if PY_VERSION_HEX >= 0x030d0000
-PyObject *py_empty_bytes = Py_GetConstant(Py_CONSTANT_EMPTY_BYTES);
-#else
-PyObject *py_empty_bytes = pybytes_from_data(nullptr, 0);
-#endif
-
-const std::array<PyObject*,_pylong_cache_max * 2> _pylongs_cache = [] {
-    std::array<PyObject*,_pylong_cache_max * 2> res;
-    for (int i = 0; i < _pylong_cache_max * 2; i++)
-        res[i] = throw_if_not(PyLong_FromLong(i - _pylong_cache_max));
-    return res;
-} ();
-
 PyObject *pytuple_append1(PyObject *tuple, PyObject *obj)
 {
     Py_ssize_t nele = PyTuple_GET_SIZE(tuple);
-    py_object res(pytuple_new(nele + 1));
-    for (Py_ssize_t i = 0; i < nele; i++)
-        PyTuple_SET_ITEM(res.get(), i, py_newref(PyTuple_GET_ITEM(tuple, i)));
-    PyTuple_SET_ITEM(res.get(), nele, py_newref(obj));
-    return res.release();
-}
-
-static PyObject *_pydict_deepcopy(PyObject *d)
-{
-    py_object res(pydict_new());
-    for (auto [key, value]: pydict_iter(d)) {
-        if (!PyDict_Check(value)) {
-            pydict_setitem(res, key, value);
-            continue;
-        }
-        pydict_setitem(res, key, py_object(_pydict_deepcopy(value)));
-    }
-    return res.release();
-}
-
-PyObject *pydict_deepcopy(PyObject *d)
-{
-    if (!PyDict_Check(d))
-        return py_newref(d);
-    return _pydict_deepcopy(d);
+    auto res = py::new_tuple(nele + 1);
+    for (auto [i, v]: py::tuple_iter(tuple))
+        res.SET(i, v);
+    res.SET(nele, py::ptr(obj));
+    return res.rel();
 }
 
 void pytype_add_method(PyTypeObject *type, PyMethodDef *meth)
 {
-    throw_if(PyDict_SetItemString(type->tp_dict, meth->ml_name,
-                                  pyobj_checked(PyDescr_NewMethod(type, meth))));
+    py::dict(type->tp_dict).set(meth->ml_name,
+                                py::ref<>::checked(PyDescr_NewMethod(type, meth)));
 }
 
 __attribute__((visibility("protected")))
@@ -327,108 +435,9 @@ __attribute__((visibility("protected")))
                     (nexpected == 1) ? "" : "s", nfound);
 }
 
-static inline void _copy_pystr_same_kind(void *tgt, const void *src, int kind, ssize_t len)
+py::str_ref channel_name_from_path(PyObject *path)
 {
-    memcpy(tgt, src, len * kind);
-}
-
-static inline void _copy_pystr_change_kind(void *tgt, int tgt_kind,
-                                           const void *src, int src_kind, ssize_t len)
-{
-    for (ssize_t i = 0; i < len; i++) {
-        PyUnicode_WRITE(tgt_kind, tgt, i, PyUnicode_READ(src_kind, src, i));
-    }
-}
-
-static inline void _copy_pystr_buffer(void *tgt, int tgt_kind,
-                                      const void *src, int src_kind, ssize_t len)
-{
-    if (tgt_kind == src_kind) [[likely]] {
-        _copy_pystr_same_kind(tgt, src, tgt_kind, len);
-    }
-    else {
-        _copy_pystr_change_kind(tgt, tgt_kind, src, src_kind, len);
-    }
-}
-
-inline void py_stringio::check_size(size_t sz, int kind)
-{
-    if (kind > m_kind) [[unlikely]] {
-        auto new_buff = (char*)malloc(sz * kind);
-        _copy_pystr_change_kind(new_buff, kind, m_buff.get(), m_kind, m_pos);
-        m_kind = kind;
-        m_size = sz;
-        m_buff.reset(new_buff);
-        return;
-    }
-    if (m_size >= sz)
-        return;
-    m_size = sz * 3 / 2;
-    m_buff.reset((char*)realloc(m_buff.release(), m_size * m_kind));
-}
-
-inline void py_stringio::write_kind(const void *data, int kind, ssize_t len)
-{
-    static_assert(PyUnicode_1BYTE_KIND == 1 &&
-                  PyUnicode_2BYTE_KIND == 2 &&
-                  PyUnicode_4BYTE_KIND == 4);
-    check_size(m_pos + len, kind);
-    _copy_pystr_buffer(m_buff.get() + m_pos * m_kind, m_kind, data, kind, len);
-    m_pos += len;
-}
-
-__attribute__((visibility("protected")))
-void py_stringio::write(PyObject *str)
-{
-    write_kind(PyUnicode_DATA(str), PyUnicode_KIND(str), PyUnicode_GET_LENGTH(str));
-}
-
-__attribute__((visibility("protected")))
-void py_stringio::write_ascii(const char *s, ssize_t len)
-{
-    write_kind(s, PyUnicode_1BYTE_KIND, len);
-}
-
-__attribute__((visibility("protected")))
-void py_stringio::write_rep_ascii(int nrep, const char *s, ssize_t len)
-{
-    static_assert(PyUnicode_1BYTE_KIND == 1);
-    check_size(m_pos + len * nrep, PyUnicode_1BYTE_KIND);
-    if (m_kind == PyUnicode_1BYTE_KIND) [[likely]] {
-        for (int i = 0; i < nrep; i++) {
-            _copy_pystr_same_kind(m_buff.get() + m_pos + len * i,
-                                  s, PyUnicode_1BYTE_KIND, len);
-        }
-    }
-    else {
-        for (int i = 0; i < nrep; i++) {
-            _copy_pystr_change_kind(m_buff.get() + (m_pos + len * i) * m_kind, m_kind,
-                                    s, PyUnicode_1BYTE_KIND, len);
-        }
-    }
-    m_pos += len * nrep;
-}
-
-__attribute__((visibility("protected")))
-std::pair<int,void*> py_stringio::reserve_buffer(int kind, ssize_t len)
-{
-    check_size(m_pos + len, kind);
-    auto ptr = m_buff.get() + m_pos * m_kind;
-    m_pos += len;
-    return {m_kind, ptr};
-}
-
-__attribute__((returns_nonnull,visibility("protected")))
-PyObject *py_stringio::getvalue()
-{
-    if (!m_pos)
-        return py_newref(""_py);
-    return throw_if_not(PyUnicode_FromKindAndData(m_kind, m_buff.get(), m_pos));
-}
-
-py_object channel_name_from_path(PyObject *path)
-{
-    return pyobj_checked(PyUnicode_Join("/"_py, path));
+    return "/"_py.join(path);
 }
 
 std::streamsize buff_streambuf::xsputn(const char *s, std::streamsize count)
@@ -543,16 +552,14 @@ pybytes_streambuf::pybytes_streambuf()
 
 pybytes_streambuf::~pybytes_streambuf()
 {
-    Py_XDECREF(m_buf);
 }
 
 __attribute__((returns_nonnull)) PyObject *pybytes_streambuf::get_buf()
 {
     if (!m_buf)
-        return py_immref(py_empty_bytes);
+        return py::empty_bytes.immref().rel();
     auto sz = m_end;
-    auto buf = m_buf;
-    m_buf = nullptr;
+    auto buf = m_buf.rel();
     setp(nullptr, nullptr);
     m_end = 0;
     throw_if(_PyBytes_Resize(&buf, sz));
@@ -567,14 +574,14 @@ char *pybytes_streambuf::extend(size_t sz)
     // overallocate.
     auto new_sz = (oldsz + sz) * 3 / 2;
     if (oldbase + new_sz <= epptr())
-        return &PyBytes_AS_STRING(m_buf)[oldsz];
+        return &PyBytes_AS_STRING(m_buf.get())[oldsz];
     if (!m_buf) {
-        m_buf = pybytes_from_data(nullptr, new_sz);
+        m_buf = py::new_bytes(nullptr, new_sz);
     }
     else {
-        throw_if(_PyBytes_Resize(&m_buf, new_sz));
+        throw_if(_PyBytes_Resize(&m_buf._get_ptr_slot(), new_sz));
     }
-    auto buf = PyBytes_AS_STRING(m_buf);
+    auto buf = PyBytes_AS_STRING(m_buf.get());
     setp(buf, &buf[new_sz]);
     pbump((int)oldsz);
     return &buf[oldsz];
@@ -596,7 +603,6 @@ pybytearray_streambuf::pybytearray_streambuf()
 
 pybytearray_streambuf::~pybytearray_streambuf()
 {
-    Py_XDECREF(m_buf);
 }
 
 __attribute__((returns_nonnull)) PyObject *pybytearray_streambuf::get_buf()
@@ -604,8 +610,7 @@ __attribute__((returns_nonnull)) PyObject *pybytearray_streambuf::get_buf()
     if (!m_buf)
         return throw_if_not(PyByteArray_FromStringAndSize(nullptr, 0));
     auto sz = m_end;
-    auto buf = m_buf;
-    m_buf = nullptr;
+    auto buf = m_buf.rel();
     setp(nullptr, nullptr);
     m_end = 0;
     throw_if(PyByteArray_Resize(buf, sz));
@@ -620,14 +625,14 @@ char *pybytearray_streambuf::extend(size_t sz)
     // overallocate.
     auto new_sz = (oldsz + sz) * 3 / 2;
     if (oldbase + new_sz <= epptr())
-        return &PyByteArray_AS_STRING(m_buf)[oldsz];
+        return &PyByteArray_AS_STRING(m_buf.get())[oldsz];
     if (!m_buf) {
-        m_buf = throw_if_not(PyByteArray_FromStringAndSize(nullptr, new_sz));
+        m_buf.take(throw_if_not(PyByteArray_FromStringAndSize(nullptr, new_sz)));
     }
     else {
-        throw_if(PyByteArray_Resize(m_buf, new_sz));
+        throw_if(PyByteArray_Resize(m_buf.get(), new_sz));
     }
-    auto buf = PyByteArray_AS_STRING(m_buf);
+    auto buf = PyByteArray_AS_STRING(m_buf.get());
     setp(buf, &buf[new_sz]);
     pbump((int)oldsz);
     return &buf[oldsz];

@@ -281,12 +281,12 @@ struct TagVal {
         throw_py_error(err);
         switch (type) {
         case DataType::Bool:
-            return py_immref(val.b_val ? Py_True : Py_False);
+            return py::immref(val.b_val ? Py_True : Py_False);
         case DataType::Int64:
-            return pylong_from_longlong(val.i64_val);
+            return py::new_int(val.i64_val).rel();
         default:
         case DataType::Float64:
-            return pyfloat_from_double(val.f64_val);
+            return py::new_float(val.f64_val).rel();
         }
     }
     bool is_zero() const
@@ -956,9 +956,9 @@ struct ExternCallback : PyObject {
     static PyTypeObject Type;
 };
 
-static inline bool is_rtval(PyObject *v)
+static inline bool is_rtval(auto &&v)
 {
-    return Py_TYPE(v) == &RuntimeValue::Type;
+    return Py_TYPE((PyObject*)v) == &RuntimeValue::Type;
 }
 
 __attribute__((returns_nonnull)) RuntimeValue*
@@ -1018,7 +1018,7 @@ rt_convert_bool(RuntimeValue *v)
     if (v->type_ == Int64)
         v = v->arg0;
     if (v->datatype == DataType::Bool)
-        return py_newref(v);
+        return py::newref(v);
     return new_expr1(Bool, v);
 }
 
@@ -1026,7 +1026,7 @@ static inline __attribute__((returns_nonnull)) RuntimeValue*
 rt_round_int64(RuntimeValue *v)
 {
     if (v->type_ == Int64)
-        return py_newref(v);
+        return py::newref(v);
     return new_expr1(Int64, v);
 }
 

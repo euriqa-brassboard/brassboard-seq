@@ -81,11 +81,17 @@
 
 namespace {
 
+template<typename T>
 __attribute__((always_inline, flatten))
-static inline constexpr auto _pyx_find_base(auto *p, auto cb)
+static inline constexpr auto _pyx_find_base(T &&p, auto cb)
 {
-    if constexpr (requires { cb(p); }) {
-        return p;
+    if constexpr (requires { cb(std::forward<T>(p)); }) {
+        if constexpr (std::is_pointer_v<std::remove_cvref_t<T>>) {
+            return p;
+        }
+        else {
+            return p.operator->();
+        }
     }
     else {
         return _pyx_find_base(&p->__pyx_base, cb);
@@ -95,7 +101,7 @@ static inline constexpr auto _pyx_find_base(auto *p, auto cb)
 }
 
 #define pyx_find_base(p, fld)                                           \
-    (::_pyx_find_base((p), [] (auto _x) constexpr requires requires { _x->fld; } {}))
+    (::_pyx_find_base((p), [] (auto &&_x) constexpr requires requires { _x->fld; } {}))
 #define pyx_fld(p, fld) (pyx_find_base((p), fld)->fld)
 
 namespace brassboard_seq {
@@ -138,6 +144,7 @@ static inline __attribute__((always_inline)) auto throw_if_not(auto &&v)
         throw0();
     return std::move(v);
 }
+static inline auto throw_if_not(auto &&v, uintptr_t key);
 
 static inline __attribute__((always_inline)) auto throw_if(auto &&v)
 {
@@ -145,6 +152,7 @@ static inline __attribute__((always_inline)) auto throw_if(auto &&v)
         throw0();
     return std::move(v);
 }
+static inline auto throw_if(auto &&v, uintptr_t key);
 
 enum BBLogLevel {
     BB_LOG_DEBUG,
@@ -160,29 +168,849 @@ extern BBLogLevel bb_logging_level;
 #define bb_debug(...) bb_log(BB_LOG_DEBUG, __VA_ARGS__)
 #define bb_info(...) bb_log(BB_LOG_INFO, __VA_ARGS__)
 
-static inline auto py_newref(auto *obj)
+struct CDeleter {
+    template<typename T>
+    void operator()(T *p) {
+        free((void*)p);
+    }
+};
+
+namespace py {
+
+struct _common {};
+template<typename T=PyObject> struct _ref;
+template<typename T=PyObject> struct ptr;
+template<template<typename> class H, typename T> struct common;
+template<typename T=PyObject> using ref = _ref<T>;
+
+template<typename T>
+constexpr bool is_handle_v = std::is_base_of_v<_common,std::remove_cvref_t<T>>;
+
+struct _pyobj_tag_type {};
+
+struct _dict : _pyobj_tag_type {};
+using dict = ptr<_dict>;
+using dict_ref = ref<_dict>;
+struct _set : _pyobj_tag_type {};
+using set = ptr<_set>;
+using set_ref = ref<_set>;
+struct _list : _pyobj_tag_type {};
+using list = ptr<_list>;
+using list_ref = ref<_list>;
+struct _tuple : _pyobj_tag_type {};
+using tuple = ptr<_tuple>;
+using tuple_ref = ref<_tuple>;
+struct _bytes : _pyobj_tag_type {};
+using bytes = ptr<_bytes>;
+using bytes_ref = ref<_bytes>;
+struct _float : _pyobj_tag_type {};
+using float_ = ptr<_float>;
+using float_ref = ref<_float>;
+struct _int : _pyobj_tag_type {};
+using int_ = ptr<_int>;
+using int_ref = ref<_int>;
+struct _str : _pyobj_tag_type {};
+using str = ptr<_str>;
+using str_ref = ref<_str>;
+struct _mod : _pyobj_tag_type {};
+using mod = ptr<_mod>;
+using mod_ref = ref<_mod>;
+
+template<typename T>
+using py_ptr_type = std::conditional_t<std::is_base_of_v<_pyobj_tag_type,T>,PyObject,T>;
+
+template<typename T>
+struct _py_tag_type { using type = T; };
+template<typename T>
+struct _py_tag_type<ref<T>> { using type = T; };
+template<typename T>
+struct _py_tag_type<ptr<T>> { using type = T; };
+template<typename T>
+using py_tag_type = typename _py_tag_type<T>::type;
+
+template<typename T2>
+static constexpr bool is_py_ptr = is_handle_v<T2> ||
+    (std::is_pointer_v<std::remove_cvref_t<T2>> &&
+     !std::integral<std::remove_pointer_t<std::remove_cvref_t<T2>>>);
+
+static inline void check_refcnt(auto *obj)
 {
+    assert(!obj || Py_REFCNT(obj) > 0);
+}
+
+static inline auto newref(auto *obj)
+{
+    check_refcnt(obj);
     Py_INCREF(obj);
     return obj;
 }
 
-static inline auto py_xnewref(auto *obj)
+static inline auto xnewref(auto *obj)
 {
+    check_refcnt(obj);
     Py_XINCREF(obj);
     return obj;
 }
 
 #if PY_VERSION_HEX >= 0x030c0000
-static inline auto py_immref(auto *obj)
+static inline auto immref(auto *obj)
 {
     return obj;
 }
 #else
-static inline auto py_immref(auto *obj)
+static inline auto immref(auto *obj)
 {
-    return py_newref(obj);
+    check_refcnt(obj);
+    return newref(obj);
 }
 #endif
+
+template<typename T>
+static inline py_ptr_type<T> *newref(py::ref<T> &&h)
+{
+    return h.rel();
+}
+template<template<typename> class H, typename T>
+static inline py_ptr_type<T> *newref(const common<H,T> &h)
+{
+    return h.ref().rel();
+}
+
+template<template<typename> class H, typename T>
+struct common : _common {
+    static auto checked(auto *p, auto&&... args)
+    {
+        check_refcnt(p);
+        return H<T>(throw_if_not(p, args...));
+    }
+
+    constexpr explicit operator bool() const noexcept
+    {
+        return _ptr() != nullptr;
+    }
+    constexpr auto operator->() const
+    {
+        return _ptr();
+    }
+    template<template<typename> class H2, typename T2>
+    bool operator==(const common<H2,T2> &other) const
+    {
+        return (void*)_ptr() == (void*)other._ptr();
+    }
+    bool operator==(auto *ptr) const
+    {
+        return (void*)_ptr() == (void*)ptr;
+    }
+    bool is_none() const
+    {
+        return (void*)_ptr() == (void*)Py_None;
+    }
+    bool typeis(auto &&type) const
+    {
+        return Py_TYPE((PyObject*)_ptr()) == (PyTypeObject*)type;
+    }
+
+    template<typename T2=T>
+    auto ptr() const
+    {
+        return py::ptr<T2>(_ptr());
+    }
+    template<typename T2=T>
+    auto immref() const
+    {
+        return py::ref<T2>(py::immref(_ptr()));
+    }
+    template<typename T2=T>
+    auto ref() const
+    {
+        return py::ref<T2>(py::newref(_ptr()));
+    }
+    template<typename T2=T>
+    auto xref() const
+    {
+        return py::ref<T2>(py::xnewref(_ptr()));
+    }
+
+    auto str() const
+    {
+        return py::str_ref(throw_if_not(PyObject_Str((PyObject*)_ptr())));
+    }
+    auto list() const
+    {
+        return py::list_ref(throw_if_not(PySequence_List((PyObject*)_ptr())));
+    }
+    auto int_() const
+    {
+        return py::int_ref(throw_if_not(PyNumber_Long((PyObject*)_ptr())));
+    }
+    auto try_int() const;
+
+    auto attr(const char *name) const
+    {
+        return py::ref(throw_if_not(PyObject_GetAttrString((PyObject*)_ptr(), name)));
+    }
+    template<typename T2>
+    auto attr(T2 &&name) const requires is_py_ptr<T2>
+    {
+        return py::ref(throw_if_not(PyObject_GetAttr((PyObject*)_ptr(), (PyObject*)name)));
+    }
+    auto try_attr(const char *name) const
+    {
+        auto res = py::ref(PyObject_GetAttrString((PyObject*)_ptr(), name));
+        if (!res)
+            PyErr_Clear();
+        return res;
+    }
+    template<typename T2>
+    auto try_attr(T2 &&name) const requires is_py_ptr<T2>
+    {
+        auto res = py::ref(PyObject_GetAttr((PyObject*)_ptr(), (PyObject*)name));
+        if (!res)
+            PyErr_Clear();
+        return res;
+    }
+    void set_attr(const char *name, auto &&val)
+    {
+        throw_if(PyObject_SetAttrString((PyObject*)_ptr(), name, (PyObject*)val));
+    }
+    template<typename T2>
+    void set_attr(T2 &&name, auto &&val) requires is_py_ptr<T2>
+    {
+        throw_if(PyObject_SetAttr((PyObject*)_ptr(), (PyObject*)name, (PyObject*)val));
+    }
+    void del_attr(const char *name)
+    {
+        throw_if(PyObject_DelAttrString((PyObject*)_ptr(), name));
+    }
+    template<typename T2>
+    void del_attr(T2 &&name) requires is_py_ptr<T2>
+    {
+        throw_if(PyObject_DelAttr((PyObject*)_ptr(), (PyObject*)name));
+    }
+
+    template<typename KW=PyObject*>
+    auto vcall(PyObject *const *args, size_t nargsf, KW &&kwnames=nullptr)
+    {
+        return py::ref(throw_if_not(PyObject_Vectorcall((PyObject*)_ptr(), args,
+                                                        nargsf, (PyObject*)kwnames)));
+    }
+    template<typename KW=PyObject*>
+    auto vcall_dict(PyObject *const *args, size_t nargs, KW &&kws=nullptr)
+    {
+        return py::ref(throw_if_not(PyObject_VectorcallDict((PyObject*)_ptr(), args,
+                                                            nargs, (PyObject*)kws)));
+    }
+    auto operator()(auto&&... args)
+    {
+        PyObject *py_args[] = { (PyObject*)args... };
+        return vcall(py_args, sizeof...(args));
+    }
+
+    Py_ssize_t size() const requires std::same_as<T,_dict>
+    {
+        return PyDict_Size((PyObject*)_ptr());
+    }
+    template<typename Key>
+    void set(Key &&key, auto &&val) requires (std::same_as<T,_dict> && is_py_ptr<Key>)
+    {
+        throw_if(PyDict_SetItem((PyObject*)_ptr(), (PyObject*)key, (PyObject*)val));
+    }
+    void set(const char *key, auto &&val) requires std::same_as<T,_dict>
+    {
+        throw_if(PyDict_SetItemString((PyObject*)_ptr(), key, (PyObject*)val));
+    }
+    auto try_get(auto &&key) const requires std::same_as<T,_dict>
+    {
+        auto res = py::ptr(PyDict_GetItemWithError((PyObject*)_ptr(), (PyObject*)key));
+        if (!res)
+            PyErr_Clear();
+        return res;
+    }
+    bool contains(auto &&key) const requires std::same_as<T,_dict>
+    {
+        auto res = PyDict_Contains((PyObject*)_ptr(), (PyObject*)key);
+        throw_if(res < 0);
+        assume(res <= 1);
+        return res;
+    }
+    void clear() requires std::same_as<T,_dict>
+    {
+        PyDict_Clear((PyObject*)_ptr());
+    }
+    auto copy() const requires std::same_as<T,_dict>
+    {
+        return dict_ref(throw_if_not(PyDict_Copy((PyObject*)_ptr())));
+    }
+
+    Py_ssize_t size() const requires std::same_as<T,_set>
+    {
+        return PySet_GET_SIZE((PyObject*)_ptr());
+    }
+    void add(auto &&item) requires std::same_as<T,_set>
+    {
+        throw_if(PySet_Add((PyObject*)_ptr(), (PyObject*)item));
+    }
+    bool contains(auto &&key) const requires std::same_as<T,_set>
+    {
+        auto res = PySet_Contains((PyObject*)_ptr(), (PyObject*)key);
+        throw_if(res < 0);
+        assume(res <= 1);
+        return res;
+    }
+    void clear() requires std::same_as<T,_set>
+    {
+        throw_if(PySet_Clear((PyObject*)_ptr()));
+    }
+
+    Py_ssize_t size() const requires std::same_as<T,_list>
+    {
+        return PyList_GET_SIZE((PyObject*)_ptr());
+    }
+    template<typename T2>
+    void SET(Py_ssize_t i, T2 &&val) requires std::same_as<T,_list>
+    {
+        PyList_SET_ITEM((PyObject*)_ptr(), i,
+                        (PyObject*)py::newref(std::forward<T2>(val)));
+    }
+    void SET(Py_ssize_t i, std::nullptr_t) requires std::same_as<T,_list>
+    {
+        PyList_SET_ITEM((PyObject*)_ptr(), i, (PyObject*)nullptr);
+    }
+    template<typename T2>
+    void set(Py_ssize_t i, T2 &&val) requires std::same_as<T,_list>
+    {
+        auto item = PyList_GET_ITEM((PyObject*)_ptr(), i);
+        SET(i, std::forward<T2>(val));
+        check_refcnt(item);
+        Py_DECREF(item);
+    }
+    auto get(Py_ssize_t i) requires std::same_as<T,_list>
+    {
+        return py::ptr(PyList_GET_ITEM((PyObject*)_ptr(), i));
+    }
+    template<typename T2>
+    void append(T2 &&x) requires std::same_as<T,_list>
+    {
+        auto list = (PyObject*)_ptr();
+        PyListObject *L = (PyListObject*)list;
+        Py_ssize_t len = Py_SIZE(list);
+        if (L->allocated > len && len > (L->allocated >> 1)) [[likely]] {
+            PyList_SET_ITEM(list, len, newref(std::forward<T2>(x)));
+#if PY_VERSION_HEX >= 0x030900A4
+            Py_SET_SIZE(list, len + 1);
+#else
+            Py_SIZE(list) = len + 1;
+#endif
+            return;
+        }
+        throw_if(PyList_Append(list, (PyObject*)x));
+    }
+
+    Py_ssize_t size() const requires std::same_as<T,_tuple>
+    {
+        return PyTuple_GET_SIZE((PyObject*)_ptr());
+    }
+    template<typename T2>
+    void SET(Py_ssize_t i, T2 &&val) requires std::same_as<T,_tuple>
+    {
+        PyTuple_SET_ITEM((PyObject*)_ptr(), i,
+                         (PyObject*)newref(std::forward<T2>(val)));
+    }
+    void SET(Py_ssize_t i, std::nullptr_t) requires std::same_as<T,_tuple>
+    {
+        PyTuple_SET_ITEM((PyObject*)_ptr(), i, (PyObject*)nullptr);
+    }
+    auto get(Py_ssize_t i) requires std::same_as<T,_tuple>
+    {
+        return py::ptr(PyTuple_GET_ITEM((PyObject*)_ptr(), i));
+    }
+
+    Py_ssize_t size() const requires std::same_as<T,_str>
+    {
+        return PyUnicode_GET_LENGTH((PyObject*)_ptr());
+    }
+    bool contains(auto &&key) const requires std::same_as<T,_str>
+    {
+        auto res = PyUnicode_Contains((PyObject*)_ptr(), (PyObject*)key);
+        throw_if(res < 0);
+        assume(res <= 1);
+        return res;
+    }
+    auto concat(auto &&s2) const requires std::same_as<T,_str>
+    {
+        return str_ref(throw_if_not(PyUnicode_Concat((PyObject*)_ptr(), (PyObject*)s2)));
+    }
+    auto join(auto &&items) const requires std::same_as<T,_str>
+    {
+        return str_ref(throw_if_not(PyUnicode_Join((PyObject*)_ptr(), (PyObject*)items)));
+    }
+
+private:
+    auto *_ptr() const
+    {
+        return static_cast<const H<T>*>(this)->get();
+    }
+    template<typename T2> friend class ptr;
+    template<typename T2> friend class _ref;
+};
+
+template<typename T>
+struct ptr : common<ptr,T> {
+    constexpr ptr() = default;
+    constexpr ptr(auto *ptr) : m_ptr{(T*)ptr}
+    {
+        check_refcnt(m_ptr);
+    }
+    template<template<typename> class H, typename T2>
+    constexpr ptr(const common<H,T2> &h) : m_ptr{(T*)h._ptr()}
+    {
+        check_refcnt(m_ptr);
+    }
+    ptr &operator=(auto *p) noexcept
+    {
+        m_ptr = (T*)p;
+        check_refcnt(m_ptr);
+        return *this;
+    }
+    template<template<typename> class H, typename T2>
+    ptr &operator=(const common<H,T2> &h) noexcept
+    {
+        m_ptr = (T*)h._ptr();
+        check_refcnt(m_ptr);
+        return *this;
+    }
+    template<typename T2> ptr &operator=(ref<T2>&&) noexcept = delete;
+    using common<ptr,T>::get;
+    template<typename T2=py_ptr_type<T>>
+    constexpr T2 *get() const
+    {
+        check_refcnt(m_ptr);
+        return (T2*)m_ptr;
+    }
+    template<typename T2> operator T2*() const
+    {
+        check_refcnt(m_ptr);
+        return (T2*)m_ptr;
+    }
+
+private:
+    T *m_ptr{nullptr};
+    template<typename T2> friend class ptr;
+    template<typename T2> friend class _ref;
+};
+template<typename T> ptr(T*) -> ptr<T>;
+
+template<typename T>
+struct _ref : common<_ref,T> {
+    constexpr _ref() = default;
+    // Take ownership
+    explicit constexpr _ref(auto *ref) : m_ptr{(T*)ref}
+    {
+        check_refcnt(m_ptr);
+    }
+    constexpr _ref(_ref &&h) : m_ptr{h.m_ptr}
+    {
+        h.m_ptr = nullptr;
+        check_refcnt(m_ptr);
+    }
+    template<typename T2>
+    constexpr _ref(ref<T2> &&h) : m_ptr{(T*)h.m_ptr}
+    {
+        h.m_ptr = nullptr;
+        check_refcnt(m_ptr);
+    }
+    _ref(const _ref&) = delete;
+    template<typename T2> _ref(const ref<T2>&) = delete;
+    template<typename T2> _ref(const ptr<T2>&) = delete;
+    ~_ref()
+    {
+        check_refcnt(m_ptr);
+        Py_XDECREF((PyObject*)m_ptr);
+    }
+    template<template<typename> class H, typename T2>
+    _ref &operator=(const common<H,T2>&) = delete;
+    _ref &operator=(const _ref&) = delete;
+    template<typename T2>
+    _ref &operator=(ref<T2> &&h) noexcept
+    {
+        take(std::move(h));
+        return *this;
+    }
+    _ref &operator=(_ref &&h) noexcept
+    {
+        take(std::move(h));
+        return *this;
+    }
+    using common<_ref,T>::get;
+    template<typename T2=py_ptr_type<T>>
+    constexpr T2 *get() const
+    {
+        check_refcnt(m_ptr);
+        return (T2*)m_ptr;
+    }
+    template<typename T2>
+    explicit operator T2*()
+    {
+        check_refcnt(m_ptr);
+        return (T2*)m_ptr;
+    }
+    void take(auto *p) noexcept
+    {
+        check_refcnt(m_ptr);
+        auto ptr = m_ptr;
+        m_ptr = (T*)p;
+        Py_XDECREF((PyObject*)ptr);
+        check_refcnt(m_ptr);
+    }
+    void take_checked(auto *p, auto&&... args)
+    {
+        take(throw_if_not(p, args...));
+    }
+    template<typename T2>
+    void take(ref<T2> &&h) noexcept
+    {
+        check_refcnt(m_ptr);
+        auto ptr = m_ptr;
+        m_ptr = (T*)h.rel();
+        Py_XDECREF((PyObject*)ptr);
+        check_refcnt(m_ptr);
+    }
+    template<typename T2=py_ptr_type<T>> T2 *rel()
+    {
+        auto p = m_ptr;
+        m_ptr = nullptr;
+        check_refcnt(p);
+        return (T2*)p;
+    }
+    auto &_get_ptr_slot()
+    {
+        return m_ptr;
+    }
+
+private:
+    T *m_ptr{nullptr};
+    template<typename T2> friend class ptr;
+    template<typename T2> friend class _ref;
+};
+template<typename T> _ref(T*) -> _ref<T>;
+
+template<template<typename> class H, typename T>
+inline auto common<H,T>::try_int() const
+{
+    auto res = py::int_ref(PyNumber_Long((PyObject*)_ptr()));
+    if (!res)
+        PyErr_Clear();
+    return res;
+}
+
+template<typename T>
+static inline void assign(auto *&field, T &&v)
+{
+    ref((PyObject*)std::exchange(field, py::newref(std::forward<T>(v))));
+}
+
+template<typename T>
+static inline auto _vararg_decay(T &&v)
+{
+    if constexpr (is_handle_v<T>) {
+        return (PyObject*)v;
+    }
+    else {
+        return std::forward<T>(v);
+    }
+}
+
+template<typename... Args>
+static inline str_ref str_format(const char *format, Args&&... args)
+{
+    return str_ref::checked(
+        PyUnicode_FromFormat(format, _vararg_decay(std::forward<Args>(args))...));
+}
+
+static inline dict_ref new_dict()
+{
+    return dict_ref(throw_if_not(PyDict_New()));
+}
+ref<> dict_deepcopy(ptr<> d);
+
+template<typename T=PyObject*>
+static inline set_ref new_set(T &&h=nullptr)
+{
+    return set_ref(throw_if_not(PySet_New((PyObject*)h)));
+}
+
+static inline list_ref new_list(Py_ssize_t n)
+{
+    return list_ref(throw_if_not(PyList_New(n)));
+}
+
+extern tuple empty_tuple;
+static inline tuple_ref new_tuple(Py_ssize_t n)
+{
+    return tuple_ref(throw_if_not(PyTuple_New(n)));
+}
+
+extern bytes empty_bytes;
+static inline bytes_ref new_bytes(const char *data, Py_ssize_t len)
+{
+    return ref(throw_if_not(PyBytes_FromStringAndSize(data, len)));
+}
+
+extern float_ float_m1;
+extern float_ float_m0_5;
+extern float_ float_0;
+extern float_ float_0_5;
+extern float_ float_1;
+static inline float_ref new_float(double v)
+{
+    if (v == -1) {
+        return float_m1.ref();
+    }
+    else if (v == -0.5) {
+        return float_m0_5.ref();
+    }
+    else if (v == 0) {
+        return float_0.ref();
+    }
+    else if (v == 0.5) {
+        return float_0_5.ref();
+    }
+    else if (v == 1) {
+        return float_1.ref();
+    }
+    return float_ref(throw_if_not(PyFloat_FromDouble(v)));
+}
+
+static constexpr int _int_cache_max = 4096;
+extern const std::array<int_,_int_cache_max * 2> _int_cache;
+
+template<std::integral auto v>
+static consteval void assert_int_cache()
+{
+    static_assert(v < _int_cache_max);
+    static_assert(v >= -_int_cache_max);
+}
+
+static inline int_ int_cached(int v)
+{
+    assert(v < _int_cache_max);
+    assert(v >= -_int_cache_max);
+    return _int_cache[v + _int_cache_max];
+}
+
+static inline int_ref new_int(std::integral auto v)
+{
+    if (v < _int_cache_max && v >= -_int_cache_max)
+        return int_cached(v).ref();
+    if constexpr (sizeof(v) > sizeof(long)) {
+        return int_ref(throw_if_not(PyLong_FromLongLong(v)));
+    }
+    else {
+        return int_ref(throw_if_not(PyLong_FromLong(v)));
+    }
+}
+
+static inline str_ref new_str(const char *str)
+{
+    return str_ref(throw_if_not(PyUnicode_FromString(str)));
+}
+static inline str_ref new_str(const char *str, Py_ssize_t len)
+{
+    return str_ref(throw_if_not(PyUnicode_FromStringAndSize(str, len)));
+}
+
+static inline str_ref new_str(const std::string &str)
+{
+    return new_str(str.c_str(), str.size());
+}
+
+struct stringio {
+    stringio &operator=(const stringio&) = delete;
+
+    void write(str s);
+    void write_str(ptr<> obj)
+    {
+        write(obj.str());
+    }
+    void write_ascii(const char *s, ssize_t len);
+    void write_ascii(const char *s)
+    {
+        write_ascii(s, strlen(s));
+    }
+    void write_rep_ascii(int nrep, const char *s, ssize_t len);
+    void write_rep_ascii(int nrep, const char *s)
+    {
+        write_rep_ascii(nrep, s, strlen(s));
+    }
+    std::pair<int,void*> reserve_buffer(int kind, ssize_t len);
+    str_ref getvalue();
+
+private:
+    void write_kind(const void *data, int kind, ssize_t len);
+    void check_size(size_t sz, int kind);
+
+    std::unique_ptr<char,CDeleter> m_buff;
+    size_t m_size{0};
+    size_t m_pos{0};
+    int m_kind{PyUnicode_1BYTE_KIND};
+};
+
+static inline mod_ref import_module(const char *str)
+{
+    return mod_ref(throw_if_not(PyImport_ImportModule(str)));
+}
+
+static inline mod_ref new_module(PyModuleDef *def)
+{
+    return mod_ref(throw_if_not(PyModule_Create(def)));
+}
+
+template<typename T1=PyObject*,typename T2=PyObject*>
+static inline auto new_cfunc(PyMethodDef *ml, T1 &&self=nullptr, T2 &&mod=nullptr)
+{
+    return ref(throw_if_not(PyCFunction_NewEx(ml, (PyObject*)self, (PyObject*)mod)));
+}
+
+template<typename T=PyObject, typename Tty>
+static inline auto generic_alloc(Tty &&ty, Py_ssize_t sz=0) requires is_py_ptr<Tty>
+{
+    return ref<py_tag_type<T>>::checked(PyType_GenericAlloc((PyTypeObject*)ty, sz));
+}
+
+template<typename T>
+static inline auto generic_alloc(Py_ssize_t sz=0)
+    requires requires { (PyTypeObject*)&T::Type; }
+{
+    return ref<T>::checked(PyType_GenericAlloc((PyTypeObject*)&T::Type, sz));
+}
+
+template<typename It, typename T>
+struct _iter {
+    explicit _iter(T &obj) : obj(obj) {}
+    auto begin() { return It((PyObject*)obj); };
+    auto end() { return It::end((PyObject*)obj); }
+private:
+    T &obj;
+};
+
+template<typename Value, typename Key>
+struct _dict_iterator {
+    _dict_iterator(PyObject *dict) : dict(dict)
+    {
+        ++(*this);
+    }
+    _dict_iterator &operator++()
+    {
+        has_next = PyDict_Next(dict, &pos, &key, &value);
+        return *this;
+    }
+    std::pair<ptr<py::py_tag_type<Key>>,ptr<py::py_tag_type<Value>>> operator*()
+    {
+        return { ptr((py::py_tag_type<Key>*)key), ptr((py::py_tag_type<Value>*)value) };
+    }
+    bool operator==(std::nullptr_t) { return !has_next; }
+    static std::nullptr_t end(auto&&) { return nullptr; };
+
+private:
+    PyObject *dict;
+    PyObject *key, *value;
+    Py_ssize_t pos{0};
+    bool has_next;
+};
+
+template<typename Value=PyObject, typename Key=PyObject,typename T>
+static inline auto dict_iter(T &&h)
+{
+    using _T = std::remove_cvref_t<T>;
+    return _iter<_dict_iterator<Value,Key>,_T>(h);
+}
+
+template<typename Value>
+struct _list_iterator {
+    _list_iterator(PyObject *list) : list(list) {}
+    _list_iterator &operator++()
+    {
+        ++pos;
+        return *this;
+    }
+    std::pair<Py_ssize_t,ptr<py::py_tag_type<Value>>> operator*()
+    {
+        return { pos, ptr((py::py_tag_type<Value>*)PyList_GET_ITEM(list, pos)) };
+    }
+    bool operator==(Py_ssize_t n) { return pos == n; }
+    static Py_ssize_t end(PyObject *list) { return PyList_GET_SIZE(list); }
+
+private:
+    PyObject *list;
+    Py_ssize_t pos{0};
+};
+
+template<typename Value=PyObject,typename T>
+static inline auto list_iter(T &&h)
+{
+    using _T = std::remove_cvref_t<T>;
+    return _iter<_list_iterator<Value>,_T>(h);
+}
+
+template<typename Value>
+struct _tuple_iterator {
+    _tuple_iterator(PyObject *tuple) : tuple(tuple) {}
+    _tuple_iterator &operator++()
+    {
+        ++pos;
+        return *this;
+    }
+    std::pair<Py_ssize_t,ptr<py::py_tag_type<Value>>> operator*()
+    {
+        return { pos, ptr((py::py_tag_type<Value>*)PyTuple_GET_ITEM(tuple, pos)) };
+    }
+    bool operator==(Py_ssize_t n) { return pos == n; }
+    static Py_ssize_t end(PyObject *tuple) { return PyTuple_GET_SIZE(tuple); }
+
+private:
+    PyObject *tuple;
+    Py_ssize_t pos{0};
+};
+
+template<typename Value=PyObject,typename T>
+static inline auto tuple_iter(T &&h)
+{
+    using _T = std::remove_cvref_t<T>;
+    return _iter<_tuple_iterator<Value>,_T>(h);
+}
+
+struct _str_iterator {
+    _str_iterator(PyObject *str)
+        : data(PyUnicode_DATA(str)),
+          kind(PyUnicode_KIND(str))
+    {
+    }
+    _str_iterator &operator++()
+    {
+        ++idx;
+        return *this;
+    }
+    std::pair<Py_ssize_t,Py_UCS4> operator*()
+    {
+        return { idx, PyUnicode_READ(kind, data, idx) };
+    }
+    bool operator==(Py_ssize_t n) { return idx == n; }
+    static Py_ssize_t end(PyObject *str) { return PyUnicode_GET_LENGTH(str); }
+
+private:
+    void *data;
+    int kind;
+    Py_ssize_t idx{0};
+};
+
+template<typename T>
+static inline auto str_iter(T &&h)
+{
+    using _T = std::remove_cvref_t<T>;
+    return _iter<_str_iterator,_T>(h);
+}
+
+}
 
 struct BacktraceTracker {
     // Record the backtrace to be used later.
@@ -343,17 +1171,38 @@ void bb_rethrow_if(bool cond, uintptr_t key)
 
 void handle_cxx_exception();
 
-auto cxx_catch(auto &&cb) try {
-    return cb();
-}
-catch (...) {
-    handle_cxx_exception();
-    using ret_type = std::remove_cvref_t<decltype(cb())>;
-    if constexpr (std::is_pointer_v<ret_type>) {
-        return (ret_type)nullptr;
+auto cxx_catch(auto &&cb)
+{
+    using raw_ret_type = std::remove_cvref_t<decltype(cb())>;
+    constexpr bool is_ptr = std::is_pointer_v<raw_ret_type>;
+    constexpr bool is_handle = py::is_handle_v<raw_ret_type>;
+    constexpr bool is_ref = is_handle && requires { cb().rel(); };
+    try {
+        if constexpr (is_ref) {
+            return cb().rel();
+        }
+        else if constexpr (is_handle) {
+            return cb().get();
+        }
+        else if constexpr (is_ptr) {
+            return cb();
+        }
+        else {
+            return (int)cb();
+        }
     }
-    else {
-        return -1;
+    catch (...) {
+        handle_cxx_exception();
+        if constexpr (is_ptr) {
+            return (raw_ret_type)nullptr;
+        }
+        else if constexpr (is_handle) {
+            using ret_type = std::remove_cvref_t<decltype(cb().get())>;
+            return (ret_type)nullptr;
+        }
+        else {
+            return -1;
+        }
     }
 }
 
@@ -370,13 +1219,6 @@ py_check_num_arg(const char *func_name, ssize_t nfound, ssize_t nmin, ssize_t nm
     if ((nfound <= nmax || nmax < 0) && nfound >= nmin)
         return;
     py_num_arg_error(func_name, nfound, nmin, nmax);
-}
-
-static __attribute__((always_inline)) inline
-int py_check_int(int v)
-{
-    throw_if(v < 0);
-    return v;
 }
 
 static __attribute__((always_inline)) inline
@@ -433,121 +1275,29 @@ struct py_object : std::unique_ptr<PyObject,PyDeleter> {
     }
     void set_obj(PyObject *p)
     {
-        reset(py_newref(p));
+        reset(py::newref(p));
     }
 };
-
-static inline py_object pyobj_checked(PyObject *obj)
-{
-    return py_object(throw_if_not(obj));
-}
-
-extern PyObject *pyfloat_m1;
-extern PyObject *pyfloat_m0_5;
-extern PyObject *pyfloat_0;
-extern PyObject *pyfloat_0_5;
-extern PyObject *pyfloat_1;
-
-static inline void pyassign(auto *&field, auto *v)
-{
-    Py_DECREF((PyObject*)std::exchange(field, py_newref(v)));
-}
 
 __attribute__((returns_nonnull)) static inline PyObject*
 pyfloat_from_double(double v)
 {
-    if (v == -1) {
-        return py_newref(pyfloat_m1);
-    }
-    else if (v == -0.5) {
-        return py_newref(pyfloat_m0_5);
-    }
-    else if (v == 0) {
-        return py_newref(pyfloat_0);
-    }
-    else if (v == 0.5) {
-        return py_newref(pyfloat_0_5);
-    }
-    else if (v == 1) {
-        return py_newref(pyfloat_1);
-    }
-    return throw_if_not(PyFloat_FromDouble(v));
-}
-
-static constexpr int _pylong_cache_max = 4096;
-extern const std::array<PyObject*,_pylong_cache_max * 2> _pylongs_cache;
-
-__attribute__((returns_nonnull)) static inline PyObject*
-pylong_cached(int v)
-{
-    assert(v < _pylong_cache_max);
-    assert(v >= -_pylong_cache_max);
-    return _pylongs_cache[v + _pylong_cache_max];
+    // Used by cython
+    return py::new_float(v).rel();
 }
 
 __attribute__((returns_nonnull)) static inline PyObject*
 pylong_from_long(long v)
 {
-    if (v < _pylong_cache_max && v >= -_pylong_cache_max)
-        return py_newref(pylong_cached(v));
-    return throw_if_not(PyLong_FromLong(v));
+    // Used by cython
+    return py::new_int(v).rel();
 }
 
 __attribute__((returns_nonnull)) static inline PyObject*
 pylong_from_longlong(long long v)
 {
-    if (v < _pylong_cache_max && v >= -_pylong_cache_max)
-        return py_newref(pylong_cached(v));
-    return throw_if_not(PyLong_FromLongLong(v));
-}
-
-__attribute__((returns_nonnull)) static inline PyObject*
-pydict_new()
-{
-    return throw_if_not(PyDict_New());
-}
-
-static inline void pydict_setitem(PyObject *dict, PyObject *key, PyObject *value)
-{
-    throw_if(PyDict_SetItem(dict, key, value));
-}
-
-__attribute__((returns_nonnull)) static inline PyObject*
-pyset_new(PyObject *iter=nullptr)
-{
-    return throw_if_not(PySet_New(iter));
-}
-
-__attribute__((returns_nonnull)) static inline PyObject*
-pylist_new(Py_ssize_t n)
-{
-    return throw_if_not(PyList_New(n));
-}
-
-__attribute__((returns_nonnull)) static inline PyObject*
-pytuple_new(Py_ssize_t n)
-{
-    return throw_if_not(PyTuple_New(n));
-}
-
-extern PyObject *py_empty_bytes;
-
-__attribute__((returns_nonnull)) static inline PyObject*
-pybytes_from_data(const char *data, Py_ssize_t len)
-{
-    return throw_if_not(PyBytes_FromStringAndSize(data, len));
-}
-
-__attribute__((returns_nonnull)) static inline PyObject*
-pyunicode_from_string(const char *str)
-{
-    return throw_if_not(PyUnicode_FromString(str));
-}
-
-__attribute__((returns_nonnull)) static inline PyObject*
-pyobject_str(PyObject *obj)
-{
-    return throw_if_not(PyObject_Str(obj));
+    // Used by cython
+    return py::new_int(v).rel();
 }
 
 template<size_t N>
@@ -560,167 +1310,38 @@ struct str_literal {
 };
 
 template<str_literal lit>
-static PyObject *const _py_string_cache = pyunicode_from_string(lit.value);
+static const py::str _py_string_cache = py::str(py::new_str(lit.value).rel());
 template<str_literal lit>
-static inline PyObject *operator ""_py()
+static inline auto operator ""_py()
 {
     return _py_string_cache<lit>;
 }
 
 template<str_literal lit>
-static inline PyObject *operator ""_pymod()
+static inline auto operator ""_pymod()
 {
     // Use a local static variable to make sure the initialization order
     // is correct when this is used to initialize another global variable
-    static PyObject *mod = throw_if_not(PyImport_ImportModule(lit.value));
-    return mod;
+    static auto m = py::mod(py::import_module(lit.value).rel());
+    return m;
 }
 
-struct CDeleter {
-    template<typename T>
-    void operator()(T *p) {
-        free((void*)p);
+struct py_stringio: py::stringio {
+    void write(PyObject *str)
+    {
+        return py::stringio::write(str);
     }
-};
-
-struct py_stringio {
-    py_stringio &operator=(const py_stringio&) = delete;
-
-    void write(PyObject*);
     void write_str(PyObject *obj)
     {
-        write(py_object(pyobject_str(obj)));
+        return py::stringio::write_str(obj);
     }
-    void write_ascii(const char *s, ssize_t len);
-    void write_ascii(const char *s)
+    __attribute__((returns_nonnull)) PyObject *getvalue()
     {
-        write_ascii(s, strlen(s));
+        return py::stringio::getvalue().rel();
     }
-    void write_rep_ascii(int nrep, const char *s, ssize_t len);
-    void write_rep_ascii(int nrep, const char *s)
-    {
-        write_rep_ascii(nrep, s, strlen(s));
-    }
-    std::pair<int,void*> reserve_buffer(int kind, ssize_t len);
-    __attribute__((returns_nonnull)) PyObject *getvalue();
-
-private:
-    void write_kind(const void *data, int kind, ssize_t len);
-    void check_size(size_t sz, int kind);
-
-    std::unique_ptr<char,CDeleter> m_buff;
-    size_t m_size{0};
-    size_t m_pos{0};
-    int m_kind{PyUnicode_1BYTE_KIND};
 };
 
-py_object channel_name_from_path(PyObject *path);
-
-template<typename It>
-struct py_iter {
-    explicit py_iter(PyObject *obj) : obj(obj) {}
-    auto begin() const { return It(obj); };
-    auto end() const { return It::end(obj); }
-private:
-    PyObject *obj;
-};
-
-template<typename Value, typename Key>
-struct _pydict_iterator {
-    _pydict_iterator(PyObject *dict) : dict(dict)
-    {
-        ++(*this);
-    }
-    _pydict_iterator &operator++()
-    {
-        has_next = PyDict_Next(dict, &pos, &key, &value);
-        return *this;
-    }
-    std::pair<Key*,Value*> operator*()
-    {
-        return { (Key*)key, (Value*)value };
-    }
-    bool operator==(std::nullptr_t) { return !has_next; }
-    static std::nullptr_t end(auto) { return nullptr; };
-
-private:
-    PyObject *dict;
-    PyObject *key, *value;
-    Py_ssize_t pos{0};
-    bool has_next;
-};
-
-template<typename Value>
-struct _pylist_iterator {
-    _pylist_iterator(PyObject *list) : list(list) {}
-    _pylist_iterator &operator++()
-    {
-        ++pos;
-        return *this;
-    }
-    std::pair<Py_ssize_t,Value*> operator*()
-    {
-        return { pos, (Value*)PyList_GET_ITEM(list, pos) };
-    }
-    bool operator==(Py_ssize_t n) { return pos == n; }
-    static Py_ssize_t end(PyObject *list) { return PyList_GET_SIZE(list); }
-
-private:
-    PyObject *list;
-    Py_ssize_t pos{0};
-};
-
-template<typename Value>
-struct _pytuple_iterator {
-    _pytuple_iterator(PyObject *tuple) : tuple(tuple) {}
-    _pytuple_iterator &operator++()
-    {
-        ++pos;
-        return *this;
-    }
-    std::pair<Py_ssize_t,Value*> operator*()
-    {
-        return { pos, (Value*)PyTuple_GET_ITEM(tuple, pos) };
-    }
-    bool operator==(Py_ssize_t n) { return pos == n; }
-    static Py_ssize_t end(PyObject *tuple) { return PyTuple_GET_SIZE(tuple); }
-
-private:
-    PyObject *tuple;
-    Py_ssize_t pos{0};
-};
-
-struct _pystr_iterator {
-    _pystr_iterator(PyObject *str)
-        : data(PyUnicode_DATA(str)),
-          kind(PyUnicode_KIND(str))
-    {
-    }
-    _pystr_iterator &operator++()
-    {
-        ++idx;
-        return *this;
-    }
-    std::pair<Py_ssize_t,Py_UCS4> operator*()
-    {
-        return { idx, PyUnicode_READ(kind, data, idx) };
-    }
-    bool operator==(Py_ssize_t n) { return idx == n; }
-    static Py_ssize_t end(PyObject *str) { return PyUnicode_GET_LENGTH(str); }
-
-private:
-    void *data;
-    int kind;
-    Py_ssize_t idx{0};
-};
-
-template<typename Value=PyObject, typename Key=PyObject>
-using pydict_iter = py_iter<_pydict_iterator<Value,Key>>;
-template<typename Value=PyObject>
-using pylist_iter = py_iter<_pylist_iterator<Value>>;
-template<typename Value=PyObject>
-using pytuple_iter = py_iter<_pytuple_iterator<Value>>;
-using pystr_iter = py_iter<_pystr_iterator>;
+py::str_ref channel_name_from_path(PyObject *path);
 
 template<typename T>
 struct ValueIndexer {
@@ -758,47 +1379,12 @@ private:
 template<typename CB>
 ScopeExit(CB) -> ScopeExit<CB>;
 
-static inline PyObject *pynum_add_or_sub(PyObject *a, PyObject *b, bool issub)
-{
-    if (issub) {
-        return PyNumber_Subtract(a, b);
-    }
-    else {
-        return PyNumber_Add(a, b);
-    }
-}
-
 __attribute__((returns_nonnull))
 PyObject *pytuple_append1(PyObject *tuple, PyObject *obj);
-__attribute__((returns_nonnull)) PyObject *pydict_deepcopy(PyObject *d);
-
-static inline void pylist_append(PyObject* list, PyObject* x)
+static inline PyObject *pydict_deepcopy(PyObject *d)
 {
-    PyListObject *L = (PyListObject*)list;
-    Py_ssize_t len = Py_SIZE(list);
-    if (L->allocated > len && len > (L->allocated >> 1)) [[likely]] {
-        Py_INCREF(x);
-        PyList_SET_ITEM(list, len, x);
-#if PY_VERSION_HEX >= 0x030900A4
-        Py_SET_SIZE(list, len + 1);
-#else
-        Py_SIZE(list) = len + 1;
-#endif
-        return;
-    }
-    throw_if(PyList_Append(list, x));
-}
-
-__attribute__((returns_nonnull)) static inline PyObject*
-pytype_genericalloc(auto *ty, Py_ssize_t sz=0)
-{
-    return throw_if_not(PyType_GenericAlloc((PyTypeObject*)ty, sz));
-}
-
-__attribute__((returns_nonnull)) static inline PyObject*
-pyobj_veccall(PyObject *obj, PyObject *const *args, size_t nargsf, PyObject *kwnames=nullptr)
-{
-    return throw_if_not(PyObject_Vectorcall(obj, args, nargsf, kwnames));
+    // Used by cython
+    return py::dict_deepcopy(d).rel();
 }
 
 static inline bool py_issubtype_nontrivial(auto *a, auto *b)
@@ -1049,7 +1635,7 @@ struct Bits {
     }
     PyObject *to_pybytes() const
     {
-        return pybytes_from_data((const char*)&bits[0], sizeof(bits));
+        return py::new_bytes((const char*)&bits[0], sizeof(bits)).rel();
     }
     PyObject *to_pylong() const
     {
@@ -1193,7 +1779,7 @@ public:
 private:
     char *extend(size_t sz) override;
 
-    PyObject *m_buf = nullptr;
+    py::ref<> m_buf;
 };
 
 class pybytearray_streambuf : public buff_streambuf {
@@ -1206,7 +1792,7 @@ public:
 private:
     char *extend(size_t sz) override;
 
-    PyObject *m_buf = nullptr;
+    py::ref<> m_buf;
 };
 
 class buff_ostream : public std::ostream {

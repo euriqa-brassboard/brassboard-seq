@@ -27,15 +27,15 @@ static inline void check_string_arg(PyObject *arg, const char *name)
     py_throw_format(PyExc_TypeError, "%s must be a string", name);
 }
 
-static inline PyObject *split_string_tuple(PyObject *s)
+static inline auto split_string_tuple(PyObject *s)
 {
-    auto list = pyobj_checked(PyUnicode_Split(s, "/"_py, -1));
-    py_object tuple(pytuple_new(PyList_GET_SIZE(list.get())));
-    for (auto [i, v]: pylist_iter(list)) {
-        PyTuple_SET_ITEM(tuple.get(), i, v);
-        PyList_SET_ITEM(list.get(), i, nullptr);
+    auto list = py::list_ref(throw_if_not(PyUnicode_Split(s, "/"_py, -1)));
+    auto tuple = py::new_tuple(list.size());
+    for (auto [i, v]: py::list_iter(list)) {
+        tuple.SET(i, py::ref(v.get())); // Steal reference
+        list.SET(i, nullptr);
     }
-    return tuple.release();
+    return tuple;
 }
 
 static PyObject *add_supported_prefix(Config *self, PyObject *const *args,
@@ -44,7 +44,7 @@ static PyObject *add_supported_prefix(Config *self, PyObject *const *args,
     return cxx_catch([&] {
         py_check_num_arg("add_supported_prefix", nargs, 1, 1);
         check_string_arg(args[0], "prefix");
-        throw_if(PySet_Add(self->supported_prefix, args[0]));
+        py::set(self->supported_prefix).add(args[0]);
         Py_RETURN_NONE;
     });
 }
@@ -58,48 +58,49 @@ static PyObject *add_channel_alias(Config *self, PyObject *const *args,
         auto target = args[1];
         check_string_arg(name, "name");
         check_string_arg(target, "target");
-        if (py_check_int(PyUnicode_Contains(name, "/"_py)))
+        if (py::str(name).contains("/"_py))
             py_throw_format(PyExc_ValueError, "Channel alias name may not contain \"/\"");
-        PyDict_Clear(self->alias_cache);
-        pydict_setitem(self->channel_alias, name, py_object(split_string_tuple(target)));
+        py::dict(self->alias_cache).clear();
+        py::dict(self->channel_alias).set(name, split_string_tuple(target));
         Py_RETURN_NONE;
     });
 }
 
-inline PyObject *Config::_translate_channel(PyObject *path)
+inline py::tuple_ref Config::_translate_channel(py::tuple path)
 {
-    if (auto resolved = PyDict_GetItemWithError(alias_cache, path))
-        return py_newref(resolved);
-    throw_pyerr();
+    auto alias_cache_dict = py::dict(alias_cache);
+    if (auto resolved = alias_cache_dict.try_get(path))
+        return resolved.ref();
     // Hardcoded limit for loop detection
-    if (PyTuple_GET_SIZE(path) > 10)
+    auto path_len = path.size();
+    if (path_len > 10)
         py_throw_format(PyExc_ValueError, "Channel alias loop detected: %U",
                         channel_name_from_path(path).get());
-    auto prefix = PyTuple_GET_ITEM(path, 0);
-    if (auto new_prefix = PyDict_GetItemWithError(channel_alias, prefix)) {
-        auto prefix_len = PyTuple_GET_SIZE(new_prefix);
-        py_object newpath(pytuple_new(prefix_len + PyTuple_GET_SIZE(path) - 1));
-        for (auto [i, v]: pytuple_iter(new_prefix))
-            PyTuple_SET_ITEM(newpath.get(), i, py_newref(v));
-        for (auto [i, v]: pytuple_iter(path))
+    auto prefix = path.get(0);
+    auto channel_alias_dict = py::dict(channel_alias);
+    if (auto new_prefix = py::tuple(channel_alias_dict.try_get(prefix))) {
+        auto prefix_len = new_prefix.size();
+        auto newpath = py::new_tuple(prefix_len + path_len - 1);
+        for (auto [i, v]: py::tuple_iter(new_prefix))
+            newpath.SET(i, v);
+        for (auto [i, v]: py::tuple_iter(path))
             if (i != 0)
-                PyTuple_SET_ITEM(newpath.get(), i + prefix_len - 1, py_newref(v));
-        py_object resolved(_translate_channel(newpath));
-        pydict_setitem(alias_cache, path, resolved);
-        return resolved.release();
+                newpath.SET(i + prefix_len - 1, v);
+        auto resolved = _translate_channel(newpath);
+        py::dict(alias_cache).set(path, resolved);
+        return resolved;
     }
-    throw_pyerr();
-    if (!py_check_int(PySet_Contains(supported_prefix, prefix)))
+    if (!py::set(supported_prefix).contains(prefix))
         py_throw_format(PyExc_ValueError, "Unsupported channel name: %U",
                         channel_name_from_path(path).get());
-    pydict_setitem(alias_cache, path, path);
-    return py_newref(path);
+    py::dict(alias_cache).set(path, path);
+    return path.ref();
 }
 
 __attribute__((visibility("protected")))
 PyObject *Config::translate_channel(PyObject *name)
 {
-    return _translate_channel(py_object(split_string_tuple(name)));
+    return _translate_channel(split_string_tuple(name)).rel();
 }
 
 static PyObject *py_translate_channel(Config *self, PyObject *const *args,
@@ -136,12 +137,11 @@ PyTypeObject Config::Type = {
     },
     .tp_new = [] (PyTypeObject *t, PyObject*, PyObject*) -> PyObject* {
         return cxx_catch([&] {
-            auto py_self = pytype_genericalloc(t);
-            auto self = (Config*)py_self;
-            self->channel_alias = pydict_new();
-            self->alias_cache = pydict_new();
-            self->supported_prefix = pyset_new();
-            return py_self;
+            auto self = py::generic_alloc<Config>(t);
+            self->channel_alias = py::new_dict().rel();
+            self->alias_cache = py::new_dict().rel();
+            self->supported_prefix = py::new_set().rel();
+            return self;
         });
     },
 };

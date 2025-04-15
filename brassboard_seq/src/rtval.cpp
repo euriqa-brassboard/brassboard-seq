@@ -28,63 +28,63 @@ __attribute__((returns_nonnull,visibility("protected"))) RuntimeValue*
 new_cb_arg2(ValueType type, PyObject *cb_arg2, PyObject *ty)
 {
     auto datatype = pytype_to_datatype(ty);
-    auto self = (RuntimeValue*)pytype_genericalloc(&RuntimeValue::Type);
+    auto self = py::generic_alloc<RuntimeValue>();
     self->datatype = datatype;
     // self->cache_err = EvalError::NoError;
     // self->cache_val = { .i64_val = 0 };
     self->type_ = type;
     self->age = (unsigned)-1;
-    self->arg0 = (RuntimeValue*)py_immref(Py_None);
-    self->arg1 = (RuntimeValue*)py_immref(Py_None);
-    self->cb_arg2 = py_newref(cb_arg2);
-    return self;
+    self->arg0 = (RuntimeValue*)py::immref(Py_None);
+    self->arg1 = (RuntimeValue*)py::immref(Py_None);
+    self->cb_arg2 = py::newref(cb_arg2);
+    return self.rel();
 }
 
 __attribute__((returns_nonnull,visibility("protected"))) RuntimeValue*
 new_expr1(ValueType type, RuntimeValue *arg0)
 {
     auto datatype = unary_return_type(type, arg0->datatype);
-    auto self = (RuntimeValue*)pytype_genericalloc(&RuntimeValue::Type);
+    auto self = py::generic_alloc<RuntimeValue>();
     self->datatype = datatype;
     // self->cache_err = EvalError::NoError;
     // self->cache_val = { .i64_val = 0 };
     self->type_ = type;
     self->age = (unsigned)-1;
-    self->arg0 = py_newref(arg0);
-    self->arg1 = (RuntimeValue*)py_immref(Py_None);
-    self->cb_arg2 = py_immref(Py_None);
-    return self;
+    self->arg0 = py::newref(arg0);
+    self->arg1 = (RuntimeValue*)py::immref(Py_None);
+    self->cb_arg2 = py::immref(Py_None);
+    return self.rel();
 }
 
 __attribute__((returns_nonnull,visibility("protected"))) RuntimeValue*
 new_expr2(ValueType type, RuntimeValue *arg0, RuntimeValue *arg1)
 {
     auto datatype = binary_return_type(type, arg0->datatype, arg1->datatype);
-    auto self = (RuntimeValue*)pytype_genericalloc(&RuntimeValue::Type);
+    auto self = py::generic_alloc<RuntimeValue>();
     self->datatype = datatype;
     // self->cache_err = EvalError::NoError;
     // self->cache_val = { .i64_val = 0 };
     self->type_ = type;
     self->age = (unsigned)-1;
-    self->arg0 = py_newref(arg0);
-    self->arg1 = py_newref(arg1);
-    self->cb_arg2 = py_immref(Py_None);
-    return self;
+    self->arg0 = py::newref(arg0);
+    self->arg1 = py::newref(arg1);
+    self->cb_arg2 = py::immref(Py_None);
+    return self.rel();
 }
 
 __attribute__((returns_nonnull,visibility("protected"))) RuntimeValue*
 new_const(TagVal v)
 {
-    auto self = (RuntimeValue*)pytype_genericalloc(&RuntimeValue::Type);
+    auto self = py::generic_alloc<RuntimeValue>();
     self->datatype = v.type;
     // self->cache_err = EvalError::NoError;
     self->cache_val = v.val;
     self->type_ = Const;
     self->age = (unsigned)-1;
-    self->arg0 = (RuntimeValue*)py_immref(Py_None);
-    self->arg1 = (RuntimeValue*)py_immref(Py_None);
-    self->cb_arg2 = py_immref(Py_None);
-    return self;
+    self->arg0 = (RuntimeValue*)py::immref(Py_None);
+    self->arg1 = (RuntimeValue*)py::immref(Py_None);
+    self->cb_arg2 = py::immref(Py_None);
+    return self.rel();
 }
 
 static PyObject *new_expr2_wrap1(ValueType type, PyObject *arg0, PyObject *arg1)
@@ -93,20 +93,20 @@ static PyObject *new_expr2_wrap1(ValueType type, PyObject *arg0, PyObject *arg1)
     py_object rtarg1;
     if (!is_rtval(arg0)) {
         rtarg0.reset(new_const(TagVal::from_py(arg0)));
-        rtarg1.reset(py_newref(arg1));
+        rtarg1.reset(py::newref(arg1));
     }
     else {
         if (is_rtval(arg1)) {
-            rtarg1.reset(py_newref(arg1));
+            rtarg1.reset(py::newref(arg1));
         }
         else {
             rtarg1.reset(new_const(TagVal::from_py(arg1)));
         }
-        rtarg0.reset(py_newref(arg0));
+        rtarg0.reset(py::newref(arg0));
     }
     auto datatype = binary_return_type(type, ((RuntimeValue*)rtarg0)->datatype,
                                        ((RuntimeValue*)rtarg1)->datatype);
-    auto self = (RuntimeValue*)pytype_genericalloc(&RuntimeValue::Type);
+    auto self = py::generic_alloc<RuntimeValue>();
     self->datatype = datatype;
     // self->cache_err = EvalError::NoError;
     // self->cache_val = { .i64_val = 0 };
@@ -114,15 +114,15 @@ static PyObject *new_expr2_wrap1(ValueType type, PyObject *arg0, PyObject *arg1)
     self->age = (unsigned)-1;
     self->arg0 = (RuntimeValue*)rtarg0.release();
     self->arg1 = (RuntimeValue*)rtarg1.release();
-    self->cb_arg2 = py_immref(Py_None);
-    return self;
+    self->cb_arg2 = py::immref(Py_None);
+    return self.rel();
 }
 
 static inline RuntimeValue*
 wrap_rtval(PyObject *v)
 {
     if (is_rtval(v))
-        return (RuntimeValue*)py_newref(v);
+        return (RuntimeValue*)py::newref(v);
     return new_const(TagVal::from_py(v));
 }
 
@@ -133,16 +133,16 @@ new_select(RuntimeValue *arg0, PyObject *arg1, PyObject *arg2)
     py_object rtarg2(wrap_rtval(arg2));
     auto datatype = promote_type(((RuntimeValue*)rtarg1)->datatype,
                                  ((RuntimeValue*)rtarg2)->datatype);
-    auto self = (RuntimeValue*)pytype_genericalloc(&RuntimeValue::Type);
+    auto self = py::generic_alloc<RuntimeValue>();
     self->datatype = datatype;
     // self->cache_err = EvalError::NoError;
     // self->cache_val = { .i64_val = 0 };
     self->type_ = Select;
     self->age = (unsigned)-1;
-    self->arg0 = py_newref(arg0);
+    self->arg0 = py::newref(arg0);
     self->arg1 = (RuntimeValue*)rtarg1.release();
     self->cb_arg2 = rtarg2.release();
-    return self;
+    return self.rel();
 }
 
 static inline bool tagval_equal(const TagVal &v1, const TagVal &v2)
@@ -424,7 +424,7 @@ static inline TagVal tagval_add_or_sub(TagVal v1, TagVal v2, bool issub)
 static inline PyObject *new_addsub(TagVal c, RuntimeValue *v, bool s)
 {
     if (c.is_zero() && !s)
-        return py_newref(v);
+        return py::newref(v);
     return new_expr2(s ? Sub : Add, (RuntimeValue*)py_object(new_const(c)), v);
 }
 
@@ -522,8 +522,7 @@ static inline PyObject *build_addsub(PyObject *v0, PyObject *v1, bool issub)
 }
 
 namespace np {
-#define GET_NP(name)                                                    \
-    static auto const name = throw_if_not(PyObject_GetAttrString("numpy"_pymod, #name))
+#define GET_NP(name) static auto const name = "numpy"_pymod.attr(#name).rel()
 GET_NP(add);
 GET_NP(subtract);
 GET_NP(multiply);
@@ -587,12 +586,12 @@ static PyNumberMethods rtvalue_as_number = {
         return cxx_catch([&] { return new_expr2_wrap1(Pow, v1, v2); });
     },
     .nb_negative = [] (PyObject *self) {
-        return cxx_catch([&] { return build_addsub(pylong_cached(0), self, true); });
+        return cxx_catch([&] { return build_addsub(py::int_cached(0), self, true); });
     },
-    .nb_positive = [] (PyObject *self) { return py_newref(self); },
+    .nb_positive = [] (PyObject *self) { return py::newref(self); },
     .nb_absolute = [] (PyObject *self) {
         if (((RuntimeValue*)self)->type_ == Abs)
-            return py_newref(self);
+            return py::newref(self);
         return cxx_catch([&] { return (PyObject*)new_expr1(Abs, self); });
     },
     .nb_bool = [] (PyObject *self) {
@@ -669,22 +668,22 @@ static PyObject *rtvalue_array_ufunc(RuntimeValue *self, PyObject *const *args,
         return bin_expr(CmpNE);
     if (ufunc == np::fmin) {
         py_check_num_arg("__array_ufunc__", nargs, 4, 4);
-        return args[2] == args[3] ? py_newref(self) : bin_expr(Min);
+        return args[2] == args[3] ? py::newref(self) : bin_expr(Min);
     }
     if (ufunc == np::fmax) {
         py_check_num_arg("__array_ufunc__", nargs, 4, 4);
-        return args[2] == args[3] ? py_newref(self) : bin_expr(Max);
+        return args[2] == args[3] ? py::newref(self) : bin_expr(Max);
     }
     if (ufunc == np::abs)
-        return self->type_ == Abs ? py_newref(self) : uni_expr(Abs);
+        return self->type_ == Abs ? py::newref(self) : uni_expr(Abs);
     if (ufunc == np::ceil)
-        return is_integer(self) ? py_newref(self) : uni_expr(Ceil);
+        return is_integer(self) ? py::newref(self) : uni_expr(Ceil);
     if (ufunc == np::exp)
         return uni_expr(Exp);
     if (ufunc == np::expm1)
         return uni_expr(Expm1);
     if (ufunc == np::floor)
-        return is_integer(self) ? py_newref(self) : uni_expr(Floor);
+        return is_integer(self) ? py::newref(self) : uni_expr(Floor);
     if (ufunc == np::log)
         return uni_expr(Log);
     if (ufunc == np::log1p)
@@ -724,7 +723,7 @@ static PyObject *rtvalue_array_ufunc(RuntimeValue *self, PyObject *const *args,
     if (ufunc == np::hypot)
         return bin_expr(Hypot);
     if (ufunc == np::rint)
-        return is_integer(self) ? py_newref(self) : uni_expr(Rint);
+        return is_integer(self) ? py::newref(self) : uni_expr(Rint);
     Py_RETURN_NOTIMPLEMENTED;
 }
 catch (...) {
@@ -749,7 +748,7 @@ static PyObject *rtvalue_ceil(RuntimeValue *self,
 {
     return cxx_catch([&] {
         py_check_num_arg("__ceil__", nargs, 0, 0);
-        return is_integer(self) ? py_newref(self) : new_expr1(Ceil, self);
+        return is_integer(self) ? py::newref(self) : new_expr1(Ceil, self);
     });
 }
 
@@ -758,7 +757,7 @@ static PyObject *rtvalue_floor(RuntimeValue *self,
 {
     return cxx_catch([&] {
         py_check_num_arg("__floor__", nargs, 0, 0);
-        return is_integer(self) ? py_newref(self) : new_expr1(Floor, self);
+        return is_integer(self) ? py::newref(self) : new_expr1(Floor, self);
     });
 }
 
@@ -803,7 +802,7 @@ static inline bool needs_parenthesis(auto v, ValueType parent_type)
 
 namespace {
 
-struct rtvalue_printer : py_stringio {
+struct rtvalue_printer : py::stringio {
     void show_arg(RuntimeValue *v, ValueType parent_type)
     {
         auto p = needs_parenthesis(v, parent_type);
@@ -855,7 +854,7 @@ struct rtvalue_printer : py_stringio {
             write_str(v->cb_arg2);
             return write_ascii(")");
         case Const:
-            return write_str(py_object(rtval_cache(v).to_py()));
+            return write_str(py::ref(rtval_cache(v).to_py()));
         case Add:
             return show_binary(v, " + ", v->type_);
         case Sub:
@@ -998,8 +997,8 @@ PyTypeObject RuntimeValue::Type = {
             auto typ = pycmp2valcmp(op);
             if (is_rtval(v2)) {
                 if (v1 == v2)
-                    return py_immref(typ == CmpLE || typ == CmpGE || typ == CmpEQ ?
-                                     Py_True : Py_False);
+                    return py::immref(typ == CmpLE || typ == CmpGE || typ == CmpEQ ?
+                                      Py_True : Py_False);
                 return new_expr2(typ, v1, v2);
             }
             return new_expr2(typ, v1, py_object(new_const(TagVal::from_py(v2))));

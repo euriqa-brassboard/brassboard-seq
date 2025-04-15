@@ -25,12 +25,10 @@ namespace brassboard_seq::scan {
 // is overwritten to something that's not scalar struct.
 static inline bool check_field(PyObject *d, PyObject *path)
 {
-    for (auto [_, name]: pytuple_iter(path)) {
-        auto vp = PyDict_GetItemWithError(d, name);
-        if (!vp) {
-            throw_pyerr();
+    for (auto [_, name]: py::tuple_iter(path)) {
+        auto vp = py::dict(d).try_get(name);
+        if (!vp)
             return false;
-        }
         if (!PyDict_CheckExact(vp))
             return true;
         d = vp;

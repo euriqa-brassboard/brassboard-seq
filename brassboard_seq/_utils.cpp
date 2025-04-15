@@ -39,15 +39,15 @@ static PyModuleDef _utils_module = {
 };
 
 #if PY_VERSION_HEX >= 0x030a0000
-static void pymodule_addobjectref(PyObject *m, const char *name, PyObject *value)
+static void pymodule_addobjectref(py::mod m, const char *name, PyObject *value)
 {
-    throw_if(PyModule_AddObjectRef(m, name, value) < 0);
+    throw_if(PyModule_AddObjectRef((PyObject*)m, name, value) < 0);
 }
 #else
-static void pymodule_addobjectref(PyObject *m, const char *name, PyObject *value)
+static void pymodule_addobjectref(py::mod m, const char *name, PyObject *value)
 {
-    py_object v(py_newref(value));
-    throw_if(PyModule_AddObject(m, name, value) < 0);
+    py_object v(py::newref(value));
+    throw_if(PyModule_AddObject((PyObject*)m, name, value) < 0);
     v.release();
 }
 #endif
@@ -56,15 +56,13 @@ PyMODINIT_FUNC
 PyInit__utils(void)
 {
     return cxx_catch([&] {
-        py_object yaml_sprint(PyCFunction_NewEx(&yaml::sprint_method, nullptr,
-                                                "brassboard_seq.yaml"_py));
-        py_object parampack_get_visited(PyCFunction_NewEx(
-                                            &scan::parampack_get_visited_method, nullptr,
-                                            "brassboard_seq.scan"_py));
-        py_object parampack_get_param(PyCFunction_NewEx(
-                                          &scan::parampack_get_param_method, nullptr,
-                                          "brassboard_seq.scan"_py));
-        py_object m(throw_if_not(PyModule_Create(&_utils_module)));
+        auto yaml_sprint = py::new_cfunc(&yaml::sprint_method, nullptr,
+                                         "brassboard_seq.yaml"_py);
+        auto parampack_get_visited = py::new_cfunc(&scan::parampack_get_visited_method,
+                                                   nullptr, "brassboard_seq.scan"_py);
+        auto parampack_get_param = py::new_cfunc(&scan::parampack_get_param_method,
+                                                 nullptr, "brassboard_seq.scan"_py);
+        auto m = py::new_module(&_utils_module);
         pymodule_addobjectref(m, "RuntimeValue",
                               (PyObject*)&rtval::RuntimeValue::Type);
         pymodule_addobjectref(m, "ExternCallback",
@@ -78,9 +76,9 @@ PyInit__utils(void)
                               (PyObject*)&rtprop::CompositeRTProp_Type);
         pymodule_addobjectref(m, "RTProp", (PyObject*)&rtprop::RTProp_Type);
         pymodule_addobjectref(m, "ParamPack", (PyObject*)&scan::ParamPack::Type);
-        pymodule_addobjectref(m, "parampack_get_visited", parampack_get_visited);
-        pymodule_addobjectref(m, "parampack_get_param", parampack_get_param);
-        pymodule_addobjectref(m, "yaml_sprint", yaml_sprint);
-        return m.release();
+        pymodule_addobjectref(m, "parampack_get_visited", parampack_get_visited.get());
+        pymodule_addobjectref(m, "parampack_get_param", parampack_get_param.get());
+        pymodule_addobjectref(m, "yaml_sprint", yaml_sprint.get());
+        return m;
     });
 }

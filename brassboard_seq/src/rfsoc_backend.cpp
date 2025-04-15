@@ -1132,64 +1132,63 @@ struct Jaqal_v1 {
     struct DictConverter {
         void invalid(const JaqalInst &inst, Executor::Error err)
         {
-            pydict_setitem(dict, "type"_py, "invalid"_py);
-            pydict_setitem(dict, "error"_py, Executor::py_error_msg(err));
+            dict.set("type"_py, "invalid"_py);
+            dict.set("error"_py, Executor::py_error_msg(err));
             std::ostringstream stm;
             stm << inst;
-            pydict_setitem(dict, "inst"_py,
-                           py_object(pyunicode_from_string(stm.str().c_str())));
+            dict.set("inst"_py, py::new_str(stm.str()));
         }
 
         void GLUT(uint8_t chn, const uint16_t *gaddrs, const uint16_t *starts,
                   const uint16_t *ends, int cnt)
         {
-            pydict_setitem(dict, "type"_py, "glut"_py);
-            pydict_setitem(dict, "channel"_py, pylong_cached(chn));
-            pydict_setitem(dict, "count"_py, pylong_cached(cnt));
-            py_object py_gaddrs(pylist_new(cnt));
-            py_object py_starts(pylist_new(cnt));
-            py_object py_ends(pylist_new(cnt));
+            dict.set("type"_py, "glut"_py);
+            dict.set("channel"_py, py::int_cached(chn));
+            dict.set("count"_py, py::int_cached(cnt));
+            auto py_gaddrs = py::new_list(cnt);
+            auto py_starts = py::new_list(cnt);
+            auto py_ends = py::new_list(cnt);
             for (int i = 0; i < cnt; i++) {
-                PyList_SET_ITEM(py_gaddrs.get(), i, pylong_from_long(gaddrs[i]));
-                PyList_SET_ITEM(py_starts.get(), i, pylong_from_long(starts[i]));
-                PyList_SET_ITEM(py_ends.get(), i, pylong_from_long(ends[i]));
+                py_gaddrs.SET(i, py::new_int(gaddrs[i]));
+                py_starts.SET(i, py::new_int(starts[i]));
+                py_ends.SET(i, py::new_int(ends[i]));
             }
-            pydict_setitem(dict, "gaddrs"_py, py_gaddrs);
-            pydict_setitem(dict, "starts"_py, py_starts);
-            pydict_setitem(dict, "ends"_py, py_ends);
+            dict.set("gaddrs"_py, py_gaddrs);
+            dict.set("starts"_py, py_starts);
+            dict.set("ends"_py, py_ends);
         }
 
         void SLUT(uint8_t chn, const uint16_t *saddrs, const uint16_t *paddrs, int cnt)
         {
-            pydict_setitem(dict, "type"_py, "slut"_py);
-            pydict_setitem(dict, "channel"_py, pylong_cached(chn));
-            pydict_setitem(dict, "count"_py, pylong_cached(cnt));
-            py_object py_saddrs(pylist_new(cnt));
-            py_object py_paddrs(pylist_new(cnt));
+            dict.set("type"_py, "slut"_py);
+            dict.set("channel"_py, py::int_cached(chn));
+            dict.set("count"_py, py::int_cached(cnt));
+            auto py_saddrs = py::new_list(cnt);
+            auto py_paddrs = py::new_list(cnt);
             for (int i = 0; i < cnt; i++) {
-                PyList_SET_ITEM(py_saddrs.get(), i, pylong_from_long(saddrs[i]));
-                PyList_SET_ITEM(py_paddrs.get(), i, pylong_from_long(paddrs[i]));
+                py_saddrs.SET(i, py::new_int(saddrs[i]));
+                py_paddrs.SET(i, py::new_int(paddrs[i]));
             }
-            pydict_setitem(dict, "saddrs"_py, py_saddrs);
-            pydict_setitem(dict, "paddrs"_py, py_paddrs);
+            dict.set("saddrs"_py, py_saddrs);
+            dict.set("paddrs"_py, py_paddrs);
         }
         void GSEQ(uint8_t chn, const uint16_t *gaddrs, int cnt, SeqMode m)
         {
             if (m == SeqMode::GATE) {
-                pydict_setitem(dict, "type"_py, "gseq"_py);
+                dict.set("type"_py, "gseq"_py);
             }
             else if (m == SeqMode::WAIT_ANC) {
-                pydict_setitem(dict, "type"_py, "wait_anc"_py);
+                dict.set("type"_py, "wait_anc"_py);
             }
             else if (m == SeqMode::CONT_ANC) {
-                pydict_setitem(dict, "type"_py, "cont_anc"_py);
+                dict.set("type"_py, "cont_anc"_py);
             }
-            pydict_setitem(dict, "channel"_py, pylong_cached(chn));
-            pydict_setitem(dict, "count"_py, pylong_cached(cnt));
-            py_object py_gaddrs(pylist_new(cnt));
+            dict.set("channel"_py, py::int_cached(chn));
+            dict.set("count"_py, py::int_cached(cnt));
+            auto py_gaddrs = py::new_list(cnt);
             for (int i = 0; i < cnt; i++)
-                PyList_SET_ITEM(py_gaddrs.get(), i, pylong_from_long(gaddrs[i]));
-            pydict_setitem(dict, "gaddrs"_py, py_gaddrs);
+                py_gaddrs.SET(i, py::new_int(gaddrs[i]));
+            dict.set("gaddrs"_py, py_gaddrs);
         }
 
         void param_pulse(int chn, int tone, Executor::ParamType param,
@@ -1200,10 +1199,10 @@ struct Jaqal_v1 {
             pulse_to_dict(tgt, (param == Executor::ParamType::Freq ? "freq"_py :
                                 (param == Executor::ParamType::Amp ? "amp"_py :
                                  "phase"_py)), chn, tone, cycles, spl);
-            pydict_setitem(dict, "trig"_py, waittrig ? Py_True : Py_False);
-            pydict_setitem(dict, "sync"_py, sync ? Py_True : Py_False);
-            pydict_setitem(dict, "enable"_py, enable ? Py_True : Py_False);
-            pydict_setitem(dict, "ff"_py, fb_enable ? Py_True : Py_False);
+            dict.set("trig"_py, waittrig ? Py_True : Py_False);
+            dict.set("sync"_py, sync ? Py_True : Py_False);
+            dict.set("enable"_py, enable ? Py_True : Py_False);
+            dict.set("ff"_py, fb_enable ? Py_True : Py_False);
         }
         void frame_pulse(int chn, int tone, const PDQSpline &spl, int64_t cycles,
                          bool waittrig, bool apply_eof, bool clr_frame,
@@ -1211,46 +1210,46 @@ struct Jaqal_v1 {
                          Executor::PulseTarget tgt)
         {
             pulse_to_dict(tgt, "frame_rot"_py, chn, tone, cycles, spl);
-            pydict_setitem(dict, "trig"_py, waittrig ? Py_True : Py_False);
-            pydict_setitem(dict, "eof"_py, apply_eof ? Py_True : Py_False);
-            pydict_setitem(dict, "clr"_py, clr_frame ? Py_True : Py_False);
-            pydict_setitem(dict, "fwd"_py, pylong_cached(fwd_frame_mask));
-            pydict_setitem(dict, "inv"_py, pylong_cached(inv_frame_mask));
+            dict.set("trig"_py, waittrig ? Py_True : Py_False);
+            dict.set("eof"_py, apply_eof ? Py_True : Py_False);
+            dict.set("clr"_py, clr_frame ? Py_True : Py_False);
+            dict.set("fwd"_py, py::int_cached(fwd_frame_mask));
+            dict.set("inv"_py, py::int_cached(inv_frame_mask));
         }
 
-        py_object dict{pydict_new()};
+        py::dict_ref dict{py::new_dict()};
 
     private:
         void pulse_to_dict(Executor::PulseTarget tgt, PyObject *name, int chn,
                            int tone, int64_t cycles, const PDQSpline &spl)
         {
             if (tgt.type == Executor::PulseTarget::None) {
-                pydict_setitem(dict, "type"_py, "pulse_data"_py);
+                dict.set("type"_py, "pulse_data"_py);
             }
             else if (tgt.type == Executor::PulseTarget::PLUT) {
-                pydict_setitem(dict, "type"_py, "plut"_py);
+                dict.set("type"_py, "plut"_py);
             }
             else if (tgt.type == Executor::PulseTarget::Stream) {
-                pydict_setitem(dict, "type"_py, "stream"_py);
+                dict.set("type"_py, "stream"_py);
             }
-            pydict_setitem(dict, "channel"_py, pylong_cached(chn));
+            dict.set("channel"_py, py::int_cached(chn));
             if (tgt.type == Executor::PulseTarget::PLUT)
-                pydict_setitem(dict, "paddr"_py, py_object(pylong_from_long(tgt.addr)));
-            pydict_setitem(dict, "param"_py, name);
-            pydict_setitem(dict, "tone"_py, pylong_cached(tone));
-            pydict_setitem(dict, "cycles"_py, py_object(pylong_from_longlong(cycles)));
-            py_object py_spl(pylist_new(4));
+                dict.set("paddr"_py, py::new_int(tgt.addr));
+            dict.set("param"_py, name);
+            dict.set("tone"_py, py::int_cached(tone));
+            dict.set("cycles"_py, py::new_int(cycles));
+            auto py_spl = py::new_list(4);
             for (int i = 0; i < 4; i++)
-                PyList_SET_ITEM(py_spl.get(), i, pylong_from_longlong(spl.orders[i]));
-            pydict_setitem(dict, "spline_mu"_py, py_spl);
-            pydict_setitem(dict, "spline_shift"_py, pylong_cached(spl.shift));
+                py_spl.SET(i, py::new_int(spl.orders[i]));
+            dict.set("spline_mu"_py, py_spl);
+            dict.set("spline_shift"_py, py::int_cached(spl.shift));
             auto fspl = spl.get_spline(cycles);
-            py_object py_fspl(pylist_new(4));
-            PyList_SET_ITEM(py_fspl.get(), 0, pyfloat_from_double(fspl.order0));
-            PyList_SET_ITEM(py_fspl.get(), 1, pyfloat_from_double(fspl.order1));
-            PyList_SET_ITEM(py_fspl.get(), 2, pyfloat_from_double(fspl.order2));
-            PyList_SET_ITEM(py_fspl.get(), 3, pyfloat_from_double(fspl.order3));
-            pydict_setitem(dict, "spline"_py, py_fspl);
+            auto py_fspl = py::new_list(4);
+            py_fspl.SET(0, py::new_float(fspl.order0));
+            py_fspl.SET(1, py::new_float(fspl.order1));
+            py_fspl.SET(2, py::new_float(fspl.order2));
+            py_fspl.SET(3, py::new_float(fspl.order3));
+            dict.set("spline"_py, py_fspl);
         }
     };
 
@@ -1636,7 +1635,7 @@ struct Jaqal_v1 {
     {
         DictConverter converter;
         Executor::execute(converter, inst);
-        return converter.dict.release();
+        return converter.dict.rel();
     }
 
     // Set the minimum clock cycles for a pulse to help avoid underflows. This time
@@ -2476,97 +2475,95 @@ struct Jaqal_v1_3 {
     struct DictConverter {
         void invalid(const JaqalInst &inst, Executor::Error err)
         {
-            pydict_setitem(dict, "type"_py, "invalid"_py);
-            pydict_setitem(dict, "error"_py, Executor::py_error_msg(err));
+            dict.set("type"_py, "invalid"_py);
+            dict.set("error"_py, Executor::py_error_msg(err));
             std::ostringstream stm;
             stm << inst;
-            pydict_setitem(dict, "inst"_py,
-                           py_object(pyunicode_from_string(stm.str().c_str())));
+            dict.set("inst"_py, py::new_str(stm.str()));
         }
 
         void GLUT(uint8_t chn_mask, const uint16_t *gaddrs, const uint16_t *starts,
                   const uint16_t *ends, int cnt)
         {
-            pydict_setitem(dict, "type"_py, "glut"_py);
+            dict.set("type"_py, "glut"_py);
             set_channels(chn_mask);
-            pydict_setitem(dict, "count"_py, pylong_cached(cnt));
-            py_object py_gaddrs(pylist_new(cnt));
-            py_object py_starts(pylist_new(cnt));
-            py_object py_ends(pylist_new(cnt));
+            dict.set("count"_py, py::int_cached(cnt));
+            auto py_gaddrs = py::new_list(cnt);
+            auto py_starts = py::new_list(cnt);
+            auto py_ends = py::new_list(cnt);
             for (int i = 0; i < cnt; i++) {
-                PyList_SET_ITEM(py_gaddrs.get(), i, pylong_from_long(gaddrs[i]));
-                PyList_SET_ITEM(py_starts.get(), i, pylong_from_long(starts[i]));
-                PyList_SET_ITEM(py_ends.get(), i, pylong_from_long(ends[i]));
+                py_gaddrs.SET(i, py::new_int(gaddrs[i]));
+                py_starts.SET(i, py::new_int(starts[i]));
+                py_ends.SET(i, py::new_int(ends[i]));
             }
-            pydict_setitem(dict, "gaddrs"_py, py_gaddrs);
-            pydict_setitem(dict, "starts"_py, py_starts);
-            pydict_setitem(dict, "ends"_py, py_ends);
+            dict.set("gaddrs"_py, py_gaddrs);
+            dict.set("starts"_py, py_starts);
+            dict.set("ends"_py, py_ends);
         }
 
         void SLUT(uint8_t chn_mask, const uint16_t *saddrs,
                   const ModTypeMask *mod_types, const uint16_t *paddrs, int cnt)
         {
-            pydict_setitem(dict, "type"_py, "slut"_py);
+            dict.set("type"_py, "slut"_py);
             set_channels(chn_mask);
-            pydict_setitem(dict, "count"_py, pylong_cached(cnt));
-            py_object py_saddrs(pylist_new(cnt));
-            py_object py_modtypes(pylist_new(cnt));
-            py_object py_paddrs(pylist_new(cnt));
+            dict.set("count"_py, py::int_cached(cnt));
+            auto py_saddrs = py::new_list(cnt);
+            auto py_modtypes = py::new_list(cnt);
+            auto py_paddrs = py::new_list(cnt);
             for (int i = 0; i < cnt; i++) {
-                PyList_SET_ITEM(py_saddrs.get(), i, pylong_from_long(saddrs[i]));
-                PyList_SET_ITEM(py_paddrs.get(), i, pylong_from_long(paddrs[i]));
-                PyList_SET_ITEM(py_modtypes.get(), i,
-                                mod_type_list(mod_types[i]).release());
+                py_saddrs.SET(i, py::new_int(saddrs[i]));
+                py_paddrs.SET(i, py::new_int(paddrs[i]));
+                py_modtypes.SET(i, mod_type_list(mod_types[i]));
             }
-            pydict_setitem(dict, "saddrs"_py, py_saddrs);
-            pydict_setitem(dict, "modtypes"_py, py_modtypes);
-            pydict_setitem(dict, "paddrs"_py, py_paddrs);
+            dict.set("saddrs"_py, py_saddrs);
+            dict.set("modtypes"_py, py_modtypes);
+            dict.set("paddrs"_py, py_paddrs);
         }
         void GSEQ(uint8_t chn_mask, const uint16_t *gaddrs, int cnt, SeqMode m)
         {
             if (m == SeqMode::GATE) {
-                pydict_setitem(dict, "type"_py, "gseq"_py);
+                dict.set("type"_py, "gseq"_py);
             }
             else if (m == SeqMode::WAIT_ANC) {
-                pydict_setitem(dict, "type"_py, "wait_anc"_py);
+                dict.set("type"_py, "wait_anc"_py);
             }
             else if (m == SeqMode::CONT_ANC) {
-                pydict_setitem(dict, "type"_py, "cont_anc"_py);
+                dict.set("type"_py, "cont_anc"_py);
             }
             set_channels(chn_mask);
-            pydict_setitem(dict, "count"_py, pylong_cached(cnt));
-            py_object py_gaddrs(pylist_new(cnt));
+            dict.set("count"_py, py::int_cached(cnt));
+            auto py_gaddrs = py::new_list(cnt);
             for (int i = 0; i < cnt; i++)
-                PyList_SET_ITEM(py_gaddrs.get(), i, pylong_from_long(gaddrs[i]));
-            pydict_setitem(dict, "gaddrs"_py, py_gaddrs);
+                py_gaddrs.SET(i, py::new_int(gaddrs[i]));
+            dict.set("gaddrs"_py, py_gaddrs);
         }
 
         void pulse(int chn_mask, ModTypeMask mod_type, const PDQSpline &spl,
                    int64_t cycles, Executor::PulseMeta meta, Executor::PulseTarget tgt)
         {
             if (tgt.type == Executor::PulseTarget::None) {
-                pydict_setitem(dict, "type"_py, "pulse_data"_py);
+                dict.set("type"_py, "pulse_data"_py);
             }
             else if (tgt.type == Executor::PulseTarget::PLUT) {
-                pydict_setitem(dict, "type"_py, "plut"_py);
+                dict.set("type"_py, "plut"_py);
             }
             else if (tgt.type == Executor::PulseTarget::Stream) {
-                pydict_setitem(dict, "type"_py, "stream"_py);
+                dict.set("type"_py, "stream"_py);
             }
             bool is_plut = tgt.type == Executor::PulseTarget::PLUT;
             if (is_plut) {
-                pydict_setitem(dict, "paddr"_py, py_object(pylong_from_long(tgt.addr)));
+                dict.set("paddr"_py, py::new_int(tgt.addr));
             }
             else {
-                pydict_setitem(dict, "modtype"_py, mod_type_list(mod_type));
+                dict.set("modtype"_py, mod_type_list(mod_type));
             }
             set_channels(chn_mask);
-            pydict_setitem(dict, "cycles"_py, py_object(pylong_from_longlong(cycles)));
-            py_object py_spl(pylist_new(4));
+            dict.set("cycles"_py, py::new_int(cycles));
+            auto py_spl = py::new_list(4);
             for (int i = 0; i < 4; i++)
-                PyList_SET_ITEM(py_spl.get(), i, pylong_from_longlong(spl.orders[i]));
-            pydict_setitem(dict, "spline_mu"_py, py_spl);
-            pydict_setitem(dict, "spline_shift"_py, pylong_cached(spl.shift));
+                py_spl.SET(i, py::new_int(spl.orders[i]));
+            dict.set("spline_mu"_py, py_spl);
+            dict.set("spline_shift"_py, py::int_cached(spl.shift));
             bool freq = mod_type & (FRQMOD0_MASK | FRQMOD1_MASK) || is_plut;
             bool amp = mod_type & (AMPMOD0_MASK | AMPMOD1_MASK) || is_plut;
             bool phase = mod_type & (PHSMOD0_MASK | PHSMOD1_MASK |
@@ -2576,56 +2573,56 @@ struct Jaqal_v1_3 {
                 if (!cond)
                     return;
                 auto fspl = cb(spl, cycles);
-                py_object py_fspl(pylist_new(4));
-                PyList_SET_ITEM(py_fspl.get(), 0, pyfloat_from_double(fspl.order0));
-                PyList_SET_ITEM(py_fspl.get(), 1, pyfloat_from_double(fspl.order1));
-                PyList_SET_ITEM(py_fspl.get(), 2, pyfloat_from_double(fspl.order2));
-                PyList_SET_ITEM(py_fspl.get(), 3, pyfloat_from_double(fspl.order3));
+                auto py_fspl = py::new_list(4);
+                py_fspl.SET(0, py::new_float(fspl.order0));
+                py_fspl.SET(1, py::new_float(fspl.order1));
+                py_fspl.SET(2, py::new_float(fspl.order2));
+                py_fspl.SET(3, py::new_float(fspl.order3));
                 if (unprefix_spline)
-                    pydict_setitem(dict, "spline"_py, py_fspl);
-                pydict_setitem(dict, name, py_fspl);
+                    dict.set("spline"_py, py_fspl);
+                dict.set(name, py_fspl);
             };
             set_spline("spline_freq"_py, Executor::freq_spline, freq);
             set_spline("spline_amp"_py, Executor::amp_spline, amp);
             set_spline("spline_phase"_py, Executor::phase_spline, phase);
-            pydict_setitem(dict, "trig"_py, meta.trig ? Py_True : Py_False);
-            pydict_setitem(dict, "sync"_py, meta.sync ? Py_True : Py_False);
-            pydict_setitem(dict, "enable"_py, meta.en ? Py_True : Py_False);
-            pydict_setitem(dict, "ff"_py, meta.fb ? Py_True : Py_False);
-            pydict_setitem(dict, "eof"_py, meta.apply_eof ? Py_True : Py_False);
-            pydict_setitem(dict, "clr"_py, meta.clr_frame ? Py_True : Py_False);
-            pydict_setitem(dict, "fwd"_py, pylong_cached(meta.fwd_frame_mask));
-            pydict_setitem(dict, "inv"_py, pylong_cached(meta.inv_frame_mask));
+            dict.set("trig"_py, meta.trig ? Py_True : Py_False);
+            dict.set("sync"_py, meta.sync ? Py_True : Py_False);
+            dict.set("enable"_py, meta.en ? Py_True : Py_False);
+            dict.set("ff"_py, meta.fb ? Py_True : Py_False);
+            dict.set("eof"_py, meta.apply_eof ? Py_True : Py_False);
+            dict.set("clr"_py, meta.clr_frame ? Py_True : Py_False);
+            dict.set("fwd"_py, py::int_cached(meta.fwd_frame_mask));
+            dict.set("inv"_py, py::int_cached(meta.inv_frame_mask));
         }
 
-        py_object dict{pydict_new()};
+        py::dict_ref dict{py::new_dict()};
 
     private:
         void set_channels(uint8_t chn_mask)
         {
             int nchns = std::popcount(chn_mask);
             int chn_added = 0;
-            py_object chns(pylist_new(nchns));
+            auto chns = py::new_list(nchns);
             for (int chn = 0; chn < 8; chn++) {
                 if (!((chn_mask >> chn) & 1))
                     continue;
                 if (nchns == 1)
-                    pydict_setitem(dict, "channel"_py, pylong_cached(chn));
-                PyList_SET_ITEM(chns.get(), chn_added, pylong_from_long(chn));
+                    dict.set("channel"_py, py::int_cached(chn));
+                chns.SET(chn_added, py::new_int(chn));
                 chn_added++;
             }
             assert(nchns == chn_added);
-            pydict_setitem(dict, "channels"_py, chns);
+            dict.set("channels"_py, chns);
         }
-        py_object mod_type_list(ModTypeMask mod_type)
+        py::ref<> mod_type_list(ModTypeMask mod_type)
         {
             int nmasks = std::popcount(uint8_t(mod_type));
-            py_object names(pylist_new(nmasks));
+            auto names = py::new_list(nmasks);
             int name_added = 0;
             auto add_name = [&] (PyObject *name, ModTypeMask mask) {
                 if (!(mod_type & mask))
                     return;
-                PyList_SET_ITEM(names.get(), name_added, py_newref(name));
+                names.SET(name_added, py::ptr(name));
                 name_added++;
             };
             add_name("freq0"_py, FRQMOD0_MASK);
@@ -2805,7 +2802,7 @@ struct Jaqal_v1_3 {
     {
         DictConverter converter;
         Executor::execute(converter, inst);
-        return converter.dict.release();
+        return converter.dict.rel();
     }
 
     // Set the minimum clock cycles for a pulse to help avoid underflows. This time
@@ -2825,57 +2822,54 @@ struct SyncChannelGen: Generator {
 struct PulseCompilerGen: SyncChannelGen {
     struct Info {
         PyObject *channel_list[64];
-        PyObject *CubicSpline;
-        PyObject *ToneData;
+        py::ptr<> CubicSpline;
+        py::ptr<> ToneData;
         PyObject *cubic_0;
         std::vector<std::pair<PyObject*,PyObject*>> tonedata_fields;
 
         __attribute__((returns_nonnull,always_inline))
         PyObject *_new_cubic_spline(cubic_spline_t sp)
         {
-            py_object newobj(pytype_genericalloc(CubicSpline, 4));
-            PyTuple_SET_ITEM(newobj, 0, pyfloat_from_double(sp.order0));
-            PyTuple_SET_ITEM(newobj, 1, pyfloat_from_double(sp.order1));
-            PyTuple_SET_ITEM(newobj, 2, pyfloat_from_double(sp.order2));
-            PyTuple_SET_ITEM(newobj, 3, pyfloat_from_double(sp.order3));
-            return newobj.release();
+            auto newobj = py::generic_alloc<py::tuple>(CubicSpline, 4);
+            newobj.SET(0, py::new_float(sp.order0));
+            newobj.SET(1, py::new_float(sp.order1));
+            newobj.SET(2, py::new_float(sp.order2));
+            newobj.SET(3, py::new_float(sp.order3));
+            return newobj.rel();
         }
 
         inline __attribute__((returns_nonnull))
         PyObject *new_cubic_spline(cubic_spline_t sp)
         {
             if (sp == cubic_spline_t{0, 0, 0, 0})
-                return py_newref(cubic_0);
+                return py::newref(cubic_0);
             return _new_cubic_spline(sp);
         }
 
-        py_object new_tone_data(int channel, int tone, int64_t duration_cycles,
+        py::ref<> new_tone_data(int channel, int tone, int64_t duration_cycles,
                                 cubic_spline_t freq, cubic_spline_t amp,
                                 cubic_spline_t phase, output_flags_t flags)
         {
-            py_object td(pytype_genericalloc(ToneData));
-            auto td_dict = pyobj_checked(PyObject_GenericGetDict(td, nullptr));
+            auto td = py::generic_alloc(ToneData);
+            auto td_dict = py::dict_ref(throw_if_not(PyObject_GenericGetDict(td.get(), nullptr)));
             for (auto [key, value]: tonedata_fields)
-                pydict_setitem(td_dict, key, value);
-            static_assert(_pylong_cache_max >= 32);
-            pydict_setitem(td_dict, "channel"_py, pylong_cached(channel));
-            pydict_setitem(td_dict, "tone"_py, pylong_cached(tone));
-            pydict_setitem(td_dict, "duration_cycles"_py,
-                           py_object(pylong_from_longlong(duration_cycles)));
-            pydict_setitem(td_dict, "frequency_hz"_py, py_object(new_cubic_spline(freq)));
-            pydict_setitem(td_dict, "amplitude"_py, py_object(new_cubic_spline(amp)));
+                td_dict.set(key, value);
+            py::assert_int_cache<32>();
+            td_dict.set("channel"_py, py::int_cached(channel));
+            td_dict.set("tone"_py, py::int_cached(tone));
+            td_dict.set("duration_cycles"_py, py::new_int(duration_cycles));
+            td_dict.set("frequency_hz"_py, py_object(new_cubic_spline(freq)));
+            td_dict.set("amplitude"_py, py_object(new_cubic_spline(amp)));
             // tone data wants rad as phase unit.
-            pydict_setitem(td_dict, "phase_rad"_py, py_object(new_cubic_spline({
+            td_dict.set("phase_rad"_py, py_object(new_cubic_spline({
                             phase.order0 * (2 * M_PI), phase.order1 * (2 * M_PI),
                             phase.order2 * (2 * M_PI), phase.order3 * (2 * M_PI) })));
-            pydict_setitem(td_dict, "frame_rotation_rad"_py, cubic_0);
-            pydict_setitem(td_dict, "wait_trigger"_py,
-                           flags.wait_trigger ? Py_True : Py_False);
-            pydict_setitem(td_dict, "sync"_py, flags.sync ? Py_True : Py_False);
-            pydict_setitem(td_dict, "output_enable"_py, Py_False);
-            pydict_setitem(td_dict, "feedback_enable"_py,
-                           flags.feedback_enable ? Py_True : Py_False);
-            pydict_setitem(td_dict, "bypass_lookup_tables"_py, Py_False);
+            td_dict.set("frame_rotation_rad"_py, cubic_0);
+            td_dict.set("wait_trigger"_py, flags.wait_trigger ? Py_True : Py_False);
+            td_dict.set("sync"_py, flags.sync ? Py_True : Py_False);
+            td_dict.set("output_enable"_py, Py_False);
+            td_dict.set("feedback_enable"_py, flags.feedback_enable ? Py_True : Py_False);
+            td_dict.set("bypass_lookup_tables"_py, Py_False);
             return td;
         }
 
@@ -2897,42 +2891,46 @@ struct PulseCompilerGen: SyncChannelGen {
         auto tonedata = info->new_tone_data(chn >> 1, chn & 1, duration_cycles, freq,
                                             amp, phase, flags);
         auto key = info->channel_list[chn];
-        PyObject *tonedatas;
+        py::list tonedatas;
         if (last_chn == chn) [[likely]] {
             tonedatas = assume(last_tonedatas);
         }
         else {
-            tonedatas = PyDict_GetItemWithError(output, key);
+            tonedatas = output.try_get(key);
         }
         if (!tonedatas) {
-            throw_pyerr();
-            py_object tonedatas(pylist_new(1));
-            PyList_SET_ITEM(tonedatas.get(), 0, tonedata.release());
-            pydict_setitem(output, key, tonedatas);
-            last_tonedatas = tonedatas;
+            auto tonedatas = py::new_list(1);
+            tonedatas.SET(0, std::move(tonedata));
+            output.set(key, tonedatas);
+            last_tonedatas = tonedatas.ptr();
         }
         else {
-            pylist_append(tonedatas, tonedata);
+            py::list(tonedatas).append(std::move(tonedata));
             last_tonedatas = tonedatas;
         }
         last_chn = chn;
     }
 
     PulseCompilerGen()
-        : output(pydict_new())
+        : output(py::new_dict())
     {
     }
     void start() override
     {
-        PyDict_Clear(output);
+        output.clear();
         last_chn = -1;
     }
     void end() override
     {}
 
-    py_object output;
+    PyObject *get_output()
+    {
+        return py::newref(output);
+    }
+
+    py::dict_ref output;
     int last_chn;
-    PyObject *last_tonedatas;
+    py::list last_tonedatas;
 };
 
 Generator *new_pulse_compiler_generator()
@@ -2942,39 +2940,37 @@ Generator *new_pulse_compiler_generator()
 
 PulseCompilerGen::Info::Info()
 {
-    auto tonedata_mod =
-        pyobj_checked(PyImport_ImportModule("pulsecompiler.rfsoc.tones.tonedata"));
-    ToneData = throw_if_not(PyObject_GetAttrString(tonedata_mod, "ToneData"));
-    auto splines_mod =
-        pyobj_checked(PyImport_ImportModule("pulsecompiler.rfsoc.structures.splines"));
-    CubicSpline = throw_if_not(PyObject_GetAttrString(splines_mod, "CubicSpline"));
+    auto tonedata_mod = py::import_module("pulsecompiler.rfsoc.tones.tonedata");
+    ToneData = tonedata_mod.attr("ToneData").rel();
+    auto splines_mod = py::import_module("pulsecompiler.rfsoc.structures.splines");
+    CubicSpline = splines_mod.attr("CubicSpline").rel();
     cubic_0 = _new_cubic_spline({0, 0, 0, 0});
-    auto pulse_mod = pyobj_checked(PyImport_ImportModule("qiskit.pulse"));
-    auto ControlChannel = pyobj_checked(PyObject_GetAttrString(pulse_mod, "ControlChannel"));
-    auto DriveChannel = pyobj_checked(PyObject_GetAttrString(pulse_mod, "DriveChannel"));
+    auto pulse_mod = py::import_module("qiskit.pulse");
+    auto ControlChannel = pulse_mod.attr("ControlChannel");
+    auto DriveChannel = pulse_mod.attr("DriveChannel");
 
-    static_assert(_pylong_cache_max >= 64);
+    py::assert_int_cache<64>();
     PyObject *py_nums[64];
     for (int i = 0; i < 64; i++)
-        py_nums[i] = pylong_cached(i);
+        py_nums[i] = py::int_cached(i);
 
-    channel_list[0] = pyobj_veccall(ControlChannel, &py_nums[0], 1);
-    channel_list[1] = pyobj_veccall(ControlChannel, &py_nums[1], 1);
+    channel_list[0] = ControlChannel(py_nums[0]).rel();
+    channel_list[1] = ControlChannel(py_nums[1]).rel();
     for (int i = 0; i < 62; i++)
-        channel_list[i + 2] = pyobj_veccall(DriveChannel, &py_nums[i], 1);
+        channel_list[i + 2] = DriveChannel(py_nums[i]).rel();
 
-    auto orig_post_init = pyobj_checked(PyObject_GetAttrString(ToneData, "__post_init__"));
+    auto orig_post_init = ToneData.attr("__post_init__");
     static PyMethodDef dummy_post_init_method = {
         "__post_init__", (PyCFunction)(void*)(_PyCFunctionFast)([] (auto, auto, auto) {
-            return py_immref(Py_None);
+            Py_RETURN_NONE;
         }), METH_FASTCALL, 0};
-    throw_if(PyObject_SetAttrString(ToneData, "__post_init__",
-                                    pyobj_checked(PyCFunction_New(&dummy_post_init_method,
-                                                                  nullptr))));
-    py_object dummy_tonedata(pyobj_veccall(ToneData, py_nums, 6, nullptr));
-    throw_if(PyObject_SetAttrString(ToneData, "__post_init__", orig_post_init));
-    auto td_dict = pyobj_checked(PyObject_GenericGetDict(dummy_tonedata, nullptr));
-    for (auto [key, value]: pydict_iter(td_dict)) {
+    ToneData.set_attr("__post_init__", py::new_cfunc(&dummy_post_init_method));
+    auto dummy_tonedata = ToneData(py_nums[0], py_nums[0], py_nums[0],
+                                   py_nums[0], py_nums[0], py_nums[0]);
+    ToneData.set_attr("__post_init__", orig_post_init);
+    auto td_dict = py::dict_ref::checked(PyObject_GenericGetDict(dummy_tonedata.get(),
+                                                                 nullptr));
+    for (auto [key, value]: py::dict_iter(td_dict)) {
         for (auto name: {"channel", "tone", "duration_cycles", "frequency_hz",
                 "amplitude", "phase_rad", "frame_rotation_rad", "wait_trigger",
                 "sync", "output_enable", "feedback_enable",
@@ -2983,7 +2979,7 @@ PulseCompilerGen::Info::Info()
                 goto skip_key;
             }
         }
-        tonedata_fields.push_back({ py_newref(key), py_newref(value) });
+        tonedata_fields.push_back({ py::newref(key), py::newref(value) });
     skip_key:
         ;
     }
@@ -3748,7 +3744,7 @@ struct Jaqalv1_3StreamGen: Jaqalv1_3Generator {
     {
         if (n < 0 || n >= 4)
             throw std::out_of_range("Board index should be in [0, 3]");
-        return py_immref(py_empty_bytes);
+        return py::empty_bytes.immref().rel();
     }
 
     __attribute__((returns_nonnull)) PyObject *get_sequence(int n) const
@@ -3758,11 +3754,11 @@ struct Jaqalv1_3StreamGen: Jaqalv1_3Generator {
         auto &insts = board_insts[n];
         auto ninsts = insts.size();
         static constexpr auto instsz = sizeof(JaqalInst);
-        py_object res(pybytes_from_data(nullptr, ninsts * instsz));
+        auto res = py::new_bytes(nullptr, ninsts * instsz);
         auto ptr = PyBytes_AS_STRING(res.get());
         for (size_t i = 0; i < ninsts; i++)
             memcpy(&ptr[i * instsz], &insts[i].inst, instsz);
-        return res.release();
+        return res.rel();
     }
 private:
     std::vector<TimedInst> board_insts[4];
@@ -3843,7 +3839,7 @@ static inline bool parse_action_kws(PyObject *kws, int aid)
     if (!kws)
         return false;
     bool sync = false;
-    for (auto [key, value]: pydict_iter(kws)) {
+    for (auto [key, value]: py::dict_iter(kws)) {
         if (PyUnicode_CompareWithASCIIString(key, "sync") == 0) {
             sync = get_value_bool(value, action_key(aid));
             continue;
