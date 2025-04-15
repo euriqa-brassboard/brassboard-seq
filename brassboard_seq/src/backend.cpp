@@ -132,7 +132,7 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
                     }
                     else if (new_value != value) {
                         assert(is_rtval(cond));
-                        value.take(new_select(cond, new_value.get(), value.get()));
+                        value.take(new_select(cond, new_value, value));
                     }
                 }
             }
@@ -154,8 +154,8 @@ static inline auto action_get_condval(auto action, unsigned age)
         return false;
     assert(is_rtval(cond));
     try {
-        rt_eval_throw((RuntimeValue*)cond, age);
-        return !rtval_cache((RuntimeValue*)cond).is_zero();
+        rt_eval_throw(cond, age);
+        return !rtval_cache(cond).is_zero();
     }
     catch (...) {
         bb_rethrow(action_key(action->aid));
@@ -175,8 +175,8 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
     comp->cseq.total_time = time_mgr->compute_all_times(age);
     for (auto [assert_id, a]: py::list_iter<py::tuple>(seqinfo->assertions)) {
         auto c = py::ptr<RuntimeValue>(a.get(0));
-        rt_eval_throw(c.get(), age, assert_key(assert_id));
-        if (rtval_cache(c.get()).is_zero()) {
+        rt_eval_throw(c, age, assert_key(assert_id));
+        if (rtval_cache(c).is_zero()) {
             bb_throw_format(PyExc_AssertionError, assert_key(assert_id), "%U", a.get(1));
         }
     }
@@ -198,13 +198,11 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
                          action_key(action->aid));
             }
             else if (is_rtval(action_value)) {
-                rt_eval_throw((RuntimeValue*)action_value, age,
-                              action_key(action->aid));
+                rt_eval_throw(action_value, age, action_key(action->aid));
             }
             auto action_end_val = action->end_val.get();
             if (action_end_val != action_value && is_rtval(action_end_val)) {
-                rt_eval_throw((RuntimeValue*)action_end_val, age,
-                              action_key(action->aid));
+                rt_eval_throw(action_end_val, age, action_key(action->aid));
             }
             // No need to evaluate action.length since the `compute_all_times`
             // above should've done it already.

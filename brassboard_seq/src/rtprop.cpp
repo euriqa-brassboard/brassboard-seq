@@ -239,7 +239,7 @@ struct rtprop_callback : ExternCallback {
     {
         auto v = py::ptr(self->obj).attr(self->fieldname);
         if (!is_rtval(v))
-            return TagVal::from_py(v.get());
+            return TagVal::from_py(v);
         auto rv = (RuntimeValue*)v;
         if (rv->type_ == ExternAge && rv->cb_arg2 == self)
             py_throw_format(PyExc_ValueError, "RT property have not been assigned.");

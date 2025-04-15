@@ -265,11 +265,11 @@ void generate_rtios(auto *ab, backend::CompiledSeq &cseq, unsigned age)
     auto seq = pyx_fld(ab, seq);
     for (size_t i = 0, nreloc = ab->bool_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = ab->bool_values[i];
-        val = !rtval::rtval_cache((RuntimeValue*)rtval).is_zero();
+        val = !rtval::rtval_cache(rtval).is_zero();
     }
     for (size_t i = 0, nreloc = ab->float_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = ab->float_values[i];
-        val = rtval::rtval_cache((RuntimeValue*)rtval).template get<double>();
+        val = rtval::rtval_cache(rtval).template get<double>();
     }
     int64_t max_delay = 0;
     auto relocate_delay = [&] (int64_t &delay, auto rt_delay) {

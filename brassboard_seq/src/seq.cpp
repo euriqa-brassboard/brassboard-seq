@@ -67,9 +67,9 @@ _combine_cond(PyObject *cond1, PyObject *new_cond)
             return { Py_False, false };
         }
     }
-    py_object cond2(rt_convert_bool((RuntimeValue*)new_cond));
+    auto cond2 = py::ref(rt_convert_bool(new_cond));
     if (cond1 == Py_True)
-        return { cond2.release(), true };
+        return { cond2.rel(), true };
     assert(is_rtval(cond1));
     auto self = py::generic_alloc<RuntimeValue>();
     self->datatype = DataType::Bool;
@@ -78,7 +78,7 @@ _combine_cond(PyObject *cond1, PyObject *new_cond)
     self->type_ = And;
     self->age = (unsigned)-1;
     self->arg0 = (RuntimeValue*)py::newref(cond1);
-    self->arg1 = (RuntimeValue*)cond2.release();
+    self->arg1 = cond2.rel();
     self->cb_arg2 = py::immref(Py_None);
     return { (PyObject*)self.rel(), true };
 }

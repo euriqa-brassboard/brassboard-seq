@@ -19,8 +19,6 @@
 #ifndef BRASSBOARD_SEQ_SRC_LIB_RTVAL_H
 #define BRASSBOARD_SEQ_SRC_LIB_RTVAL_H
 
-#include <concepts>
-
 #include "utils.h"
 
 namespace brassboard_seq::rtval {
@@ -106,13 +104,13 @@ enum class DataType: uint8_t {
     Float64,
 };
 
-static inline DataType pytype_to_datatype(PyObject *type)
+static inline DataType pytype_to_datatype(py::ptr<> type)
 {
-    if (type == (PyObject *)&PyFloat_Type)
+    if (type == &PyFloat_Type)
         return DataType::Float64;
-    if (type == (PyObject *)&PyLong_Type)
+    if (type == &PyLong_Type)
         return DataType::Int64;
-    if (type == (PyObject *)&PyBool_Type)
+    if (type == &PyBool_Type)
         return DataType::Bool;
     py_throw_format(PyExc_TypeError, "Unknown runtime value type '%S'", type);
 }
@@ -274,7 +272,7 @@ struct TagVal {
             return { new_type };
         }
     }
-    static TagVal from_py(PyObject *obj);
+    static TagVal from_py(py::ptr<> obj);
     __attribute__((returns_nonnull))
     PyObject *to_py() const
     {
@@ -944,12 +942,8 @@ struct RuntimeValue : PyObject {
     static PyTypeObject Type;
 };
 
-template<class T>
-concept is_rtval_ptr = std::same_as<std::remove_cvref_t<T>,RuntimeValue*>;
-template<class... T>
-concept all_rtval_ptr = (is_rtval_ptr<T> && ...);
-template<class T>
-concept not_rtval_ptr = !is_rtval_ptr<T>;
+using rtval_ptr = py::ptr<RuntimeValue>;
+using rtval_ref = py::ref<RuntimeValue>;
 
 struct ExternCallback : PyObject {
     void *fptr;
@@ -962,58 +956,62 @@ static inline bool is_rtval(auto &&v)
 }
 
 __attribute__((returns_nonnull)) RuntimeValue*
-new_cb_arg2(ValueType type, PyObject *cb_arg2, PyObject *ty);
+new_cb_arg2(ValueType type, py::ptr<> cb_arg2, py::ptr<> ty);
 
 static inline __attribute__((returns_nonnull)) RuntimeValue*
-new_arg(PyObject *idx, PyObject *ty)
+new_arg(py::ptr<> idx, py::ptr<> ty)
 {
     return new_cb_arg2(Arg, idx, ty);
 }
 static inline __attribute__((returns_nonnull)) RuntimeValue*
-new_extern(auto *cb, PyObject *ty)
+new_extern(py::ptr<> cb, py::ptr<> ty)
 {
-    return new_cb_arg2(Extern, (PyObject*)cb, ty);
+    return new_cb_arg2(Extern, cb, ty);
 }
 static inline __attribute__((returns_nonnull)) RuntimeValue*
-new_extern_age(auto *cb, PyObject *ty)
+new_extern_age(py::ptr<> cb, py::ptr<> ty)
 {
-    return new_cb_arg2(ExternAge, (PyObject*)cb, ty);
-}
-
-__attribute__((returns_nonnull)) RuntimeValue*
-new_expr1(ValueType type, RuntimeValue *arg0);
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-new_expr1(ValueType type, not_rtval_ptr auto arg0)
-{
-    return new_expr1(type, (RuntimeValue*)arg0);
+    return new_cb_arg2(ExternAge, cb, ty);
 }
 
 __attribute__((returns_nonnull)) RuntimeValue*
-new_expr2(ValueType type, RuntimeValue *arg0, RuntimeValue *arg1);
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-new_expr2(ValueType type, auto arg0, auto arg1)
-    requires (!all_rtval_ptr<decltype(arg0),decltype(arg1)>)
+new_expr1(ValueType type, rtval_ref &&arg0);
+
+template<typename T>
+__attribute__((returns_nonnull)) RuntimeValue*
+new_expr1(ValueType type, T &&arg0)
 {
-    return new_expr2(type, (RuntimeValue*)arg0, (RuntimeValue*)arg1);
+    return new_expr1(type, rtval_ref(py::newref(std::forward<T>(arg0))));
+}
+
+__attribute__((returns_nonnull)) RuntimeValue*
+new_expr2(ValueType type, rtval_ref &&arg0, rtval_ref &&arg1);
+
+template<typename T0, typename T1>
+__attribute__((returns_nonnull)) RuntimeValue*
+new_expr2(ValueType type, T0 &&arg0, T1 &&arg1)
+{
+    return new_expr2(type, rtval_ref(py::newref(std::forward<T0>(arg0))),
+                     rtval_ref(py::newref(std::forward<T1>(arg1))));
 }
 
 __attribute__((returns_nonnull)) RuntimeValue *new_const(TagVal v);
 static inline __attribute__((returns_nonnull)) RuntimeValue*
-new_const(PyObject *v)
+new_const(py::ptr<> v)
 {
     return new_const(TagVal::from_py(v));
 }
-
-__attribute__((returns_nonnull)) RuntimeValue*
-new_select(RuntimeValue *arg0, PyObject *arg1, PyObject *arg2);
 static inline __attribute__((returns_nonnull)) RuntimeValue*
-new_select(not_rtval_ptr auto arg0, PyObject *arg1, PyObject *arg2)
+new_const(auto *pyv)
 {
-    return new_select((RuntimeValue*)arg0, arg1, arg2);
+    return new_const(py::ptr(pyv));
 }
 
+__attribute__((returns_nonnull)) RuntimeValue*
+new_select(rtval_ptr arg0, py::ptr<> arg1, py::ptr<> arg2);
+
 static inline __attribute__((returns_nonnull)) RuntimeValue*
-rt_convert_bool(RuntimeValue *v)
+rt_convert_bool(rtval_ptr v)
 {
     if (v->type_ == Int64)
         v = v->arg0;
@@ -1023,14 +1021,14 @@ rt_convert_bool(RuntimeValue *v)
 }
 
 static inline __attribute__((returns_nonnull)) RuntimeValue*
-rt_round_int64(RuntimeValue *v)
+rt_round_int64(rtval_ptr v)
 {
     if (v->type_ == Int64)
         return py::newref(v);
     return new_expr1(Int64, v);
 }
 
-static inline __attribute__((always_inline)) TagVal rtval_cache(RuntimeValue *rtval)
+static inline __attribute__((always_inline)) TagVal rtval_cache(rtval_ptr rtval)
 {
     TagVal cache;
     cache.type = rtval->datatype;
@@ -1039,17 +1037,12 @@ static inline __attribute__((always_inline)) TagVal rtval_cache(RuntimeValue *rt
     return cache;
 }
 
-bool rt_same_value(PyObject *v1, PyObject *v2);
+bool rt_same_value(py::ptr<> v1, py::ptr<> v2);
 
-void rt_eval_cache(RuntimeValue *self, unsigned age);
-static inline __attribute__((always_inline))
-void rt_eval_cache(not_rtval_ptr auto self, unsigned age)
-{
-    rt_eval_cache((RuntimeValue*)self, age);
-}
+void rt_eval_cache(rtval_ptr self, unsigned age);
 
 static inline __attribute__((always_inline))
-void rt_eval_throw(auto *self, unsigned age, uintptr_t key=uintptr_t(-1))
+void rt_eval_throw(rtval_ptr self, unsigned age, uintptr_t key=uintptr_t(-1))
 {
     try {
         rt_eval_cache(self, age);
@@ -1062,11 +1055,11 @@ void rt_eval_throw(auto *self, unsigned age, uintptr_t key=uintptr_t(-1))
     throw_py_error(self->cache_err, key);
 }
 
-static inline double get_value_f64(PyObject *v, unsigned age)
+static inline double get_value_f64(py::ptr<> v, unsigned age)
 {
     if (is_rtval(v)) {
-        rt_eval_throw((RuntimeValue*)v, age);
-        return rtval_cache((RuntimeValue*)v).get<double>();
+        rt_eval_throw(v, age);
+        return rtval_cache(v).get<double>();
     }
     return brassboard_seq::get_value_f64(v, -1);
 }
@@ -1103,14 +1096,12 @@ struct InterpFunction {
         return idx;
     }
 
-    void set_value(RuntimeValue *value, auto &&args)
-        requires std::same_as<std::vector<DataType>,
-                              std::remove_cvref_t<decltype(args)>>
+    void set_value(rtval_ptr value, std::vector<DataType> &&args)
     {
-        _set_value(value, args);
+        set_value(value, args);
     }
 
-    void _set_value(RuntimeValue *value, std::vector<DataType> &args);
+    void set_value(rtval_ptr value, std::vector<DataType> &args);
     Builder::ValueInfo &visit_value(RuntimeValue *value, Builder &builder);
 
     void eval_all(unsigned age);

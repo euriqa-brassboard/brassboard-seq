@@ -4161,11 +4161,11 @@ void gen_rfsoc_data(auto *rb, backend::CompiledSeq &cseq,
     auto seq = pyx_fld(rb, seq);
     for (size_t i = 0, nreloc = rb->bool_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = rb->bool_values[i];
-        val = !rtval::rtval_cache((RuntimeValue*)rtval).is_zero();
+        val = !rtval::rtval_cache(rtval).is_zero();
     }
     for (size_t i = 0, nreloc = rb->float_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = rb->float_values[i];
-        val = rtval::rtval_cache((RuntimeValue*)rtval).template get<double>();
+        val = rtval::rtval_cache(rtval).template get<double>();
     }
     auto &time_values = pyx_fld(seq, seqinfo)->time_mgr->time_values;
     auto reloc_action = [rb, &time_values] (const RFSOCAction &action,

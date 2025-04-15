@@ -25,7 +25,7 @@
 namespace brassboard_seq::rtval {
 
 __attribute__((returns_nonnull,visibility("protected"))) RuntimeValue*
-new_cb_arg2(ValueType type, PyObject *cb_arg2, PyObject *ty)
+new_cb_arg2(ValueType type, py::ptr<> cb_arg2, py::ptr<> ty)
 {
     auto datatype = pytype_to_datatype(ty);
     auto self = py::generic_alloc<RuntimeValue>();
@@ -41,7 +41,7 @@ new_cb_arg2(ValueType type, PyObject *cb_arg2, PyObject *ty)
 }
 
 __attribute__((returns_nonnull,visibility("protected"))) RuntimeValue*
-new_expr1(ValueType type, RuntimeValue *arg0)
+new_expr1(ValueType type, rtval_ref &&arg0)
 {
     auto datatype = unary_return_type(type, arg0->datatype);
     auto self = py::generic_alloc<RuntimeValue>();
@@ -50,14 +50,14 @@ new_expr1(ValueType type, RuntimeValue *arg0)
     // self->cache_val = { .i64_val = 0 };
     self->type_ = type;
     self->age = (unsigned)-1;
-    self->arg0 = py::newref(arg0);
+    self->arg0 = arg0.rel();
     self->arg1 = (RuntimeValue*)py::immref(Py_None);
     self->cb_arg2 = py::immref(Py_None);
     return self.rel();
 }
 
 __attribute__((returns_nonnull,visibility("protected"))) RuntimeValue*
-new_expr2(ValueType type, RuntimeValue *arg0, RuntimeValue *arg1)
+new_expr2(ValueType type, rtval_ref &&arg0, rtval_ref &&arg1)
 {
     auto datatype = binary_return_type(type, arg0->datatype, arg1->datatype);
     auto self = py::generic_alloc<RuntimeValue>();
@@ -66,8 +66,8 @@ new_expr2(ValueType type, RuntimeValue *arg0, RuntimeValue *arg1)
     // self->cache_val = { .i64_val = 0 };
     self->type_ = type;
     self->age = (unsigned)-1;
-    self->arg0 = py::newref(arg0);
-    self->arg1 = py::newref(arg1);
+    self->arg0 = arg0.rel();
+    self->arg1 = arg1.rel();
     self->cb_arg2 = py::immref(Py_None);
     return self.rel();
 }
@@ -87,50 +87,48 @@ new_const(TagVal v)
     return self.rel();
 }
 
-static PyObject *new_expr2_wrap1(ValueType type, PyObject *arg0, PyObject *arg1)
+static PyObject *new_expr2_wrap1(ValueType type, py::ptr<> arg0, py::ptr<> arg1)
 {
-    py_object rtarg0;
-    py_object rtarg1;
+    rtval_ref rtarg0;
+    rtval_ref rtarg1;
     if (!is_rtval(arg0)) {
-        rtarg0.reset(new_const(TagVal::from_py(arg0)));
-        rtarg1.reset(py::newref(arg1));
+        rtarg0.take(new_const(TagVal::from_py(arg0)));
+        rtarg1.assign(arg1);
     }
     else {
         if (is_rtval(arg1)) {
-            rtarg1.reset(py::newref(arg1));
+            rtarg1.assign(arg1);
         }
         else {
-            rtarg1.reset(new_const(TagVal::from_py(arg1)));
+            rtarg1.take(new_const(TagVal::from_py(arg1)));
         }
-        rtarg0.reset(py::newref(arg0));
+        rtarg0.assign(arg0);
     }
-    auto datatype = binary_return_type(type, ((RuntimeValue*)rtarg0)->datatype,
-                                       ((RuntimeValue*)rtarg1)->datatype);
+    auto datatype = binary_return_type(type, rtarg0->datatype, rtarg1->datatype);
     auto self = py::generic_alloc<RuntimeValue>();
     self->datatype = datatype;
     // self->cache_err = EvalError::NoError;
     // self->cache_val = { .i64_val = 0 };
     self->type_ = type;
     self->age = (unsigned)-1;
-    self->arg0 = (RuntimeValue*)rtarg0.release();
-    self->arg1 = (RuntimeValue*)rtarg1.release();
+    self->arg0 = rtarg0.rel();
+    self->arg1 = rtarg1.rel();
     self->cb_arg2 = py::immref(Py_None);
     return self.rel();
 }
 
-static inline RuntimeValue*
-wrap_rtval(PyObject *v)
+static inline rtval_ref wrap_rtval(py::ptr<> v)
 {
     if (is_rtval(v))
-        return (RuntimeValue*)py::newref(v);
-    return new_const(TagVal::from_py(v));
+        return rtval_ref(py::newref(v));
+    return rtval_ref(new_const(TagVal::from_py(v)));
 }
 
 __attribute__((returns_nonnull,visibility("protected"))) RuntimeValue*
-new_select(RuntimeValue *arg0, PyObject *arg1, PyObject *arg2)
+new_select(rtval_ptr arg0, py::ptr<> arg1, py::ptr<> arg2)
 {
-    py_object rtarg1(wrap_rtval(arg1));
-    py_object rtarg2(wrap_rtval(arg2));
+    auto rtarg1 = wrap_rtval(arg1);
+    auto rtarg2 = wrap_rtval(arg2);
     auto datatype = promote_type(((RuntimeValue*)rtarg1)->datatype,
                                  ((RuntimeValue*)rtarg2)->datatype);
     auto self = py::generic_alloc<RuntimeValue>();
@@ -140,8 +138,8 @@ new_select(RuntimeValue *arg0, PyObject *arg1, PyObject *arg2)
     self->type_ = Select;
     self->age = (unsigned)-1;
     self->arg0 = py::newref(arg0);
-    self->arg1 = (RuntimeValue*)rtarg1.release();
-    self->cb_arg2 = rtarg2.release();
+    self->arg1 = rtarg1.rel();
+    self->cb_arg2 = (PyObject*)rtarg2.rel();
     return self.rel();
 }
 
@@ -150,14 +148,14 @@ static inline bool tagval_equal(const TagVal &v1, const TagVal &v2)
     return !CmpEQ_op::generic_eval(v1, v2).is_zero();
 }
 
-static inline bool _rt_equal_val(RuntimeValue *rtval, PyObject *pyval)
+static inline bool _rt_equal_val(rtval_ptr rtval, py::ptr<> pyval)
 {
     if (rtval->type_ != Const)
         return false;
     return tagval_equal(rtval_cache(rtval), TagVal::from_py(pyval));
 }
 
-static bool _rt_same_value(RuntimeValue *v1, RuntimeValue *v2)
+static bool _rt_same_value(rtval_ptr v1, rtval_ptr v2)
 {
     if (v1 == v2)
         return true;
@@ -206,9 +204,8 @@ static bool _rt_same_value(RuntimeValue *v1, RuntimeValue *v2)
     case Int64:
         return _rt_same_value(v1->arg0, v2->arg0);
     case Select:
-        return (_rt_same_value(v1->arg0, v2->arg0) &&
-                _rt_same_value(v1->arg1, v2->arg1) &&
-                _rt_same_value((RuntimeValue*)v1->cb_arg2, (RuntimeValue*)v2->cb_arg2));
+        return (_rt_same_value(v1->arg0, v2->arg0) && _rt_same_value(v1->arg1, v2->arg1) &&
+                _rt_same_value(v1->cb_arg2, v2->cb_arg2));
     case Sub:
     case Div:
     case Pow:
@@ -218,8 +215,7 @@ static bool _rt_same_value(RuntimeValue *v1, RuntimeValue *v2)
     case CmpLE:
     case CmpGE:
     case Atan2:
-        return (_rt_same_value(v1->arg0, v2->arg0) &&
-                _rt_same_value(v1->arg1, v2->arg1));
+        return (_rt_same_value(v1->arg0, v2->arg0) && _rt_same_value(v1->arg1, v2->arg1));
     case Add:
     case Mul:
     case And:
@@ -230,27 +226,25 @@ static bool _rt_same_value(RuntimeValue *v1, RuntimeValue *v2)
     case Hypot:
     case Max:
     case Min:
-        return ((_rt_same_value(v1->arg0, v2->arg0) &&
-                _rt_same_value(v1->arg1, v2->arg1)) ||
-                (_rt_same_value(v1->arg0, v2->arg1) &&
-                 _rt_same_value(v1->arg1, v2->arg0)));
+        return ((_rt_same_value(v1->arg0, v2->arg0) && _rt_same_value(v1->arg1, v2->arg1)) ||
+                (_rt_same_value(v1->arg0, v2->arg1) && _rt_same_value(v1->arg1, v2->arg0)));
     }
 }
 
 __attribute__((visibility("protected")))
-bool rt_same_value(PyObject *v1, PyObject *v2) try {
+bool rt_same_value(py::ptr<> v1, py::ptr<> v2) try {
     if (!is_rtval(v1)) {
         if (!is_rtval(v2)) {
             int res = PyObject_RichCompareBool(v1, v2, Py_EQ);
             throw_if(res < 0);
             return res;
         }
-        return _rt_equal_val((RuntimeValue*)v2, v1);
+        return _rt_equal_val(v2, v1);
     }
     else if (!is_rtval(v2)) {
-        return _rt_equal_val((RuntimeValue*)v1, v2);
+        return _rt_equal_val(v1, v2);
     }
-    return _rt_same_value((RuntimeValue*)v1, (RuntimeValue*)v2);
+    return _rt_same_value(v1, v2);
 }
 catch (...) {
     PyErr_Clear();
@@ -269,7 +263,7 @@ using extern_cb_t = TagVal(ExternCallback*);
 using extern_age_cb_t = TagVal(ExternCallback*, unsigned);
 
 __attribute__((flatten,visibility("protected")))
-void rt_eval_cache(RuntimeValue *self, unsigned age)
+void rt_eval_cache(rtval_ptr self, unsigned age)
 {
     if (self->age == age)
         return;
@@ -400,13 +394,13 @@ static inline bool is_numpy_int(PyObject *value)
 }
 
 __attribute__((visibility("protected")))
-TagVal TagVal::from_py(PyObject *value)
+TagVal TagVal::from_py(py::ptr<> value)
 {
     if (value == Py_True)
         return true;
     if (value == Py_False)
         return false;
-    if (py::isa<py::int_>(value) || is_numpy_int(value)) {
+    if (value.isa<py::int_>() || is_numpy_int(value)) {
         auto val = PyLong_AsLongLong(value);
         throw_pyerr(val == -1);
         return TagVal(val);
@@ -421,14 +415,14 @@ static inline TagVal tagval_add_or_sub(TagVal v1, TagVal v2, bool issub)
     return (issub ? Sub_op::generic_eval(v1, v2) : Add_op::generic_eval(v1, v2));
 }
 
-static inline PyObject *new_addsub(TagVal c, RuntimeValue *v, bool s)
+static inline rtval_ref new_addsub(TagVal c, rtval_ptr v, bool s)
 {
     if (c.is_zero() && !s)
-        return py::newref(v);
-    return new_expr2(s ? Sub : Add, (RuntimeValue*)py_object(new_const(c)), v);
+        return v.ref();
+    return py::ref(new_expr2(s ? Sub : Add, py::ref(new_const(c)), v));
 }
 
-static inline PyObject *build_addsub(PyObject *v0, PyObject *v1, bool issub)
+static inline rtval_ref build_addsub(py::ptr<> v0, py::ptr<> v1, bool issub)
 {
     assume(v0);
     assume(v1);
@@ -496,29 +490,29 @@ static inline PyObject *build_addsub(PyObject *v0, PyObject *v1, bool issub)
         }
     }
     if (nv0 == v0 && nv1 == v1)
-        return new_expr2(issub ? Sub : Add, nv0, nv1);
+        return py::ref(new_expr2(issub ? Sub : Add, nv0, nv1));
     if (issub)
         ns1 = !ns1;
     if (!nv0) {
         if (!nv1)
-            return new_const(nc);
+            return py::ref(new_const(nc));
         return new_addsub(nc, nv1, ns1);
     }
     if (!nv1)
         return new_addsub(nc, nv0, ns0);
     bool ns = false;
-    py_object nv;
+    rtval_ref nv;
     if (!ns0) {
-        nv.reset(new_expr2(ns1 ? Sub : Add, nv0, nv1));
+        nv.take(new_expr2(ns1 ? Sub : Add, nv0, nv1));
     }
     else if (ns1) {
-        nv.reset(new_expr2(Add, nv0, nv1));
+        nv.take(new_expr2(Add, nv0, nv1));
         ns = true;
     }
     else {
-        nv.reset(new_expr2(Sub, nv1, nv0));
+        nv.take(new_expr2(Sub, nv1, nv0));
     }
-    return new_addsub(nc, (RuntimeValue*)nv, ns);
+    return new_addsub(nc, nv, ns);
 }
 
 namespace np {
@@ -572,9 +566,9 @@ GET_NP(rint);
 };
 
 static PyNumberMethods rtvalue_as_number = {
-    .nb_add = [] (PyObject *v1, PyObject *v2) {
+    .nb_add = [] (PyObject *v1, PyObject *v2) -> PyObject* {
         return cxx_catch([&] { return build_addsub(v1, v2, false); }); },
-    .nb_subtract = [] (PyObject *v1, PyObject *v2) {
+    .nb_subtract = [] (PyObject *v1, PyObject *v2) -> PyObject* {
         return cxx_catch([&] { return build_addsub(v1, v2, true); }); },
     .nb_multiply = [] (PyObject *v1, PyObject *v2) {
         return cxx_catch([&] { return new_expr2_wrap1(Mul, v1, v2); }); },
@@ -585,7 +579,7 @@ static PyNumberMethods rtvalue_as_number = {
             Py_RETURN_NOTIMPLEMENTED;
         return cxx_catch([&] { return new_expr2_wrap1(Pow, v1, v2); });
     },
-    .nb_negative = [] (PyObject *self) {
+    .nb_negative = [] (PyObject *self) -> PyObject* {
         return cxx_catch([&] { return build_addsub(py::int_cached(0), self, true); });
     },
     .nb_positive = [] (PyObject *self) { return py::newref(self); },
@@ -627,11 +621,11 @@ static PyObject *rtvalue_array_ufunc(RuntimeValue *self, PyObject *const *args,
     // so we need to implement the corresponding ufuncs to support these.
     if (ufunc == np::add) {
         py_check_num_arg("__array_ufunc__", nargs, 4, 4);
-        return build_addsub(args[2], args[3], false);
+        return build_addsub(args[2], args[3], false).rel();
     }
     if (ufunc == np::subtract) {
         py_check_num_arg("__array_ufunc__", nargs, 4, 4);
-        return build_addsub(args[2], args[3], true);
+        return build_addsub(args[2], args[3], true).rel();
     }
     auto uni_expr = [&] (auto type) { return new_expr1(type, self); };
     auto bin_expr = [&] (auto type) {
@@ -1001,7 +995,7 @@ PyTypeObject RuntimeValue::Type = {
                                       Py_True : Py_False);
                 return new_expr2(typ, v1, v2);
             }
-            return new_expr2(typ, v1, py_object(new_const(TagVal::from_py(v2))));
+            return new_expr2(typ, v1, py::ref(new_const(TagVal::from_py(v2))));
         });
     },
     .tp_methods = (PyMethodDef[]){
@@ -1176,7 +1170,7 @@ static inline int get_label_offset(ValueType op, DataType t1, DataType t2)
 }
 
 __attribute__((visibility("protected")))
-void InterpFunction::_set_value(RuntimeValue *value, std::vector<DataType> &args)
+void InterpFunction::set_value(rtval_ptr value, std::vector<DataType> &args)
 {
     int nargs = args.size();
     code.clear();
