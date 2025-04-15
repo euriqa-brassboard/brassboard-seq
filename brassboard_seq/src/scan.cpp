@@ -29,7 +29,7 @@ static inline bool check_field(PyObject *d, PyObject *path)
         auto vp = py::dict(d).try_get(name);
         if (!vp)
             return false;
-        if (!PyDict_CheckExact(vp))
+        if (!vp.typeis<py::dict>())
             return true;
         d = vp;
     }

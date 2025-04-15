@@ -71,12 +71,12 @@ static inline bool apply_dict_ovr(py::dict_ref &dict, PyObject *k, PyObject *v)
 
 static inline PyObject *apply_composite_ovr(PyObject *val, PyObject *ovr)
 {
-    if (!PyDict_Check(ovr))
+    if (!py::isa<py::dict>(ovr))
         return py::newref(ovr);
     if (!PyDict_Size(ovr))
         return py::newref(val);
-    if (PyDict_Check(val)) {
-        auto newval = py::dict(val).copy();
+    if (auto d = py::cast<py::dict>(val)) {
+        auto newval = d.copy();
         for (auto [k, v]: py::dict_iter(ovr)) {
             if (apply_dict_ovr(newval, k, v))
                 continue;
@@ -87,8 +87,8 @@ static inline PyObject *apply_composite_ovr(PyObject *val, PyObject *ovr)
         }
         return newval.rel();
     }
-    if (PyList_Check(val)) {
-        auto newval = py::ptr(val).list();
+    if (auto l = py::cast<py::list>(val)) {
+        auto newval = l.list(); // copy
         for (auto [k, v]: py::dict_iter(ovr)) {
             // for scangroup support since only string key is supported
             auto idx = PyLong_AsLong(k.int_().get());
@@ -209,12 +209,12 @@ PyTypeObject CompositeRTProp_Type = {
         return cxx_catch([&] { return ((CompositeRTProp*)self)->get_res(obj); });
     },
     .tp_vectorcall = [] (PyObject *type, PyObject *const *args, size_t _nargs,
-                         PyObject *kwnames) -> PyObject* {
+                         PyObject *_kwnames) -> PyObject* {
         auto nargs = PyVectorcall_NARGS(_nargs);
-        if (kwnames && PyTuple_GET_SIZE(kwnames))
+        if (auto kwnames = py::tuple(_kwnames); kwnames && kwnames.size())
             return PyErr_Format(PyExc_TypeError,
                                 "CompositeRTProp.__init__() got an unexpected "
-                                "keyword argument '%U'", PyTuple_GET_ITEM(kwnames, 0));
+                                "keyword argument '%U'", kwnames.get(0));
         return cxx_catch([&] {
             py_check_num_arg("CompositeRTProp.__init__", nargs, 1, 1);
             auto cb = args[0];
@@ -389,12 +389,12 @@ PyTypeObject RTProp_Type = {
         return 0;
     },
     .tp_vectorcall = [] (PyObject *type, PyObject *const *args, size_t _nargs,
-                         PyObject *kwnames) -> PyObject* {
+                         PyObject *_kwnames) -> PyObject* {
         auto nargs = PyVectorcall_NARGS(_nargs);
-        if (kwnames && PyTuple_GET_SIZE(kwnames))
+        if (auto kwnames = py::tuple(_kwnames); kwnames && kwnames.size())
             return PyErr_Format(PyExc_TypeError,
                                 "RTProp.__init__() got an unexpected "
-                                "keyword argument '%U'", PyTuple_GET_ITEM(kwnames, 0));
+                                "keyword argument '%U'", kwnames.get(0));
         return cxx_catch([&] {
             py_check_num_arg("RTProp.__init__", nargs, 0, 0);
             auto self = py::generic_alloc<RTProp>();

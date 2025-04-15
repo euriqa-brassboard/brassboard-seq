@@ -24,7 +24,7 @@ namespace brassboard_seq::scan {
 
 static inline void check_non_empty_string_arg(PyObject *arg, const char *name)
 {
-    if (PyUnicode_CheckExact(arg) && PyUnicode_GET_LENGTH(arg))
+    if (auto s = py::cast<py::str>(arg); s && s.size())
         return;
     py_throw_format(PyExc_TypeError, "%s must be a string", name);
 }
@@ -37,8 +37,8 @@ static void set_dict(py::dict tgt, py::ptr<> key, py::ptr<> value)
 {
     auto oldv = tgt.try_get(key);
     if (oldv) {
-        bool is_dict = PyDict_Check(value);
-        bool was_dict = PyDict_Check(oldv);
+        bool is_dict = value.isa<py::dict>();
+        bool was_dict = oldv.isa<py::dict>();
         if (was_dict && !is_dict) {
             py_throw_format(PyExc_TypeError,
                             "Cannot override parameter pack as value");
@@ -85,7 +85,7 @@ inline py::ref<> ParamPack::ensure_visited()
 inline py::dict_ref ParamPack::ensure_dict()
 {
     if (auto res = py::dict(values).try_get(fieldname)) {
-        if (PyDict_Check(res))
+        if (res.isa<py::dict>())
             return res.ref();
         py_throw_format(PyExc_TypeError, "Cannot access value as parameter pack.");
     }
@@ -97,7 +97,7 @@ inline __attribute__((returns_nonnull)) PyObject *ParamPack::get_value()
     auto res = py::dict(values).try_get(fieldname);
     if (!res)
         py_throw_format(PyExc_KeyError, "Value is not assigned");
-    if (PyDict_Check(res))
+    if (res.isa<py::dict>())
         py_throw_format(PyExc_TypeError, "Cannot get parameter pack as value");
     py::dict(visited).set(fieldname, Py_True);
     return py::newref(res);
@@ -106,13 +106,13 @@ inline __attribute__((returns_nonnull)) PyObject *ParamPack::get_value()
 inline __attribute__((returns_nonnull)) PyObject*
 ParamPack::get_value_default(PyObject *default_value)
 {
-    assert(!PyDict_Check(default_value));
+    assert(!py::isa<py::dict>(default_value));
     auto res = py::dict(values).try_get(fieldname);
     if (!res) {
         py::dict(values).set(fieldname, default_value);
         res = default_value;
     }
-    else if (PyDict_Check(res)) {
+    else if (res.isa<py::dict>()) {
         py_throw_format(PyExc_TypeError, "Cannot get parameter pack as value");
     }
     py::dict(visited).set(fieldname, Py_True);
@@ -134,7 +134,7 @@ parampack_vectorcall(ParamPack *self, PyObject *const *args, size_t _nargs,
             return self->get_value();
         if (nargs == 1) {
             auto arg0 = args[0];
-            if (!PyDict_Check(arg0)) {
+            if (!py::isa<py::dict>(arg0)) {
                 return self->get_value_default(arg0);
             }
         }
@@ -142,7 +142,7 @@ parampack_vectorcall(ParamPack *self, PyObject *const *args, size_t _nargs,
     auto self_values = self->ensure_dict();
     for (int i = 0; i < nargs; i++) {
         auto arg = args[i];
-        if (!PyDict_Check(arg))
+        if (!py::isa<py::dict>(arg))
             py_throw_format(PyExc_TypeError,
                             "Cannot use value as default value for parameter pack");
         merge_dict_into<false>(self_values, arg);
@@ -179,7 +179,7 @@ static PyObject *parampack_new(PyObject*, PyObject *const *args, size_t _nargs,
     py::dict(self->values).set("root"_py, kwargs);
     for (size_t i = 0; i < nargs; i++) {
         auto arg = args[i];
-        if (!PyDict_Check(arg))
+        if (!py::isa<py::dict>(arg))
             py_throw_format(PyExc_TypeError,
                             "Cannot use value as default value for parameter pack");
         merge_dict_into<false>(kwargs, arg);
@@ -203,7 +203,7 @@ static PyObject *parampack_str(PyObject *py_self)
         auto field = values.try_get(fieldname);
         if (!field)
             return py::newref("<Undefined>"_py);
-        if (!PyDict_CheckExact(field))
+        if (!field.typeis<py::dict>())
             return PyObject_Str(field);
         return yaml::sprint(field);
     });
@@ -228,7 +228,7 @@ static PySequenceMethods ParamPack_as_sequence = {
             auto field = values.try_get(fieldname);
             if (!field)
                 return false;
-            if (!PyDict_CheckExact(field))
+            if (!field.typeis<py::dict>())
                 py_throw_format(PyExc_TypeError, "Scalar value does not have field");
             return py::dict(field).contains(key);
         });
@@ -254,7 +254,7 @@ static PyMappingMethods ParamPack_as_mapping = {
             auto field = values.try_get(fieldname);
             if (!field)
                 return py::new_dict();
-            if (!PyDict_CheckExact(field))
+            if (!field.typeis<py::dict>())
                 py_throw_format(PyExc_TypeError, "Cannot access value as parameter pack.");
             auto res = py::new_dict();
             for (auto [k, v]: py::dict_iter(field))
@@ -307,8 +307,8 @@ PyTypeObject ParamPack::Type = {
             auto self_values = self->ensure_dict();
             auto oldvalue = self_values.try_get(name);
             if (oldvalue) {
-                auto was_dict = PyDict_CheckExact(oldvalue);
-                auto is_dict = PyDict_Check(value);
+                auto was_dict = oldvalue.typeis<py::dict>();
+                auto is_dict = py::isa<py::dict>(value);
                 if (was_dict && !is_dict)
                     py_throw_format(PyExc_TypeError,
                                     "Cannot override parameter pack as value");
@@ -348,15 +348,15 @@ static PyObject *get_visited(PyObject*, PyObject *const *args, Py_ssize_t nargs)
 {
     return cxx_catch([&] {
         py_check_num_arg("get_visited", nargs, 1, 1);
-        if (Py_TYPE(args[0]) != &ParamPack::Type)
+        auto self = py::cast<ParamPack,true>(args[0]);
+        if (!self)
             py_throw_format(PyExc_TypeError, "Wrong type for ParamPack");
-        auto self = (ParamPack*)args[0];
         auto fieldname = self->fieldname;
         auto visited = py::dict(self->visited);
         if (auto res = visited.try_get(fieldname))
             return py::newref(res);
         if (auto value = py::dict(self->values).try_get(fieldname);
-            value && PyDict_CheckExact(value))
+            value && value.typeis<py::dict>())
             return set_new_dict(visited, fieldname).rel();
         Py_RETURN_FALSE;
     });

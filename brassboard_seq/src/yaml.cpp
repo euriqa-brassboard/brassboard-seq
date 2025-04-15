@@ -22,12 +22,12 @@
 
 namespace brassboard_seq::yaml {
 
-static void print_generic(py::stringio &io, PyObject *obj, int indent, int cur_indent);
+static void print_generic(py::stringio &io, py::ptr<> obj, int indent, int cur_indent);
 
-static inline bool needs_quote(PyObject *s)
+static inline bool needs_quote(py::str s)
 {
     // Good enough for now........
-    auto len = PyUnicode_GET_LENGTH(s);
+    auto len = s.size();
     for (auto [i, c]: py::str_iter(s)) {
         if (c == ' ' && (i == 0 || i == len - 1))
             return true;
@@ -38,9 +38,9 @@ static inline bool needs_quote(PyObject *s)
     return false;
 }
 
-static inline void print_string(py::stringio &io, PyObject *s, int indent, int cur_indent)
+static inline void print_string(py::stringio &io, py::str s, int indent, int cur_indent)
 {
-    auto orig_len = PyUnicode_GET_LENGTH(s);
+    auto orig_len = s.size();
     if (!orig_len)
         return io.write_ascii("\"\"");
     auto write_str_prefix = [&] (auto len) {
@@ -57,7 +57,7 @@ static inline void print_string(py::stringio &io, PyObject *s, int indent, int c
             }
         }
         write_str_prefix(quoted_len);
-        int k = PyUnicode_KIND(s);
+        int k = PyUnicode_KIND(s.get());
         auto [buff_kind, buff] = io.reserve_buffer(k, quoted_len);
         PyUnicode_WRITE(buff_kind, buff, 0, '"');
         Py_ssize_t offset = 1;
@@ -91,8 +91,8 @@ static inline void print_string(py::stringio &io, PyObject *s, int indent, int c
     }
 }
 
-static inline void print_single_field_dict(py::stringio &io, PyObject *obj, int indent,
-                                           int cur_indent, PyObject *prefix_name=nullptr)
+static inline void print_single_field_dict(py::stringio &io, py::ptr<> obj, int indent,
+                                           int cur_indent, py::str prefix_name=py::str())
 {
     // `indent < cur_indent` can only happen if `print_generic` is called with
     // this condition following the call chain:
@@ -104,21 +104,21 @@ static inline void print_single_field_dict(py::stringio &io, PyObject *obj, int 
     cur_indent = indent + 1;
     bool isfirst = true;
     if (prefix_name) {
-        cur_indent += PyUnicode_GET_LENGTH(prefix_name) + 1;
+        cur_indent += prefix_name.size() + 1;
         io.write(prefix_name);
         isfirst = false;
     }
-    while (PyDict_Check(obj)) {
-        if (PyDict_GET_SIZE(obj) != 1)
+    while (auto objd = py::cast<py::dict>(obj)) {
+        if (objd.size() != 1)
             break;
-        for (auto [k, v]: py::dict_iter(obj)) {
-            if (!PyUnicode_Check(k))
+        for (auto [k, v]: py::dict_iter(objd)) {
+            if (!k.isa<py::str>())
                 py_throw_format(PyExc_TypeError, "yaml dict key must be str");
             obj = v;
             if (!isfirst)
                 io.write_ascii(".");
             isfirst = false;
-            cur_indent += PyUnicode_GET_LENGTH(k) + 1;
+            cur_indent += py::str(k).size() + 1;
             io.write(k);
         }
     }
@@ -132,11 +132,11 @@ static inline void print_single_field_dict(py::stringio &io, PyObject *obj, int 
     io.write(strfield);
 }
 
-static inline void print_dict_field(py::stringio &io, PyObject *k, PyObject *v, int indent)
+static inline void print_dict_field(py::stringio &io, py::str k, py::ptr<> v, int indent)
 {
-    if (PyDict_Check(v) && PyDict_GET_SIZE(v) == 1)
-        return print_single_field_dict(io, v, indent, indent, k);
-    auto keylen = PyUnicode_GET_LENGTH(k);
+    if (auto d = py::cast<py::dict>(v); d && d.size() == 1)
+        return print_single_field_dict(io, d, indent, indent, k);
+    auto keylen = k.size();
     io.write(k);
     io.write_ascii(":");
     py::stringio io2;
@@ -148,9 +148,9 @@ static inline void print_dict_field(py::stringio &io, PyObject *k, PyObject *v, 
     io.write(strfield);
 }
 
-static inline void print_dict(py::stringio &io, PyObject *obj, int indent, int cur_indent)
+static inline void print_dict(py::stringio &io, py::dict obj, int indent, int cur_indent)
 {
-    int nmembers = PyDict_GET_SIZE(obj);
+    int nmembers = obj.size();
     if (nmembers == 0) {
         return io.write_ascii("{}");
     }
@@ -172,19 +172,20 @@ static inline void print_dict(py::stringio &io, PyObject *obj, int indent, int c
     }
 }
 
-static inline bool is_bool_obj(PyObject *obj)
+static inline bool is_bool_obj(py::ptr<> obj)
 {
     return PyBool_Check(obj) || PyArray_IsScalar(obj, Bool);
 }
 
-static inline void print_scalar(py::stringio &io, PyObject *obj, int indent, int cur_indent)
+static inline void print_scalar(py::stringio &io, py::ptr<> obj,
+                                int indent, int cur_indent)
 {
     if (is_bool_obj(obj))
         return io.write_ascii(get_value_bool(obj, -1) ? "true" : "false");
-    if (PyUnicode_Check(obj))
-        return print_string(io, obj, indent, cur_indent);
-    if (PyDict_Check(obj))
-        return print_dict(io, obj, indent, cur_indent);
+    if (auto s = py::cast<py::str>(obj))
+        return print_string(io, s, indent, cur_indent);
+    if (auto d = py::cast<py::dict>(obj))
+        return print_dict(io, d, indent, cur_indent);
     if (PyArray_IsPythonNumber(obj) || PyArray_IsScalar(obj, Number))
         return io.write_str(obj);
     io.write_ascii("<unknown object ");
@@ -261,9 +262,9 @@ static inline void print_array_iter(py::stringio &io, auto &&iter,
         if (is_bool_obj(v)) {
             strary.push_back((get_value_bool(v, -1) ? "true"_py : "false"_py).ref());
         }
-        else if (PyUnicode_Check(v)) {
+        else if (auto sv = py::cast<py::str>(v)) {
             py::stringio io2;
-            print_string(io2, v, 0, 0);
+            print_string(io2, sv, 0, 0);
             auto s = io2.getvalue();
             if (s.size() > 16)
                 all_short_scalar = false;
@@ -272,13 +273,17 @@ static inline void print_array_iter(py::stringio &io, auto &&iter,
         else if (PyArray_IsPythonNumber(v) || PyArray_IsScalar(v, Number)) {
             strary.push_back(v.str());
         }
-        else if (PyDict_Check(v) && PyDict_GET_SIZE(v) == 0) {
+        else if (auto d = py::cast<py::dict>(v); d && d.size() == 0) {
             strary.push_back("{}"_py.ref());
         }
-        else if ((PyList_Check(v) && PyList_GET_SIZE(v) == 0) ||
-                 (PyTuple_Check(v) && PyTuple_GET_SIZE(v) == 0) ||
-                 (PyArray_Check(v) && PyArray_NDIM((PyArrayObject*)v) == 1 &&
-                  PyArray_DIM((PyArrayObject*)v, 0) == 0)) {
+        else if (auto l = py::cast<py::list>(v); l && l.size() == 0) {
+            strary.push_back("[]"_py.ref());
+        }
+        else if (auto t = py::cast<py::tuple>(v); t && t.size() == 0) {
+            strary.push_back("[]"_py.ref());
+        }
+        else if (PyArray_Check(v) && PyArray_NDIM((PyArrayObject*)v) == 1 &&
+                 PyArray_DIM((PyArrayObject*)v, 0) == 0) {
             strary.push_back("[]"_py.ref());
         }
         else {
@@ -313,12 +318,12 @@ static inline void print_array_numpy(py::stringio &io, PyArrayObject *ary,
     print_array_str(io, strary, true, indent, cur_indent);
 }
 
-static void print_generic(py::stringio &io, PyObject *obj, int indent, int cur_indent)
+static void print_generic(py::stringio &io, py::ptr<> obj, int indent, int cur_indent)
 {
-    if (PyList_Check(obj))
-        return print_array_iter(io, py::list_iter(obj), indent, cur_indent);
-    if (PyTuple_Check(obj))
-        return print_array_iter(io, py::tuple_iter(obj), indent, cur_indent);
+    if (auto l = py::cast<py::list>(obj))
+        return print_array_iter(io, py::list_iter(l), indent, cur_indent);
+    if (auto t = py::cast<py::tuple>(obj))
+        return print_array_iter(io, py::tuple_iter(t), indent, cur_indent);
     if (PyArray_Check(obj)) {
         if (PyArray_NDIM((PyArrayObject*)obj) != 1)
             py_throw_format(PyExc_TypeError, "yaml only support ndarray of dimension 1");
@@ -328,13 +333,13 @@ static void print_generic(py::stringio &io, PyObject *obj, int indent, int cur_i
 }
 
 __attribute__((visibility("protected")))
-void print(py::stringio &io, PyObject *obj, int indent)
+void print(py::stringio &io, py::ptr<> obj, int indent)
 {
     print_generic(io, obj, indent, indent);
 }
 
 __attribute__((visibility("protected")))
-PyObject *sprint(PyObject *obj, int indent)
+PyObject *sprint(py::ptr<> obj, int indent)
 {
     py::stringio io;
     print_generic(io, obj, indent, indent);
@@ -347,7 +352,7 @@ static PyObject *py_sprint(PyObject*, PyObject *const *args, Py_ssize_t nargs)
         py_check_num_arg("sprint", nargs, 1, 2);
         int indent = 0;
         if (nargs >= 2) {
-            if (!PyLong_Check(args[1]))
+            if (!py::isa<py::int_>(args[1]))
                 py_throw_format(PyExc_TypeError, "indent must be integer");
             indent = PyLong_AsLong(args[1]);
             if (indent < 0) {

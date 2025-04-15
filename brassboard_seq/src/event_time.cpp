@@ -266,7 +266,7 @@ int64_t TimeManager::compute_all_times(unsigned age)
     if (!status->finalized)
         py_throw_format(PyExc_RuntimeError, "Event times not finalized");
     int64_t max_time = 0;
-    int ntimes = PyList_GET_SIZE(event_times);
+    int ntimes = py::list(event_times).size();
     time_values.resize(ntimes);
     std::ranges::fill(time_values, -1);
     for (auto [i, t]: py::list_iter<EventTime>(event_times))

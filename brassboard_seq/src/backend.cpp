@@ -35,11 +35,11 @@ template<typename TimeStep, typename SubSeq>
 static void collect_actions(SubSeq *self, std::vector<action::Action*> *actions)
 {
     for (auto [i, subseq]: py::list_iter(self->sub_seqs)) {
-        if (Py_TYPE(subseq) != (PyTypeObject*)timestep_type) {
+        auto step = py::cast<TimeStep,true>(subseq, timestep_type);
+        if (!step) {
             collect_actions<TimeStep>((SubSeq*)subseq, actions);
             continue;
         }
-        auto step = (TimeStep*)subseq;
         auto tid = pyx_fld(step, start_time)->data.id;
         auto end_tid = pyx_fld(step, end_time)->data.id;
         int nactions = step->actions.size();
@@ -61,7 +61,7 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
     using EventTime = std::remove_reference_t<decltype(*pyx_fld(seq, end_time))>;
     auto seqinfo = pyx_fld(seq, seqinfo);
     auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);
-    auto nchn = (int)PyList_GET_SIZE(seqinfo->channel_paths);
+    auto nchn = py::list(seqinfo->channel_paths).size();
     for (auto [i, path]: py::list_iter<py::tuple>(seqinfo->channel_paths)) {
         auto prefix = path.get(0);
         if (py::dict(comp->backends).contains(prefix)) [[likely]]
@@ -75,8 +75,8 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
     auto all_actions = new std::vector<action::Action*>[nchn];
     comp->cseq.all_actions.reset(all_actions);
     collect_actions<TimeStep>(pyx_find_base(seq, sub_seqs), all_actions);
-    auto get_time = [event_times=time_mgr->event_times] (int tid) {
-        return (EventTime*)PyList_GET_ITEM(event_times, tid);
+    auto get_time = [event_times=py::list(time_mgr->event_times)] (int tid) {
+        return event_times.get<EventTime>(tid);
     };
     for (int cid = 0; cid < nchn; cid++) {
         auto &actions = all_actions[cid];
@@ -180,7 +180,7 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
             bb_throw_format(PyExc_AssertionError, assert_key(assert_id), "%U", a.get(1));
         }
     }
-    auto nchn = (int)PyList_GET_SIZE(seqinfo->channel_paths);
+    auto nchn = py::list(seqinfo->channel_paths).size();
     for (int cid = 0; cid < nchn; cid++) {
         auto &actions = comp->cseq.all_actions[cid];
         int64_t prev_time = 0;

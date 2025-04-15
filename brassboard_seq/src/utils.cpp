@@ -74,7 +74,7 @@ static dict_ref _dict_deepcopy(dict d)
 {
     auto res = new_dict();
     for (auto [key, value]: dict_iter(d)) {
-        if (!PyDict_Check(value)) {
+        if (!value.isa<dict>()) {
             res.set(key, value);
             continue;
         }
@@ -85,7 +85,7 @@ static dict_ref _dict_deepcopy(dict d)
 
 ref<> dict_deepcopy(ptr<> d)
 {
-    if (!PyDict_Check(d))
+    if (!d.isa<dict>())
         return d.ref();
     return _dict_deepcopy(d);
 }
@@ -395,9 +395,9 @@ void handle_cxx_exception()
     }
 }
 
-PyObject *pytuple_append1(PyObject *tuple, PyObject *obj)
+PyObject *pytuple_append1(py::tuple tuple, py::ptr<> obj)
 {
-    Py_ssize_t nele = PyTuple_GET_SIZE(tuple);
+    Py_ssize_t nele = tuple.size();
     auto res = py::new_tuple(nele + 1);
     for (auto [i, v]: py::tuple_iter(tuple))
         res.SET(i, v);

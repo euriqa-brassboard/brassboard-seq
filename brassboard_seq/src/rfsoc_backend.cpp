@@ -3892,7 +3892,7 @@ void collect_actions(auto *rb, backend::CompiledSeq &cseq)
                 rfsoc_action.tid = tid;
                 rfsoc_action.is_end = is_end;
 
-                auto event_time = (EventTime*)PyList_GET_ITEM(event_times, tid);
+                auto event_time = py::list(event_times).get<EventTime>(tid);
                 if (event_time->data.is_static()) {
                     rfsoc_action.seq_time = event_time->data._get_static();
                 }
@@ -4362,10 +4362,10 @@ void gen_rfsoc_data(auto *rb, backend::CompiledSeq &cseq,
                     sync_mgr.add_action(param_action, cycle1, cycle2,
                                         sp, sp_seq_time, prev_tid, param);
                 };
-                if (Py_TYPE(ramp_func) == (PyTypeObject*)seqcubicspline_type) {
+                if (auto py_spline =
+                    py::cast<SeqCubicSpline,true>(ramp_func, seqcubicspline_type)) {
                     bb_debug("found SeqCubicSpline on %s spline: "
                              "old cycle:%" PRId64 "\n", param_name(param), cur_cycle);
-                    auto py_spline = (SeqCubicSpline*)ramp_func;
                     cubic_spline_t sp{py_spline->f_order0, py_spline->f_order1,
                         py_spline->f_order2, py_spline->f_order3};
                     val = sp.order0 + sp.order1 + sp.order2 + sp.order3;

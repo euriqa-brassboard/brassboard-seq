@@ -406,7 +406,7 @@ TagVal TagVal::from_py(PyObject *value)
         return true;
     if (value == Py_False)
         return false;
-    if (PyLong_Check(value) || is_numpy_int(value)) {
+    if (py::isa<py::int_>(value) || is_numpy_int(value)) {
         auto val = PyLong_AsLongLong(value);
         throw_pyerr(val == -1);
         return TagVal(val);

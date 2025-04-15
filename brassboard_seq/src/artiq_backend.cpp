@@ -130,7 +130,7 @@ void collect_actions(auto *ab, backend::CompiledSeq &cseq)
         bool needs_reloc = cond_reloc != -1;
         Relocation reloc{cond_reloc, -1, -1};
 
-        auto event_time = (EventTime*)PyList_GET_ITEM(event_times, tid);
+        auto event_time = py::list(event_times).get<EventTime>(tid);
         if (event_time->data.is_static()) {
             PyObject *rt_delay;
             int64_t delay;

@@ -305,30 +305,140 @@ struct common : _common {
     {
         return (void*)_ptr() == (void*)Py_None;
     }
-    bool typeis(auto &&type) const
+    template<bool exact=false>
+    bool isa(auto &&type) const
     {
-        return Py_TYPE((PyObject*)_ptr()) == (PyTypeObject*)type;
+        if constexpr (exact) {
+            return Py_TYPE((PyObject*)_ptr()) == (PyTypeObject*)type;
+        }
+        else {
+            return PyObject_TypeCheck((PyObject*)_ptr(), (PyTypeObject*)type);
+        }
+    }
+    template<typename T2, bool exact=false> bool isa() const
+        requires requires { (PyTypeObject*)&T2::Type; }
+    {
+        return isa<exact>((PyTypeObject*)&T2::Type);
+    }
+    template<typename T2, bool exact=false> bool isa() const
+        requires std::same_as<py_tag_type<T2>,_dict>
+    {
+        if constexpr (exact) {
+            return PyDict_CheckExact((PyObject*)_ptr());
+        }
+        else {
+            return PyDict_Check((PyObject*)_ptr());
+        }
+    }
+    template<typename T2, bool exact=false> bool isa() const
+        requires std::same_as<py_tag_type<T2>,_set>
+    {
+        if constexpr (exact) {
+            return PySet_CheckExact((PyObject*)_ptr());
+        }
+        else {
+            return PySet_Check((PyObject*)_ptr());
+        }
+    }
+    template<typename T2, bool exact=false> bool isa() const
+        requires std::same_as<py_tag_type<T2>,_list>
+    {
+        if constexpr (exact) {
+            return PyList_CheckExact((PyObject*)_ptr());
+        }
+        else {
+            return PyList_Check((PyObject*)_ptr());
+        }
+    }
+    template<typename T2, bool exact=false> bool isa() const
+        requires std::same_as<py_tag_type<T2>,_tuple>
+    {
+        if constexpr (exact) {
+            return PyTuple_CheckExact((PyObject*)_ptr());
+        }
+        else {
+            return PyTuple_Check((PyObject*)_ptr());
+        }
+    }
+    template<typename T2, bool exact=false> bool isa() const
+        requires std::same_as<py_tag_type<T2>,_bytes>
+    {
+        if constexpr (exact) {
+            return PyBytes_CheckExact((PyObject*)_ptr());
+        }
+        else {
+            return PyBytes_Check((PyObject*)_ptr());
+        }
+    }
+    template<typename T2, bool exact=false> bool isa() const
+        requires std::same_as<py_tag_type<T2>,_float>
+    {
+        if constexpr (exact) {
+            return PyFloat_CheckExact((PyObject*)_ptr());
+        }
+        else {
+            return PyFloat_Check((PyObject*)_ptr());
+        }
+    }
+    template<typename T2, bool exact=false> bool isa() const
+        requires std::same_as<py_tag_type<T2>,_int>
+    {
+        if constexpr (exact) {
+            return PyLong_CheckExact((PyObject*)_ptr());
+        }
+        else {
+            return PyLong_Check((PyObject*)_ptr());
+        }
+    }
+    template<typename T2, bool exact=false> bool isa() const
+        requires std::same_as<py_tag_type<T2>,_str>
+    {
+        if constexpr (exact) {
+            return PyUnicode_CheckExact((PyObject*)_ptr());
+        }
+        else {
+            return PyUnicode_Check((PyObject*)_ptr());
+        }
+    }
+    template<typename T2, bool exact=false> bool isa() const
+        requires std::same_as<py_tag_type<T2>,_mod>
+    {
+        if constexpr (exact) {
+            return PyModule_CheckExact((PyObject*)_ptr());
+        }
+        else {
+            return PyModule_Check((PyObject*)_ptr());
+        }
+    }
+    template<typename T2>
+    bool typeis(T2 &&type) const
+    {
+        return isa<true>(std::forward<T2>(type));
+    }
+    template<typename T2> bool typeis() const
+    {
+        return isa<T2,true>();
     }
 
     template<typename T2=T>
     auto ptr() const
     {
-        return py::ptr<T2>(_ptr());
+        return py::ptr<py_tag_type<T2>>(_ptr());
     }
     template<typename T2=T>
     auto immref() const
     {
-        return py::ref<T2>(py::immref(_ptr()));
+        return py::ref<py_tag_type<T2>>(py::immref(_ptr()));
     }
     template<typename T2=T>
     auto ref() const
     {
-        return py::ref<T2>(py::newref(_ptr()));
+        return py::ref<py_tag_type<T2>>(py::newref(_ptr()));
     }
     template<typename T2=T>
     auto xref() const
     {
-        return py::ref<T2>(py::xnewref(_ptr()));
+        return py::ref<py_tag_type<T2>>(py::xnewref(_ptr()));
     }
 
     auto str() const
@@ -421,9 +531,11 @@ struct common : _common {
     {
         throw_if(PyDict_SetItemString((PyObject*)_ptr(), key, (PyObject*)val));
     }
+    template<typename T2=PyObject>
     auto try_get(auto &&key) const requires std::same_as<T,_dict>
     {
-        auto res = py::ptr(PyDict_GetItemWithError((PyObject*)_ptr(), (PyObject*)key));
+        auto res = py::ptr<py_tag_type<T2>>(PyDict_GetItemWithError((PyObject*)_ptr(),
+                                                                    (PyObject*)key));
         if (!res)
             PyErr_Clear();
         return res;
@@ -486,9 +598,10 @@ struct common : _common {
         check_refcnt(item);
         Py_DECREF(item);
     }
-    auto get(Py_ssize_t i) requires std::same_as<T,_list>
+    template<typename T2=PyObject>
+    auto get(Py_ssize_t i) const requires std::same_as<T,_list>
     {
-        return py::ptr(PyList_GET_ITEM((PyObject*)_ptr(), i));
+        return py::ptr<py_tag_type<T2>>(PyList_GET_ITEM((PyObject*)_ptr(), i));
     }
     template<typename T2>
     void append(T2 &&x) requires std::same_as<T,_list>
@@ -522,9 +635,10 @@ struct common : _common {
     {
         PyTuple_SET_ITEM((PyObject*)_ptr(), i, (PyObject*)nullptr);
     }
-    auto get(Py_ssize_t i) requires std::same_as<T,_tuple>
+    template<typename T2=PyObject>
+    auto get(Py_ssize_t i) const requires std::same_as<T,_tuple>
     {
-        return py::ptr(PyTuple_GET_ITEM((PyObject*)_ptr(), i));
+        return py::ptr<py_tag_type<T2>>(PyTuple_GET_ITEM((PyObject*)_ptr(), i));
     }
 
     Py_ssize_t size() const requires std::same_as<T,_bytes>
@@ -717,6 +831,86 @@ inline auto common<H,T>::try_int() const
     if (!res)
         PyErr_Clear();
     return res;
+}
+
+template<bool exact=false, template<typename> class H, typename T, typename T3>
+bool isa(const common<H,T> &self, T3 &&type)
+{
+    return self.template isa<exact>(std::forward<T3>(type));
+}
+template<bool exact=false, typename T3>
+auto isa(auto *_self, T3 &&type)
+{
+    return isa<exact>(ptr(_self), std::forward<T3>(type));
+}
+template<typename T2, bool exact=false, template<typename> class H, typename T>
+bool isa(const common<H,T> &self)
+{
+    return self.template isa<T2,exact>();
+}
+template<typename T2, bool exact=false>
+bool isa(auto *_self)
+{
+    return isa<T2,exact>(ptr(_self));
+}
+template<typename T2, typename T> bool typeis(T &&self, T2 &&type)
+{
+    return isa<true>(std::forward<T>(self), std::forward<T2>(type));
+}
+template<typename T2, typename T> bool typeis(T &&self)
+{
+    return isa<T2,true>(std::forward<T>(self));
+}
+
+template<typename T2, bool exact=false, typename T, typename T3>
+auto cast(ref<T> &&self, T3 &&type)
+{
+    if (isa<exact>(self, std::forward<T3>(type)))
+        return ref<py_tag_type<T2>>(std::move(self));
+    return ref<py_tag_type<T2>>();
+}
+template<typename T2, bool exact=false, template<typename> class H, typename T, typename T3>
+auto cast(const common<H,T> &self, T3 &&type)
+{
+    if (isa<exact>(self, std::forward<T3>(type)))
+        return self.template ptr<T2>();
+    return ptr<py_tag_type<T2>>();
+}
+template<typename T2, bool exact=false, typename T3>
+auto cast(auto *_self, T3 &&type)
+{
+    return cast<T2,exact>(ptr(_self), std::forward<T3>(type));
+}
+
+template<typename T2, bool exact=false, typename T>
+auto cast(ref<T> &&self)
+{
+    if (isa<T2,exact>(self))
+        return ref<py_tag_type<T2>>(std::move(self));
+    return ref<py_tag_type<T2>>();
+}
+template<typename T2, bool exact=false, template<typename> class H, typename T>
+auto cast(const common<H,T> &self)
+{
+    if (isa<T2,exact>(self))
+        return self.template ptr<T2>();
+    return ptr<py_tag_type<T2>>();
+}
+template<typename T2, bool exact=false>
+auto cast(auto *_self)
+{
+    return cast<T2,exact>(ptr(_self));
+}
+
+template<typename T, typename T2, typename T3>
+auto exact_cast(T2 &&self, T3 &&type)
+{
+    return cast<T,true>(std::forward<T2>(self), std::forward<T3>(type));
+}
+template<typename T, typename T2>
+auto exact_cast(T2 &&self)
+{
+    return cast<T,true>(std::forward<T2>(self));
 }
 
 template<typename T>
@@ -1300,7 +1494,7 @@ py_check_num_arg(const char *func_name, ssize_t nfound, ssize_t nmin, ssize_t nm
 }
 
 static __attribute__((always_inline)) inline
-bool get_value_bool(PyObject *obj, auto &&cb) requires requires { cb(); }
+bool get_value_bool(py::ptr<> obj, auto &&cb) requires requires { cb(); }
 {
     if (obj == Py_True)
         return true;
@@ -1312,7 +1506,7 @@ bool get_value_bool(PyObject *obj, auto &&cb) requires requires { cb(); }
     return res;
 }
 
-static inline bool get_value_bool(PyObject *obj, uintptr_t key)
+static inline bool get_value_bool(py::ptr<> obj, uintptr_t key)
 {
     return get_value_bool(obj, [&] {
         bb_rethrow(key);
@@ -1320,17 +1514,17 @@ static inline bool get_value_bool(PyObject *obj, uintptr_t key)
 }
 
 static __attribute__((always_inline)) inline
-double get_value_f64(PyObject *obj, auto &&cb) requires requires { cb(); }
+double get_value_f64(py::ptr<> obj, auto &&cb) requires requires { cb(); }
 {
-    if (PyFloat_CheckExact(obj)) [[likely]]
-        return PyFloat_AS_DOUBLE(obj);
+    if (obj.isa<py::float_>()) [[likely]]
+        return PyFloat_AS_DOUBLE(obj.get());
     auto res = PyFloat_AsDouble(obj);
     if (res == -1 && PyErr_Occurred())
         cb();
     return res;
 }
 
-static inline double get_value_f64(PyObject *obj, uintptr_t key)
+static inline double get_value_f64(py::ptr<> obj, uintptr_t key)
 {
     return get_value_f64(obj, [&] {
         bb_rethrow(key);
@@ -1458,7 +1652,7 @@ template<typename CB>
 ScopeExit(CB) -> ScopeExit<CB>;
 
 __attribute__((returns_nonnull))
-PyObject *pytuple_append1(PyObject *tuple, PyObject *obj);
+PyObject *pytuple_append1(py::tuple tuple, py::ptr<> obj);
 static inline PyObject *pydict_deepcopy(PyObject *d)
 {
     // Used by cython
@@ -1469,9 +1663,9 @@ static inline bool py_issubtype_nontrivial(auto *a, auto *b)
 {
     // Assume a != b and b != object, and skip the first and last element in mro.
     // Also assume fully initialized type a/b
-    PyObject *mro = ((PyTypeObject*)a)->tp_mro;
-    for (Py_ssize_t i = 1, n = PyTuple_GET_SIZE(mro) - 1; i < n; i++) {
-        if (PyTuple_GET_ITEM(mro, i) == (PyObject*)b) {
+    py::tuple mro = ((PyTypeObject*)a)->tp_mro;
+    for (Py_ssize_t i = 1, n = mro.size() - 1; i < n; i++) {
+        if (mro.get(i) == b) {
             return true;
         }
     }

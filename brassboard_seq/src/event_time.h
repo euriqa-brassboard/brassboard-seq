@@ -38,9 +38,9 @@ static inline int64_t round_time_f64(double v)
     return round<int64_t>(v * double(time_scale));
 }
 
-static inline int64_t round_time_int(PyObject *v)
+static inline int64_t round_time_int(py::ptr<> v)
 {
-    if (Py_TYPE(v) == &PyLong_Type) {
+    if (v.typeis<py::int_>()) {
         auto vi = PyLong_AsLongLong(v);
         throw_pyerr(vi == -1);
         return vi * time_scale;

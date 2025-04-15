@@ -219,7 +219,7 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
                                           true, cond, (EventTime*)Py_None));
     }
     else if (type == AddStepType::At) {
-        if (args[0] != Py_None && Py_TYPE(args[0]) != &event_time::EventTime::Type)
+        if (args[0] != Py_None && !py::typeis<event_time::EventTime>(args[0]))
             return PyErr_Format(PyExc_TypeError,
                                 "Argument 'tp' has incorrect type (expected EventTime, "
                                 "got %.200s)", Py_TYPE(args[0])->tp_name);
@@ -283,9 +283,9 @@ timestep_set(auto *self, PyObject *chn, PyObject *value, PyObject *cond,
 {
     auto seqinfo = pyx_fld(self, seqinfo);
     int cid;
-    if (Py_TYPE(chn) == &PyLong_Type) {
+    if (py::typeis<py::int_>(chn)) {
         auto lcid = PyLong_AsLong(chn);
-        if (lcid < 0 || lcid > PyList_GET_SIZE(seqinfo->channel_paths))
+        if (lcid < 0 || lcid > py::list(seqinfo->channel_paths).size())
             py_throw_format(PyExc_ValueError, "Channel id %ld out of bound", lcid);
         cid = lcid;
     }

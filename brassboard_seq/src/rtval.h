@@ -958,7 +958,7 @@ struct ExternCallback : PyObject {
 
 static inline bool is_rtval(auto &&v)
 {
-    return Py_TYPE((PyObject*)v) == &RuntimeValue::Type;
+    return py::typeis<RuntimeValue>(v);
 }
 
 __attribute__((returns_nonnull)) RuntimeValue*
