@@ -406,6 +406,8 @@ struct common : _common {
         return vcall(py_args, sizeof...(args));
     }
 
+    template<typename Value=PyObject> auto generic_iter(uintptr_t key=-1);
+
     Py_ssize_t size() const requires std::same_as<T,_dict>
     {
         return PyDict_Size((PyObject*)_ptr());
@@ -889,14 +891,65 @@ static inline auto generic_alloc(Py_ssize_t sz=0)
     return ref<T>::checked(PyType_GenericAlloc((PyTypeObject*)&T::Type, sz));
 }
 
-template<typename It, typename T>
+template<typename It, typename T, typename... Args>
 struct _iter {
-    explicit _iter(T &&obj) : obj(obj) {}
-    auto begin() { return It((PyObject*)obj); };
-    auto end() { return It::end((PyObject*)obj); }
+    template<typename... Args2>
+    explicit _iter(T &&obj, Args2&&... args2)
+        : obj(std::forward<T>(obj)), args(std::forward<Args2>(args2)...)
+    {}
+    auto begin()
+    {
+        return std::apply([] <typename... Args3> (Args3&&... args3) {
+                return It(std::forward<Args3>(args3)...);
+            }, arg_tuple());
+    };
+    auto end()
+    {
+        return std::apply([] <typename... Args3> (Args3&&... args3) {
+                return It::end(std::forward<Args3>(args3)...);
+            }, arg_tuple());
+    }
 private:
     T obj;
+    std::tuple<Args...> args;
+    auto arg_tuple()
+    {
+        return std::tuple_cat(std::tuple((PyObject*)obj), args);
+    }
 };
+
+template<typename Value>
+struct _generic_iterator {
+    _generic_iterator(PyObject *it, uintptr_t key)
+        : it(it), item(PyIter_Next(it))
+    {
+    }
+    _generic_iterator &operator++()
+    {
+        item.take(PyIter_Next(it));
+        throw_if(!item && PyErr_Occurred(), key);
+        return *this;
+    }
+    ptr<py::py_tag_type<Value>> operator*()
+    {
+        return item.ptr();
+    }
+    bool operator==(std::nullptr_t) { return !item; }
+    static std::nullptr_t end(auto&&...) { return nullptr; };
+
+private:
+    PyObject *it;
+    ref<> item;
+    uintptr_t key;
+};
+
+template<template<typename> class H, typename T>
+template<typename Value>
+inline auto common<H,T>::generic_iter(uintptr_t key)
+{
+    auto it = throw_if_not(PyObject_GetIter((PyObject*)_ptr()), key);
+    return _iter<_generic_iterator<Value>,py::ref<>,uintptr_t>(py::ref(it), key);
+}
 
 template<typename Value, typename Key>
 struct _dict_iterator {

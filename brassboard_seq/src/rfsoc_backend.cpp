@@ -4386,7 +4386,7 @@ void gen_rfsoc_data(auto *rb, backend::CompiledSeq &cseq,
                     throw_py_error(v.err);
                     return v.val.f64_val;
                 };
-                py_object pts(ramp_func->__pyx_vtab->spline_segments(ramp_func, len, val));
+                auto pts = py::ref(ramp_func->__pyx_vtab->spline_segments(ramp_func, len, val));
                 bb_rethrow_if(!pts, action_key(action.aid));
                 if (pts == Py_None) {
                     bb_debug("Use adaptive segments on %s spline: "
@@ -4398,14 +4398,12 @@ void gen_rfsoc_data(auto *rb, backend::CompiledSeq &cseq,
                              "new cycle:%" PRId64 "\n", param_name(param), cur_cycle);
                     continue;
                 }
-                py_object iter(PyObject_GetIter(pts));
-                bb_rethrow_if(!iter, action_key(action.aid));
                 double prev_t = 0;
                 double prev_v = eval_ramp(0);
                 bb_debug("Use ramp function provided segments on %s spline: "
                          "old cycle:%" PRId64 "\n", param_name(param), cur_cycle);
-                while (PyObject *item = PyIter_Next(iter)) {
-                    double t = PyFloat_AsDouble(py_object(item));
+                for (auto item: pts.generic_iter(action_key(action.aid))) {
+                    double t = PyFloat_AsDouble(item.get());
                     if (!(t > prev_t)) [[unlikely]] {
                         if (!PyErr_Occurred()) {
                             if (t < 0) {
@@ -4431,7 +4429,6 @@ void gen_rfsoc_data(auto *rb, backend::CompiledSeq &cseq,
                     prev_t = t3;
                     prev_v = v3;
                 }
-                bb_rethrow_if(PyErr_Occurred(), action_key(action.aid));
                 if (!(prev_t < len)) [[unlikely]]
                     bb_throw_format(PyExc_ValueError, action_key(action.aid),
                                     "Segment time point must not "
