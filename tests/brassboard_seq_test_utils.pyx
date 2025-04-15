@@ -27,17 +27,15 @@ cdef extern from *:
     static brassboard_seq::rtval::TagVal test_callback_extern(auto *self)
     {
         using namespace brassboard_seq;
-        py_object res(throw_if_not(PyObject_Vectorcall(self->cb, nullptr, 0, nullptr)));
-        return rtval::TagVal::from_py(res);
+        auto res = py::ptr(self->cb)();
+        return rtval::TagVal::from_py(res.get());
     }
 
     static brassboard_seq::rtval::TagVal test_callback_extern_age(auto *self, unsigned age)
     {
         using namespace brassboard_seq;
-        py_object pyage(pylong_from_long(age));
-        PyObject *args[] = { pyage.get() };
-        py_object res(throw_if_not(PyObject_Vectorcall(self->cb, args, 1, nullptr)));
-        return rtval::TagVal::from_py(res);
+        auto res = py::ptr(self->cb)(py::new_int(age));
+        return rtval::TagVal::from_py(res.get());
     }
 
     static inline std::vector<int> _get_suffix_array(std::vector<int> S)
