@@ -209,26 +209,25 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
     py_check_num_arg(add_step_name(type), nargs, nargs_min);
 
     auto first_arg = args[nargs_min - 1];
-    py_object start_time;
+    py::ref<EventTime> start_time;
     if (type == AddStepType::Background) {
-        start_time.reset(py::newref(pyx_fld(subseq, end_time)));
+        start_time.assign(pyx_fld(subseq, end_time));
     }
     else if (type == AddStepType::Floating) {
         auto time_mgr = pyx_fld(subseq, seqinfo)->time_mgr;
-        auto new_time = time_mgr->new_int((EventTime*)Py_None, 0,
-                                          true, cond, (EventTime*)Py_None);
-        start_time.reset(new_time);
+        start_time.take(time_mgr->new_int((EventTime*)Py_None, 0,
+                                          true, cond, (EventTime*)Py_None));
     }
     else if (type == AddStepType::At) {
         if (args[0] != Py_None && Py_TYPE(args[0]) != &event_time::EventTime::Type)
             return PyErr_Format(PyExc_TypeError,
                                 "Argument 'tp' has incorrect type (expected EventTime, "
                                 "got %.200s)", Py_TYPE(args[0])->tp_name);
-        start_time.reset(py::newref(args[0]));
+        start_time.assign(args[0]);
     }
     else {
         assert(type == AddStepType::Step);
-        start_time.reset(py::newref(pyx_fld(subseq, end_time)));
+        start_time.assign(pyx_fld(subseq, end_time));
     }
 
     auto tuple_nargs = nargs - nargs_min;
@@ -253,8 +252,8 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
 
     PyObject *res;
     if (Py_TYPE(first_arg)->tp_call) {
-        res = (PyObject*)add_custom_step(subseq, cond, (EventTime*)start_time,
-                                         first_arg, tuple_nargs, args + nargs_min, kws.get());
+        res = (PyObject*)add_custom_step(subseq, cond, start_time.get(), first_arg,
+                                         tuple_nargs, args + nargs_min, kws.get());
     }
     else if (kws) {
         return PyErr_Format(PyExc_ValueError,
@@ -262,8 +261,7 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
                             get_args_tuple(), kws);
     }
     else if (tuple_nargs == 0) {
-        res = (PyObject*)add_time_step<TimeStep>(subseq, cond, (EventTime*)start_time,
-                                                 first_arg);
+        res = (PyObject*)add_time_step<TimeStep>(subseq, cond, start_time.get(), first_arg);
     }
     else {
         return PyErr_Format(PyExc_ValueError,

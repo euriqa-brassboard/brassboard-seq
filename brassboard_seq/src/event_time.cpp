@@ -36,8 +36,7 @@ __attribute__((visibility("protected"),returns_nonnull))
 RuntimeValue *round_time_rt(RuntimeValue *v)
 {
     static RuntimeValue *rt_scale = rtval::new_const(py_time_scale());
-    return rtval::rt_round_int64(
-        (RuntimeValue*)py_object(rtval::new_expr2(rtval::Mul, v, rt_scale)));
+    return rtval::rt_round_int64(py::ref(rtval::new_expr2(rtval::Mul, v, rt_scale)).get());
 }
 
 static inline bool get_cond_val(PyObject *v, unsigned age)

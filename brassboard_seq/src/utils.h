@@ -675,6 +675,11 @@ struct _ref : common<_ref,T> {
         Py_XDECREF((PyObject*)ptr);
         check_refcnt(m_ptr);
     }
+    template<typename T2>
+    void assign(T2 &&p) noexcept
+    {
+        take(py::newref(std::forward<T2>(p)));
+    }
     template<typename T2=py_ptr_type<T>> T2 *rel()
     {
         auto p = m_ptr;
