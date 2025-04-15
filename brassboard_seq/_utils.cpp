@@ -46,9 +46,9 @@ static void pymodule_addobjectref(py::mod m, const char *name, PyObject *value)
 #else
 static void pymodule_addobjectref(py::mod m, const char *name, PyObject *value)
 {
-    py_object v(py::newref(value));
-    throw_if(PyModule_AddObject((PyObject*)m, name, value) < 0);
-    v.release();
+    py::ref v(py::newref(value));
+    throw_if(PyModule_AddObject((PyObject*)m, name, value.get()) < 0);
+    v.rel();
 }
 #endif
 
