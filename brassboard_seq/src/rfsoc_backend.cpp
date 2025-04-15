@@ -2824,25 +2824,23 @@ struct PulseCompilerGen: SyncChannelGen {
         PyObject *channel_list[64];
         py::ptr<> CubicSpline;
         py::ptr<> ToneData;
-        PyObject *cubic_0;
+        py::ptr<> cubic_0;
         std::vector<std::pair<PyObject*,PyObject*>> tonedata_fields;
 
-        __attribute__((returns_nonnull,always_inline))
-        PyObject *_new_cubic_spline(cubic_spline_t sp)
+        py::ref<> _new_cubic_spline(cubic_spline_t sp)
         {
             auto newobj = py::generic_alloc<py::tuple>(CubicSpline, 4);
             newobj.SET(0, py::new_float(sp.order0));
             newobj.SET(1, py::new_float(sp.order1));
             newobj.SET(2, py::new_float(sp.order2));
             newobj.SET(3, py::new_float(sp.order3));
-            return newobj.rel();
+            return newobj;
         }
 
-        inline __attribute__((returns_nonnull))
-        PyObject *new_cubic_spline(cubic_spline_t sp)
+        py::ref<> new_cubic_spline(cubic_spline_t sp)
         {
             if (sp == cubic_spline_t{0, 0, 0, 0})
-                return py::newref(cubic_0);
+                return cubic_0.ref();
             return _new_cubic_spline(sp);
         }
 
@@ -2858,12 +2856,12 @@ struct PulseCompilerGen: SyncChannelGen {
             td_dict.set("channel"_py, py::int_cached(channel));
             td_dict.set("tone"_py, py::int_cached(tone));
             td_dict.set("duration_cycles"_py, py::new_int(duration_cycles));
-            td_dict.set("frequency_hz"_py, py_object(new_cubic_spline(freq)));
-            td_dict.set("amplitude"_py, py_object(new_cubic_spline(amp)));
+            td_dict.set("frequency_hz"_py, new_cubic_spline(freq));
+            td_dict.set("amplitude"_py, new_cubic_spline(amp));
             // tone data wants rad as phase unit.
-            td_dict.set("phase_rad"_py, py_object(new_cubic_spline({
-                            phase.order0 * (2 * M_PI), phase.order1 * (2 * M_PI),
-                            phase.order2 * (2 * M_PI), phase.order3 * (2 * M_PI) })));
+            td_dict.set("phase_rad"_py, new_cubic_spline({
+                        phase.order0 * (2 * M_PI), phase.order1 * (2 * M_PI),
+                        phase.order2 * (2 * M_PI), phase.order3 * (2 * M_PI) }));
             td_dict.set("frame_rotation_rad"_py, cubic_0);
             td_dict.set("wait_trigger"_py, flags.wait_trigger ? Py_True : Py_False);
             td_dict.set("sync"_py, flags.sync ? Py_True : Py_False);
@@ -2944,7 +2942,7 @@ PulseCompilerGen::Info::Info()
     ToneData = tonedata_mod.attr("ToneData").rel();
     auto splines_mod = py::import_module("pulsecompiler.rfsoc.structures.splines");
     CubicSpline = splines_mod.attr("CubicSpline").rel();
-    cubic_0 = _new_cubic_spline({0, 0, 0, 0});
+    cubic_0 = _new_cubic_spline({0, 0, 0, 0}).rel();
     auto pulse_mod = py::import_module("qiskit.pulse");
     auto ControlChannel = pulse_mod.attr("ControlChannel");
     auto DriveChannel = pulse_mod.attr("DriveChannel");
