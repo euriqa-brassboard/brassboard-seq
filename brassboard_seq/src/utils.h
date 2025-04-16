@@ -154,6 +154,10 @@ static inline __attribute__((always_inline)) auto throw_if(auto &&v)
 }
 static inline auto throw_if(auto &&v, uintptr_t key);
 
+template<typename... Args>
+[[noreturn]] static inline void py_throw_format(PyObject *exc, const char *format,
+                                                Args&&... args);
+
 enum BBLogLevel {
     BB_LOG_DEBUG,
     BB_LOG_INFO,
@@ -911,6 +915,23 @@ template<typename T, typename T2>
 auto exact_cast(T2 &&self)
 {
     return cast<T,true>(std::forward<T2>(self));
+}
+
+template<typename T, typename T2, typename T3>
+auto arg_cast(T2 &&self, T3 &&type, const char *name)
+{
+    if (auto res = cast<T,false>(std::forward<T2>(self), std::forward<T3>(type)))
+        return res;
+    py_throw_format(PyExc_TypeError, "Unexpected type '%S' for %s",
+                    Py_TYPE((PyObject*)self), name);
+}
+template<typename T, typename T2>
+auto arg_cast(T2 &&self, const char *name)
+{
+    if (auto res = cast<T,false>(std::forward<T2>(self)))
+        return res;
+    py_throw_format(PyExc_TypeError, "Unexpected type '%S' for %s",
+                    Py_TYPE((PyObject*)self), name);
 }
 
 template<typename T>

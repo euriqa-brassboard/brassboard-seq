@@ -91,7 +91,7 @@ def test_print(yaml_print):
     with pytest.raises(TypeError, match="print\\(\\) takes at most 2 positional arguments \\(3 given\\)"):
         yaml_print([], 1, 2)
 
-    with pytest.raises(TypeError, match="indent must be integer"):
+    with pytest.raises(TypeError, match="Unexpected type .* for indent"):
         yaml_print([], "aa")
 
     with pytest.raises(TypeError, match="indent cannot be negative"):

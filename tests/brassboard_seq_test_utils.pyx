@@ -1331,7 +1331,7 @@ def check_num_arg(func_name, nfound, nmin, nmax):
 
 def yaml_io_print(obj, indent=0):
     if not isinstance(indent, int):
-        raise TypeError("indent must be integer")
+        raise TypeError(f"Unexpected type {type(indent)} for indent")
     if indent < 0:
         raise TypeError("indent cannot be negative")
     cdef utils.stringio io
