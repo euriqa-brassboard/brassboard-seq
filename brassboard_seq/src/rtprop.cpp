@@ -58,23 +58,23 @@ PyTypeObject composite_rtprop_data::Type = {
     },
 };
 
-static inline PyObject *apply_composite_ovr(PyObject *val, PyObject *ovr);
+static inline py::ref<> apply_composite_ovr(py::ptr<> val, py::ptr<> ovr);
 
-static inline bool apply_dict_ovr(py::dict_ref &dict, PyObject *k, PyObject *v)
+static inline bool apply_dict_ovr(py::dict_ref &dict, py::ptr<> k, py::ptr<> v)
 {
     if (auto field = dict.try_get(k)) {
-        dict.set(k, py::ref(apply_composite_ovr(field, v)));
+        dict.set(k, apply_composite_ovr(field, v));
         return true;
     }
     return false;
 }
 
-static inline PyObject *apply_composite_ovr(PyObject *val, PyObject *ovr)
+static inline py::ref<> apply_composite_ovr(py::ptr<> val, py::ptr<> ovr)
 {
-    if (!py::isa<py::dict>(ovr))
-        return py::newref(ovr);
+    if (!ovr.isa<py::dict>())
+        return ovr.ref();
     if (!PyDict_Size(ovr))
-        return py::newref(val);
+        return val.ref();
     if (auto d = py::cast<py::dict>(val)) {
         auto newval = d.copy();
         for (auto [k, v]: py::dict_iter(ovr)) {
@@ -85,7 +85,7 @@ static inline PyObject *apply_composite_ovr(PyObject *val, PyObject *ovr)
                 continue;
             newval.set(k, v);
         }
-        return newval.rel();
+        return newval;
     }
     if (auto l = py::cast<py::list>(val)) {
         auto newval = l.list(); // copy
@@ -98,16 +98,16 @@ static inline PyObject *apply_composite_ovr(PyObject *val, PyObject *ovr)
             }
             if (idx >= newval.size())
                 py_throw_format(PyExc_IndexError, "list index out of range");
-            newval.set(idx, py::ref(apply_composite_ovr(newval.get(idx), v)));
+            newval.set(idx, apply_composite_ovr(newval.get(idx), v));
         }
-        return newval.rel();
+        return newval;
     }
     py_throw_format(PyExc_TypeError, "Unknown value type '%S'", Py_TYPE(val));
 }
 
-static inline bool _object_compiled(PyObject *obj)
+static inline bool _object_compiled(py::ptr<> obj)
 {
-    return py::ptr(obj).try_attr("_bb_rt_values"_py).is_none();
+    return obj.try_attr("_bb_rt_values"_py).is_none();
 }
 
 struct CompositeRTProp : PyObject {
@@ -117,21 +117,21 @@ struct CompositeRTProp : PyObject {
     __attribute__((alias("_ZN14brassboard_seq6rtprop20CompositeRTProp_TypeE")))
     static PyTypeObject Type;
 
-    py::ref<composite_rtprop_data> get_data(PyObject *obj)
+    py::ref<composite_rtprop_data> get_data(py::ptr<> obj)
     {
         if (fieldname == Py_None)
             py_throw_format(PyExc_ValueError, "Cannot determine runtime property name");
-        if (auto val = py::ptr(obj).try_attr(fieldname);
+        if (auto val = obj.try_attr(fieldname);
             val && val.typeis(&composite_rtprop_data::Type))
             return val;
         auto data = py::generic_alloc<composite_rtprop_data>();
         data->ovr = py::immref(Py_None);
         data->cache = py::immref(Py_None);
-        py::ptr(obj).set_attr(fieldname, data);
+        obj.set_attr(fieldname, data);
         return data;
     }
 
-    PyObject *get_res(PyObject *obj)
+    py::ref<> get_res(py::ptr<> obj)
     {
         auto data = get_data(obj);
         if (!data->filled || (!data->compiled && _object_compiled(obj))) {
@@ -140,7 +140,7 @@ struct CompositeRTProp : PyObject {
             data->compiled = _object_compiled(obj);
         }
         if (data->ovr == Py_None)
-            return py::newref(data->cache);
+            return py::ptr(data->cache).ref();
         return apply_composite_ovr(data->cache, data->ovr);
     }
 
@@ -247,13 +247,13 @@ struct rtprop_callback : ExternCallback {
         return rtval_cache(rv);
     }
 
-    static inline rtprop_callback *alloc(PyObject *obj, PyObject *fieldname)
+    static inline py::ref<rtprop_callback> alloc(py::ptr<> obj, py::ptr<> fieldname)
     {
         auto self = py::generic_alloc<rtprop_callback>();
         self->fptr = (void*)callback;
         self->obj = py::newref(obj);
         self->fieldname = py::newref(fieldname);
-        return self.rel();
+        return self;
     }
     static PyTypeObject Type;
 };
@@ -297,26 +297,25 @@ struct RTProp : PyObject {
     __attribute__((alias("_ZN14brassboard_seq6rtprop11RTProp_TypeE")))
     static PyTypeObject Type;
 
-    PyObject *get_res(PyObject *obj)
+    py::ref<> get_res(py::ptr<> obj)
     {
         if (fieldname == Py_None)
             py_throw_format(PyExc_ValueError, "Cannot determine runtime property name");
-        if (auto res = py::ptr(obj).try_attr(fieldname))
-            return res.rel();
-        py::ref val(new_extern_age(py::ref(rtprop_callback::alloc(obj, fieldname)),
-                                   &PyFloat_Type));
-        py::ptr(obj).set_attr(fieldname, val);
-        return val.rel();
+        if (auto res = obj.try_attr(fieldname))
+            return res;
+        py::ref val(new_extern_age(rtprop_callback::alloc(obj, fieldname), &PyFloat_Type));
+        obj.set_attr(fieldname, val);
+        return val;
     }
 
-    void set_res(PyObject *obj, PyObject *val)
+    void set_res(py::ptr<> obj, py::ptr<> val)
     {
         if (fieldname == Py_None)
             py_throw_format(PyExc_ValueError, "Cannot determine runtime property name");
         if (val && val != Py_None)
-            py::ptr(obj).set_attr(fieldname, val);
+            obj.set_attr(fieldname, val);
         else
-            py::ptr(obj).del_attr(fieldname);
+            obj.del_attr(fieldname);
     }
 
     static PyObject *get_state(RTProp *self, PyObject *const *args, Py_ssize_t nargs)
