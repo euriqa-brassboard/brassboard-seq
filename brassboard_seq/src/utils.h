@@ -1551,27 +1551,6 @@ struct py_object : std::unique_ptr<PyObject,PyDeleter> {
     }
 };
 
-__attribute__((returns_nonnull)) static inline PyObject*
-pyfloat_from_double(double v)
-{
-    // Used by cython
-    return py::new_float(v).rel();
-}
-
-__attribute__((returns_nonnull)) static inline PyObject*
-pylong_from_long(long v)
-{
-    // Used by cython
-    return py::new_int(v).rel();
-}
-
-__attribute__((returns_nonnull)) static inline PyObject*
-pylong_from_longlong(long long v)
-{
-    // Used by cython
-    return py::new_int(v).rel();
-}
-
 template<size_t N>
 struct str_literal {
     constexpr str_literal(const char (&str)[N])

@@ -42,9 +42,13 @@ cdef extern from "src/utils.h" namespace "brassboard_seq::py":
 
     cppclass stringio:
         void write(str)
+        void write_str(object) except +
         void write_ascii(const char*)
         void write_rep_ascii(int, const char*)
         ref getvalue() except +
+
+    ref new_int[T](T v) except +
+    ref new_float(double v) except +
 
 cdef extern from * namespace "brassboard_seq":
     T assume[T](T) noexcept nogil
@@ -71,9 +75,6 @@ cdef extern from * namespace "brassboard_seq":
         void reset(PyObject*)
         void set_obj(object)
 
-    object pyfloat_from_double(double v) except +
-    object pylong_from_long(long v) except +
-    object pylong_from_longlong(long long v) except +
     tuple pytuple_append1(tuple, object) except +
     object pydict_deepcopy(object) except +
 

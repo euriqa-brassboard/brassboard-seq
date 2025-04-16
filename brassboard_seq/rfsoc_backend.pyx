@@ -22,8 +22,7 @@ from brassboard_seq.backend cimport CompiledSeq
 from brassboard_seq.event_time cimport round_time_f64
 from brassboard_seq.rtval cimport is_rtval, rtval_cache, rt_eval_throw, RuntimeValue
 from brassboard_seq.utils cimport set_global_tracker, \
-  PyErr_Format, PyExc_ValueError, PyExc_TypeError, \
-  ostream, pybytes_ostream, pylong_from_long, pylong_from_longlong
+  PyErr_Format, PyExc_ValueError, PyExc_TypeError, ostream, pybytes_ostream, new_int
 
 cimport cython
 from cython.operator cimport dereference as deref
@@ -531,7 +530,7 @@ cdef class JaqalChannelGen_v1:
         sz = self.chn_gen.slut.size()
         cdef list res = PyList_New(sz)
         for i in range(sz):
-            v = pylong_from_long(self.chn_gen.slut[i])
+            v = new_int(<int>self.chn_gen.slut[i]).rel[PyObject]()
             Py_INCREF(v)
             PyList_SET_ITEM(res, i, v)
         return res
@@ -541,7 +540,7 @@ cdef class JaqalChannelGen_v1:
         cdef list res = PyList_New(sz)
         for i in range(sz):
             gate = self.chn_gen.glut[i]
-            v = (pylong_from_long(gate.first), pylong_from_long(gate.second))
+            v = (new_int(gate.first).rel[PyObject](), new_int(gate.second).rel[PyObject]())
             Py_INCREF(v)
             PyList_SET_ITEM(res, i, v)
         return res
@@ -551,7 +550,7 @@ cdef class JaqalChannelGen_v1:
         cdef list res = PyList_New(sz)
         for i in range(sz):
             gate = self.chn_gen.gate_ids[i]
-            v = (pylong_from_longlong(gate.time), pylong_from_long(gate.id))
+            v = (new_int(gate.time).rel[PyObject](), new_int(gate.id).rel[PyObject]())
             Py_INCREF(v)
             PyList_SET_ITEM(res, i, v)
         return res

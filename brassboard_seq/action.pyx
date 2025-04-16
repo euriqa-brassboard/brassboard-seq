@@ -19,7 +19,7 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.rtval cimport get_value_f64, is_rtval, \
   new_arg, new_const, new_expr2, ValueType, DataType, RuntimeValue
-from brassboard_seq.utils cimport PyObject_Vectorcall, pyfloat_from_double, \
+from brassboard_seq.utils cimport PyObject_Vectorcall, new_float, \
   PyErr_Format, PyExc_RuntimeError
 
 cimport cython
@@ -82,7 +82,7 @@ cdef class RampFunction(_RampFunctionBase):
             deref(interp_func).set_value(<RuntimeValue>fvalue, args)
             self.interp_func = move(interp_func)
         elif type(fvalue) is not float:
-            fvalue = pyfloat_from_double(<double>fvalue)
+            fvalue = new_float(<double>fvalue).rel[PyObject]()
         self._fvalue = fvalue
 
     cdef eval_end(self, length, oldval):
@@ -101,8 +101,8 @@ cdef class RampFunction(_RampFunctionBase):
         if <object>_spline_segments is dummy_spline_segments:
             return
         cdef PyObject *args[3]
-        cdef object pylen = pyfloat_from_double(length)
-        cdef object pyoldval = pyfloat_from_double(oldval)
+        cdef object pylen = new_float(length).rel[PyObject]()
+        cdef object pyoldval = new_float(oldval).rel[PyObject]()
         args[0] = <PyObject*>self
         args[1] = <PyObject*>pylen
         args[2] = <PyObject*>pyoldval
