@@ -132,7 +132,7 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
                     }
                     else if (new_value != value) {
                         assert(is_rtval(cond));
-                        value.take(new_select(cond, new_value, value));
+                        value = new_select(cond, new_value, value);
                     }
                 }
             }

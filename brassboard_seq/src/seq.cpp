@@ -67,7 +67,7 @@ _combine_cond(PyObject *cond1, PyObject *new_cond)
             return { Py_False, false };
         }
     }
-    auto cond2 = py::ref(rt_convert_bool(new_cond));
+    auto cond2 = rt_convert_bool(new_cond);
     if (cond1 == Py_True)
         return { cond2.rel(), true };
     assert(is_rtval(cond1));

@@ -30,8 +30,7 @@ using brassboard_seq::rtval::RuntimeValue;
 // 1ps for internal time unit
 static constexpr int64_t time_scale = 1000000000000ll;
 
-// Return borrowed reference
-__attribute__((returns_nonnull)) PyObject *py_time_scale();
+py::ptr<> py_time_scale();
 
 static inline int64_t round_time_f64(double v)
 {

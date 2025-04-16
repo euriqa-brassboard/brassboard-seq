@@ -980,12 +980,10 @@ new_extern_age(py::ptr<> cb, py::ptr<> ty)
     return new_cb_arg2(ExternAge, cb, ty);
 }
 
-__attribute__((returns_nonnull)) RuntimeValue*
-new_expr1(ValueType type, rtval_ref &&arg0);
+rtval_ref new_expr1(ValueType type, rtval_ref &&arg0);
 
 template<typename T>
-__attribute__((returns_nonnull)) RuntimeValue*
-new_expr1(ValueType type, T &&arg0)
+auto new_expr1(ValueType type, T &&arg0)
 {
     return new_expr1(type, rtval_ref(py::newref(std::forward<T>(arg0))));
 }
@@ -1013,24 +1011,21 @@ new_const(auto *pyv)
     return new_const(py::ptr(pyv));
 }
 
-__attribute__((returns_nonnull)) RuntimeValue*
-new_select(rtval_ptr arg0, py::ptr<> arg1, py::ptr<> arg2);
+rtval_ref new_select(rtval_ptr arg0, py::ptr<> arg1, py::ptr<> arg2);
 
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-rt_convert_bool(rtval_ptr v)
+static inline rtval_ref rt_convert_bool(rtval_ptr v)
 {
     if (v->type_ == Int64)
         v = v->arg0;
     if (v->datatype == DataType::Bool)
-        return py::newref(v);
+        return v.ref();
     return new_expr1(Bool, v);
 }
 
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-rt_round_int64(rtval_ptr v)
+static inline rtval_ref rt_round_int64(rtval_ptr v)
 {
     if (v->type_ == Int64)
-        return py::newref(v);
+        return v.ref();
     return new_expr1(Int64, v);
 }
 
@@ -1043,7 +1038,7 @@ static inline __attribute__((always_inline)) TagVal rtval_cache(rtval_ptr rtval)
     return cache;
 }
 
-bool rt_same_value(py::ptr<> v1, py::ptr<> v2);
+bool same_value(py::ptr<> v1, py::ptr<> v2);
 
 void rt_eval_cache(rtval_ptr self, unsigned age);
 

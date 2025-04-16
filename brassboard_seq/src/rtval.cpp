@@ -40,7 +40,7 @@ new_cb_arg2(ValueType type, py::ptr<> cb_arg2, py::ptr<> ty)
     return self.rel();
 }
 
-__attribute__((returns_nonnull,visibility("protected"))) RuntimeValue*
+__attribute__((visibility("protected"))) rtval_ref
 new_expr1(ValueType type, rtval_ref &&arg0)
 {
     auto datatype = unary_return_type(type, arg0->datatype);
@@ -53,7 +53,7 @@ new_expr1(ValueType type, rtval_ref &&arg0)
     self->arg0 = arg0.rel();
     self->arg1 = (RuntimeValue*)py::immref(Py_None);
     self->cb_arg2 = py::immref(Py_None);
-    return self.rel();
+    return self;
 }
 
 __attribute__((returns_nonnull,visibility("protected"))) RuntimeValue*
@@ -124,8 +124,8 @@ static inline rtval_ref wrap_rtval(py::ptr<> v)
     return rtval_ref(new_const(TagVal::from_py(v)));
 }
 
-__attribute__((returns_nonnull,visibility("protected"))) RuntimeValue*
-new_select(rtval_ptr arg0, py::ptr<> arg1, py::ptr<> arg2)
+__attribute__((visibility("protected")))
+rtval_ref new_select(rtval_ptr arg0, py::ptr<> arg1, py::ptr<> arg2)
 {
     auto rtarg1 = wrap_rtval(arg1);
     auto rtarg2 = wrap_rtval(arg2);
@@ -140,7 +140,7 @@ new_select(rtval_ptr arg0, py::ptr<> arg1, py::ptr<> arg2)
     self->arg0 = py::newref(arg0);
     self->arg1 = rtarg1.rel();
     self->cb_arg2 = (PyObject*)rtarg2.rel();
-    return self.rel();
+    return self;
 }
 
 static inline bool tagval_equal(const TagVal &v1, const TagVal &v2)
@@ -232,7 +232,7 @@ static bool _rt_same_value(rtval_ptr v1, rtval_ptr v2)
 }
 
 __attribute__((visibility("protected")))
-bool rt_same_value(py::ptr<> v1, py::ptr<> v2) try {
+bool same_value(py::ptr<> v1, py::ptr<> v2) try {
     if (!is_rtval(v1)) {
         if (!is_rtval(v2)) {
             int res = PyObject_RichCompareBool(v1, v2, Py_EQ);
@@ -583,10 +583,10 @@ static PyNumberMethods rtvalue_as_number = {
         return cxx_catch([&] { return build_addsub(py::int_cached(0), self, true); });
     },
     .nb_positive = [] (PyObject *self) { return py::newref(self); },
-    .nb_absolute = [] (PyObject *self) {
+    .nb_absolute = [] (PyObject *self) -> PyObject* {
         if (((RuntimeValue*)self)->type_ == Abs)
             return py::newref(self);
-        return cxx_catch([&] { return (PyObject*)new_expr1(Abs, self); });
+        return cxx_catch([&] { return new_expr1(Abs, self); });
     },
     .nb_bool = [] (PyObject *self) {
         // It's too easy to accidentally use this in control flow/assertion
@@ -627,7 +627,7 @@ static PyObject *rtvalue_array_ufunc(RuntimeValue *self, PyObject *const *args,
         py_check_num_arg("__array_ufunc__", nargs, 4, 4);
         return build_addsub(args[2], args[3], true).rel();
     }
-    auto uni_expr = [&] (auto type) { return new_expr1(type, self); };
+    auto uni_expr = [&] (auto type) { return new_expr1(type, self).rel(); };
     auto bin_expr = [&] (auto type) {
         py_check_num_arg("__array_ufunc__", nargs, 4, 4);
         return new_expr2_wrap1(type, args[2], args[3]);
@@ -645,7 +645,7 @@ static PyObject *rtvalue_array_ufunc(RuntimeValue *self, PyObject *const *args,
     if (ufunc == np::bitwise_xor)
         return bin_expr(Xor);
     if (ufunc == np::logical_not)
-        return (self->type_ == Not ? rt_convert_bool(self->arg0) : uni_expr(Not));
+        return (self->type_ == Not ? rt_convert_bool(self->arg0).rel() : uni_expr(Not));
     if (ufunc == np::power)
         return bin_expr(Pow);
     if (ufunc == np::less)
@@ -742,7 +742,7 @@ static PyObject *rtvalue_ceil(RuntimeValue *self,
 {
     return cxx_catch([&] {
         py_check_num_arg("__ceil__", nargs, 0, 0);
-        return is_integer(self) ? py::newref(self) : new_expr1(Ceil, self);
+        return is_integer(self) ? py::newref(self) : new_expr1(Ceil, self).rel();
     });
 }
 
@@ -751,7 +751,7 @@ static PyObject *rtvalue_floor(RuntimeValue *self,
 {
     return cxx_catch([&] {
         py_check_num_arg("__floor__", nargs, 0, 0);
-        return is_integer(self) ? py::newref(self) : new_expr1(Floor, self);
+        return is_integer(self) ? py::newref(self) : new_expr1(Floor, self).rel();
     });
 }
 
@@ -1048,8 +1048,8 @@ static PyObject *py_inv(PyObject*, PyObject *const *args, Py_ssize_t nargs)
             return py::immref(Py_True);
         if (auto rv = py::cast<RuntimeValue>(v)) {
             if (rv->type_ == Not)
-                return rt_convert_bool(rv->arg0);
-            return new_expr1(Not, rv);
+                return rt_convert_bool(rv->arg0).rel();
+            return new_expr1(Not, rv).rel();
         }
         return py::immref(get_value_bool(v, -1) ? Py_False : Py_True);
     });
@@ -1061,23 +1061,23 @@ static PyObject *py_convert_bool(PyObject*, PyObject *const *args, Py_ssize_t na
         py_check_num_arg("convert_bool", nargs, 1, 1);
         auto v = args[0];
         if (auto rv = py::cast<RuntimeValue>(v))
-            return rt_convert_bool(rv);
+            return rt_convert_bool(rv).rel();
         return py::immref(get_value_bool(v, -1) ? Py_True : Py_False);
     });
 }
 
 static PyObject *py_ifelse(PyObject*, PyObject *const *args, Py_ssize_t nargs)
 {
-    return cxx_catch([&] () -> PyObject* {
+    return cxx_catch([&] () -> py::ref<> {
         py_check_num_arg("ifelse", nargs, 3, 3);
         auto b = args[0];
-        auto v1 = args[1];
-        auto v2 = args[2];
-        if (rt_same_value(v1, v2))
-            return py::newref(v1);
+        auto v1 = py::ptr(args[1]);
+        auto v2 = py::ptr(args[2]);
+        if (same_value(v1, v2))
+            return v1.ref();
         if (auto rb = py::cast<RuntimeValue>(b))
             return new_select(rb, v1, v2);
-        return py::newref(get_value_bool(b, -1) ? v1 : v2);
+        return (get_value_bool(b, -1) ? v1 : v2).ref();
     });
 }
 
@@ -1085,7 +1085,7 @@ static PyObject *py_same_value(PyObject*, PyObject *const *args, Py_ssize_t narg
 {
     return cxx_catch([&] () -> PyObject* {
         py_check_num_arg("same_value", nargs, 2, 2);
-        return py::immref(rt_same_value(args[0], args[1]) ? Py_True : Py_False);
+        return py::immref(same_value(args[0], args[1]) ? Py_True : Py_False);
     });
 }
 
