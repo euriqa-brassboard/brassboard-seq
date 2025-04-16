@@ -371,6 +371,22 @@ catch (...) {
     return nullptr;
 }
 
+template<typename ConditionalWrapper> static PyObject*
+condwrapper_vectorcall(ConditionalWrapper *self, PyObject *const *args, size_t _nargs,
+                       PyObject *kwnames) try {
+    auto nargs = PyVectorcall_NARGS(_nargs);
+    py_check_no_kwnames("__call__", kwnames);
+    py_check_num_arg("__call__", nargs, 1, 1);
+    auto step = add_custom_step(self->seq, self->cond,
+                                pyx_fld(self->seq, end_time), args[0]);
+    py::assign(pyx_fld(self->seq, end_time), pyx_fld(step, end_time));
+    return (PyObject*)step;
+}
+catch (...) {
+    handle_cxx_exception();
+    return nullptr;
+}
+
 template<typename CondSeq, typename ConditionalWrapper>
 static PyObject *condseq_conditional(PyObject *py_self, PyObject *const *args,
                                      Py_ssize_t nargs) try
@@ -383,6 +399,7 @@ static PyObject *condseq_conditional(PyObject *py_self, PyObject *const *args,
     auto wrapper = py::generic_alloc<ConditionalWrapper>(condwrapper_type);
     wrapper->seq = py::newref(subseq);
     wrapper->cond = cc.take_cond();
+    wrapper->fptr = (void*)condwrapper_vectorcall<ConditionalWrapper>;
     return (PyObject*)wrapper.rel();
 }
 catch (...) {
@@ -456,6 +473,9 @@ update_conditional(ConditionalWrapper*, TimeSeq*, TimeStep*)
     };
     for (auto &method: methods)
         pytype_add_method(condwrapper_type, &method);
+    ((PyTypeObject*)condwrapper_type)->tp_call = PyVectorcall_Call;
+    ((PyTypeObject*)condwrapper_type)->tp_vectorcall_offset =
+        offsetof(ConditionalWrapper, fptr),
     PyType_Modified((PyTypeObject*)condwrapper_type);
 }
 

@@ -36,7 +36,6 @@ cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
     int get_channel_id(SeqInfo self, str name) except +
     object combine_cond(object cond1, object new_cond) except +
     void timeseq_set_time(TimeSeq self, EventTime time, object offset) except +
-    SubSeq add_custom_step(SubSeq, object cond, EventTime, object) except +
 
 
 timestep_type = <PyObject*>TimeStep
@@ -126,12 +125,8 @@ cdef class ConditionalWrapper:
     # def add_floating(self, first_arg, /, *args, **kwargs)
     # def add_at(self, EventTime tp, first_arg, /, *args, **kwargs)
     # def set(self, chn, value, /, *, cond=True, bint exact_time=False, **kws)
-
     # Shorthand for add_step of custom step. Meant to be used as decorator
-    def __call__(self, cb, /):
-        step = add_custom_step(self.seq, self.cond, self.seq.end_time, cb)
-        self.seq.end_time = step.end_time
-        return step
+    # def __call__(self, cb, /)
 
     def __str__(self):
         cdef stringio io

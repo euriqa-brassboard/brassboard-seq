@@ -53,6 +53,7 @@ cdef class TimeStep(TimeSeq):
 cdef class ConditionalWrapper:
     cdef SubSeq seq
     cdef object cond
+    cdef void *fptr
 
 
 cdef class SubSeq(TimeSeq):
