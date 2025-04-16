@@ -612,7 +612,7 @@ static inline bool is_integer(auto v)
 static PyObject *rtvalue_array_ufunc(RuntimeValue *self, PyObject *const *args,
                                      Py_ssize_t nargs) try
 {
-    py_check_num_arg("__array_ufunc__", nargs, 2);
+    py::check_num_arg("__array_ufunc__", nargs, 2);
     auto ufunc = args[0];
     auto methods = args[1];
     if (PyUnicode_CompareWithASCIIString(methods, "__call__"))
@@ -620,16 +620,16 @@ static PyObject *rtvalue_array_ufunc(RuntimeValue *self, PyObject *const *args,
     // numpy type support would dispatch arithmetic operations to this function
     // so we need to implement the corresponding ufuncs to support these.
     if (ufunc == np::add) {
-        py_check_num_arg("__array_ufunc__", nargs, 4, 4);
+        py::check_num_arg("__array_ufunc__", nargs, 4, 4);
         return build_addsub(args[2], args[3], false).rel();
     }
     if (ufunc == np::subtract) {
-        py_check_num_arg("__array_ufunc__", nargs, 4, 4);
+        py::check_num_arg("__array_ufunc__", nargs, 4, 4);
         return build_addsub(args[2], args[3], true).rel();
     }
     auto uni_expr = [&] (auto type) { return new_expr1(type, self).rel(); };
     auto bin_expr = [&] (auto type) {
-        py_check_num_arg("__array_ufunc__", nargs, 4, 4);
+        py::check_num_arg("__array_ufunc__", nargs, 4, 4);
         return new_expr2_wrap1(type, args[2], args[3]);
     };
     if (ufunc == np::multiply)
@@ -661,11 +661,11 @@ static PyObject *rtvalue_array_ufunc(RuntimeValue *self, PyObject *const *args,
     if (ufunc == np::not_equal)
         return bin_expr(CmpNE);
     if (ufunc == np::fmin) {
-        py_check_num_arg("__array_ufunc__", nargs, 4, 4);
+        py::check_num_arg("__array_ufunc__", nargs, 4, 4);
         return args[2] == args[3] ? py::newref(self) : bin_expr(Min);
     }
     if (ufunc == np::fmax) {
-        py_check_num_arg("__array_ufunc__", nargs, 4, 4);
+        py::check_num_arg("__array_ufunc__", nargs, 4, 4);
         return args[2] == args[3] ? py::newref(self) : bin_expr(Max);
     }
     if (ufunc == np::abs)
@@ -729,7 +729,7 @@ static PyObject *rtvalue_eval(RuntimeValue *self,
                               PyObject *const *args, Py_ssize_t nargs)
 {
     return cxx_catch([&] {
-        py_check_num_arg("eval", nargs, 1, 1);
+        py::check_num_arg("eval", nargs, 1, 1);
         auto age = PyLong_AsLong(args[0]);
         throw_pyerr(age == -1);
         rt_eval_cache(self, age);
@@ -741,7 +741,7 @@ static PyObject *rtvalue_ceil(RuntimeValue *self,
                               PyObject *const *args, Py_ssize_t nargs)
 {
     return cxx_catch([&] {
-        py_check_num_arg("__ceil__", nargs, 0, 0);
+        py::check_num_arg("__ceil__", nargs, 0, 0);
         return is_integer(self) ? py::newref(self) : new_expr1(Ceil, self).rel();
     });
 }
@@ -750,7 +750,7 @@ static PyObject *rtvalue_floor(RuntimeValue *self,
                                PyObject *const *args, Py_ssize_t nargs)
 {
     return cxx_catch([&] {
-        py_check_num_arg("__floor__", nargs, 0, 0);
+        py::check_num_arg("__floor__", nargs, 0, 0);
         return is_integer(self) ? py::newref(self) : new_expr1(Floor, self).rel();
     });
 }
@@ -759,7 +759,7 @@ static PyObject *rtvalue_round(RuntimeValue *self,
                                PyObject *const *args, Py_ssize_t nargs)
 {
     return cxx_catch([&] {
-        py_check_num_arg("__round__", nargs, 0, 0);
+        py::check_num_arg("__round__", nargs, 0, 0);
         return rt_round_int64(self);
     });
 }
@@ -1025,7 +1025,7 @@ PyTypeObject ExternCallback::Type = {
 static PyObject *py_get_value(PyObject*, PyObject *const *args, Py_ssize_t nargs)
 {
     return cxx_catch([&] {
-        py_check_num_arg("get_value", nargs, 2, 2);
+        py::check_num_arg("get_value", nargs, 2, 2);
         auto pyage = py::arg_cast<py::int_>(args[1], "age");
         if (is_rtval(args[0])) {
             auto age = PyLong_AsLong(pyage);
@@ -1040,7 +1040,7 @@ static PyObject *py_get_value(PyObject*, PyObject *const *args, Py_ssize_t nargs
 static PyObject *py_inv(PyObject*, PyObject *const *args, Py_ssize_t nargs)
 {
     return cxx_catch([&] () -> PyObject* {
-        py_check_num_arg("inv", nargs, 1, 1);
+        py::check_num_arg("inv", nargs, 1, 1);
         auto v = args[0];
         if (v == Py_True)
             return py::immref(Py_False);
@@ -1058,7 +1058,7 @@ static PyObject *py_inv(PyObject*, PyObject *const *args, Py_ssize_t nargs)
 static PyObject *py_convert_bool(PyObject*, PyObject *const *args, Py_ssize_t nargs)
 {
     return cxx_catch([&] () -> PyObject* {
-        py_check_num_arg("convert_bool", nargs, 1, 1);
+        py::check_num_arg("convert_bool", nargs, 1, 1);
         auto v = args[0];
         if (auto rv = py::cast<RuntimeValue>(v))
             return rt_convert_bool(rv).rel();
@@ -1069,7 +1069,7 @@ static PyObject *py_convert_bool(PyObject*, PyObject *const *args, Py_ssize_t na
 static PyObject *py_ifelse(PyObject*, PyObject *const *args, Py_ssize_t nargs)
 {
     return cxx_catch([&] () -> py::ref<> {
-        py_check_num_arg("ifelse", nargs, 3, 3);
+        py::check_num_arg("ifelse", nargs, 3, 3);
         auto b = args[0];
         auto v1 = py::ptr(args[1]);
         auto v2 = py::ptr(args[2]);
@@ -1084,7 +1084,7 @@ static PyObject *py_ifelse(PyObject*, PyObject *const *args, Py_ssize_t nargs)
 static PyObject *py_same_value(PyObject*, PyObject *const *args, Py_ssize_t nargs)
 {
     return cxx_catch([&] () -> PyObject* {
-        py_check_num_arg("same_value", nargs, 2, 2);
+        py::check_num_arg("same_value", nargs, 2, 2);
         return py::immref(same_value(args[0], args[1]) ? Py_True : Py_False);
     });
 }

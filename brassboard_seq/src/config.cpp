@@ -42,7 +42,7 @@ static PyObject *add_supported_prefix(Config *self, PyObject *const *args,
                                       Py_ssize_t nargs)
 {
     return cxx_catch([&] {
-        py_check_num_arg("add_supported_prefix", nargs, 1, 1);
+        py::check_num_arg("add_supported_prefix", nargs, 1, 1);
         check_string_arg(args[0], "prefix");
         py::set(self->supported_prefix).add(args[0]);
         Py_RETURN_NONE;
@@ -53,7 +53,7 @@ static PyObject *add_channel_alias(Config *self, PyObject *const *args,
                                    Py_ssize_t nargs)
 {
     return cxx_catch([&] {
-        py_check_num_arg("add_channel_alias", nargs, 2, 2);
+        py::check_num_arg("add_channel_alias", nargs, 2, 2);
         auto name = args[0];
         auto target = args[1];
         check_string_arg(name, "name");
@@ -107,7 +107,7 @@ static PyObject *py_translate_channel(Config *self, PyObject *const *args,
                                       Py_ssize_t nargs)
 {
     return cxx_catch([&] {
-        py_check_num_arg("translate_channel", nargs, 1);
+        py::check_num_arg("translate_channel", nargs, 1);
         check_string_arg(args[0], "name");
         return self->translate_channel(args[0]);
     });

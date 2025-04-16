@@ -204,7 +204,7 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
     auto subseq = condseq_get_subseq(self);
     auto cond = pyx_fld(self, cond);
     auto nargs_min = type == AddStepType::At ? 2 : 1;
-    py_check_num_arg(add_step_name(type), nargs, nargs_min);
+    py::check_num_arg(add_step_name(type), nargs, nargs_min);
 
     auto first_arg = args[nargs_min - 1];
     py::ref<EventTime> start_time;
@@ -329,7 +329,7 @@ static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
                              Py_ssize_t nargs, PyObject *kwnames) try
 {
     static_assert(is_step || !is_pulse);
-    py_check_num_arg((is_pulse ? "pulse" : "set"), nargs, 2, 2);
+    py::check_num_arg((is_pulse ? "pulse" : "set"), nargs, 2, 2);
     auto chn = args[0];
     auto value = args[1];
     bool exact_time{false};
@@ -371,8 +371,8 @@ template<typename ConditionalWrapper> static PyObject*
 condwrapper_vectorcall(ConditionalWrapper *self, PyObject *const *args, size_t _nargs,
                        PyObject *kwnames) try {
     auto nargs = PyVectorcall_NARGS(_nargs);
-    py_check_no_kwnames("__call__", kwnames);
-    py_check_num_arg("__call__", nargs, 1, 1);
+    py::check_no_kwnames("__call__", kwnames);
+    py::check_num_arg("__call__", nargs, 1, 1);
     // Reuse the args buffer
     auto step = add_custom_step(self->seq, self->cond, pyx_fld(self->seq, end_time),
                                 args[0], 0, &args[1], py::tuple());
@@ -388,7 +388,7 @@ template<typename CondSeq, typename ConditionalWrapper>
 static PyObject *condseq_conditional(PyObject *py_self, PyObject *const *args,
                                      Py_ssize_t nargs) try
 {
-    py_check_num_arg("conditional", nargs, 1, 1);
+    py::check_num_arg("conditional", nargs, 1, 1);
     auto self = (CondSeq*)py_self;
     auto subseq = condseq_get_subseq(self);
     auto cond = pyx_fld(self, cond);

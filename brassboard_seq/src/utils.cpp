@@ -189,6 +189,30 @@ str_ref stringio::getvalue()
     return str_ref::checked(PyUnicode_FromKindAndData(m_kind, m_buff.get(), m_pos));
 }
 
+__attribute__((visibility("protected")))
+[[noreturn]] void num_arg_error(const char *func_name, ssize_t nfound,
+                                ssize_t nmin, ssize_t nmax)
+{
+    ssize_t nexpected;
+    const char *more_or_less;
+    if (nmin == nmax) {
+        nexpected = nmin;
+        more_or_less = "exactly";
+    }
+    else if (nfound < nmin) {
+        nexpected = nmin;
+        more_or_less = "at least";
+    }
+    else {
+        nexpected = nmax;
+        more_or_less = "at most";
+    }
+    py_throw_format(PyExc_TypeError,
+                    "%.200s() takes %.8s %zd positional argument%.1s (%zd given)",
+                    func_name, more_or_less, nexpected,
+                    (nexpected == 1) ? "" : "s", nfound);
+}
+
 }
 
 #if PY_VERSION_HEX < 0x030b00f0
@@ -409,30 +433,6 @@ void pytype_add_method(PyTypeObject *type, PyMethodDef *meth)
 {
     py::dict(type->tp_dict).set(meth->ml_name,
                                 py::ref<>::checked(PyDescr_NewMethod(type, meth)));
-}
-
-__attribute__((visibility("protected")))
-[[noreturn]] void py_num_arg_error(const char *func_name, ssize_t nfound,
-                                   ssize_t nmin, ssize_t nmax)
-{
-    ssize_t nexpected;
-    const char *more_or_less;
-    if (nmin == nmax) {
-        nexpected = nmin;
-        more_or_less = "exactly";
-    }
-    else if (nfound < nmin) {
-        nexpected = nmin;
-        more_or_less = "at least";
-    }
-    else {
-        nexpected = nmax;
-        more_or_less = "at most";
-    }
-    py_throw_format(PyExc_TypeError,
-                    "%.200s() takes %.8s %zd positional argument%.1s (%zd given)",
-                    func_name, more_or_less, nexpected,
-                    (nexpected == 1) ? "" : "s", nfound);
 }
 
 py::str_ref channel_name_from_path(py::ptr<> path)

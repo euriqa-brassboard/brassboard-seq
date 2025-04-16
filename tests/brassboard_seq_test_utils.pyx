@@ -113,7 +113,7 @@ cdef extern from "test_utils.cpp" namespace "brassboard_seq":
     object _action_get_end_val(action.Action *action)
     vector[action.Action*] *compiledseq_get_all_actions(backend.CompiledSeq &cseq)
     int64_t compiledseq_get_total_time(backend.CompiledSeq &cseq)
-    void py_check_num_arg "brassboard_seq::py_check_num_arg" (
+    void py_check_num_arg "brassboard_seq::py::check_num_arg" (
         const char *func_name, ssize_t nfound, ssize_t nmin, ssize_t nmax) except +
     void _timemanager_finalize(event_time.TimeManager) except +
     int64_t _timemanager_compute_all_times(event_time.TimeManager, unsigned) except +

@@ -148,7 +148,7 @@ struct CompositeRTProp : PyObject {
                                PyObject *const *args, Py_ssize_t nargs)
     {
         return cxx_catch([&] {
-            py_check_num_arg("get_state", nargs, 1, 1);
+            py::check_num_arg("get_state", nargs, 1, 1);
             return py::newref(self->get_data(args[0])->ovr);
         });
     }
@@ -156,7 +156,7 @@ struct CompositeRTProp : PyObject {
                                PyObject *const *args, Py_ssize_t nargs)
     {
         return cxx_catch([&] {
-            py_check_num_arg("set_state", nargs, 2, 2);
+            py::check_num_arg("set_state", nargs, 2, 2);
             py::assign(self->get_data(args[0])->ovr, args[1]);
             Py_RETURN_NONE;
         });
@@ -166,7 +166,7 @@ struct CompositeRTProp : PyObject {
                               PyObject *const *args, Py_ssize_t nargs)
     {
         return cxx_catch([&] {
-            py_check_num_arg("__set_name__", nargs, 2, 2);
+            py::check_num_arg("__set_name__", nargs, 2, 2);
             py::assign(self->fieldname, "__CompositeRTProp__"_py.concat(args[1]));
             Py_RETURN_NONE;
         });
@@ -212,8 +212,8 @@ PyTypeObject CompositeRTProp_Type = {
                          PyObject *kwnames) -> PyObject* {
         auto nargs = PyVectorcall_NARGS(_nargs);
         return cxx_catch([&] {
-            py_check_no_kwnames("CompositeRTProp.__init__", kwnames);
-            py_check_num_arg("CompositeRTProp.__init__", nargs, 1, 1);
+            py::check_no_kwnames("CompositeRTProp.__init__", kwnames);
+            py::check_num_arg("CompositeRTProp.__init__", nargs, 1, 1);
             auto cb = args[0];
             auto data = py::generic_alloc<CompositeRTProp>();
             data->fieldname = py::immref(Py_None);
@@ -318,7 +318,7 @@ struct RTProp : PyObject {
     static PyObject *get_state(RTProp *self, PyObject *const *args, Py_ssize_t nargs)
     {
         return cxx_catch([&] {
-            py_check_num_arg("get_state", nargs, 1, 1);
+            py::check_num_arg("get_state", nargs, 1, 1);
             if (auto res = py::ptr(args[0]).try_attr(self->fieldname))
                 return res.rel();
             Py_RETURN_NONE;
@@ -328,7 +328,7 @@ struct RTProp : PyObject {
     static PyObject *set_state(RTProp *self, PyObject *const *args, Py_ssize_t nargs)
     {
         return cxx_catch([&] {
-            py_check_num_arg("set_state", nargs, 2, 2);
+            py::check_num_arg("set_state", nargs, 2, 2);
             auto obj = py::ptr(args[0]);
             auto val = args[1];
             if (val == Py_None)
@@ -342,7 +342,7 @@ struct RTProp : PyObject {
     static PyObject *set_name(RTProp *self, PyObject *const *args, Py_ssize_t nargs)
     {
         return cxx_catch([&] {
-            py_check_num_arg("__set_name__", nargs, 2, 2);
+            py::check_num_arg("__set_name__", nargs, 2, 2);
             py::assign(self->fieldname, RTPROP_PREFIX_STR ""_py.concat(args[1]));
             Py_RETURN_NONE;
         });
@@ -387,8 +387,8 @@ PyTypeObject RTProp_Type = {
                          PyObject *kwnames) -> PyObject* {
         auto nargs = PyVectorcall_NARGS(_nargs);
         return cxx_catch([&] {
-            py_check_no_kwnames("RTProp.__init__", kwnames);
-            py_check_num_arg("RTProp.__init__", nargs, 0, 0);
+            py::check_no_kwnames("RTProp.__init__", kwnames);
+            py::check_num_arg("RTProp.__init__", nargs, 0, 0);
             auto self = py::generic_alloc<RTProp>();
             self->fieldname = py::immref(Py_None);
             return self;

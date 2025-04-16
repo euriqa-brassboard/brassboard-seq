@@ -349,7 +349,7 @@ PyObject *sprint(py::ptr<> obj, int indent)
 static PyObject *py_sprint(PyObject*, PyObject *const *args, Py_ssize_t nargs)
 {
     return cxx_catch([&] {
-        py_check_num_arg("sprint", nargs, 1, 2);
+        py::check_num_arg("sprint", nargs, 1, 2);
         int indent = 0;
         if (nargs >= 2) {
             indent = PyLong_AsLong(py::arg_cast<py::int_>(args[1], "indent"));

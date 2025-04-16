@@ -1288,6 +1288,25 @@ static inline auto str_iter(T &&h)
     return _iter<_str_iterator,std::remove_cv_t<T>>(std::forward<T>(h));
 }
 
+[[noreturn]] void num_arg_error(const char *func_name, ssize_t nfound,
+                                ssize_t nmin, ssize_t nmax);
+static __attribute__((always_inline)) inline void
+check_num_arg(const char *func_name, ssize_t nfound, ssize_t nmin, ssize_t nmax=-1)
+{
+    if ((nfound <= nmax || nmax < 0) && nfound >= nmin)
+        return;
+    num_arg_error(func_name, nfound, nmin, nmax);
+}
+
+static __attribute__((always_inline)) inline void
+check_no_kwnames(const char *name, tuple kwnames)
+{
+    if (kwnames && kwnames.size()) {
+        py_throw_format(PyExc_TypeError, "%s got an unexpected keyword argument '%U'",
+                        name, kwnames.get(0));
+    }
+}
+
 }
 
 struct BacktraceTracker {
@@ -1502,24 +1521,6 @@ auto cxx_catch(auto &&cb)
 static inline void throw_pyerr(bool cond=true)
 {
     throw_if(cond && PyErr_Occurred());
-}
-
-[[noreturn]] void py_num_arg_error(const char *func_name, ssize_t nfound,
-                                   ssize_t nmin, ssize_t nmax);
-static __attribute__((always_inline)) inline void
-py_check_num_arg(const char *func_name, ssize_t nfound, ssize_t nmin, ssize_t nmax=-1)
-{
-    if ((nfound <= nmax || nmax < 0) && nfound >= nmin)
-        return;
-    py_num_arg_error(func_name, nfound, nmin, nmax);
-}
-static __attribute__((always_inline)) inline void
-py_check_no_kwnames(const char *name, py::tuple kwnames)
-{
-    if (kwnames && kwnames.size()) {
-        py_throw_format(PyExc_TypeError, "%s got an unexpected keyword argument '%U'",
-                        name, kwnames.get(0));
-    }
 }
 
 static __attribute__((always_inline)) inline

@@ -347,7 +347,7 @@ PyTypeObject ParamPack::Type = {
 static PyObject *get_visited(PyObject*, PyObject *const *args, Py_ssize_t nargs)
 {
     return cxx_catch([&] {
-        py_check_num_arg("get_visited", nargs, 1, 1);
+        py::check_num_arg("get_visited", nargs, 1, 1);
         auto self = py::cast<ParamPack,true>(args[0]);
         if (!self)
             py_throw_format(PyExc_TypeError, "Wrong type for ParamPack");
@@ -369,7 +369,7 @@ PyMethodDef parampack_get_visited_method ={
 static PyObject *get_param(PyObject*, PyObject *const *args, Py_ssize_t nargs)
 {
     return cxx_catch([&] () -> PyObject* {
-        py_check_num_arg("get_param", nargs, 1, 1);
+        py::check_num_arg("get_param", nargs, 1, 1);
         if (args[0] == Py_None)
             return ParamPack::new_empty();
         return py::newref(args[0]);
