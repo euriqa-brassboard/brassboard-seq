@@ -18,10 +18,7 @@
 
 #include "rfsoc_backend.h"
 
-#include "rtval.h"
-
 #include "event_time.h"
-#include "utils.h"
 
 #include <bit>
 #include <bitset>
@@ -3856,7 +3853,7 @@ void collect_actions(auto *rb, backend::CompiledSeq &cseq)
     ValueIndexer<int> bool_values;
     ValueIndexer<double> float_values;
     std::vector<Relocation> &relocations = rb->relocations;
-    auto event_times = pyx_fld(seq, seqinfo)->time_mgr->event_times;
+    auto event_times = seq->seqinfo->time_mgr->event_times;
 
     rb->channels.ensure_unused_tones(rb->use_all_channels);
 
@@ -4167,7 +4164,7 @@ void gen_rfsoc_data(auto *rb, backend::CompiledSeq &cseq,
         auto &[rtval, val] = rb->float_values[i];
         val = rtval::rtval_cache(rtval).template get<double>();
     }
-    auto &time_values = pyx_fld(seq, seqinfo)->time_mgr->time_values;
+    auto &time_values = seq->seqinfo->time_mgr->time_values;
     auto reloc_action = [rb, &time_values] (const RFSOCAction &action,
                                             ToneParam param) {
         auto reloc = rb->relocations[action.reloc_id];

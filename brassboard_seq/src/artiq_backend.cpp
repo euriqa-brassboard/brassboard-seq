@@ -19,7 +19,6 @@
 #include "artiq_backend.h"
 
 #include "event_time.h"
-#include "utils.h"
 
 #include <algorithm>
 
@@ -111,7 +110,7 @@ void collect_actions(auto *ab, backend::CompiledSeq &cseq)
     ValueIndexer<double> float_values;
     std::vector<Relocation> &relocations = ab->relocations;
 
-    auto event_times = pyx_fld(seq, seqinfo)->time_mgr->event_times;
+    auto event_times = seq->seqinfo->time_mgr->event_times;
 
     auto add_single_action = [&] (auto *action, ChannelType type, int chn_idx,
                                   int tid, py::ptr<> value, int cond_reloc,
@@ -295,7 +294,7 @@ void generate_rtios(auto *ab, backend::CompiledSeq &cseq, unsigned age)
         relocate_delay(ddschn.delay, (RuntimeValue*)ddschn.rt_delay);
         max_delay = std::max(max_delay, ddschn.delay);
     }
-    auto &time_values = pyx_fld(seq, seqinfo)->time_mgr->time_values;
+    auto &time_values = seq->seqinfo->time_mgr->time_values;
 
     auto reloc_action = [ab, &time_values] (const ArtiqAction &action) {
         auto reloc = ab->relocations[action.reloc_id];

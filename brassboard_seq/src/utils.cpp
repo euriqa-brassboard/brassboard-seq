@@ -213,6 +213,13 @@ __attribute__((visibility("protected")))
                     (nexpected == 1) ? "" : "s", nfound);
 }
 
+__attribute__((visibility("protected")))
+[[noreturn]] void unexpected_kwarg_error(const char *func_name, py::str name)
+{
+    py_throw_format(PyExc_TypeError, "%s got an unexpected keyword argument '%U'",
+                    func_name, name);
+}
+
 }
 
 #if PY_VERSION_HEX < 0x030b00f0

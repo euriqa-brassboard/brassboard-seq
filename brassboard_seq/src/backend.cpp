@@ -16,9 +16,6 @@
  *   see <http://www.gnu.org/licenses/>.                                 *
  *************************************************************************/
 
-#include "Python.h"
-
-#include "event_time.h"
 #include "seq.h"
 
 #include <algorithm>
@@ -26,22 +23,23 @@
 
 namespace brassboard_seq::backend {
 
-static PyObject *timestep_type;
 static PyObject *rampfunctionbase_type;
 
 using namespace rtval;
+using seq::TimeStep;
+using seq::SubSeq;
+using event_time::EventTime;
 
-template<typename TimeStep, typename SubSeq>
 static void collect_actions(SubSeq *self, std::vector<action::Action*> *actions)
 {
     for (auto [i, subseq]: py::list_iter(self->sub_seqs)) {
-        auto step = py::cast<TimeStep,true>(subseq, timestep_type);
+        auto step = py::cast<TimeStep,true>(subseq);
         if (!step) {
-            collect_actions<TimeStep>((SubSeq*)subseq, actions);
+            collect_actions((SubSeq*)subseq, actions);
             continue;
         }
-        auto tid = pyx_fld(step, start_time)->data.id;
-        auto end_tid = pyx_fld(step, end_time)->data.id;
+        auto tid = step->start_time->data.id;
+        auto end_tid = step->end_time->data.id;
         int nactions = step->actions.size();
         for (int chn = 0; chn < nactions; chn++) {
             auto action = step->actions[chn];
@@ -54,12 +52,11 @@ static void collect_actions(SubSeq *self, std::vector<action::Action*> *actions)
     }
 }
 
-template<typename TimeStep, typename _RampFunctionBase, typename Backend>
-static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, Backend*)
+template<typename _RampFunctionBase, typename Backend>
+static inline void compiler_finalize(auto comp, _RampFunctionBase*, Backend*)
 {
     auto seq = comp->seq;
-    using EventTime = std::remove_reference_t<decltype(*pyx_fld(seq, end_time))>;
-    auto seqinfo = pyx_fld(seq, seqinfo);
+    auto seqinfo = seq->seqinfo;
     auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);
     auto nchn = py::list(seqinfo->channel_paths).size();
     for (auto [i, path]: py::list_iter<py::tuple>(seqinfo->channel_paths)) {
@@ -74,7 +71,7 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
     py::assign(seqinfo->channel_name_map, Py_None); // Free up memory
     auto all_actions = new std::vector<action::Action*>[nchn];
     comp->cseq.all_actions.reset(all_actions);
-    collect_actions<TimeStep>(pyx_find_base(seq, sub_seqs), all_actions);
+    collect_actions(seq, all_actions);
     auto get_time = [event_times=py::list(time_mgr->event_times)] (int tid) {
         return event_times.get<EventTime>(tid);
     };
@@ -169,7 +166,7 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
     unsigned age = PyLong_AsLong(_age);
     throw_pyerr(age == (unsigned)-1);
     auto seq = comp->seq;
-    auto seqinfo = pyx_fld(seq, seqinfo);
+    auto seqinfo = seq->seqinfo;
     auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);
     auto time_mgr = seqinfo->time_mgr;
     comp->cseq.total_time = time_mgr->compute_all_times(age);

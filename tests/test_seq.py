@@ -6,17 +6,6 @@ import py_test_utils as test_utils
 import pytest
 
 def test_seq():
-    with pytest.raises(TypeError):
-        seq.SeqInfo()
-    with pytest.raises(TypeError):
-        seq.TimeSeq()
-    with pytest.raises(TypeError):
-        seq.TimeStep()
-    with pytest.raises(TypeError):
-        seq.SubSeq()
-    with pytest.raises(TypeError):
-        seq.ConditionalWrapper()
-
     conf = Config()
     conf.add_supported_prefix('artiq')
     conf.add_channel_alias('test_ttl', 'artiq/ttl1')
@@ -1381,5 +1370,4 @@ def test_seq_C():
     assert s.C[:] == dict(a=1)
 
     c = s.conditional(False)
-    assert isinstance(c, seq.ConditionalWrapper)
     assert c.C is s.C

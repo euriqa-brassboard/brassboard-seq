@@ -179,6 +179,31 @@ struct CDeleter {
     }
 };
 
+template<size_t N>
+struct str_literal {
+    constexpr str_literal(const char (&str)[N])
+    {
+        std::copy_n(str, N, value);
+    }
+    char value[N];
+};
+
+template<size_t N, typename T>
+class _ntuple {
+    template<typename=std::make_index_sequence<N>> struct impl;
+
+    template<size_t... Is>
+    struct impl<std::index_sequence<Is...>> {
+        template<size_t> using wrap = T;
+        using type = std::tuple<wrap<Is>...>;
+    };
+public:
+    using type = typename impl<>::type;
+};
+
+template<size_t N, typename T>
+using ntuple = typename _ntuple<N,T>::type;
+
 namespace py {
 
 struct _common {};
@@ -1290,6 +1315,7 @@ static inline auto str_iter(T &&h)
 
 [[noreturn]] void num_arg_error(const char *func_name, ssize_t nfound,
                                 ssize_t nmin, ssize_t nmax);
+[[noreturn]] void unexpected_kwarg_error(const char *func_name, py::str name);
 static __attribute__((always_inline)) inline void
 check_num_arg(const char *func_name, ssize_t nfound, ssize_t nmin, ssize_t nmax=-1)
 {
@@ -1302,9 +1328,39 @@ static __attribute__((always_inline)) inline void
 check_no_kwnames(const char *name, tuple kwnames)
 {
     if (kwnames && kwnames.size()) {
-        py_throw_format(PyExc_TypeError, "%s got an unexpected keyword argument '%U'",
-                        name, kwnames.get(0));
+        unexpected_kwarg_error(name, kwnames.get(0));
     }
+}
+
+template<str_literal... argnames>
+static inline auto parse_pos_or_kw_args(const char *fname, PyObject *const *args,
+                                        Py_ssize_t nargs, tuple kwnames)
+{
+    std::array<py::ptr<>,sizeof...(argnames)> res;
+    const char *argnames_ary[] = { argnames.value... };
+    for (Py_ssize_t i = 0; i < nargs; i++)
+        res[i] = args[i];
+    if (kwnames) {
+        auto kwargs = args + nargs;
+        for (auto [i, kwname]: tuple_iter<py::str>(kwnames)) {
+            bool found = false;
+            for (size_t j = 0; j < sizeof...(argnames); j++) {
+                if (PyUnicode_CompareWithASCIIString(kwname, argnames_ary[j]) == 0) {
+                    if (res[j])
+                        py_throw_format(PyExc_TypeError,
+                                        "%s got multiple values for argument '%s'",
+                                        fname, argnames_ary[j]);
+                    res[j] = kwargs[i];
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                unexpected_kwarg_error(fname, kwname);
+            }
+        }
+    }
+    return res;
 }
 
 }
@@ -1560,15 +1616,6 @@ static inline double get_value_f64(py::ptr<> obj, uintptr_t key)
         bb_rethrow(key);
     });
 }
-
-template<size_t N>
-struct str_literal {
-    constexpr str_literal(const char (&str)[N])
-    {
-        std::copy_n(str, N, value);
-    }
-    char value[N];
-};
 
 template<str_literal lit>
 static const py::str _py_string_cache = py::str(py::new_str(lit.value).rel());

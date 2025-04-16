@@ -27,6 +27,7 @@
 #include "src/rtprop.h"
 #include "src/rtval.h"
 #include "src/scan.h"
+#include "src/seq.h"
 #include "src/yaml.h"
 
 using namespace brassboard_seq;
@@ -58,24 +59,19 @@ PyInit__utils(void)
     return cxx_catch([&] {
         auto m = py::new_module(&_utils_module);
         // config
-        pymodule_addobjectref(m, "Config", (PyObject*)&config::Config::Type);
+        pymodule_addobjectref(m, "Config", &config::Config::Type);
 
         // event_time
-        pymodule_addobjectref(m, "TimeManager",
-                              (PyObject*)&event_time::TimeManager::Type);
-        pymodule_addobjectref(m, "EventTime",
-                              (PyObject*)&event_time::EventTime::Type);
+        pymodule_addobjectref(m, "TimeManager", &event_time::TimeManager::Type);
+        pymodule_addobjectref(m, "EventTime", &event_time::EventTime::Type);
 
         // rtprop
-        pymodule_addobjectref(m, "CompositeRTProp",
-                              (PyObject*)&rtprop::CompositeRTProp_Type);
-        pymodule_addobjectref(m, "RTProp", (PyObject*)&rtprop::RTProp_Type);
+        pymodule_addobjectref(m, "CompositeRTProp", &rtprop::CompositeRTProp_Type);
+        pymodule_addobjectref(m, "RTProp", &rtprop::RTProp_Type);
 
         // rtval
-        pymodule_addobjectref(m, "RuntimeValue",
-                              (PyObject*)&rtval::RuntimeValue::Type);
-        pymodule_addobjectref(m, "ExternCallback",
-                              (PyObject*)&rtval::ExternCallback::Type);
+        pymodule_addobjectref(m, "RuntimeValue", &rtval::RuntimeValue::Type);
+        pymodule_addobjectref(m, "ExternCallback", &rtval::ExternCallback::Type);
         pymodule_addobjectref(m, "rtval_get_value",
                               py::new_cfunc(&rtval::get_value_method,
                                             nullptr, "brassboard_seq.rtval"_py));
@@ -93,13 +89,21 @@ PyInit__utils(void)
                                             nullptr, "brassboard_seq.rtval"_py));
 
         // scan
-        pymodule_addobjectref(m, "ParamPack", (PyObject*)&scan::ParamPack::Type);
+        pymodule_addobjectref(m, "ParamPack", &scan::ParamPack::Type);
         pymodule_addobjectref(m, "parampack_get_visited",
                               py::new_cfunc(&scan::parampack_get_visited_method,
                                             nullptr, "brassboard_seq.scan"_py));
         pymodule_addobjectref(m, "parampack_get_param",
                               py::new_cfunc(&scan::parampack_get_param_method,
                                             nullptr, "brassboard_seq.scan"_py));
+
+        // seq
+        pymodule_addobjectref(m, "SeqInfo", &seq::SeqInfo::Type);
+        pymodule_addobjectref(m, "TimeSeq", &seq::TimeSeq::Type);
+        pymodule_addobjectref(m, "TimeStep", &seq::TimeStep::Type);
+        pymodule_addobjectref(m, "SubSeq", &seq::SubSeq::Type);
+        pymodule_addobjectref(m, "ConditionalWrapper", &seq::ConditionalWrapper::Type);
+        pymodule_addobjectref(m, "Seq", &seq::Seq::Type);
 
         // yaml
         pymodule_addobjectref(m, "yaml_sprint",

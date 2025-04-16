@@ -21,7 +21,6 @@ from libcpp.vector cimport vector
 from libc.stdint cimport *
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.rtval cimport RuntimeValue
 
 cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
     # Cython doesn't seem to allow namespace in the object property
@@ -29,14 +28,6 @@ cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
     """
     using _brassboard_seq_event_time_TimeManager = brassboard_seq::event_time::TimeManager;
     using _brassboard_seq_event_time_EventTime = brassboard_seq::event_time::EventTime;
-    static inline auto new_time_manager()
-    {
-        return brassboard_seq::event_time::TimeManager::alloc();
-    }
-    static inline auto timemanager_new_time_int(auto self, auto prev, auto offset, auto floating, auto cond, auto wait_for)
-    {
-        return self->new_int(prev, offset, floating, cond, wait_for);
-    }
     """
     cppclass EventTimeData:
         int id
@@ -45,14 +36,8 @@ cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
         bint is_static()
         int64_t get_static()
 
-    EventTime new_time_int "timemanager_new_time_int" (TimeManager self, EventTime prev,
-                                                       int64_t offset, bint floating,
-                                                       object cond,
-                                                       EventTime wait_for) except +
-
     int64_t round_time_f64(double v)
     int64_t round_time_int(v) except +
-    RuntimeValue round_time_rt(RuntimeValue) except +
 
     enum TimeOrder:
         NoOrder
@@ -65,8 +50,6 @@ cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
     ctypedef class brassboard_seq._utils.TimeManager [object _brassboard_seq_event_time_TimeManager]:
         cdef list event_times
         cdef vector[int64_t] time_values
-
-    TimeManager new_time_manager "new_time_manager"() except +
 
     ctypedef class brassboard_seq._utils.EventTime [object _brassboard_seq_event_time_EventTime]:
         cdef EventTime prev

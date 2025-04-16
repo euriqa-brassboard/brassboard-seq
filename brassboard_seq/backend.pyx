@@ -18,20 +18,17 @@
 
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.action cimport _RampFunctionBase
-from brassboard_seq.seq cimport TimeStep
 from brassboard_seq.utils cimport PyErr_Format, PyExc_ValueError
 
 cimport cython
 from cpython cimport PyObject
 
 cdef extern from "src/backend.cpp" namespace "brassboard_seq::backend":
-    PyObject *timestep_type
     PyObject *rampfunctionbase_type
-    void compiler_finalize(SeqCompiler, TimeStep, _RampFunctionBase, Backend) except +
+    void compiler_finalize(SeqCompiler, _RampFunctionBase, Backend) except +
     void compiler_runtime_finalize(SeqCompiler, object age,
                                    _RampFunctionBase, Backend) except +
 
-timestep_type = <PyObject*>TimeStep
 rampfunctionbase_type = <PyObject*>_RampFunctionBase
 
 @cython.auto_pickle(False)
@@ -56,7 +53,7 @@ cdef class SeqCompiler:
         backend.prefix = name
 
     def finalize(self, /):
-        compiler_finalize(self, None, None, None)
+        compiler_finalize(self, None, None)
 
     def runtime_finalize(self, age, /):
         compiler_runtime_finalize(self, age, None, None)

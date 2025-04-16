@@ -140,10 +140,28 @@ private:
     pybytearray_streambuf m_buf;
 };
 
+static inline auto _new_time_manager()
+{
+    return event_time::TimeManager::alloc();
+}
+
 static inline auto timemanager_new_round_time(auto self, auto prev, auto offset,
                                               auto cond, auto wait_for)
 {
     return self->new_round(prev, offset, cond, wait_for);
+}
+
+static inline auto timemanager_new_time_int(auto self, auto prev, auto offset,
+                                            auto floating, auto cond, auto wait_for)
+{
+    return self->new_int(prev, offset, floating, cond, wait_for);
+}
+
+static inline auto condseq_get_cond(py::ptr<> condseq)
+{
+    if (auto cond = py::exact_cast<seq::ConditionalWrapper>(condseq))
+        return cond->cond;
+    return py::arg_cast<seq::TimeSeq>(condseq, "s")->cond;
 }
 
 void init_action_obj(auto *action, py::ptr<> value, py::ptr<> cond, bool is_pulse,

@@ -12,6 +12,7 @@ add_library(brassboard_seq_utils SHARED
   src/parampack.cpp
   src/rtprop.cpp
   src/rtval.cpp
+  src/seq.cpp
   src/utils.cpp
   src/yaml.cpp)
 target_include_directories(brassboard_seq_utils PRIVATE ${Python_INCLUDE_DIRS})
