@@ -76,6 +76,21 @@ PyInit__utils(void)
                               (PyObject*)&rtval::RuntimeValue::Type);
         pymodule_addobjectref(m, "ExternCallback",
                               (PyObject*)&rtval::ExternCallback::Type);
+        pymodule_addobjectref(m, "rtval_get_value",
+                              py::new_cfunc(&rtval::get_value_method,
+                                            nullptr, "brassboard_seq.rtval"_py));
+        pymodule_addobjectref(m, "rtval_inv",
+                              py::new_cfunc(&rtval::inv_method,
+                                            nullptr, "brassboard_seq.rtval"_py));
+        pymodule_addobjectref(m, "rtval_convert_bool",
+                              py::new_cfunc(&rtval::convert_bool_method,
+                                            nullptr, "brassboard_seq.rtval"_py));
+        pymodule_addobjectref(m, "rtval_ifelse",
+                              py::new_cfunc(&rtval::ifelse_method,
+                                            nullptr, "brassboard_seq.rtval"_py));
+        pymodule_addobjectref(m, "rtval_same_value",
+                              py::new_cfunc(&rtval::same_value_method,
+                                            nullptr, "brassboard_seq.rtval"_py));
 
         // scan
         pymodule_addobjectref(m, "ParamPack", (PyObject*)&scan::ParamPack::Type);

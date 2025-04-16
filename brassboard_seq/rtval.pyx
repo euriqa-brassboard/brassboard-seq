@@ -18,39 +18,9 @@
 
 # Do not use relative import since it messes up cython file name tracking
 
-from brassboard_seq._utils import CompositeRTProp, RTProp
+from brassboard_seq._utils import CompositeRTProp, RTProp, \
+     rtval_get_value as get_value, rtval_inv as inv, rtval_convert_bool as convert_bool, \
+     rtval_ifelse as ifelse, rtval_same_value as same_value
 # Manually set the field since I can't make cython automatically do this
 # without also declaring the c struct again...
 globals()['RuntimeValue'] = RuntimeValue
-
-def get_value(v, unsigned age):
-    if is_rtval(v):
-        rt_eval_cache(<RuntimeValue>v, age)
-        return rtval_cache(<RuntimeValue>v).to_py()
-    return v
-
-def inv(v, /):
-    if type(v) is bool:
-        return v is False
-    cdef RuntimeValue _v
-    if is_rtval(v):
-        _v = <RuntimeValue>v
-        if _v.type_ == ValueType.Not:
-            return rt_convert_bool(_v.arg0)
-        return new_expr1(ValueType.Not, _v)
-    return not v
-
-def convert_bool(_v):
-    if is_rtval(_v):
-        return rt_convert_bool(<RuntimeValue>_v)
-    return bool(_v)
-
-def ifelse(b, v1, v2):
-    if rt_same_value(v1, v2):
-        return v1
-    if is_rtval(b):
-        return new_select(<RuntimeValue>b, v1, v2)
-    return v1 if b else v2
-
-def same_value(v1, v2):
-    return rt_same_value(v1, v2)

@@ -1022,6 +1022,84 @@ PyTypeObject ExternCallback::Type = {
     },
 };
 
+static PyObject *py_get_value(PyObject*, PyObject *const *args, Py_ssize_t nargs)
+{
+    return cxx_catch([&] {
+        py_check_num_arg("get_value", nargs, 2, 2);
+        auto pyage = py::arg_cast<py::int_>(args[1], "age");
+        if (is_rtval(args[0])) {
+            auto age = PyLong_AsLong(pyage);
+            throw_pyerr(age < 0);
+            rt_eval_cache(args[0], age);
+            return rtval_cache(args[0]).to_py();
+        }
+        return py::newref(args[0]);
+    });
+}
+
+static PyObject *py_inv(PyObject*, PyObject *const *args, Py_ssize_t nargs)
+{
+    return cxx_catch([&] () -> PyObject* {
+        py_check_num_arg("inv", nargs, 1, 1);
+        auto v = args[0];
+        if (v == Py_True)
+            return py::immref(Py_False);
+        if (v == Py_False)
+            return py::immref(Py_True);
+        if (auto rv = py::cast<RuntimeValue>(v)) {
+            if (rv->type_ == Not)
+                return rt_convert_bool(rv->arg0);
+            return new_expr1(Not, rv);
+        }
+        return py::immref(get_value_bool(v, -1) ? Py_False : Py_True);
+    });
+}
+
+static PyObject *py_convert_bool(PyObject*, PyObject *const *args, Py_ssize_t nargs)
+{
+    return cxx_catch([&] () -> PyObject* {
+        py_check_num_arg("convert_bool", nargs, 1, 1);
+        auto v = args[0];
+        if (auto rv = py::cast<RuntimeValue>(v))
+            return rt_convert_bool(rv);
+        return py::immref(get_value_bool(v, -1) ? Py_True : Py_False);
+    });
+}
+
+static PyObject *py_ifelse(PyObject*, PyObject *const *args, Py_ssize_t nargs)
+{
+    return cxx_catch([&] () -> PyObject* {
+        py_check_num_arg("ifelse", nargs, 3, 3);
+        auto b = args[0];
+        auto v1 = args[1];
+        auto v2 = args[2];
+        if (rt_same_value(v1, v2))
+            return py::newref(v1);
+        if (auto rb = py::cast<RuntimeValue>(b))
+            return new_select(rb, v1, v2);
+        return py::newref(get_value_bool(b, -1) ? v1 : v2);
+    });
+}
+
+static PyObject *py_same_value(PyObject*, PyObject *const *args, Py_ssize_t nargs)
+{
+    return cxx_catch([&] () -> PyObject* {
+        py_check_num_arg("same_value", nargs, 2, 2);
+        return py::immref(rt_same_value(args[0], args[1]) ? Py_True : Py_False);
+    });
+}
+
+PyMethodDef get_value_method = {"get_value", (PyCFunction)(void*)py_get_value,
+    METH_FASTCALL, 0};
+PyMethodDef inv_method = {"inv", (PyCFunction)(void*)py_inv,
+    METH_FASTCALL, 0};
+PyMethodDef convert_bool_method = {"convert_bool", (PyCFunction)(void*)py_convert_bool,
+    METH_FASTCALL, 0};
+PyMethodDef ifelse_method = {"ifelse", (PyCFunction)(void*)py_ifelse,
+    METH_FASTCALL, 0};
+PyMethodDef same_value_method = {"same_value", (PyCFunction)(void*)py_same_value,
+    METH_FASTCALL, 0};
+
 static __attribute__((flatten, noinline))
 std::pair<EvalError,GenVal> interpret_func(const int *code, GenVal *data,
                                            EvalError *errors)
