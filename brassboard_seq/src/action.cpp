@@ -24,10 +24,10 @@ PyObject *Action::py_str()
 {
     py::stringio io;
     io.write_ascii(is_pulse ? "Pulse(" : "Set(");
-    io.write_str(value.get());
+    io.write_str(value);
     if (cond != Py_True) {
         io.write_ascii(", cond=");
-        io.write_str(cond.get());
+        io.write_str(cond);
     }
     if (exact_time)
         io.write_ascii(", exact_time=True");

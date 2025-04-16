@@ -81,7 +81,7 @@ static inline py::ref<> apply_composite_ovr(py::ptr<> val, py::ptr<> ovr)
             if (apply_dict_ovr(newval, k, v))
                 continue;
             // for scangroup support since only string key is supported
-            if (auto ik = k.try_int(); ik && apply_dict_ovr(newval, ik.get(), v))
+            if (auto ik = k.try_int(); ik && apply_dict_ovr(newval, ik, v))
                 continue;
             newval.set(k, v);
         }

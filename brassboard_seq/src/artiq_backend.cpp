@@ -225,8 +225,7 @@ void collect_actions(auto *ab, backend::CompiledSeq &cseq)
         for (auto action: cseq.all_actions[chn]) {
             if (action->kws)
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
-                                "Invalid output keyword argument %S",
-                                action->kws.get());
+                                "Invalid output keyword argument %S", action->kws);
             auto value = action->value.get();
             if (py_issubtype_nontrivial(Py_TYPE(value), rampfunctionbase_type))
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
@@ -242,8 +241,7 @@ void collect_actions(auto *ab, backend::CompiledSeq &cseq)
         for (auto action: cseq.all_actions[chn]) {
             if (action->kws)
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
-                                "Invalid output keyword argument %S",
-                                action->kws.get());
+                                "Invalid output keyword argument %S", action->kws);
             auto value = action->value.get();
             if (py_issubtype_nontrivial(Py_TYPE(value), rampfunctionbase_type))
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),

@@ -3878,7 +3878,7 @@ void collect_actions(auto *rb, backend::CompiledSeq &cseq)
             bool cond_need_reloc = rtval::is_rtval(cond);
             assert(cond_need_reloc || cond == Py_True);
             int cond_idx = cond_need_reloc ? bool_values.get_id(cond) : -1;
-            auto add_action = [&] (PyObject *value, int tid, bool sync, bool is_ramp,
+            auto add_action = [&] (py::ptr<> value, int tid, bool sync, bool is_ramp,
                                    bool is_end) {
                 bool needs_reloc = cond_need_reloc;
                 Relocation reloc{cond_idx, -1, -1};
@@ -3938,9 +3938,9 @@ void collect_actions(auto *rb, backend::CompiledSeq &cseq)
                 }
                 rfsoc_actions.push_back(rfsoc_action);
             };
-            add_action(action->value.get(), action->tid, sync, is_ramp, false);
+            add_action(action->value, action->tid, sync, is_ramp, false);
             if (action->is_pulse || is_ramp) {
-                add_action(action->end_val.get(), action->end_tid, false, false, true);
+                add_action(action->end_val, action->end_tid, false, false, true);
             }
         }
     }

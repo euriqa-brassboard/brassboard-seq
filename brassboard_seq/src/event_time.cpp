@@ -419,7 +419,7 @@ PyTypeObject EventTimeDiff::Type = {
 };
 
 static PyNumberMethods EventTime_as_number = {
-    .nb_subtract = [] (PyObject *v1, PyObject *v2) {
+    .nb_subtract = [] (PyObject *v1, PyObject *v2) -> PyObject* {
         auto self = (EventTime*)v1;
         auto other = (EventTime*)v2;
         return cxx_catch([&] {
@@ -431,8 +431,7 @@ static PyNumberMethods EventTime_as_number = {
             diff->t2 = (EventTime*)py::newref(other);
             diff->in_eval = false;
             diff->fptr = (void*)EventTimeDiff::eval;
-            return (PyObject*)rtval::new_extern_age(diff.get(),
-                                                    (PyObject*)&PyFloat_Type);
+            return rtval::new_extern_age(diff, (PyObject*)&PyFloat_Type);
         });
     },
 };

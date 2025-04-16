@@ -435,7 +435,7 @@ __attribute__((visibility("protected")))
                     (nexpected == 1) ? "" : "s", nfound);
 }
 
-py::str_ref channel_name_from_path(PyObject *path)
+py::str_ref channel_name_from_path(py::ptr<> path)
 {
     return "/"_py.join(path);
 }
