@@ -109,7 +109,7 @@ add_time_step(auto self, PyObject *cond, EventTime *start_time, PyObject *length
     py::ref end_time(seqinfo->time_mgr->new_round(start_time, length,
                                                   cond, (EventTime*)Py_None));
     auto step = py::generic_alloc<TimeStep>(timestep_type);
-    new (&step->actions) std::vector<py_object>();
+    call_constructor(&step->actions);
     pyx_fld(step, seqinfo) = py::newref(seqinfo);
     pyx_fld(step, start_time) = py::newref(start_time);
     pyx_fld(step, end_time) = end_time.rel();
