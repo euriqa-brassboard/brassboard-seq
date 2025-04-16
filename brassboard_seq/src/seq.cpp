@@ -101,7 +101,7 @@ static inline void timeseq_set_time(auto self, EventTime *time, PyObject *offset
     self->seqinfo->bt_tracker.record(event_time_key(self->start_time));
 }
 
-template<typename TimeStep, typename EventTime>
+template<typename TimeStep>
 static inline __attribute__((returns_nonnull)) TimeStep*
 add_time_step(auto self, PyObject *cond, EventTime *start_time, PyObject *length)
 {
@@ -120,7 +120,7 @@ add_time_step(auto self, PyObject *cond, EventTime *start_time, PyObject *length
     return step.rel();
 }
 
-template<typename SubSeq, typename EventTime>
+template<typename SubSeq>
 static inline __attribute__((returns_nonnull)) SubSeq*
 add_custom_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *cb,
                 size_t nargs=0, PyObject *const *args=nullptr, PyObject *kwargs=nullptr)
