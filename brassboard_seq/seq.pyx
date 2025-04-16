@@ -17,7 +17,7 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.event_time cimport new_time_manager, new_time_int, new_round_time
+from brassboard_seq.event_time cimport new_time_manager, new_time_int
 from brassboard_seq.rtval cimport is_rtval, RuntimeValue
 from brassboard_seq.scan cimport new_empty_param_pack
 from brassboard_seq.utils cimport assert_key, event_time_key, stringio, \
@@ -27,6 +27,7 @@ cimport cython
 from cpython cimport PyObject
 
 cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
+    PyObject *timeseq_type
     PyObject *timestep_type
     PyObject *subseq_type
     PyObject *condwrapper_type
@@ -36,8 +37,11 @@ cdef extern from "src/seq.cpp" namespace "brassboard_seq::seq":
     int get_channel_id(SeqInfo self, str name) except +
     object combine_cond(object cond1, object new_cond) except +
     void timeseq_set_time(TimeSeq self, EventTime time, object offset) except +
+    void wait_cond(SubSeq self, length, cond) except +
+    void wait_for_cond(SubSeq self, _tp0, offset, cond) except +
 
 
+timeseq_type = <PyObject*>TimeSeq
 timestep_type = <PyObject*>TimeStep
 subseq_type = <PyObject*>SubSeq
 condwrapper_type = <PyObject*>ConditionalWrapper
@@ -177,23 +181,6 @@ cdef class SubSeq(TimeSeq):
 
     def __repr__(self):
         return str(self)
-
-cdef int wait_cond(SubSeq self, length, cond) except -1:
-    self.end_time = new_round_time(self.seqinfo.time_mgr, self.end_time, length,
-                                   cond, None)
-    self.seqinfo.bt_tracker.record(event_time_key(<void*>self.end_time))
-    return 0
-
-cdef int wait_for_cond(SubSeq self, _tp0, offset, cond) except -1:
-    cdef EventTime tp0
-    if type(_tp0) is EventTime:
-        tp0 = <EventTime>_tp0
-    else:
-        tp0 = (<TimeSeq?>_tp0).end_time
-    self.end_time = new_round_time(self.seqinfo.time_mgr, self.end_time, offset,
-                                   cond, tp0)
-    self.seqinfo.bt_tracker.record(event_time_key(<void*>self.end_time))
-    return 0
 
 cdef int subseq_show_subseqs(SubSeq self, stringio &io, int indent) except -1:
     for _subseq in self.sub_seqs:

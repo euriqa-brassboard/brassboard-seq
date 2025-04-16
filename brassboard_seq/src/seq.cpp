@@ -27,6 +27,7 @@
 
 namespace brassboard_seq::seq {
 
+static PyObject *timeseq_type;
 static PyObject *timestep_type;
 static PyObject *subseq_type;
 static PyObject *condwrapper_type;
@@ -401,6 +402,29 @@ static PyObject *condseq_conditional(PyObject *py_self, PyObject *const *args,
 catch (...) {
     handle_cxx_exception();
     return nullptr;
+}
+
+template<typename SubSeq>
+void wait_cond(SubSeq *self, py::ptr<> length, py::ptr<> cond)
+{
+    auto new_time = py::ref(pyx_fld(self, seqinfo)->time_mgr->new_round(
+                                pyx_fld(self, end_time), length, cond,
+                                (EventTime*)Py_None));
+    pyx_fld(self, seqinfo)->bt_tracker.record(event_time_key(new_time));
+    py::assign(pyx_fld(self, end_time), std::move(new_time));
+}
+
+template<typename SubSeq>
+void wait_for_cond(SubSeq *self, py::ptr<> _tp0, py::ptr<> offset, py::ptr<> cond)
+{
+    using TimeSeq = std::remove_cvref_t<decltype(*pyx_find_base(self, end_time))>;
+    auto tp0 = py::cast<EventTime>(_tp0);
+    if (!tp0)
+        tp0 = py::arg_cast<TimeSeq>(_tp0, timeseq_type, "time_point")->end_time;
+    auto new_time = py::ref(pyx_fld(self, seqinfo)->time_mgr->new_round(
+                                pyx_fld(self, end_time), offset, cond, tp0));
+    pyx_fld(self, seqinfo)->bt_tracker.record(event_time_key(new_time));
+    py::assign(pyx_fld(self, end_time), std::move(new_time));
 }
 
 template<typename TimeStep>

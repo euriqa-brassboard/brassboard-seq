@@ -237,7 +237,7 @@ static constexpr bool is_py_ptr = is_handle_v<T2> ||
     (std::is_pointer_v<std::remove_cvref_t<T2>> &&
      !std::integral<std::remove_pointer_t<std::remove_cvref_t<T2>>>);
 
-static inline void check_refcnt(auto *obj)
+static constexpr void check_refcnt(auto *obj)
 {
     assert(!obj || Py_REFCNT(obj) > 0);
 }
@@ -716,7 +716,7 @@ struct ptr : common<ptr,T> {
         check_refcnt(m_ptr);
         return (T2*)m_ptr;
     }
-    template<typename T2> operator T2*() const
+    template<typename T2> constexpr operator T2*() const
     {
         check_refcnt(m_ptr);
         return (T2*)m_ptr;
@@ -778,7 +778,7 @@ struct _ref : common<_ref,T> {
         return (T2*)m_ptr;
     }
     template<typename T2>
-    explicit operator T2*()
+    explicit constexpr operator T2*()
     {
         check_refcnt(m_ptr);
         return (T2*)m_ptr;
@@ -1393,17 +1393,17 @@ static inline void call_destructor(T *x)
     x->~T();
 }
 
-static inline __attribute__((always_inline,pure))
-uintptr_t event_time_key(void *event_time)
+static constexpr __attribute__((always_inline,pure))
+uintptr_t event_time_key(py::ptr<> event_time)
 {
-    return (uintptr_t)event_time;
+    return (uintptr_t)(void*)event_time;
 }
-static inline __attribute__((always_inline,pure))
+static constexpr __attribute__((always_inline,pure))
 uintptr_t action_key(int aid)
 {
     return (uintptr_t)(aid << 2) | 1;
 }
-static inline __attribute__((always_inline,pure))
+static constexpr __attribute__((always_inline,pure))
 uintptr_t assert_key(int aid)
 {
     return (uintptr_t)(aid << 2) | 2;
