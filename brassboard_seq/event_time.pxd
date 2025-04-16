@@ -16,14 +16,12 @@
 # License along with this library. If not,
 # see <http://www.gnu.org/licenses/>.
 
-from libcpp.memory cimport shared_ptr
 from libcpp.vector cimport vector
 
 from libc.stdint cimport *
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.rtval cimport is_rtval, RuntimeValue
-from brassboard_seq.utils cimport PyErr_Format, PyExc_ValueError
+from brassboard_seq.rtval cimport RuntimeValue
 
 cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
     # Cython doesn't seem to allow namespace in the object property
