@@ -1513,6 +1513,14 @@ py_check_num_arg(const char *func_name, ssize_t nfound, ssize_t nmin, ssize_t nm
         return;
     py_num_arg_error(func_name, nfound, nmin, nmax);
 }
+static __attribute__((always_inline)) inline void
+py_check_no_kwnames(const char *name, py::tuple kwnames)
+{
+    if (kwnames && kwnames.size()) {
+        py_throw_format(PyExc_TypeError, "%s got an unexpected keyword argument '%U'",
+                        name, kwnames.get(0));
+    }
+}
 
 static __attribute__((always_inline)) inline
 bool get_value_bool(py::ptr<> obj, auto &&cb) requires requires { cb(); }

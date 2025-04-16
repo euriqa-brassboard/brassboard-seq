@@ -209,13 +209,10 @@ PyTypeObject CompositeRTProp_Type = {
         return cxx_catch([&] { return ((CompositeRTProp*)self)->get_res(obj); });
     },
     .tp_vectorcall = [] (PyObject *type, PyObject *const *args, size_t _nargs,
-                         PyObject *_kwnames) -> PyObject* {
+                         PyObject *kwnames) -> PyObject* {
         auto nargs = PyVectorcall_NARGS(_nargs);
-        if (auto kwnames = py::tuple(_kwnames); kwnames && kwnames.size())
-            return PyErr_Format(PyExc_TypeError,
-                                "CompositeRTProp.__init__() got an unexpected "
-                                "keyword argument '%U'", kwnames.get(0));
         return cxx_catch([&] {
+            py_check_no_kwnames("CompositeRTProp.__init__", kwnames);
             py_check_num_arg("CompositeRTProp.__init__", nargs, 1, 1);
             auto cb = args[0];
             auto data = py::generic_alloc<CompositeRTProp>();
@@ -387,13 +384,10 @@ PyTypeObject RTProp_Type = {
         return 0;
     },
     .tp_vectorcall = [] (PyObject *type, PyObject *const *args, size_t _nargs,
-                         PyObject *_kwnames) -> PyObject* {
+                         PyObject *kwnames) -> PyObject* {
         auto nargs = PyVectorcall_NARGS(_nargs);
-        if (auto kwnames = py::tuple(_kwnames); kwnames && kwnames.size())
-            return PyErr_Format(PyExc_TypeError,
-                                "RTProp.__init__() got an unexpected "
-                                "keyword argument '%U'", kwnames.get(0));
         return cxx_catch([&] {
+            py_check_no_kwnames("RTProp.__init__", kwnames);
             py_check_num_arg("RTProp.__init__", nargs, 0, 0);
             auto self = py::generic_alloc<RTProp>();
             self->fieldname = py::immref(Py_None);
