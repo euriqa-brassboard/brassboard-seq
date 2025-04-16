@@ -530,7 +530,7 @@ cdef class JaqalChannelGen_v1:
         sz = self.chn_gen.slut.size()
         cdef list res = PyList_New(sz)
         for i in range(sz):
-            v = new_int(<int>self.chn_gen.slut[i]).rel[PyObject]()
+            v = new_int(<int>self.chn_gen.slut[i]).rel()
             Py_INCREF(v)
             PyList_SET_ITEM(res, i, v)
         return res
@@ -540,7 +540,7 @@ cdef class JaqalChannelGen_v1:
         cdef list res = PyList_New(sz)
         for i in range(sz):
             gate = self.chn_gen.glut[i]
-            v = (new_int(gate.first).rel[PyObject](), new_int(gate.second).rel[PyObject]())
+            v = (new_int(gate.first).rel(), new_int(gate.second).rel())
             Py_INCREF(v)
             PyList_SET_ITEM(res, i, v)
         return res
@@ -550,7 +550,7 @@ cdef class JaqalChannelGen_v1:
         cdef list res = PyList_New(sz)
         for i in range(sz):
             gate = self.chn_gen.gate_ids[i]
-            v = (new_int(gate.time).rel[PyObject](), new_int(gate.id).rel[PyObject]())
+            v = (new_int(gate.time).rel(), new_int(gate.id).rel())
             Py_INCREF(v)
             PyList_SET_ITEM(res, i, v)
         return res

@@ -37,8 +37,8 @@ cdef extern from "<ostream>" namespace "std":
         void clear()
 
 cdef extern from "src/utils.h" namespace "brassboard_seq::py":
-    cppclass ref:
-        object rel[T]()
+    cppclass ref "brassboard_seq::py::ref<>":
+        object rel "rel<PyObject>" ()
 
     cppclass stringio:
         void write(str)

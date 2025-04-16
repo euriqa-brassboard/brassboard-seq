@@ -82,7 +82,7 @@ cdef class RampFunction(_RampFunctionBase):
             deref(interp_func).set_value(<RuntimeValue>fvalue, args)
             self.interp_func = move(interp_func)
         elif type(fvalue) is not float:
-            fvalue = new_float(<double>fvalue).rel[PyObject]()
+            fvalue = new_float(<double>fvalue).rel()
         self._fvalue = fvalue
 
     cdef eval_end(self, length, oldval):
@@ -101,8 +101,8 @@ cdef class RampFunction(_RampFunctionBase):
         if <object>_spline_segments is dummy_spline_segments:
             return
         cdef PyObject *args[3]
-        cdef object pylen = new_float(length).rel[PyObject]()
-        cdef object pyoldval = new_float(oldval).rel[PyObject]()
+        cdef object pylen = new_float(length).rel()
+        cdef object pyoldval = new_float(oldval).rel()
         args[0] = <PyObject*>self
         args[1] = <PyObject*>pylen
         args[2] = <PyObject*>pyoldval

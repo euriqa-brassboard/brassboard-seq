@@ -1103,7 +1103,7 @@ cdef class IOBuff:
         self.io.write_rep_ascii(nrep, s)
 
     def getvalue(self):
-        return self.io.getvalue().rel[PyObject]()
+        return self.io.getvalue().rel()
 
 def int_to_chars(int i):
     cdef char buff[5]
@@ -1160,4 +1160,4 @@ def yaml_io_print(obj, indent=0):
         raise TypeError("indent cannot be negative")
     cdef utils.stringio io
     _yaml_io_print(io, obj, indent)
-    return io.getvalue().rel[PyObject]()
+    return io.getvalue().rel()

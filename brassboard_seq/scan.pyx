@@ -314,7 +314,7 @@ cdef class ScanWrapper:
             else:
                 io.write(f'Scan {self.idx}:\n')
         print_scan(self.scan, io, 2, self.path)
-        return io.getvalue().rel[PyObject]()
+        return io.getvalue().rel()
 
     def __repr__(self):
         return str(self)
@@ -596,7 +596,7 @@ cdef class ScanGroup:
             for i in range(len(self.scans)):
                 io.write(f'  Scan {i}:\n')
                 print_scan(<ScanND>self.scans[i], io, 4, ())
-        return io.getvalue().rel[PyObject]()
+        return io.getvalue().rel()
 
     def __repr__(self):
         return str(self)

@@ -84,7 +84,7 @@ cdef class TimeStep(TimeSeq):
     def __str__(self):
         cdef stringio io
         timestep_show(self, io, 0)
-        return io.getvalue().rel[PyObject]()
+        return io.getvalue().rel()
 
     def __repr__(self):
         return str(self)
@@ -136,7 +136,7 @@ cdef class ConditionalWrapper:
     def __str__(self):
         cdef stringio io
         conditionalwrapper_show(self, io, 0)
-        return io.getvalue().rel[PyObject]()
+        return io.getvalue().rel()
 
     def __repr__(self):
         return str(self)
@@ -178,7 +178,7 @@ cdef class SubSeq(TimeSeq):
     def __str__(self):
         cdef stringio io
         subseq_show(self, io, 0)
-        return io.getvalue().rel[PyObject]()
+        return io.getvalue().rel()
 
     def __repr__(self):
         return str(self)
@@ -250,7 +250,7 @@ cdef class Seq(SubSeq):
     def __str__(self):
         cdef stringio io
         seq_show(self, io, 0)
-        return io.getvalue().rel[PyObject]()
+        return io.getvalue().rel()
 
     def __repr__(self):
         return str(self)
