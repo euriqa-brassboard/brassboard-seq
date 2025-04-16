@@ -2,6 +2,7 @@
 
 cython_include_directories("${CMAKE_BINARY_DIR}")
 include_directories("${CMAKE_SOURCE_DIR}/brassboard_seq")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}")
 
 cython_link_libraries(brassboard_seq_utils)
 
