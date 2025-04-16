@@ -25,8 +25,6 @@ from libc.stdint cimport *
 from brassboard_seq.rtval cimport is_rtval, RuntimeValue
 from brassboard_seq.utils cimport PyErr_Format, PyExc_ValueError
 
-from cpython cimport PyObject
-
 cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
     # Cython doesn't seem to allow namespace in the object property
     # for the imported extension class
@@ -47,17 +45,7 @@ cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
         bint floating
         int chain_id
         bint is_static()
-        int64_t _get_static()
         int64_t get_static()
-        void set_static(int64_t value)
-        int64_t get_c_offset()
-        void set_c_offset(int64_t value)
-        PyObject *get_rt_offset()
-        void set_rt_offset(RuntimeValue)
-
-    cppclass TimeManagerStatus:
-        int ntimes
-        bint finalized
 
     EventTime new_time_int "timemanager_new_time_int" (TimeManager self, EventTime prev,
                                                        int64_t offset, bint floating,
@@ -77,14 +65,12 @@ cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
     TimeOrder is_ordered(EventTime t1, EventTime t2) except +
 
     ctypedef class brassboard_seq._utils.TimeManager [object _brassboard_seq_event_time_TimeManager]:
-        cdef shared_ptr[TimeManagerStatus] status
         cdef list event_times
         cdef vector[int64_t] time_values
 
     TimeManager new_time_manager "new_time_manager"() except +
 
     ctypedef class brassboard_seq._utils.EventTime [object _brassboard_seq_event_time_EventTime]:
-        cdef shared_ptr[TimeManagerStatus] manager_status
         cdef EventTime prev
         cdef EventTime wait_for
         cdef object cond

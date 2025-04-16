@@ -18,6 +18,8 @@
 
 # Do not use relative import since it messes up cython file name tracking
 
+from cpython cimport PyObject
+
 cdef extern from * namespace "brassboard_seq::event_time":
     PyObject *py_time_scale()
 
