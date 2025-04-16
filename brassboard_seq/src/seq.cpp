@@ -101,9 +101,8 @@ static inline void timeseq_set_time(auto self, EventTime *time, PyObject *offset
     self->seqinfo->bt_tracker.record(event_time_key(self->start_time));
 }
 
-template<typename TimeStep>
-static inline __attribute__((returns_nonnull)) TimeStep*
-add_time_step(auto self, PyObject *cond, EventTime *start_time, PyObject *length)
+template<typename TimeStep> static inline py::ref<TimeStep>
+add_time_step(auto self, py::ptr<> cond, py::ptr<EventTime> start_time, py::ptr<> length)
 {
     auto seqinfo = pyx_fld(self, seqinfo);
     py::ref end_time(seqinfo->time_mgr->new_round(start_time, length,
@@ -117,13 +116,12 @@ add_time_step(auto self, PyObject *cond, EventTime *start_time, PyObject *length
     pyx_fld(step, length) = py::newref(length);
     seqinfo->bt_tracker.record(event_time_key(pyx_fld(step, end_time)));
     py::list(self->sub_seqs).append(step);
-    return step.rel();
+    return step;
 }
 
-template<typename SubSeq>
-static inline __attribute__((returns_nonnull)) SubSeq*
-add_custom_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *cb,
-                size_t nargs=0, PyObject *const *args=nullptr, PyObject *kwargs=nullptr)
+template<typename SubSeq> static inline py::ref<SubSeq>
+add_custom_step(SubSeq *self, py::ptr<> cond, py::ptr<EventTime> start_time,
+                py::ptr<> cb, size_t nargs, PyObject *const *args, py::tuple kwnames)
 {
     auto seqinfo = pyx_fld(self, seqinfo);
     auto subseq = py::generic_alloc<SubSeq>(subseq_type);
@@ -133,14 +131,14 @@ add_custom_step(SubSeq *self, PyObject *cond, EventTime *start_time, PyObject *c
     pyx_fld(subseq, cond) = py::newref(cond);
     pyx_fld(subseq, sub_seqs) = py::new_list(0).rel();
     subseq->dummy_step = (decltype(subseq->dummy_step))py::immref(Py_None);
-    {
-        PyObject *callargs[nargs + 1] = { (PyObject*)subseq };
-        for (auto i = 0; i < nargs; i++)
-            callargs[i + 1] = args[i];
-        py::ptr(cb).vcall_dict(callargs, nargs + 1, kwargs);
-    }
+    // The python vectorcall ABI allows us to temporarily change the argument array
+    // as long as we restore it before returning.
+    auto prev_arg = args[-1];
+    ((PyObject**)args)[-1] = (PyObject*)subseq;
+    ScopeExit restore_arg([&] { ((PyObject**)args)[-1] = prev_arg; });
+    cb.vcall(&args[-1], nargs + 1, kwnames);
     py::list(self->sub_seqs).append(subseq);
-    return subseq.rel();
+    return subseq;
 }
 
 struct CondCombiner {
@@ -199,7 +197,7 @@ const char *add_step_name(AddStepType type)
 
 template<typename CondSeq, typename TimeSeq, typename TimeStep, AddStepType type>
 static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
-                               Py_ssize_t nargs, PyObject *kwnames) try
+                               Py_ssize_t nargs, PyObject *_kwnames) try
 {
     auto self = (CondSeq*)py_self;
     auto subseq = condseq_get_subseq(self);
@@ -240,27 +238,23 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
         return res;
     };
 
-    py::dict_ref kws;
-    if (kwnames) {
-        kws = py::new_dict();
-        auto kwvalues = args + nargs;
-        for (auto [i, name]: py::tuple_iter(kwnames)) {
-            kws.set(name, kwvalues[i]);
-        }
-    }
-
-    PyObject *res;
+    py::ref<TimeSeq> res;
     if (Py_TYPE(first_arg)->tp_call) {
-        res = (PyObject*)add_custom_step(subseq, cond, start_time.get(), first_arg,
-                                         tuple_nargs, args + nargs_min, kws.get());
+        assert(nargs_min >= 1);
+        res.take(add_custom_step(subseq, cond, start_time, first_arg,
+                                 tuple_nargs, args + nargs_min, _kwnames));
     }
-    else if (kws) {
+    else if (auto kwnames = py::tuple(_kwnames); kwnames && kwnames.size()) {
+        auto kws = py::new_dict();
+        auto kwvalues = args + nargs;
+        for (auto [i, name]: py::tuple_iter(kwnames))
+            kws.set(name, kwvalues[i]);
         return PyErr_Format(PyExc_ValueError,
                             "Unexpected arguments when creating new time step, %S, %S.",
                             get_args_tuple(), kws);
     }
     else if (tuple_nargs == 0) {
-        res = (PyObject*)add_time_step<TimeStep>(subseq, cond, start_time.get(), first_arg);
+        res.take(add_time_step<TimeStep>(subseq, cond, start_time, first_arg));
     }
     else {
         return PyErr_Format(PyExc_ValueError,
@@ -268,8 +262,8 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
                             get_args_tuple());
     }
     if (type == AddStepType::Step)
-        py::assign(pyx_fld(subseq, end_time), ((TimeSeq*)res)->end_time);
-    return res;
+        py::assign(pyx_fld(subseq, end_time), res->end_time);
+    return (PyObject*)res.rel();
 }
 catch (...) {
     handle_cxx_exception();
@@ -316,10 +310,11 @@ subseq_set(auto *self, PyObject *chn, PyObject *value, PyObject *cond,
     using TimeStep = std::remove_reference_t<decltype(*step)>;
     auto *start_time = pyx_fld(self, end_time);
     if ((PyObject*)step == Py_None || pyx_fld(step, end_time) != start_time) {
-        step = add_time_step<TimeStep>(self, pyx_fld(self, cond),
-                                       start_time, py::int_cached(0));
+        auto new_step = add_time_step<TimeStep>(self, pyx_fld(self, cond),
+                                                start_time, py::int_cached(0));
+        step = new_step.get();
         // Steals a reference while keeping step as a borrowed reference.
-        py::assign(self->dummy_step, py::ref(step));
+        py::assign(self->dummy_step, std::move(new_step));
         // Update the current time so that a normal step added later
         // this is treated as ordered after this set event
         // rather than at the same time.
@@ -377,10 +372,11 @@ condwrapper_vectorcall(ConditionalWrapper *self, PyObject *const *args, size_t _
     auto nargs = PyVectorcall_NARGS(_nargs);
     py_check_no_kwnames("__call__", kwnames);
     py_check_num_arg("__call__", nargs, 1, 1);
-    auto step = add_custom_step(self->seq, self->cond,
-                                pyx_fld(self->seq, end_time), args[0]);
+    // Reuse the args buffer
+    auto step = add_custom_step(self->seq, self->cond, pyx_fld(self->seq, end_time),
+                                args[0], 0, &args[1], py::tuple());
     py::assign(pyx_fld(self->seq, end_time), pyx_fld(step, end_time));
-    return (PyObject*)step;
+    return (PyObject*)step.rel();
 }
 catch (...) {
     handle_cxx_exception();
