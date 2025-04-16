@@ -24,22 +24,22 @@
 namespace brassboard_seq::action {
 
 struct Action {
-    py_object value;
-    py_object cond;
-    py_object kws;
+    py::ref<> value;
+    py::ref<> cond;
+    py::ref<> kws;
     bool is_pulse;
     bool exact_time;
     bool cond_val;
     int aid;
     int tid;
     int end_tid;
-    PyObject *length;
-    py_object end_val;
+    py::ptr<> length;
+    py::ref<> end_val;
 
-    Action(PyObject *value, PyObject *cond,
-           bool is_pulse, bool exact_time, py_object &&kws, int aid)
-        : value(py::newref(value)),
-          cond(py::newref(cond)),
+    Action(py::ptr<> value, py::ptr<> cond,
+           bool is_pulse, bool exact_time, py::dict_ref &&kws, int aid)
+        : value(value.ref()),
+          cond(cond.ref()),
           kws(std::move(kws)),
           is_pulse(is_pulse),
           exact_time(exact_time),

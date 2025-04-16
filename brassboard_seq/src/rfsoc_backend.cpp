@@ -3831,7 +3831,7 @@ inline void ChannelInfo::ensure_unused_tones(bool all)
     }
 }
 
-static inline bool parse_action_kws(PyObject *kws, int aid)
+static inline bool parse_action_kws(py::dict kws, int aid)
 {
     assert(kws != Py_None);
     if (!kws)
@@ -3938,9 +3938,9 @@ void collect_actions(auto *rb, backend::CompiledSeq &cseq)
                 }
                 rfsoc_actions.push_back(rfsoc_action);
             };
-            add_action(action->value, action->tid, sync, is_ramp, false);
+            add_action(action->value.get(), action->tid, sync, is_ramp, false);
             if (action->is_pulse || is_ramp) {
-                add_action(action->end_val, action->end_tid, false, false, true);
+                add_action(action->end_val.get(), action->end_tid, false, false, true);
             }
         }
     }

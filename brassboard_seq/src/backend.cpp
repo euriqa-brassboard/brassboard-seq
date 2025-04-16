@@ -137,7 +137,7 @@ static inline void compiler_finalize(auto comp, TimeStep*, _RampFunctionBase*, B
                 }
             }
             last_time = last_is_start ? start_time : get_time(action->end_tid);
-            action->end_val.set_obj(value.get());
+            action->end_val = value.ref();
         }
     }
     for (auto [name, backend]: py::dict_iter<Backend>(comp->backends)) {

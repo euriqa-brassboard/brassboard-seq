@@ -1552,26 +1552,6 @@ static inline double get_value_f64(py::ptr<> obj, uintptr_t key)
     });
 }
 
-struct PyDeleter {
-    void operator()(auto *p) {
-        if (p) {
-            Py_DECREF(p);
-        }
-    }
-};
-struct py_object : std::unique_ptr<PyObject,PyDeleter> {
-    using std::unique_ptr<PyObject,PyDeleter>::unique_ptr;
-    template<typename T> operator T*() { return (T*)this->get(); };
-    void reset_checked(PyObject *obj, auto&&... args)
-    {
-        reset(throw_if_not(obj, args...));
-    }
-    void set_obj(PyObject *p)
-    {
-        reset(py::newref(p));
-    }
-};
-
 template<size_t N>
 struct str_literal {
     constexpr str_literal(const char (&str)[N])

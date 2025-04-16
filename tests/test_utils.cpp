@@ -143,23 +143,22 @@ private:
 void init_action_obj(auto *action, py::ptr<> value, py::ptr<> cond, bool is_pulse,
                      bool exact_time, py::dict kws, int aid)
 {
-    py_object _kws;
+    py::dict_ref _kws;
     if (!kws.is_none())
-        _kws.set_obj(kws.get());
+        _kws.assign(kws);
     auto p = new action::Action(value, cond, is_pulse, exact_time, std::move(_kws), aid);
-    p->length = nullptr;
     action->action = p;
     action->tofree.reset(p);
 }
 
 PyObject *_action_get_cond(action::Action *action)
 {
-    return py::newref(action->cond.get());
+    return py::newref(action->cond);
 }
 
 PyObject *_action_get_value(action::Action *action)
 {
-    return py::newref(action->value.get());
+    return py::newref(action->value);
 }
 
 PyObject *_action_get_length(action::Action *action)
@@ -173,7 +172,7 @@ PyObject *_action_get_end_val(action::Action *action)
 {
     if (!action->end_val)
         Py_RETURN_NONE;
-    return py::newref(action->end_val.get());
+    return py::newref(action->end_val);
 }
 
 auto compiledseq_get_all_actions(backend::CompiledSeq &cseq)

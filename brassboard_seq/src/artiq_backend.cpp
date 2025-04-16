@@ -114,7 +114,7 @@ void collect_actions(auto *ab, backend::CompiledSeq &cseq)
     auto event_times = pyx_fld(seq, seqinfo)->time_mgr->event_times;
 
     auto add_single_action = [&] (auto *action, ChannelType type, int chn_idx,
-                                  int tid, PyObject *value, int cond_reloc,
+                                  int tid, py::ptr<> value, int cond_reloc,
                                   bool is_end) {
         ArtiqAction artiq_action;
         int aid = action->aid;
@@ -214,8 +214,8 @@ void collect_actions(auto *ab, backend::CompiledSeq &cseq)
         add_single_action(action, type, chn_idx, action->tid, action->value,
                           cond_reloc, false);
         if (action->is_pulse) {
-            add_single_action(action, type, chn_idx, action->end_tid, action->end_val,
-                              cond_reloc, true);
+            add_single_action(action, type, chn_idx, action->end_tid,
+                              action->end_val, cond_reloc, true);
         }
     };
 

@@ -301,7 +301,7 @@ timestep_set(auto *self, PyObject *chn, PyObject *value, PyObject *cond,
     }
     auto aid = seqinfo->action_counter;
     auto action = seqinfo->action_alloc.alloc(value, cond, is_pulse, exact_time,
-                                              py_object(kws.rel()), aid);
+                                              std::move(kws), aid);
     action->length = self->length;
     seqinfo->bt_tracker.record(action_key(aid));
     seqinfo->action_counter = aid + 1;
