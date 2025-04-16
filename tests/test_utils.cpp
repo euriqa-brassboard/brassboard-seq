@@ -140,6 +140,12 @@ private:
     pybytearray_streambuf m_buf;
 };
 
+static inline auto timemanager_new_round_time(auto self, auto prev, auto offset,
+                                              auto cond, auto wait_for)
+{
+    return self->new_round(prev, offset, cond, wait_for);
+}
+
 void init_action_obj(auto *action, py::ptr<> value, py::ptr<> cond, bool is_pulse,
                      bool exact_time, py::dict kws, int aid)
 {

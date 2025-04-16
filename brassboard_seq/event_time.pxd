@@ -37,10 +37,6 @@ cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
     {
         return brassboard_seq::event_time::TimeManager::alloc();
     }
-    static inline auto timemanager_new_round_time(auto self, auto prev, auto offset, auto cond, auto wait_for)
-    {
-        return self->new_round(prev, offset, cond, wait_for);
-    }
     static inline auto timemanager_new_time_int(auto self, auto prev, auto offset, auto floating, auto cond, auto wait_for)
     {
         return self->new_int(prev, offset, floating, cond, wait_for);
@@ -86,7 +82,6 @@ cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
         cdef vector[int64_t] time_values
 
     TimeManager new_time_manager "new_time_manager"() except +
-    EventTime new_round_time "timemanager_new_round_time" (TimeManager, EventTime, object, object, EventTime) except +
 
     ctypedef class brassboard_seq._utils.EventTime [object _brassboard_seq_event_time_EventTime]:
         cdef shared_ptr[TimeManagerStatus] manager_status

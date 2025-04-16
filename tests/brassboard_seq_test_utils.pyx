@@ -103,6 +103,8 @@ cdef extern from "test_utils.cpp" namespace "brassboard_seq":
         test_istream_ba &seekg2 "seekg"(ssize_t, utils.seekdir)
         bint fail() const
 
+    event_time.EventTime timemanager_new_round_time(event_time.TimeManager, event_time.EventTime, object, object, event_time.EventTime) except +
+
     void init_action_obj(Action action, object value, object cond, bint is_pulse,
                          bint exact_time, object kws, int aid) except +
     object _action_get_cond(action.Action *action)
@@ -260,7 +262,7 @@ def time_manager_new_time(event_time.TimeManager time_manager,
 def time_manager_new_round_time(event_time.TimeManager time_manager,
                                 event_time.EventTime prev, offset,
                                 cond, event_time.EventTime wait_for):
-    return event_time.new_round_time(time_manager, prev, offset, cond, wait_for)
+    return timemanager_new_round_time(time_manager, prev, offset, cond, wait_for)
 
 def time_manager_finalize(event_time.TimeManager time_manager):
     _timemanager_finalize(time_manager)
