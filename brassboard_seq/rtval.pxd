@@ -116,20 +116,14 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
     TagVal rtval_cache(RuntimeValue)
 
     bint is_rtval(object)
-    bint rt_same_value(object, object)
 
     RuntimeValue new_arg(object idx, object ty) except +
     RuntimeValue new_extern(ExternCallback cb, ty) except +
     RuntimeValue new_extern_age(ExternCallback cb, ty) except +
-    RuntimeValue new_expr1(ValueType, RuntimeValue) except +
     RuntimeValue new_expr2(ValueType, RuntimeValue, RuntimeValue) except +
     RuntimeValue new_const(object) except +
-    RuntimeValue new_select(RuntimeValue arg0, object, object) except +
-    RuntimeValue rt_convert_bool(RuntimeValue) except +
 
-    void rt_eval_cache(RuntimeValue self, unsigned age) except +
     void rt_eval_throw(RuntimeValue self, unsigned age) except +
-    void rt_eval_throw(RuntimeValue self, unsigned age, uintptr_t) except +
     double get_value_f64(object, unsigned age) except +
 
     cppclass InterpFunction:
