@@ -102,6 +102,13 @@ cdef extern from "test_utils.cpp" namespace "brassboard_seq":
         test_istream_ba &seekg(ssize_t)
         test_istream_ba &seekg2 "seekg"(ssize_t, utils.seekdir)
         bint fail() const
+
+    void init_action_obj(Action action, object value, object cond, bint is_pulse,
+                         bint exact_time, object kws, int aid) except +
+    object _action_get_cond(action.Action *action)
+    object _action_get_value(action.Action *action)
+    object _action_get_length(action.Action *action)
+    object _action_get_end_val(action.Action *action)
     vector[action.Action*] *compiledseq_get_all_actions(backend.CompiledSeq &cseq)
     int64_t compiledseq_get_total_time(backend.CompiledSeq &cseq)
     void py_check_num_arg "brassboard_seq::py_check_num_arg" (
@@ -173,14 +180,7 @@ cdef _ref_action(action.Action *p, parent):
 
 def new_action(value, cond, bint is_pulse, bint exact_time, dict kws, int aid):
     a = <Action>Action.__new__(Action)
-    cdef utils.py_object _kws
-    if kws is not None:
-        Py_INCREF(kws)
-        _kws.reset(<PyObject*>kws)
-    p = new action.Action(value, cond, is_pulse, exact_time, move(_kws), aid)
-    p.length = <PyObject*>NULL
-    a.action = p
-    a.tofree.reset(p)
+    init_action_obj(a, value, cond, is_pulse, exact_time, kws, aid)
     return a
 
 def action_set_tid(Action action, int tid):
@@ -195,23 +195,17 @@ def action_get_is_pulse(Action action):
 def action_get_exact_time(Action action):
     return action.action.exact_time
 
-cdef get_pyobject(utils.py_object &v):
-    p = v.get()
-    if p == NULL:
-        return
-    return <object>p
-
 def action_get_cond(Action action):
-    return get_pyobject(action.action.cond)
+    return _action_get_cond(action.action)
 
 def action_get_value(Action action):
-    return get_pyobject(action.action.value)
+    return _action_get_value(action.action)
 
 def action_get_compile_info(Action action):
     pa = action.action
     return dict(tid=pa.tid, end_tid=pa.end_tid,
-                length=<object>pa.length if pa.length != NULL else None,
-                end_val=get_pyobject(pa.end_val))
+                length=_action_get_length(pa),
+                end_val=_action_get_end_val(pa))
 
 def action_get_cond_val(Action action):
     return action.action.cond_val

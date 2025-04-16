@@ -70,11 +70,6 @@ cdef extern from * namespace "brassboard_seq":
 
     PyObject *PyErr_Format(PyObject *exception, char *format, ...) except NULL
 
-    cppclass py_object:
-        PyObject *get()
-        void reset(PyObject*)
-        void set_obj(object)
-
     tuple pytuple_append1(tuple, object) except +
     object pydict_deepcopy(object) except +
 

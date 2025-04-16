@@ -18,7 +18,6 @@
 
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.rtval cimport InterpFunction, TagVal
-from brassboard_seq.utils cimport py_object
 
 from libcpp.memory cimport unique_ptr
 
@@ -26,18 +25,12 @@ from cpython cimport PyObject
 
 cdef extern from "src/action.h" namespace "brassboard_seq::action":
     cppclass Action:
-        Action(object, object, bint, bint, py_object&, int)
-        py_object value
-        py_object cond
-        py_object kws
         bint is_pulse
         bint exact_time
         bint cond_val
         int aid
         int tid
         int end_tid
-        PyObject *length
-        py_object end_val
 
         str py_str() except +
 
