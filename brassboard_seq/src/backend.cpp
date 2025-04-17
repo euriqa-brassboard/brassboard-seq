@@ -93,7 +93,7 @@ static inline void compiler_finalize(auto comp, _RampFunctionBase*, Backend*)
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "Multiple actions added for the same channel "
                                 "at the same time on %U.",
-                                seq::channel_name_from_id(seqinfo, cid));
+                                seqinfo->channel_name_from_id(cid));
             tid = action->tid;
             auto start_time = get_time(tid);
             if (last_time) {
@@ -102,7 +102,7 @@ static inline void compiler_finalize(auto comp, _RampFunctionBase*, Backend*)
                     (o != event_time::OrderEqual || last_is_start)) {
                     bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                     "Actions on %U is not statically ordered",
-                                    seq::channel_name_from_id(seqinfo, cid));
+                                    seqinfo->channel_name_from_id(cid));
                 }
             }
             auto action_value = action->value.get();

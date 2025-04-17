@@ -534,7 +534,7 @@ inline void TimeStep::set(py::ptr<> chn, py::ptr<> value, py::ptr<> cond,
     else if (actions[cid]) {
         py_throw_format(PyExc_ValueError,
                         "Multiple actions added for the same channel "
-                        "at the same time on %U.", channel_name_from_id(seqinfo, cid));
+                        "at the same time on %U.", seqinfo->channel_name_from_id(cid));
     }
     auto aid = seqinfo->action_counter;
     auto action = seqinfo->action_alloc.alloc(value, cond, is_pulse, exact_time,

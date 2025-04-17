@@ -137,8 +137,6 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
     ctypedef class brassboard_seq._utils.RuntimeValue [object _brassboard_seq_rtval_RuntimeValue, check_size ignore]:
         cdef ValueType type_
         cdef DataType datatype
-        cdef EvalError cache_err
-        cdef unsigned age
         cdef GenVal cache_val
         cdef RuntimeValue arg0
         cdef RuntimeValue arg1

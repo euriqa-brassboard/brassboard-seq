@@ -143,11 +143,6 @@ struct Seq : SubSeq {
     static PyTypeObject Type;
 };
 
-static inline py::str_ref channel_name_from_id(auto *seqinfo, int cid)
-{
-    return channel_name_from_path(py::list(seqinfo->channel_paths).get(cid));
-}
-
 }
 
 #endif
