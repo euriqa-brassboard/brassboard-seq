@@ -185,6 +185,27 @@ struct str_literal {
     {
         std::copy_n(str, N, value);
     }
+    constexpr str_literal()
+    {
+        std::fill_n(value, N, 0);
+    }
+    template<size_t N2>
+    constexpr auto operator+(const str_literal<N2> &s2) const
+    {
+        str_literal<N + N2 - 1> res;
+        std::copy_n(value, N - 1, res.value);
+        std::copy_n(s2.value, N2, res.value + N - 1);
+        return res;
+    }
+    template<size_t N2>
+    constexpr auto operator+(const char (&s2)[N2]) const
+    {
+        return this->operator+(str_literal<N2>(s2));
+    }
+    constexpr operator const char*() const
+    {
+        return value;
+    }
     char value[N];
 };
 

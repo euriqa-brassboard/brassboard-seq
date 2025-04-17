@@ -74,6 +74,7 @@ struct TimeSeq : PyObject {
     void show_cond_suffix(py::stringio &io) const;
 
     static PyTypeObject Type;
+    constexpr static str_literal ClsName = "TimeSeq";
 protected:
     void dealloc();
     int traverse(visitproc visit, void *arg);
@@ -96,6 +97,7 @@ struct TimeStep : TimeSeq {
              bool exact_time, py::dict_ref &&kws);
 
     static PyTypeObject Type;
+    constexpr static str_literal ClsName = "TimeStep";
 protected:
     int traverse(visitproc visit, void *arg);
     void cclear();
@@ -121,6 +123,7 @@ struct SubSeq : TimeSeq {
                                     py::ptr<> length);
 
     static PyTypeObject Type;
+    constexpr static str_literal ClsName = "SubSeq";
 protected:
     int traverse(visitproc visit, void *arg);
     void cclear();
@@ -135,12 +138,14 @@ struct ConditionalWrapper : PyObject {
     void show(py::stringio &io, int indent) const;
 
     static PyTypeObject Type;
+    constexpr static str_literal ClsName = "ConditionalWrapper";
 };
 
 struct Seq : SubSeq {
     void show(py::stringio &io, int indent) const;
 
     static PyTypeObject Type;
+    constexpr static str_literal ClsName = "Seq";
 };
 
 }

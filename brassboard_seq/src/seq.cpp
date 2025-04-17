@@ -31,16 +31,22 @@ enum class AddStepType {
     At,
 };
 
-const char *add_step_name(AddStepType type)
+template<typename CondSeq, AddStepType type>
+static inline auto add_step_name()
 {
-    if (type == AddStepType::Background)
-        return "add_background";
-    if (type == AddStepType::Floating)
-        return "add_floating";
-    if (type == AddStepType::At)
-        return "add_at";
-    assert(type == AddStepType::Step);
-    return "add_step";
+    if constexpr (type == AddStepType::Background) {
+        return CondSeq::ClsName + ".add_background";
+    }
+    else if constexpr (type == AddStepType::Floating) {
+        return CondSeq::ClsName + ".add_floating";
+    }
+    else if constexpr (type == AddStepType::At) {
+        return CondSeq::ClsName + ".add_at";
+    }
+    else {
+        static_assert(type == AddStepType::Step);
+        return CondSeq::ClsName + ".add_step";
+    }
 }
 
 static inline std::pair<PyObject*,bool>
@@ -120,7 +126,8 @@ template<typename CondSeq, bool is_pulse=false>
 static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
                              Py_ssize_t nargs, PyObject *kwnames) try
 {
-    py::check_num_arg((is_pulse ? "pulse" : "set"), nargs, 2, 2);
+    py::check_num_arg((is_pulse ? CondSeq::ClsName + ".pulse" :
+                       CondSeq::ClsName + ".set"), nargs, 2, 2);
     auto chn = args[0];
     auto value = args[1];
     bool exact_time{false};
@@ -158,7 +165,7 @@ template<typename CondSeq>
 static PyObject *condseq_wait(PyObject *py_self, PyObject *const *args,
                               Py_ssize_t nargs, PyObject *kwnames) try
 {
-    py::check_num_arg("wait", nargs, 1, 1);
+    py::check_num_arg(CondSeq::ClsName + ".wait", nargs, 1, 1);
     py::ptr<> length = args[0];
     py::ptr<> cond{Py_True};
     if (kwnames) {
@@ -188,7 +195,7 @@ static PyObject *condseq_wait_for(PyObject *py_self, PyObject *const *args,
                                   Py_ssize_t nargs, PyObject *kwnames)
 {
     return cxx_catch([&] {
-        py::check_num_arg("wait_for", nargs, 1, 2);
+        py::check_num_arg(CondSeq::ClsName + ".wait_for", nargs, 1, 2);
         auto [offset] =
             py::parse_pos_or_kw_args<"offset">("wait_for", args + 1, nargs - 1, kwnames);
         if (!offset)
@@ -202,8 +209,8 @@ static PyObject *condseq_wait_for(PyObject *py_self, PyObject *const *args,
 static PyObject *condwrapper_vectorcall(ConditionalWrapper *self, PyObject *const *args,
                                         size_t _nargs, PyObject *kwnames) try {
     auto nargs = PyVectorcall_NARGS(_nargs);
-    py::check_no_kwnames("__call__", kwnames);
-    py::check_num_arg("__call__", nargs, 1, 1);
+    py::check_no_kwnames("ConditionalWrapper.__call__", kwnames);
+    py::check_num_arg("ConditionalWrapper.__call__", nargs, 1, 1);
     // Reuse the args buffer
     auto step = self->seq->add_custom_step(self->cond, self->seq->end_time,
                                            args[0], 0, &args[1], py::tuple());
@@ -235,7 +242,7 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
     auto subseq = self->get_seq();
     auto cond = self->cond;
     auto nargs_min = type == AddStepType::At ? 2 : 1;
-    py::check_num_arg(add_step_name(type), nargs, nargs_min);
+    py::check_num_arg(add_step_name<CondSeq,type>(), nargs, nargs_min);
 
     auto first_arg = args[nargs_min - 1];
     py::ref<EventTime> start_time;
@@ -399,7 +406,7 @@ static PyObject *set_time(PyObject *py_self, PyObject *const *args,
                           Py_ssize_t nargs, PyObject *kwnames)
 {
     return cxx_catch([&] {
-        py::check_num_arg("set_time", nargs, 1, 2);
+        py::check_num_arg("TimeSeq.set_time", nargs, 1, 2);
         auto [offset] =
             py::parse_pos_or_kw_args<"offset">("set_time", args + 1, nargs - 1, kwnames);
         auto time = (args[0] == Py_None ? py::ptr<EventTime>(Py_None) :
@@ -420,7 +427,7 @@ static PyObject *rt_assert(PyObject *py_self, PyObject *const *args,
                            Py_ssize_t nargs, PyObject *kwnames)
 {
     return cxx_catch([&] {
-        py::check_num_arg("rt_assert", nargs, 1, 2);
+        py::check_num_arg("TimeSeq.rt_assert", nargs, 1, 2);
         auto [msg] = py::parse_pos_or_kw_args<"msg">("rt_assert", args + 1,
                                                      nargs - 1, kwnames);
         auto c = py::ptr(args[0]);
