@@ -1672,7 +1672,7 @@ struct _method_def {
         return get();
     }
 };
-constexpr PyMethodDef null_def = {0, 0, 0, 0};
+static constexpr PyMethodDef null_def = {0, 0, 0, 0};
 
 template<auto F> static constexpr auto cfunc = binfunc<F>;
 template<str_literal name, auto F, str_literal doc="">
