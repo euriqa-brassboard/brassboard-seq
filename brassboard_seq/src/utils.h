@@ -1618,11 +1618,26 @@ auto cxx_catch(auto &&cb)
 
 namespace py {
 
+template<str_literal name, auto F, int flags, str_literal doc>
+struct _method_def {
+    static constexpr PyMethodDef get()
+    {
+        return {name, (PyCFunction)(uintptr_t)F, flags, doc};
+    }
+    constexpr operator PyMethodDef() const
+    {
+        return get();
+    }
+};
+constexpr PyMethodDef null_def = {0, 0, 0, 0};
+
 template<auto F>
 static inline PyObject *cfunc(PyObject *self, PyObject *arg)
 {
     return (PyObject*)cxx_catch([&] { return F(self, arg); });
 }
+template<str_literal name, auto F, str_literal doc="">
+static constexpr auto meth_o = _method_def<name,cfunc<F>,METH_O,doc>{};
 
 template<auto F>
 static inline PyObject *cfunc_noargs(PyObject *self, PyObject *arg)
@@ -1630,12 +1645,16 @@ static inline PyObject *cfunc_noargs(PyObject *self, PyObject *arg)
     assert(!arg);
     return (PyObject*)cxx_catch([&] { return F(self); });
 }
+template<str_literal name, auto F, str_literal doc="">
+static constexpr auto meth_noargs = _method_def<name,cfunc_noargs<F>,METH_NOARGS,doc>{};
 
 template<auto F>
 static inline PyObject *cfunc_fast(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
     return (PyObject*)cxx_catch([&] { return F(self, args, nargs); });
 }
+template<str_literal name, auto F, str_literal doc="">
+static constexpr auto meth_fast = _method_def<name,cfunc_fast<F>,METH_FASTCALL,doc>{};
 
 template<auto F>
 static inline PyObject *cfunc_fastkw(PyObject *self, PyObject *const *args,
@@ -1643,6 +1662,15 @@ static inline PyObject *cfunc_fastkw(PyObject *self, PyObject *const *args,
 {
     return (PyObject*)cxx_catch([&] { return F(self, args, nargs, kwnames); });
 }
+template<str_literal name, auto F, str_literal doc="">
+static constexpr auto meth_fastkw = _method_def<name,cfunc_fastkw<F>,
+                                                METH_FASTCALL|METH_KEYWORDS,doc>{};
+
+template<_method_def... defs>
+static inline PyMethodDef meth_table[] = {
+    defs...,
+    null_def
+};
 
 template<auto F>
 static inline PyObject *vectorfunc(PyObject *self, PyObject *const *args,

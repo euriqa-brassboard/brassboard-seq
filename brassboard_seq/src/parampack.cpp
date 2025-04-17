@@ -346,8 +346,7 @@ static inline py::ref<> get_visited(PyObject*, py::ptr<> param_pack)
     return py::ptr(Py_False).immref();
 }
 __attribute__((visibility("protected")))
-PyMethodDef parampack_get_visited_method ={
-    "get_visited", (PyCFunction)(void*)py::cfunc<get_visited>, METH_O};
+PyMethodDef parampack_get_visited_method = py::meth_o<"get_visited",get_visited>;
 
 // Helper function for functions that takes an optional parameter pack
 static inline PyObject *get_param(PyObject*, py::ptr<> param)
@@ -357,8 +356,7 @@ static inline PyObject *get_param(PyObject*, py::ptr<> param)
     return py::newref(param);
 }
 __attribute__((visibility("protected")))
-PyMethodDef parampack_get_param_method ={
-    "get_param", (PyCFunction)(void*)py::cfunc<get_param>, METH_O};
+PyMethodDef parampack_get_param_method = py::meth_o<"get_param",get_param>;
 
 __attribute__((constructor))
 static void init()

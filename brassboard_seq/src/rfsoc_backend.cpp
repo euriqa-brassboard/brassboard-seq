@@ -2955,10 +2955,7 @@ PulseCompilerGen::Info::Info()
         channel_list[i + 2] = DriveChannel(py_nums[i]).rel();
 
     auto orig_post_init = ToneData.attr("__post_init__");
-    static PyMethodDef dummy_post_init_method = {
-        "__post_init__", (PyCFunction)(void*)py::cfunc_fast<[] (auto, auto, auto) {
-            Py_RETURN_NONE;
-        }>, METH_FASTCALL};
+    static PyMethodDef dummy_post_init_method = py::meth_fast<"__post_init__",[] (auto...) {}>;
     ToneData.set_attr("__post_init__", py::new_cfunc(&dummy_post_init_method));
     auto dummy_tonedata = ToneData(py_nums[0], py_nums[0], py_nums[0],
                                    py_nums[0], py_nums[0], py_nums[0]);

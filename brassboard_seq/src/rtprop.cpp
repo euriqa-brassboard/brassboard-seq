@@ -187,15 +187,10 @@ PyTypeObject CompositeRTProp_Type = {
         Py_CLEAR(self->cb);
         return 0;
     },
-    .tp_methods = (PyMethodDef[]){
-        {"get_state", (PyCFunction)(void*)py::cfunc<CompositeRTProp::get_state>,
-         METH_O},
-        {"set_state", (PyCFunction)(void*)py::cfunc_fast<CompositeRTProp::set_state>,
-         METH_FASTCALL},
-        {"__set_name__", (PyCFunction)(void*)py::cfunc_fast<CompositeRTProp::set_name>,
-         METH_FASTCALL},
-        {0, 0, 0, 0}
-    },
+    .tp_methods = (py::meth_table<
+                   py::meth_o<"get_state",CompositeRTProp::get_state>,
+                   py::meth_fast<"set_state",CompositeRTProp::set_state>,
+                   py::meth_fast<"__set_name__",CompositeRTProp::set_name>>),
     .tp_descr_get = [] (PyObject *self, PyObject *obj, PyObject*) -> PyObject* {
         if (!obj) [[unlikely]]
             return py::newref(self);
@@ -343,14 +338,10 @@ PyTypeObject RTProp_Type = {
         Py_TYPE(py_self)->tp_free(py_self);
     },
     .tp_flags = Py_TPFLAGS_DEFAULT,
-    .tp_methods = (PyMethodDef[]){
-        {"get_state", py::cfunc<RTProp::get_state>, METH_O},
-        {"set_state", (PyCFunction)(void*)py::cfunc_fast<RTProp::set_state>,
-         METH_FASTCALL},
-        {"__set_name__", (PyCFunction)(void*)py::cfunc_fast<RTProp::set_name>,
-         METH_FASTCALL},
-        {0, 0, 0, 0}
-    },
+    .tp_methods = (py::meth_table<
+                   py::meth_o<"get_state",RTProp::get_state>,
+                   py::meth_fast<"set_state",RTProp::set_state>,
+                   py::meth_fast<"__set_name__",RTProp::set_name>>),
     .tp_descr_get = [] (PyObject *py_self, PyObject *obj, PyObject*) {
         if (!obj) [[unlikely]]
             return py::newref(py_self);

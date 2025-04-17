@@ -453,14 +453,10 @@ PyTypeObject TimeSeq::Type = {
         ((TimeSeq*)py_self)->clear();
         return 0;
     },
-    .tp_methods = (PyMethodDef[]){
-        {"get_channel_id", py::cfunc<get_channel_id>, METH_O},
-        {"set_time", (PyCFunction)(void*)py::cfunc_fastkw<set_time>,
-         METH_FASTCALL|METH_KEYWORDS},
-        {"rt_assert", (PyCFunction)(void*)py::cfunc_fastkw<rt_assert>,
-         METH_FASTCALL|METH_KEYWORDS},
-        {0, 0, 0, 0}
-    },
+    .tp_methods = (py::meth_table<
+                   py::meth_o<"get_channel_id",get_channel_id>,
+                   py::meth_fastkw<"set_time",set_time>,
+                   py::meth_fastkw<"rt_assert",rt_assert>>),
     .tp_members = TimeSeq_members,
     .tp_getset = TimeSeq_getsets,
 };
@@ -558,13 +554,9 @@ PyTypeObject TimeStep::Type = {
         ((TimeStep*)py_self)->clear();
         return 0;
     },
-    .tp_methods = (PyMethodDef[]){
-        {"set", (PyCFunction)(void*)py::cfunc_fastkw<condseq_set<TimeStep,false>>,
-         METH_FASTCALL|METH_KEYWORDS},
-        {"pulse", (PyCFunction)(void*)py::cfunc_fastkw<condseq_set<TimeStep,true>>,
-         METH_FASTCALL|METH_KEYWORDS},
-        {0, 0, 0, 0}
-    },
+    .tp_methods = (py::meth_table<
+                   py::meth_fastkw<"set",condseq_set<TimeStep,false>>,
+                   py::meth_fastkw<"pulse",condseq_set<TimeStep,true>>>),
     .tp_base = &TimeSeq::Type,
 };
 
@@ -709,28 +701,16 @@ PyTypeObject SubSeq::Type = {
         ((SubSeq*)py_self)->clear();
         return 0;
     },
-    .tp_methods = (PyMethodDef[]){
-        {"wait", (PyCFunction)(void*)py::cfunc_fastkw<condseq_wait<SubSeq>>,
-         METH_FASTCALL|METH_KEYWORDS},
-        {"wait_for", (PyCFunction)(void*)py::cfunc_fastkw<condseq_wait_for<SubSeq>>,
-         METH_FASTCALL|METH_KEYWORDS},
-        {"conditional", py::cfunc<condseq_conditional<SubSeq>>, METH_O},
-        {"set", (PyCFunction)(void*)py::cfunc_fastkw<condseq_set<SubSeq>>,
-         METH_FASTCALL|METH_KEYWORDS},
-        {"add_step",
-         (PyCFunction)(void*)py::cfunc_fastkw<add_step_real<SubSeq,AddStepType::Step>>,
-         METH_FASTCALL|METH_KEYWORDS},
-        {"add_background",
-         (PyCFunction)(void*)py::cfunc_fastkw<add_step_real<SubSeq,AddStepType::Background>>,
-         METH_FASTCALL|METH_KEYWORDS},
-        {"add_floating",
-         (PyCFunction)(void*)py::cfunc_fastkw<add_step_real<SubSeq,AddStepType::Floating>>,
-         METH_FASTCALL|METH_KEYWORDS},
-        {"add_at",
-         (PyCFunction)(void*)py::cfunc_fastkw<add_step_real<SubSeq,AddStepType::At>>,
-         METH_FASTCALL|METH_KEYWORDS},
-        {0, 0, 0, 0}
-    },
+    .tp_methods = (
+        py::meth_table<
+        py::meth_fastkw<"wait",condseq_wait<SubSeq>>,
+        py::meth_fastkw<"wait_for",condseq_wait_for<SubSeq>>,
+        py::meth_o<"conditional",condseq_conditional<SubSeq>>,
+        py::meth_fastkw<"set",condseq_set<SubSeq>>,
+        py::meth_fastkw<"add_step",add_step_real<SubSeq,AddStepType::Step>>,
+        py::meth_fastkw<"add_background",add_step_real<SubSeq,AddStepType::Background>>,
+        py::meth_fastkw<"add_floating",add_step_real<SubSeq,AddStepType::Floating>>,
+        py::meth_fastkw<"add_at",add_step_real<SubSeq,AddStepType::At>>>),
     .tp_members = SubSeq_members,
     .tp_base = &TimeSeq::Type,
 };
@@ -779,28 +759,16 @@ PyTypeObject ConditionalWrapper::Type = {
         Py_CLEAR(self->cond);
         return 0;
     },
-    .tp_methods = (PyMethodDef[]){
-        {"wait", (PyCFunction)(void*)py::cfunc_fastkw<condseq_wait<ConditionalWrapper>>,
-         METH_FASTCALL|METH_KEYWORDS},
-        {"wait_for", (PyCFunction)(void*)py::cfunc_fastkw<condseq_wait_for<ConditionalWrapper>>,
-         METH_FASTCALL|METH_KEYWORDS},
-        {"conditional", py::cfunc<condseq_conditional<ConditionalWrapper>>, METH_O},
-        {"set", (PyCFunction)(void*)py::cfunc_fastkw<condseq_set<ConditionalWrapper>>,
-         METH_FASTCALL|METH_KEYWORDS},
-        {"add_step",
-         (PyCFunction)(void*)py::cfunc_fastkw<add_step_real<ConditionalWrapper,AddStepType::Step>>,
-         METH_FASTCALL|METH_KEYWORDS},
-        {"add_background",
-         (PyCFunction)(void*)py::cfunc_fastkw<add_step_real<ConditionalWrapper,AddStepType::Background>>,
-         METH_FASTCALL|METH_KEYWORDS},
-        {"add_floating",
-         (PyCFunction)(void*)py::cfunc_fastkw<add_step_real<ConditionalWrapper,AddStepType::Floating>>,
-         METH_FASTCALL|METH_KEYWORDS},
-        {"add_at",
-         (PyCFunction)(void*)py::cfunc_fastkw<add_step_real<ConditionalWrapper,AddStepType::At>>,
-         METH_FASTCALL|METH_KEYWORDS},
-        {0, 0, 0, 0}
-    },
+    .tp_methods = (
+        py::meth_table<
+        py::meth_fastkw<"wait",condseq_wait<ConditionalWrapper>>,
+        py::meth_fastkw<"wait_for",condseq_wait_for<ConditionalWrapper>>,
+        py::meth_o<"conditional",condseq_conditional<ConditionalWrapper>>,
+        py::meth_fastkw<"set",condseq_set<ConditionalWrapper>>,
+        py::meth_fastkw<"add_step",add_step_real<ConditionalWrapper,AddStepType::Step>>,
+        py::meth_fastkw<"add_background",add_step_real<ConditionalWrapper,AddStepType::Background>>,
+        py::meth_fastkw<"add_floating",add_step_real<ConditionalWrapper,AddStepType::Floating>>,
+        py::meth_fastkw<"add_at",add_step_real<ConditionalWrapper,AddStepType::At>>>),
     .tp_getset = ConditionalWrapper_getsets,
 };
 

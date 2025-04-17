@@ -360,8 +360,7 @@ static PyObject *py_sprint(PyObject*, PyObject *const *args, Py_ssize_t nargs)
     return sprint(args[0], indent);
 }
 
-PyMethodDef sprint_method = {"sprint", (PyCFunction)(void*)py::cfunc_fast<py_sprint>,
-    METH_FASTCALL};
+PyMethodDef sprint_method = py::meth_fast<"sprint",py_sprint>;
 
 __attribute__((constructor))
 static void init()

@@ -978,15 +978,12 @@ PyTypeObject RuntimeValue::Type = {
             return new_expr2(typ, v1, new_const(TagVal::from_py(v2)));
         });
     },
-    .tp_methods = (PyMethodDef[]){
-        {"__array_ufunc__", (PyCFunction)(void*)py::cfunc_fast<rtvalue_array_ufunc>,
-         METH_FASTCALL},
-        {"eval", py::cfunc<rtvalue_eval>, METH_O},
-        {"__ceil__", py::cfunc_noargs<rtvalue_ceil>, METH_NOARGS},
-        {"__floor__", py::cfunc_noargs<rtvalue_floor>, METH_NOARGS},
-        {"__round__", py::cfunc_noargs<rtvalue_round>, METH_NOARGS},
-        {0, 0, 0, 0}
-    },
+    .tp_methods = (py::meth_table<
+                   py::meth_fast<"__array_ufunc__",rtvalue_array_ufunc>,
+                   py::meth_o<"eval",rtvalue_eval>,
+                   py::meth_noargs<"__ceil__",rtvalue_ceil>,
+                   py::meth_noargs<"__floor__",rtvalue_floor>,
+                   py::meth_noargs<"__round__",rtvalue_round>>),
 };
 
 __attribute__((visibility("protected")))
@@ -1056,14 +1053,11 @@ static PyObject *py_same_value(PyObject*, PyObject *const *args, Py_ssize_t narg
     return py::immref(same_value(args[0], args[1]) ? Py_True : Py_False);
 }
 
-PyMethodDef get_value_method = {"get_value",
-    (PyCFunction)(void*)py::cfunc_fast<py_get_value>, METH_FASTCALL};
-PyMethodDef inv_method = {"inv", py::cfunc<py_inv>, METH_O};
-PyMethodDef convert_bool_method = {"convert_bool", py::cfunc<py_convert_bool>, METH_O};
-PyMethodDef ifelse_method = {"ifelse", (PyCFunction)(void*)py::cfunc_fast<py_ifelse>,
-    METH_FASTCALL};
-PyMethodDef same_value_method = {"same_value",
-    (PyCFunction)(void*)py::cfunc_fast<py_same_value>, METH_FASTCALL};
+PyMethodDef get_value_method = py::meth_fast<"get_value",py_get_value>;
+PyMethodDef inv_method = py::meth_o<"inv",py_inv>;
+PyMethodDef convert_bool_method = py::meth_o<"convert_bool",py_convert_bool>;
+PyMethodDef ifelse_method = py::meth_fast<"ifelse",py_ifelse>;
+PyMethodDef same_value_method = py::meth_fast<"same_value",py_same_value>;
 
 static __attribute__((flatten, noinline))
 std::pair<EvalError,GenVal> interpret_func(const int *code, GenVal *data,

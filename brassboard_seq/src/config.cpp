@@ -112,15 +112,10 @@ PyTypeObject Config::Type = {
     // All fields are containers of immutable types.
     // No reference loop possible.
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,
-    .tp_methods = (PyMethodDef[]){
-        {"add_supported_prefix", (PyCFunction)(void*)py::cfunc<add_supported_prefix>,
-         METH_O},
-        {"add_channel_alias", (PyCFunction)(void*)py::cfunc_fast<add_channel_alias>,
-         METH_FASTCALL},
-        {"translate_channel", (PyCFunction)(void*)py::cfunc<py_translate_channel>,
-         METH_O},
-        {0, 0, 0, 0}
-    },
+    .tp_methods = (py::meth_table<
+                   py::meth_o<"add_supported_prefix",add_supported_prefix>,
+                   py::meth_fast<"add_channel_alias",add_channel_alias>,
+                   py::meth_o<"translate_channel",py_translate_channel>>),
     .tp_new = [] (PyTypeObject *t, PyObject*, PyObject*) -> PyObject* {
         return cxx_catch([&] {
             auto self = py::generic_alloc<Config>(t);
