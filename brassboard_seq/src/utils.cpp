@@ -26,6 +26,7 @@
 
 namespace brassboard_seq {
 
+__attribute__((visibility("protected")))
 BBLogLevel bb_logging_level = [] {
     if (auto env = getenv("BB_LOG")) {
         if (strcasecmp(env, "debug") == 0) {
@@ -83,6 +84,7 @@ static dict_ref _dict_deepcopy(dict d)
     return res;
 }
 
+__attribute__((visibility("protected")))
 ref<> dict_deepcopy(ptr<> d)
 {
     if (!d.isa<dict>())
@@ -342,11 +344,13 @@ static inline PyObject *get_global_backtrace(uintptr_t key)
     return nullptr;
 }
 
+__attribute__((visibility("protected")))
 [[noreturn]] void throw0()
 {
     throw 0;
 }
 
+__attribute__((visibility("protected")))
 void bb_reraise(uintptr_t key)
 {
     PyObject *exc, *type, *old_tb;
@@ -354,12 +358,14 @@ void bb_reraise(uintptr_t key)
     PyErr_Restore(type, exc, combine_traceback(old_tb, get_global_backtrace(key)));
 }
 
+__attribute__((visibility("protected")))
 [[noreturn]] void bb_rethrow(uintptr_t key)
 {
     bb_reraise(key);
     throw0();
 }
 
+__attribute__((visibility("protected")))
 [[noreturn]] void _bb_throw_format(PyObject *exc, uintptr_t key,
                                    const char *format, ...)
 {
@@ -371,6 +377,7 @@ void bb_reraise(uintptr_t key)
     bb_rethrow(key);
 }
 
+__attribute__((visibility("protected")))
 [[noreturn]] void _py_throw_format(PyObject *exc, const char *format, ...)
 {
     // This is slightly less efficient but much simpler to implement.
@@ -381,6 +388,7 @@ void bb_reraise(uintptr_t key)
     throw0();
 }
 
+__attribute__((visibility("protected")))
 void handle_cxx_exception()
 {
     if (PyErr_Occurred())
@@ -426,6 +434,7 @@ void handle_cxx_exception()
     }
 }
 
+__attribute__((visibility("protected")))
 PyObject *pytuple_append1(py::tuple tuple, py::ptr<> obj)
 {
     Py_ssize_t nele = tuple.size();
@@ -436,12 +445,7 @@ PyObject *pytuple_append1(py::tuple tuple, py::ptr<> obj)
     return res.rel();
 }
 
-void pytype_add_method(PyTypeObject *type, PyMethodDef *meth)
-{
-    py::dict(type->tp_dict).set(meth->ml_name,
-                                py::ref<>::checked(PyDescr_NewMethod(type, meth)));
-}
-
+__attribute__((visibility("protected")))
 py::str_ref channel_name_from_path(py::ptr<> path)
 {
     return "/"_py.join(path);

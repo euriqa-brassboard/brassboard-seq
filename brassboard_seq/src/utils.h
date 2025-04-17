@@ -1693,13 +1693,6 @@ static inline bool py_issubtype_nontrivial(auto *a, auto *b)
     return false;
 }
 
-void pytype_add_method(PyTypeObject *type, PyMethodDef *meth);
-static inline void pytype_add_method(auto type, PyMethodDef *meth)
-    requires (!std::same_as<std::remove_cvref_t<decltype(*type)>,PyTypeObject>)
-{
-    pytype_add_method((PyTypeObject*)type, meth);
-}
-
 template<typename T, size_t N>
 class PermAllocator {
 public:
