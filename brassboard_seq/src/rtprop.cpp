@@ -347,7 +347,6 @@ PyTypeObject RTProp_Type = {
     }>,
     .tp_descr_set = py::itrifunc<[] (py::ptr<RTProp> self, py::ptr<> obj, py::ptr<> val) {
         self->set_res(obj, val);
-        return 0;
     }>,
     .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {

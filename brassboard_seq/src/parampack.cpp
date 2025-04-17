@@ -270,8 +270,7 @@ PyTypeObject ParamPack::Type = {
         res->fieldname = py::newref(name);
         return res;
     }>,
-    .tp_setattro = py::itrifunc<[] (py::ptr<ParamPack> self, py::ptr<> name,
-                                        py::ptr<> value) {
+    .tp_setattro = py::itrifunc<[] (py::ptr<ParamPack> self, py::ptr<> name, py::ptr<> value) {
         check_non_empty_string_arg(name, "name");
         // To be consistent with __getattribute__
         if (PyUnicode_READ_CHAR(name, 0) == '_')
@@ -300,7 +299,6 @@ PyTypeObject ParamPack::Type = {
         else {
             self_values.set(name, py::dict_deepcopy(value));
         }
-        return 0;
     }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC|Py_TPFLAGS_HAVE_VECTORCALL,
     .tp_traverse = [] (PyObject *py_self, visitproc visit, void *arg) {

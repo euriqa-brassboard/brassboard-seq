@@ -1573,6 +1573,7 @@ void bb_rethrow_if(bool cond, uintptr_t key)
 
 void handle_cxx_exception();
 
+template<typename T=PyObject*>
 auto cxx_catch(auto &&cb)
 {
     using raw_ret_type = std::remove_cvref_t<decltype(cb())>;
@@ -1582,36 +1583,42 @@ auto cxx_catch(auto &&cb)
     constexpr bool is_ref = is_handle && requires { cb().rel(); };
     try {
         if constexpr (is_ref) {
-            return cb().rel();
+            static_assert(std::is_pointer_v<T>);
+            return (T)cb().rel();
         }
         else if constexpr (is_handle) {
-            return cb().get();
+            static_assert(std::is_pointer_v<T>);
+            return (T)cb().get();
         }
-        else if constexpr (is_ptr) {
-            return cb();
-        }
-        else if constexpr (is_void) {
-            cb();
-            Py_RETURN_NONE;
+        else if constexpr (!is_void) {
+            static_assert(std::is_pointer_v<T> == is_ptr);
+            return (T)cb();
         }
         else {
-            return (int)cb();
+            cb();
+            if constexpr (std::is_pointer_v<T>) {
+                return (T)py::immref(Py_None);
+            }
+            else if constexpr (std::is_void_v<T>) {
+                return;
+            }
+            else {
+                static_assert(std::is_integral_v<T>);
+                return (T)0;
+            }
         }
     }
     catch (...) {
         handle_cxx_exception();
-        if constexpr (is_ptr) {
-            return (raw_ret_type)nullptr;
+        if constexpr (std::is_pointer_v<T>) {
+            return (T)nullptr;
         }
-        else if constexpr (is_void) {
-            return (PyObject*)nullptr;
-        }
-        else if constexpr (is_handle) {
-            using ret_type = std::remove_cvref_t<decltype(cb().get())>;
-            return (ret_type)nullptr;
+        else if constexpr (std::is_void_v<T>) {
+            return;
         }
         else {
-            return -1;
+            static_assert(std::is_integral_v<T>);
+            return (T)-1;
         }
     }
 }
@@ -1621,37 +1628,37 @@ namespace py {
 template<auto F>
 static inline PyObject *unifunc(PyObject *v1)
 {
-    return (PyObject*)cxx_catch([&] { return F(v1); });
+    return cxx_catch([&] { return F(v1); });
 }
 
 template<auto F>
 static inline PyObject *binfunc(PyObject *v1, PyObject *v2)
 {
-    return (PyObject*)cxx_catch([&] { return F(v1, v2); });
+    return cxx_catch([&] { return F(v1, v2); });
 }
 
 template<auto F>
 static inline PyObject *trifunc(PyObject *v1, PyObject *v2, PyObject *v3)
 {
-    return (PyObject*)cxx_catch([&] { return F(v1, v2, v3); });
+    return cxx_catch([&] { return F(v1, v2, v3); });
 }
 
 template<auto F>
 static inline int iunifunc(PyObject *v1)
 {
-    return (int)cxx_catch([&] { return F(v1); });
+    return cxx_catch<int>([&] { return F(v1); });
 }
 
 template<auto F>
 static inline int ibinfunc(PyObject *v1, PyObject *v2)
 {
-    return (int)cxx_catch([&] { return F(v1, v2); });
+    return cxx_catch<int>([&] { return F(v1, v2); });
 }
 
 template<auto F>
 static inline int itrifunc(PyObject *v1, PyObject *v2, PyObject *v3)
 {
-    return (int)cxx_catch([&] { return F(v1, v2, v3); });
+    return cxx_catch<int>([&] { return F(v1, v2, v3); });
 }
 
 template<str_literal name, auto F, int flags, str_literal doc>
@@ -1675,7 +1682,7 @@ template<auto F>
 static inline PyObject *cfunc_noargs(PyObject *self, PyObject *arg)
 {
     assert(!arg);
-    return (PyObject*)cxx_catch([&] { return F(self); });
+    return cxx_catch([&] { return F(self); });
 }
 template<str_literal name, auto F, str_literal doc="">
 static constexpr auto meth_noargs = _method_def<name,cfunc_noargs<F>,METH_NOARGS,doc>{};
@@ -1683,7 +1690,7 @@ static constexpr auto meth_noargs = _method_def<name,cfunc_noargs<F>,METH_NOARGS
 template<auto F>
 static inline PyObject *cfunc_fast(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    return (PyObject*)cxx_catch([&] { return F(self, args, nargs); });
+    return cxx_catch([&] { return F(self, args, nargs); });
 }
 template<str_literal name, auto F, str_literal doc="">
 static constexpr auto meth_fast = _method_def<name,cfunc_fast<F>,METH_FASTCALL,doc>{};
@@ -1692,7 +1699,7 @@ template<auto F>
 static inline PyObject *cfunc_fastkw(PyObject *self, PyObject *const *args,
                                      Py_ssize_t nargs, PyObject *kwnames)
 {
-    return (PyObject*)cxx_catch([&] { return F(self, args, nargs, kwnames); });
+    return cxx_catch([&] { return F(self, args, nargs, kwnames); });
 }
 template<str_literal name, auto F, str_literal doc="">
 static constexpr auto meth_fastkw = _method_def<name,cfunc_fastkw<F>,
@@ -1708,20 +1715,19 @@ template<auto F>
 static inline PyObject *vectorfunc(PyObject *self, PyObject *const *args,
                                    size_t nargsf, PyObject *kwnames)
 {
-    return (PyObject*)cxx_catch([&] { return F(self, args, PyVectorcall_NARGS(nargsf),
-                                               kwnames); });
+    return cxx_catch([&] { return F(self, args, PyVectorcall_NARGS(nargsf), kwnames); });
 }
 
 template<auto F>
 static inline PyObject *tp_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
-    return (PyObject*)cxx_catch([&] { return F(type, args, kwargs); });
+    return cxx_catch([&] { return F(type, args, kwargs); });
 }
 
 template<auto F>
 static inline PyObject *tp_richcompare(PyObject *v1, PyObject *v2, int op)
 {
-    return (PyObject*)cxx_catch([&] { return F(v1, v2, op); });
+    return cxx_catch([&] { return F(v1, v2, op); });
 }
 
 }
