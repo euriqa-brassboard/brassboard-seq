@@ -117,11 +117,14 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
 
     bint is_rtval(object)
 
+    cppclass rtval_ref:
+        RuntimeValue rel "rel<brassboard_seq::rtval::RuntimeValue>" ()
+
     RuntimeValue new_arg(object idx, object ty) except +
     RuntimeValue new_extern(ExternCallback cb, ty) except +
     RuntimeValue new_extern_age(ExternCallback cb, ty) except +
-    RuntimeValue new_expr2(ValueType, RuntimeValue, RuntimeValue) except +
-    RuntimeValue new_const(object) except +
+    rtval_ref new_expr2(ValueType, RuntimeValue, RuntimeValue) except +
+    rtval_ref new_const(object) except +
 
     void rt_eval_throw(RuntimeValue self, unsigned age) except +
     double get_value_f64(object, unsigned age) except +

@@ -56,7 +56,7 @@ new_expr1(ValueType type, rtval_ref &&arg0)
     return self;
 }
 
-__attribute__((returns_nonnull,visibility("protected"))) RuntimeValue*
+__attribute__((visibility("protected"))) rtval_ref
 new_expr2(ValueType type, rtval_ref &&arg0, rtval_ref &&arg1)
 {
     auto datatype = binary_return_type(type, arg0->datatype, arg1->datatype);
@@ -69,10 +69,10 @@ new_expr2(ValueType type, rtval_ref &&arg0, rtval_ref &&arg1)
     self->arg0 = arg0.rel();
     self->arg1 = arg1.rel();
     self->cb_arg2 = py::immref(Py_None);
-    return self.rel();
+    return self;
 }
 
-__attribute__((returns_nonnull,visibility("protected"))) RuntimeValue*
+__attribute__((visibility("protected"))) rtval_ref
 new_const(TagVal v)
 {
     auto self = py::generic_alloc<RuntimeValue>();
@@ -84,7 +84,7 @@ new_const(TagVal v)
     self->arg0 = (RuntimeValue*)py::immref(Py_None);
     self->arg1 = (RuntimeValue*)py::immref(Py_None);
     self->cb_arg2 = py::immref(Py_None);
-    return self.rel();
+    return self;
 }
 
 static PyObject *new_expr2_wrap1(ValueType type, py::ptr<> arg0, py::ptr<> arg1)
@@ -120,8 +120,8 @@ static PyObject *new_expr2_wrap1(ValueType type, py::ptr<> arg0, py::ptr<> arg1)
 static inline rtval_ref wrap_rtval(py::ptr<> v)
 {
     if (is_rtval(v))
-        return rtval_ref(py::newref(v));
-    return rtval_ref(new_const(TagVal::from_py(v)));
+        return v.ref();
+    return new_const(TagVal::from_py(v));
 }
 
 __attribute__((visibility("protected")))
@@ -419,7 +419,7 @@ static inline rtval_ref new_addsub(TagVal c, rtval_ptr v, bool s)
 {
     if (c.is_zero() && !s)
         return v.ref();
-    return py::ref(new_expr2(s ? Sub : Add, py::ref(new_const(c)), v));
+    return new_expr2(s ? Sub : Add, new_const(c), v);
 }
 
 static inline rtval_ref build_addsub(py::ptr<> v0, py::ptr<> v1, bool issub)
@@ -490,12 +490,12 @@ static inline rtval_ref build_addsub(py::ptr<> v0, py::ptr<> v1, bool issub)
         }
     }
     if (nv0 == v0 && nv1 == v1)
-        return py::ref(new_expr2(issub ? Sub : Add, nv0, nv1));
+        return new_expr2(issub ? Sub : Add, nv0, nv1);
     if (issub)
         ns1 = !ns1;
     if (!nv0) {
         if (!nv1)
-            return py::ref(new_const(nc));
+            return new_const(nc);
         return new_addsub(nc, nv1, ns1);
     }
     if (!nv1)
@@ -987,15 +987,15 @@ PyTypeObject RuntimeValue::Type = {
         return 0;
     },
     .tp_richcompare = [] (PyObject *v1, PyObject *v2, int op) {
-        return cxx_catch([&] () -> PyObject* {
+        return cxx_catch([&] () -> py::ref<> {
             auto typ = pycmp2valcmp(op);
             if (is_rtval(v2)) {
                 if (v1 == v2)
-                    return py::immref(typ == CmpLE || typ == CmpGE || typ == CmpEQ ?
-                                      Py_True : Py_False);
+                    return py::ptr(typ == CmpLE || typ == CmpGE || typ == CmpEQ ?
+                                   Py_True : Py_False).immref();
                 return new_expr2(typ, v1, v2);
             }
-            return new_expr2(typ, v1, py::ref(new_const(TagVal::from_py(v2))));
+            return new_expr2(typ, v1, new_const(TagVal::from_py(v2)));
         });
     },
     .tp_methods = (PyMethodDef[]){

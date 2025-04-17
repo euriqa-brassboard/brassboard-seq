@@ -137,7 +137,7 @@ def new_invalid_rtval():
     # This should only happen if something really wrong happens.
     # We'll just test that we behave reasonably enough.
     # (it's unavoidable that we'll crash in some cases)
-    rt = rtval.new_expr2(rtval.ValueType.Add, rtval.new_const(1), rtval.new_const(1))
+    rt = rtval.new_expr2(rtval.ValueType.Add, rtval.new_const(1).rel(), rtval.new_const(1).rel()).rel()
     rt.type_ = <rtval.ValueType>1000
     return rt
 
@@ -158,7 +158,7 @@ cdef TestCallback new_test_callback(cb, bint has_age):
     return self
 
 def new_const(c):
-    return rtval.new_const(c)
+    return rtval.new_const(c).rel()
 
 def new_arg(idx):
     return rtval.new_arg(idx, float)

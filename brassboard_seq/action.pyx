@@ -50,7 +50,7 @@ cdef class _RampFunctionBase:
 cdef RuntimeValue arg0 = new_arg(0, float)
 cdef RuntimeValue arg1 = new_arg(1, float)
 cdef RuntimeValue arg2 = new_arg(2, float)
-cdef RuntimeValue const0 = new_const(0.0)
+cdef RuntimeValue const0 = new_const(0.0).rel()
 cdef dummy_spline_segments = []
 
 cdef rampfunction_eval(RampFunction self, t, length, oldval):
@@ -78,7 +78,7 @@ cdef class RampFunction(_RampFunctionBase):
             args.push_back(DataType.Float64)
             args.push_back(DataType.Float64)
             if (<RuntimeValue>fvalue).datatype != DataType.Float64:
-                fvalue = new_expr2(ValueType.Add, fvalue, const0)
+                fvalue = new_expr2(ValueType.Add, fvalue, const0).rel()
             deref(interp_func).set_value(<RuntimeValue>fvalue, args)
             self.interp_func = move(interp_func)
         elif type(fvalue) is not float:

@@ -988,25 +988,21 @@ auto new_expr1(ValueType type, T &&arg0)
     return new_expr1(type, rtval_ref(py::newref(std::forward<T>(arg0))));
 }
 
-__attribute__((returns_nonnull)) RuntimeValue*
-new_expr2(ValueType type, rtval_ref &&arg0, rtval_ref &&arg1);
+rtval_ref new_expr2(ValueType type, rtval_ref &&arg0, rtval_ref &&arg1);
 
 template<typename T0, typename T1>
-__attribute__((returns_nonnull)) RuntimeValue*
-new_expr2(ValueType type, T0 &&arg0, T1 &&arg1)
+rtval_ref new_expr2(ValueType type, T0 &&arg0, T1 &&arg1)
 {
     return new_expr2(type, rtval_ref(py::newref(std::forward<T0>(arg0))),
                      rtval_ref(py::newref(std::forward<T1>(arg1))));
 }
 
-__attribute__((returns_nonnull)) RuntimeValue *new_const(TagVal v);
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-new_const(py::ptr<> v)
+rtval_ref new_const(TagVal v);
+static inline rtval_ref new_const(py::ptr<> v)
 {
     return new_const(TagVal::from_py(v));
 }
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-new_const(auto *pyv)
+static inline rtval_ref new_const(auto *pyv)
 {
     return new_const(py::ptr(pyv));
 }
