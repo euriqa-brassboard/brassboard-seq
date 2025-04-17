@@ -729,17 +729,17 @@ static auto rtvalue_eval(rtval_ptr self, py::ptr<> pyage)
     return rtval_cache(self).to_py();
 }
 
-static auto rtvalue_ceil(rtval_ptr self, PyObject*)
+static auto rtvalue_ceil(rtval_ptr self)
 {
     return is_integer(self) ? self.ref() : new_expr1(Ceil, self);
 }
 
-static auto rtvalue_floor(rtval_ptr self, PyObject*)
+static auto rtvalue_floor(rtval_ptr self)
 {
     return is_integer(self) ? self.ref() : new_expr1(Floor, self);
 }
 
-static auto rtvalue_round(rtval_ptr self, PyObject*)
+static auto rtvalue_round(rtval_ptr self)
 {
     return rt_round_int64(self);
 }
@@ -982,9 +982,9 @@ PyTypeObject RuntimeValue::Type = {
         {"__array_ufunc__", (PyCFunction)(void*)py::cfunc_fast<rtvalue_array_ufunc>,
          METH_FASTCALL},
         {"eval", py::cfunc<rtvalue_eval>, METH_O},
-        {"__ceil__", py::cfunc<rtvalue_ceil>, METH_NOARGS},
-        {"__floor__", py::cfunc<rtvalue_floor>, METH_NOARGS},
-        {"__round__", py::cfunc<rtvalue_round>, METH_NOARGS},
+        {"__ceil__", py::cfunc_noargs<rtvalue_ceil>, METH_NOARGS},
+        {"__floor__", py::cfunc_noargs<rtvalue_floor>, METH_NOARGS},
+        {"__round__", py::cfunc_noargs<rtvalue_round>, METH_NOARGS},
         {0, 0, 0, 0}
     },
 };

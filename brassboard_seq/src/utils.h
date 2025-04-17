@@ -1606,9 +1606,16 @@ auto cxx_catch(auto &&cb)
 namespace py {
 
 template<auto F>
-static inline PyObject *cfunc(PyObject *self, PyObject *args)
+static inline PyObject *cfunc(PyObject *self, PyObject *arg)
 {
-    return (PyObject*)cxx_catch([&] { return F(self, args); });
+    return (PyObject*)cxx_catch([&] { return F(self, arg); });
+}
+
+template<auto F>
+static inline PyObject *cfunc_noargs(PyObject *self, PyObject *arg)
+{
+    assert(!arg);
+    return (PyObject*)cxx_catch([&] { return F(self); });
 }
 
 template<auto F>
