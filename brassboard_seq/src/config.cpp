@@ -116,15 +116,13 @@ PyTypeObject Config::Type = {
                    py::meth_o<"add_supported_prefix",add_supported_prefix>,
                    py::meth_fast<"add_channel_alias",add_channel_alias>,
                    py::meth_o<"translate_channel",py_translate_channel>>),
-    .tp_new = [] (PyTypeObject *t, PyObject*, PyObject*) -> PyObject* {
-        return cxx_catch([&] {
-            auto self = py::generic_alloc<Config>(t);
-            self->channel_alias = py::new_dict().rel();
-            self->alias_cache = py::new_dict().rel();
-            self->supported_prefix = py::new_set().rel();
-            return self;
-        });
-    },
+    .tp_new = py::tp_new<[] (PyTypeObject *t, auto...) {
+        auto self = py::generic_alloc<Config>(t);
+        self->channel_alias = py::new_dict().rel();
+        self->alias_cache = py::new_dict().rel();
+        self->supported_prefix = py::new_set().rel();
+        return self;
+    }>,
 };
 
 __attribute__((constructor))

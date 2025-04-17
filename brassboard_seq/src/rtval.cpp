@@ -566,41 +566,34 @@ GET_NP(rint);
 };
 
 static PyNumberMethods rtvalue_as_number = {
-    .nb_add = [] (PyObject *v1, PyObject *v2) -> PyObject* {
-        return cxx_catch([&] { return build_addsub(v1, v2, false); }); },
-    .nb_subtract = [] (PyObject *v1, PyObject *v2) -> PyObject* {
-        return cxx_catch([&] { return build_addsub(v1, v2, true); }); },
-    .nb_multiply = [] (PyObject *v1, PyObject *v2) {
-        return cxx_catch([&] { return new_expr2_wrap1(Mul, v1, v2); }); },
-    .nb_remainder = [] (PyObject *v1, PyObject *v2) {
-        return cxx_catch([&] { return new_expr2_wrap1(Mod, v1, v2); }); },
-    .nb_power = [] (PyObject *v1, PyObject *v2, PyObject *v3) {
+    .nb_add = py::binfunc<[] (auto v1, auto v2) { return build_addsub(v1, v2, false); }>,
+    .nb_subtract = py::binfunc<[] (auto v1, auto v2) { return build_addsub(v1, v2, true); }>,
+    .nb_multiply = py::binfunc<[] (auto v1, auto v2) { return new_expr2_wrap1(Mul, v1, v2); }>,
+    .nb_remainder = py::binfunc<[] (auto v1, auto v2) { return new_expr2_wrap1(Mod, v1, v2); }>,
+    .nb_power = py::trifunc<[] (auto v1, auto v2, auto v3) {
         if (v3 != Py_None) [[unlikely]]
             Py_RETURN_NOTIMPLEMENTED;
-        return cxx_catch([&] { return new_expr2_wrap1(Pow, v1, v2); });
-    },
-    .nb_negative = [] (PyObject *self) -> PyObject* {
-        return cxx_catch([&] { return build_addsub(py::int_cached(0), self, true); });
-    },
+        return new_expr2_wrap1(Pow, v1, v2);
+    }>,
+    .nb_negative = py::unifunc<[] (auto self) {
+        return build_addsub(py::int_cached(0), self, true);
+    }>,
     .nb_positive = [] (PyObject *self) { return py::newref(self); },
-    .nb_absolute = [] (PyObject *self) -> PyObject* {
-        if (((RuntimeValue*)self)->type_ == Abs)
-            return py::newref(self);
-        return cxx_catch([&] { return new_expr1(Abs, self); });
-    },
+    .nb_absolute = py::unifunc<[] (rtval_ptr self) {
+        if (self->type_ == Abs)
+            return self.ref();
+        return new_expr1(Abs, self);
+    }>,
     .nb_bool = [] (PyObject *self) {
         // It's too easy to accidentally use this in control flow/assertion
         PyErr_Format(PyExc_TypeError, "Cannot convert runtime value to boolean");
         return -1;
     },
-    .nb_and = [] (PyObject *v1, PyObject *v2) {
-        return cxx_catch([&] { return new_expr2_wrap1(And, v1, v2); }); },
-    .nb_xor = [] (PyObject *v1, PyObject *v2) {
-        return cxx_catch([&] { return new_expr2_wrap1(Xor, v1, v2); }); },
-    .nb_or = [] (PyObject *v1, PyObject *v2) {
-        return cxx_catch([&] { return new_expr2_wrap1(Or, v1, v2); }); },
-    .nb_true_divide =  [] (PyObject *v1, PyObject *v2) {
-        return cxx_catch([&] { return new_expr2_wrap1(Div, v1, v2); }); },
+    .nb_and = py::binfunc<[] (auto v1, auto v2) { return new_expr2_wrap1(And, v1, v2); }>,
+    .nb_xor = py::binfunc<[] (auto v1, auto v2) { return new_expr2_wrap1(Xor, v1, v2); }>,
+    .nb_or = py::binfunc<[] (auto v1, auto v2) { return new_expr2_wrap1(Or, v1, v2); }>,
+    .nb_true_divide = py::binfunc<[] (auto v1, auto v2) {
+        return new_expr2_wrap1(Div, v1, v2); }>,
 };
 
 static inline bool is_integer(auto v)
@@ -929,14 +922,11 @@ struct rtvalue_printer : py::stringio {
 
 }
 
-static PyObject *rtvalue_str(PyObject *self)
-{
-    return cxx_catch([&] {
-        rtvalue_printer io;
-        io.show((RuntimeValue*)self);
-        return io.getvalue();
-    });
-}
+static constexpr auto rtvalue_str = py::unifunc<[] (rtval_ptr self) {
+    rtvalue_printer io;
+    io.show(self);
+    return io.getvalue();
+}>;
 
 __attribute__((visibility("protected")))
 PyTypeObject RuntimeValue::Type = {
@@ -966,18 +956,16 @@ PyTypeObject RuntimeValue::Type = {
         Py_CLEAR(self->cb_arg2);
         return 0;
     },
-    .tp_richcompare = [] (PyObject *v1, PyObject *v2, int op) {
-        return cxx_catch([&] () -> py::ref<> {
-            auto typ = pycmp2valcmp(op);
-            if (is_rtval(v2)) {
-                if (v1 == v2)
-                    return py::ptr(typ == CmpLE || typ == CmpGE || typ == CmpEQ ?
-                                   Py_True : Py_False).immref();
-                return new_expr2(typ, v1, v2);
-            }
-            return new_expr2(typ, v1, new_const(TagVal::from_py(v2)));
-        });
-    },
+    .tp_richcompare = py::tp_richcompare<[] (auto v1, auto v2, int op) -> py::ref<> {
+        auto typ = pycmp2valcmp(op);
+        if (is_rtval(v2)) {
+            if (v1 == v2)
+                return py::ptr(typ == CmpLE || typ == CmpGE || typ == CmpEQ ?
+                               Py_True : Py_False).immref();
+            return new_expr2(typ, v1, v2);
+        }
+        return new_expr2(typ, v1, new_const(TagVal::from_py(v2)));
+    }>,
     .tp_methods = (py::meth_table<
                    py::meth_fast<"__array_ufunc__",rtvalue_array_ufunc>,
                    py::meth_o<"eval",rtvalue_eval>,
@@ -995,9 +983,7 @@ PyTypeObject ExternCallback::Type = {
         Py_TYPE(py_self)->tp_free(py_self);
     },
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,
-    .tp_new = [] (PyTypeObject *t, PyObject*, PyObject*) {
-        return PyType_GenericAlloc(t, 0);
-    },
+    .tp_new = py::tp_new<[] (PyTypeObject *t, auto...) { return PyType_GenericAlloc(t, 0); }>,
 };
 
 static PyObject *py_get_value(PyObject*, PyObject *const *args, Py_ssize_t nargs)

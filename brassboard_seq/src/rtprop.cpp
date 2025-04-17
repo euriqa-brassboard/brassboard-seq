@@ -191,11 +191,12 @@ PyTypeObject CompositeRTProp_Type = {
                    py::meth_o<"get_state",CompositeRTProp::get_state>,
                    py::meth_fast<"set_state",CompositeRTProp::set_state>,
                    py::meth_fast<"__set_name__",CompositeRTProp::set_name>>),
-    .tp_descr_get = [] (PyObject *self, PyObject *obj, PyObject*) -> PyObject* {
+    .tp_descr_get = py::trifunc<[] (py::ptr<CompositeRTProp> self, py::ptr<> obj,
+                                    auto) -> py::ref<> {
         if (!obj) [[unlikely]]
-            return py::newref(self);
-        return cxx_catch([&] { return ((CompositeRTProp*)self)->get_res(obj); });
-    },
+            return self.ref();
+        return self->get_res(obj);
+    }>,
     .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_no_kwnames("CompositeRTProp.__init__", kwnames);
@@ -249,15 +250,12 @@ PyTypeObject rtprop_callback::Type = {
         Type.tp_clear(py_self);
         Py_TYPE(py_self)->tp_free(py_self);
     },
-    .tp_str = [] (PyObject *py_self) {
-        return cxx_catch([&] {
-            auto self = (rtprop_callback*)py_self;
-            return py::str_format(
-                "<RTProp %U for %S>",
-                py::str_ref::checked(PyUnicode_Substring(self->fieldname, rtprop_prefix_len,
-                                                         PY_SSIZE_T_MAX)), self->obj);
-        });
-    },
+    .tp_str = py::unifunc<[] (py::ptr<rtprop_callback> self) {
+        return py::str_format(
+            "<RTProp %U for %S>",
+            py::str_ref::checked(PyUnicode_Substring(self->fieldname, rtprop_prefix_len,
+                                                     PY_SSIZE_T_MAX)), self->obj);
+    }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = [] (PyObject *py_self, visitproc visit, void *arg) {
         auto self = (rtprop_callback*)py_self;
@@ -342,21 +340,15 @@ PyTypeObject RTProp_Type = {
                    py::meth_o<"get_state",RTProp::get_state>,
                    py::meth_fast<"set_state",RTProp::set_state>,
                    py::meth_fast<"__set_name__",RTProp::set_name>>),
-    .tp_descr_get = [] (PyObject *py_self, PyObject *obj, PyObject*) {
+    .tp_descr_get = py::trifunc<[] (py::ptr<RTProp> self, py::ptr<> obj, auto) -> py::ref<> {
         if (!obj) [[unlikely]]
-            return py::newref(py_self);
-        return cxx_catch([&] { return ((RTProp*)py_self)->get_res(obj); });
-    },
-    .tp_descr_set = [] (PyObject *py_self, PyObject *obj, PyObject *val) {
-        try {
-            ((RTProp*)py_self)->set_res(obj, val);
-        }
-        catch (...) {
-            handle_cxx_exception();
-            return -1;
-        }
+            return self.ref();
+        return self->get_res(obj);
+    }>,
+    .tp_descr_set = py::itrifunc<[] (py::ptr<RTProp> self, py::ptr<> obj, py::ptr<> val) {
+        self->set_res(obj, val);
         return 0;
-    },
+    }>,
     .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_no_kwnames("RTProp.__init__", kwnames);

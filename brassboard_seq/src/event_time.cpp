@@ -159,7 +159,7 @@ inline void TimeManager::visit_time(EventTime *t, auto &visited)
 
 __attribute__((visibility("protected")))
 time_ref TimeManager::new_rt(time_ptr prev, rtval::rtval_ptr offset,
-                               py::ptr<> cond, time_ptr wait_for)
+                             py::ptr<> cond, time_ptr wait_for)
 {
     if (status->finalized)
         py_throw_format(PyExc_RuntimeError,
@@ -315,35 +315,31 @@ PyTypeObject TimeManager::Type = {
 
 namespace {
 
-static PyObject *eventtime_str(PyObject *py_self)
-{
-    return cxx_catch([&] {
-        auto self = (EventTime*)py_self;
-        if (self->data.floating)
-            return "<floating>"_py.ref();
-        if (self->data.is_static())
-            return str_time(self->data._get_static());
-        auto rt_offset = self->data.get_rt_offset();
-        auto str_offset(rt_offset ? rt_offset.str() : str_time(self->data.get_c_offset()));
-        auto prev = self->prev;
-        auto cond = self->cond;
-        if (prev == Py_None) {
-            assert(cond == Py_True);
-            return str_offset;
-        }
-        auto wait_for = self->wait_for;
-        if (wait_for == Py_None) {
-            if (cond == Py_True)
-                return py::str_format("T[%u] + %U", prev->data.id, str_offset);
-            return py::str_format("T[%u] + (%U; if %S)", prev->data.id, str_offset, cond);
-        }
+static constexpr auto eventtime_str = py::unifunc<[] (time_ptr self) {
+    if (self->data.floating)
+        return "<floating>"_py.ref();
+    if (self->data.is_static())
+        return str_time(self->data._get_static());
+    auto rt_offset = self->data.get_rt_offset();
+    auto str_offset(rt_offset ? rt_offset.str() : str_time(self->data.get_c_offset()));
+    auto prev = self->prev;
+    auto cond = self->cond;
+    if (prev == Py_None) {
+        assert(cond == Py_True);
+        return str_offset;
+    }
+    auto wait_for = self->wait_for;
+    if (wait_for == Py_None) {
         if (cond == Py_True)
-            return py::str_format("T[%u]; wait_for(T[%u] + %U)",
-                                  prev->data.id, wait_for->data.id, str_offset);
-        return py::str_format("T[%u]; wait_for(T[%u] + %U; if %S)",
-                              prev->data.id, wait_for->data.id, str_offset, cond);
-    });
-}
+            return py::str_format("T[%u] + %U", prev->data.id, str_offset);
+        return py::str_format("T[%u] + (%U; if %S)", prev->data.id, str_offset, cond);
+    }
+    if (cond == Py_True)
+        return py::str_format("T[%u]; wait_for(T[%u] + %U)",
+                              prev->data.id, wait_for->data.id, str_offset);
+    return py::str_format("T[%u]; wait_for(T[%u] + %U; if %S)",
+                          prev->data.id, wait_for->data.id, str_offset, cond);
+}>;
 
 static inline int eventtime_find_base_id(EventTime *t1, EventTime *t2, unsigned age)
 {
@@ -419,21 +415,18 @@ PyTypeObject EventTimeDiff::Type = {
 };
 
 static PyNumberMethods EventTime_as_number = {
-    .nb_subtract = [] (PyObject *v1, PyObject *v2) -> PyObject* {
-        auto self = (EventTime*)v1;
-        auto other = (EventTime*)v2;
-        return cxx_catch([&] {
-            if (self->manager_status != other->manager_status)
-                py_throw_format(PyExc_ValueError,
-                                "Cannot take the difference between unrelated times");
-            auto diff = py::generic_alloc<EventTimeDiff>();
-            diff->t1 = (EventTime*)py::newref(self);
-            diff->t2 = (EventTime*)py::newref(other);
-            diff->in_eval = false;
-            diff->fptr = (void*)EventTimeDiff::eval;
-            return rtval::new_extern_age(diff, (PyObject*)&PyFloat_Type);
-        });
-    },
+    .nb_subtract = py::binfunc<[] (time_ptr self, PyObject *v) {
+        auto other = py::arg_cast<EventTime,true>(v, "other");
+        if (self->manager_status != other->manager_status)
+            py_throw_format(PyExc_ValueError,
+                            "Cannot take the difference between unrelated times");
+        auto diff = py::generic_alloc<EventTimeDiff>();
+        diff->t1 = (EventTime*)py::newref(self);
+        diff->t2 = (EventTime*)py::newref(other);
+        diff->in_eval = false;
+        diff->fptr = (void*)EventTimeDiff::eval;
+        return rtval::new_extern_age(diff, (PyObject*)&PyFloat_Type);
+    }>,
 };
 
 }

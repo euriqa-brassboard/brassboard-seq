@@ -1618,6 +1618,42 @@ auto cxx_catch(auto &&cb)
 
 namespace py {
 
+template<auto F>
+static inline PyObject *unifunc(PyObject *v1)
+{
+    return (PyObject*)cxx_catch([&] { return F(v1); });
+}
+
+template<auto F>
+static inline PyObject *binfunc(PyObject *v1, PyObject *v2)
+{
+    return (PyObject*)cxx_catch([&] { return F(v1, v2); });
+}
+
+template<auto F>
+static inline PyObject *trifunc(PyObject *v1, PyObject *v2, PyObject *v3)
+{
+    return (PyObject*)cxx_catch([&] { return F(v1, v2, v3); });
+}
+
+template<auto F>
+static inline int iunifunc(PyObject *v1)
+{
+    return (int)cxx_catch([&] { return F(v1); });
+}
+
+template<auto F>
+static inline int ibinfunc(PyObject *v1, PyObject *v2)
+{
+    return (int)cxx_catch([&] { return F(v1, v2); });
+}
+
+template<auto F>
+static inline int itrifunc(PyObject *v1, PyObject *v2, PyObject *v3)
+{
+    return (int)cxx_catch([&] { return F(v1, v2, v3); });
+}
+
 template<str_literal name, auto F, int flags, str_literal doc>
 struct _method_def {
     static constexpr PyMethodDef get()
@@ -1631,11 +1667,7 @@ struct _method_def {
 };
 constexpr PyMethodDef null_def = {0, 0, 0, 0};
 
-template<auto F>
-static inline PyObject *cfunc(PyObject *self, PyObject *arg)
-{
-    return (PyObject*)cxx_catch([&] { return F(self, arg); });
-}
+template<auto F> static constexpr auto cfunc = binfunc<F>;
 template<str_literal name, auto F, str_literal doc="">
 static constexpr auto meth_o = _method_def<name,cfunc<F>,METH_O,doc>{};
 
@@ -1678,6 +1710,18 @@ static inline PyObject *vectorfunc(PyObject *self, PyObject *const *args,
 {
     return (PyObject*)cxx_catch([&] { return F(self, args, PyVectorcall_NARGS(nargsf),
                                                kwnames); });
+}
+
+template<auto F>
+static inline PyObject *tp_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    return (PyObject*)cxx_catch([&] { return F(type, args, kwargs); });
+}
+
+template<auto F>
+static inline PyObject *tp_richcompare(PyObject *v1, PyObject *v2, int op)
+{
+    return (PyObject*)cxx_catch([&] { return F(v1, v2, op); });
 }
 
 }

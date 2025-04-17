@@ -113,14 +113,11 @@ struct CondCombiner {
 };
 
 template<typename T>
-static PyObject *generic_str(PyObject *py_self)
-{
-    return cxx_catch([&] {
-        py::stringio io;
-        ((T*)py_self)->show(io, 0);
-        return io.getvalue();
-    });
-}
+static constexpr auto generic_str = py::unifunc<[] (py::ptr<T> self) {
+    py::stringio io;
+    self->show(io, 0);
+    return io.getvalue();
+}>;
 
 template<typename CondSeq, bool is_pulse=false>
 static auto condseq_set(py::ptr<CondSeq> self, PyObject *const *args,

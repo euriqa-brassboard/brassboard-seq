@@ -183,20 +183,16 @@ static auto parampack_new(PyObject*, PyObject *const *args, ssize_t nargs,
     return self;
 }
 
-static PyObject *parampack_str(PyObject *py_self)
-{
-    return cxx_catch([&] {
-        auto self = (ParamPack*)py_self;
-        auto fieldname = self->fieldname;
-        auto values = py::dict(self->values);
-        auto field = values.try_get(fieldname);
-        if (!field)
-            return py::newref("<Undefined>"_py);
-        if (!field.typeis<py::dict>())
-            return PyObject_Str(field);
-        return yaml::sprint(field);
-    });
-}
+static constexpr auto parampack_str = py::unifunc<[] (py::ptr<ParamPack> self) {
+    auto fieldname = self->fieldname;
+    auto values = py::dict(self->values);
+    auto field = values.try_get(fieldname);
+    if (!field)
+        return py::newref("<Undefined>"_py);
+    if (!field.typeis<py::dict>())
+        return PyObject_Str(field);
+    return yaml::sprint(field);
+}>;
 
 __attribute__((visibility("protected")))
 ParamPack *ParamPack::new_empty()
@@ -209,19 +205,16 @@ ParamPack *ParamPack::new_empty()
 }
 
 static PySequenceMethods ParamPack_as_sequence = {
-    .sq_contains = [] (PyObject *py_self, PyObject *key) -> int {
-        auto self = (ParamPack*)py_self;
+    .sq_contains = py::ibinfunc<[] (py::ptr<ParamPack> self, PyObject *key) -> int {
         auto fieldname = self->fieldname;
         auto values = py::dict(self->values);
-        return cxx_catch([&] {
-            auto field = values.try_get(fieldname);
-            if (!field)
-                return false;
-            if (!field.typeis<py::dict>())
-                py_throw_format(PyExc_TypeError, "Scalar value does not have field");
-            return py::dict(field).contains(key);
-        });
-    },
+        auto field = values.try_get(fieldname);
+        if (!field)
+            return false;
+        if (!field.typeis<py::dict>())
+            py_throw_format(PyExc_TypeError, "Scalar value does not have field");
+        return py::dict(field).contains(key);
+    }>,
 };
 
 static inline bool is_slice_none(PyObject *key)
@@ -233,24 +226,21 @@ static inline bool is_slice_none(PyObject *key)
 }
 
 static PyMappingMethods ParamPack_as_mapping = {
-    .mp_subscript = [] (PyObject *py_self, PyObject *key) -> PyObject* {
+    .mp_subscript = py::binfunc<[] (py::ptr<ParamPack> self, py::ptr<> key) {
         if (!is_slice_none(key))
-            return PyErr_Format(PyExc_ValueError, "Invalid index for ParamPack: %S", key);
-        auto self = (ParamPack*)py_self;
+            py_throw_format(PyExc_ValueError, "Invalid index for ParamPack: %S", key);
         auto fieldname = self->fieldname;
         auto values = py::dict(self->values);
-        return cxx_catch([&] {
-            auto field = values.try_get(fieldname);
-            if (!field)
-                return py::new_dict();
-            if (!field.typeis<py::dict>())
-                py_throw_format(PyExc_TypeError, "Cannot access value as parameter pack.");
-            auto res = py::new_dict();
-            for (auto [k, v]: py::dict_iter(field))
-                res.set(k, py::dict_deepcopy(v));
-            return res;
-        });
-    },
+        auto field = values.try_get(fieldname);
+        if (!field)
+            return py::new_dict();
+        if (!field.typeis<py::dict>())
+            py_throw_format(PyExc_TypeError, "Cannot access value as parameter pack.");
+        auto res = py::new_dict();
+        for (auto [k, v]: py::dict_iter(field))
+            res.set(k, py::dict_deepcopy(v));
+        return res;
+    }>,
 };
 
 __attribute__((visibility("protected")))
@@ -270,53 +260,48 @@ PyTypeObject ParamPack::Type = {
     .tp_as_mapping = &ParamPack_as_mapping,
     .tp_call = PyVectorcall_Call,
     .tp_str = parampack_str,
-    .tp_getattro = [] (PyObject *py_self, PyObject *name) {
-        return cxx_catch([&] () -> PyObject* {
-            check_non_empty_string_arg(name, "name");
-            if (PyUnicode_READ_CHAR(name, 0) == '_')
-                return PyObject_GenericGetAttr(py_self, name);
-            auto self = (ParamPack*)py_self;
-            auto res = parampack_alloc();
-            res->values = self->ensure_dict().rel();
-            res->visited = self->ensure_visited().rel();
-            res->fieldname = py::newref(name);
-            return res.rel();
-        });
-    },
-    .tp_setattro = [] (PyObject *py_self, PyObject *name, PyObject *value) -> int {
-        return cxx_catch([&] {
-            check_non_empty_string_arg(name, "name");
-            // To be consistent with __getattribute__
-            if (PyUnicode_READ_CHAR(name, 0) == '_')
-                py_throw_format(PyExc_AttributeError,
-                                "'ParamPack' object has no attribute '%U'", name);
-            if (!value)
-                py_throw_format(PyExc_RuntimeError, "Deleting attribute not supported");
-            auto self = (ParamPack*)py_self;
-            auto self_values = self->ensure_dict();
-            auto oldvalue = self_values.try_get(name);
-            if (oldvalue) {
-                auto was_dict = oldvalue.typeis<py::dict>();
-                auto is_dict = py::isa<py::dict>(value);
-                if (was_dict && !is_dict)
-                    py_throw_format(PyExc_TypeError,
-                                    "Cannot override parameter pack as value");
-                if (!was_dict && is_dict)
-                    py_throw_format(PyExc_TypeError,
-                                    "Cannot override value as parameter pack");
-                if (is_dict) {
-                    merge_dict_into<true>(oldvalue, value);
-                }
-                else {
-                    self_values.set(name, value);
-                }
+    .tp_getattro = py::binfunc<[] (py::ptr<ParamPack> self, py::ptr<> name) -> py::ref<> {
+        check_non_empty_string_arg(name, "name");
+        if (PyUnicode_READ_CHAR(name, 0) == '_')
+            return py::ref(PyObject_GenericGetAttr(self, name));
+        auto res = parampack_alloc();
+        res->values = self->ensure_dict().rel();
+        res->visited = self->ensure_visited().rel();
+        res->fieldname = py::newref(name);
+        return res;
+    }>,
+    .tp_setattro = py::itrifunc<[] (py::ptr<ParamPack> self, py::ptr<> name,
+                                        py::ptr<> value) {
+        check_non_empty_string_arg(name, "name");
+        // To be consistent with __getattribute__
+        if (PyUnicode_READ_CHAR(name, 0) == '_')
+            py_throw_format(PyExc_AttributeError,
+                            "'ParamPack' object has no attribute '%U'", name);
+        if (!value)
+            py_throw_format(PyExc_RuntimeError, "Deleting attribute not supported");
+        auto self_values = self->ensure_dict();
+        auto oldvalue = self_values.try_get(name);
+        if (oldvalue) {
+            auto was_dict = oldvalue.typeis<py::dict>();
+            auto is_dict = py::isa<py::dict>(value);
+            if (was_dict && !is_dict)
+                py_throw_format(PyExc_TypeError,
+                                "Cannot override parameter pack as value");
+            if (!was_dict && is_dict)
+                py_throw_format(PyExc_TypeError,
+                                "Cannot override value as parameter pack");
+            if (is_dict) {
+                merge_dict_into<true>(oldvalue, value);
             }
             else {
-                self_values.set(name, py::dict_deepcopy(value));
+                self_values.set(name, value);
             }
-            return 0;
-        });
-    },
+        }
+        else {
+            self_values.set(name, py::dict_deepcopy(value));
+        }
+        return 0;
+    }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC|Py_TPFLAGS_HAVE_VECTORCALL,
     .tp_traverse = [] (PyObject *py_self, visitproc visit, void *arg) {
         auto self = (ParamPack*)py_self;
