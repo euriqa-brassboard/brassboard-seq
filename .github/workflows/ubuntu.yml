@@ -53,6 +53,7 @@ jobs:
         bash ${{github.workspace}}/scripts/fix_cython_c_path.sh ${{github.workspace}} ${{github.workspace}}/build
         python3 -m coverage combine --rcfile=${{github.workspace}}/cmake/coveragerc
         python3 -m coverage xml -i --ignore-errors --omit='tests/*' --rcfile=${{github.workspace}}/cmake/coveragerc
+        find ${{github.workspace}}/build/tests -iname '*.gcov' -exec rm -v {} \;
 
     - name: Upload coverage
       uses: codecov/codecov-action@v5
