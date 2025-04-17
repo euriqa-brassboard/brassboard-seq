@@ -942,18 +942,18 @@ auto exact_cast(T2 &&self)
     return cast<T,true>(std::forward<T2>(self));
 }
 
-template<typename T, typename T2, typename T3>
+template<typename T, bool exact=false, typename T2, typename T3>
 auto arg_cast(T2 &&self, T3 &&type, const char *name)
 {
-    if (auto res = cast<T,false>(std::forward<T2>(self), std::forward<T3>(type)))
+    if (auto res = cast<T,exact>(std::forward<T2>(self), std::forward<T3>(type)))
         return res;
     py_throw_format(PyExc_TypeError, "Unexpected type '%S' for %s",
                     Py_TYPE((PyObject*)self), name);
 }
-template<typename T, typename T2>
+template<typename T, bool exact=false, typename T2>
 auto arg_cast(T2 &&self, const char *name)
 {
-    if (auto res = cast<T,false>(std::forward<T2>(self)))
+    if (auto res = cast<T,exact>(std::forward<T2>(self)))
         return res;
     py_throw_format(PyExc_TypeError, "Unexpected type '%S' for %s",
                     Py_TYPE((PyObject*)self), name);
@@ -1542,6 +1542,7 @@ void handle_cxx_exception();
 auto cxx_catch(auto &&cb)
 {
     using raw_ret_type = std::remove_cvref_t<decltype(cb())>;
+    constexpr bool is_void = std::is_void_v<raw_ret_type>;
     constexpr bool is_ptr = std::is_pointer_v<raw_ret_type>;
     constexpr bool is_handle = py::is_handle_v<raw_ret_type>;
     constexpr bool is_ref = is_handle && requires { cb().rel(); };
@@ -1555,6 +1556,10 @@ auto cxx_catch(auto &&cb)
         else if constexpr (is_ptr) {
             return cb();
         }
+        else if constexpr (is_void) {
+            cb();
+            Py_RETURN_NONE;
+        }
         else {
             return (int)cb();
         }
@@ -1564,6 +1569,9 @@ auto cxx_catch(auto &&cb)
         if constexpr (is_ptr) {
             return (raw_ret_type)nullptr;
         }
+        else if constexpr (is_void) {
+            return (PyObject*)nullptr;
+        }
         else if constexpr (is_handle) {
             using ret_type = std::remove_cvref_t<decltype(cb().get())>;
             return (ret_type)nullptr;
@@ -1572,6 +1580,22 @@ auto cxx_catch(auto &&cb)
             return -1;
         }
     }
+}
+
+namespace py {
+
+template<auto F>
+static inline PyObject *cfunc(PyObject *self, PyObject *args)
+{
+    return (PyObject*)cxx_catch([&] { return F(self, args); });
+}
+
+template<auto F>
+static inline PyObject *cfunc_fast(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+{
+    return (PyObject*)cxx_catch([&] { return F(self, args, nargs); });
+}
+
 }
 
 static inline void throw_pyerr(bool cond=true)

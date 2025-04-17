@@ -38,32 +38,21 @@ static inline auto split_string_tuple(PyObject *s)
     return tuple;
 }
 
-static PyObject *add_supported_prefix(Config *self, PyObject *const *args,
-                                      Py_ssize_t nargs)
+static inline void add_supported_prefix(py::ptr<Config> self, py::ptr<> prefix)
 {
-    return cxx_catch([&] {
-        py::check_num_arg("add_supported_prefix", nargs, 1, 1);
-        check_string_arg(args[0], "prefix");
-        py::set(self->supported_prefix).add(args[0]);
-        Py_RETURN_NONE;
-    });
+    py::set(self->supported_prefix).add(py::arg_cast<py::str>(prefix, "prefix"));
 }
 
-static PyObject *add_channel_alias(Config *self, PyObject *const *args,
-                                   Py_ssize_t nargs)
+static inline void add_channel_alias(py::ptr<Config> self, PyObject *const *args,
+                                     Py_ssize_t nargs)
 {
-    return cxx_catch([&] {
-        py::check_num_arg("add_channel_alias", nargs, 2, 2);
-        auto name = args[0];
-        auto target = args[1];
-        check_string_arg(name, "name");
-        check_string_arg(target, "target");
-        if (py::str(name).contains("/"_py))
-            py_throw_format(PyExc_ValueError, "Channel alias name may not contain \"/\"");
-        py::dict(self->alias_cache).clear();
-        py::dict(self->channel_alias).set(name, split_string_tuple(target));
-        Py_RETURN_NONE;
-    });
+    py::check_num_arg("Config.add_channel_alias", nargs, 2, 2);
+    auto name = py::arg_cast<py::str>(args[0], "name");
+    auto target = py::arg_cast<py::str>(args[1], "target");
+    if (py::str(name).contains("/"_py))
+        py_throw_format(PyExc_ValueError, "Channel alias name may not contain \"/\"");
+    py::dict(self->alias_cache).clear();
+    py::dict(self->channel_alias).set(name, split_string_tuple(target));
 }
 
 inline py::tuple_ref Config::_translate_channel(py::tuple path)
@@ -103,14 +92,9 @@ PyObject *Config::translate_channel(PyObject *name)
     return _translate_channel(split_string_tuple(name)).rel();
 }
 
-static PyObject *py_translate_channel(Config *self, PyObject *const *args,
-                                      Py_ssize_t nargs)
+static inline PyObject *py_translate_channel(py::ptr<Config> self, py::ptr<> name)
 {
-    return cxx_catch([&] {
-        py::check_num_arg("translate_channel", nargs, 1);
-        check_string_arg(args[0], "name");
-        return self->translate_channel(args[0]);
-    });
+    return self->translate_channel(py::arg_cast<py::str>(name, "name"));
 }
 
 __attribute__((visibility("protected")))
@@ -129,10 +113,12 @@ PyTypeObject Config::Type = {
     // No reference loop possible.
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,
     .tp_methods = (PyMethodDef[]){
-        {"add_supported_prefix", (PyCFunction)(void*)add_supported_prefix,
-         METH_FASTCALL, 0},
-        {"add_channel_alias", (PyCFunction)(void*)add_channel_alias, METH_FASTCALL, 0},
-        {"translate_channel", (PyCFunction)(void*)py_translate_channel, METH_FASTCALL, 0},
+        {"add_supported_prefix", (PyCFunction)(void*)py::cfunc<add_supported_prefix>,
+         METH_O},
+        {"add_channel_alias", (PyCFunction)(void*)py::cfunc_fast<add_channel_alias>,
+         METH_FASTCALL},
+        {"translate_channel", (PyCFunction)(void*)py::cfunc<py_translate_channel>,
+         METH_O},
         {0, 0, 0, 0}
     },
     .tp_new = [] (PyTypeObject *t, PyObject*, PyObject*) -> PyObject* {

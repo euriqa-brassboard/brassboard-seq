@@ -144,32 +144,22 @@ struct CompositeRTProp : PyObject {
         return apply_composite_ovr(data->cache, data->ovr);
     }
 
-    static PyObject *get_state(CompositeRTProp *self,
-                               PyObject *const *args, Py_ssize_t nargs)
+    static PyObject *get_state(py::ptr<CompositeRTProp> self, py::ptr<> obj)
     {
-        return cxx_catch([&] {
-            py::check_num_arg("get_state", nargs, 1, 1);
-            return py::newref(self->get_data(args[0])->ovr);
-        });
+        return py::newref(self->get_data(obj)->ovr);
     }
-    static PyObject *set_state(CompositeRTProp *self,
-                               PyObject *const *args, Py_ssize_t nargs)
+    static void set_state(py::ptr<CompositeRTProp> self,
+                          PyObject *const *args, Py_ssize_t nargs)
     {
-        return cxx_catch([&] {
-            py::check_num_arg("set_state", nargs, 2, 2);
-            py::assign(self->get_data(args[0])->ovr, args[1]);
-            Py_RETURN_NONE;
-        });
+        py::check_num_arg("CompositeRTProp.set_state", nargs, 2, 2);
+        py::assign(self->get_data(args[0])->ovr, args[1]);
     }
 
-    static PyObject *set_name(CompositeRTProp *self,
-                              PyObject *const *args, Py_ssize_t nargs)
+    static void set_name(py::ptr<CompositeRTProp> self,
+                         PyObject *const *args, Py_ssize_t nargs)
     {
-        return cxx_catch([&] {
-            py::check_num_arg("__set_name__", nargs, 2, 2);
-            py::assign(self->fieldname, "__CompositeRTProp__"_py.concat(args[1]));
-            Py_RETURN_NONE;
-        });
+        py::check_num_arg("CompositeRTProp.__set_name__", nargs, 2, 2);
+        py::assign(self->fieldname, "__CompositeRTProp__"_py.concat(args[1]));
     }
 };
 
@@ -198,9 +188,12 @@ PyTypeObject CompositeRTProp_Type = {
         return 0;
     },
     .tp_methods = (PyMethodDef[]){
-        {"get_state", (PyCFunction)(void*)CompositeRTProp::get_state, METH_FASTCALL, 0},
-        {"set_state", (PyCFunction)(void*)CompositeRTProp::set_state, METH_FASTCALL, 0},
-        {"__set_name__", (PyCFunction)(void*)CompositeRTProp::set_name, METH_FASTCALL, 0},
+        {"get_state", (PyCFunction)(void*)py::cfunc<CompositeRTProp::get_state>,
+         METH_O},
+        {"set_state", (PyCFunction)(void*)py::cfunc_fast<CompositeRTProp::set_state>,
+         METH_FASTCALL},
+        {"__set_name__", (PyCFunction)(void*)py::cfunc_fast<CompositeRTProp::set_name>,
+         METH_FASTCALL},
         {0, 0, 0, 0}
     },
     .tp_descr_get = [] (PyObject *self, PyObject *obj, PyObject*) -> PyObject* {
@@ -315,37 +308,28 @@ struct RTProp : PyObject {
             obj.del_attr(fieldname);
     }
 
-    static PyObject *get_state(RTProp *self, PyObject *const *args, Py_ssize_t nargs)
+    static PyObject *get_state(py::ptr<RTProp> self, py::ptr<> obj)
     {
-        return cxx_catch([&] {
-            py::check_num_arg("get_state", nargs, 1, 1);
-            if (auto res = py::ptr(args[0]).try_attr(self->fieldname))
-                return res.rel();
-            Py_RETURN_NONE;
-        });
+        if (auto res = obj.try_attr(self->fieldname))
+            return res.rel();
+        Py_RETURN_NONE;
     }
 
-    static PyObject *set_state(RTProp *self, PyObject *const *args, Py_ssize_t nargs)
+    static void set_state(py::ptr<RTProp> self, PyObject *const *args, Py_ssize_t nargs)
     {
-        return cxx_catch([&] {
-            py::check_num_arg("set_state", nargs, 2, 2);
-            auto obj = py::ptr(args[0]);
-            auto val = args[1];
-            if (val == Py_None)
-                obj.del_attr(self->fieldname);
-            else
-                obj.set_attr(self->fieldname, val);
-            Py_RETURN_NONE;
-        });
+        py::check_num_arg("RTProp.set_state", nargs, 2, 2);
+        auto obj = py::ptr(args[0]);
+        auto val = args[1];
+        if (val == Py_None)
+            obj.del_attr(self->fieldname);
+        else
+            obj.set_attr(self->fieldname, val);
     }
 
-    static PyObject *set_name(RTProp *self, PyObject *const *args, Py_ssize_t nargs)
+    static void set_name(py::ptr<RTProp> self, PyObject *const *args, Py_ssize_t nargs)
     {
-        return cxx_catch([&] {
-            py::check_num_arg("__set_name__", nargs, 2, 2);
-            py::assign(self->fieldname, RTPROP_PREFIX_STR ""_py.concat(args[1]));
-            Py_RETURN_NONE;
-        });
+        py::check_num_arg("RTProp.__set_name__", nargs, 2, 2);
+        py::assign(self->fieldname, RTPROP_PREFIX_STR ""_py.concat(args[1]));
     }
 };
 
@@ -363,9 +347,11 @@ PyTypeObject RTProp_Type = {
     },
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_methods = (PyMethodDef[]){
-        {"get_state", (PyCFunction)(void*)RTProp::get_state, METH_FASTCALL, 0},
-        {"set_state", (PyCFunction)(void*)RTProp::set_state, METH_FASTCALL, 0},
-        {"__set_name__", (PyCFunction)(void*)RTProp::set_name, METH_FASTCALL, 0},
+        {"get_state", py::cfunc<RTProp::get_state>, METH_O},
+        {"set_state", (PyCFunction)(void*)py::cfunc_fast<RTProp::set_state>,
+         METH_FASTCALL},
+        {"__set_name__", (PyCFunction)(void*)py::cfunc_fast<RTProp::set_name>,
+         METH_FASTCALL},
         {0, 0, 0, 0}
     },
     .tp_descr_get = [] (PyObject *py_self, PyObject *obj, PyObject*) {

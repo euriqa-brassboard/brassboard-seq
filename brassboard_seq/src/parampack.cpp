@@ -344,40 +344,32 @@ PyTypeObject ParamPack::Type = {
     .tp_vectorcall = parampack_new,
 };
 
-static PyObject *get_visited(PyObject*, PyObject *const *args, Py_ssize_t nargs)
+static inline py::ref<> get_visited(PyObject*, py::ptr<> param_pack)
 {
-    return cxx_catch([&] {
-        py::check_num_arg("get_visited", nargs, 1, 1);
-        auto self = py::cast<ParamPack,true>(args[0]);
-        if (!self)
-            py_throw_format(PyExc_TypeError, "Wrong type for ParamPack");
-        auto fieldname = self->fieldname;
-        auto visited = py::dict(self->visited);
-        if (auto res = visited.try_get(fieldname))
-            return py::newref(res);
-        if (auto value = py::dict(self->values).try_get(fieldname);
-            value && value.typeis<py::dict>())
-            return set_new_dict(visited, fieldname).rel();
-        Py_RETURN_FALSE;
-    });
+    auto self = py::arg_cast<ParamPack,true>(param_pack, "param_pack");
+    auto fieldname = self->fieldname;
+    auto visited = py::dict(self->visited);
+    if (auto res = visited.try_get(fieldname))
+        return res.ref();
+    if (auto value = py::dict(self->values).try_get(fieldname);
+        value && value.typeis<py::dict>())
+        return set_new_dict(visited, fieldname);
+    return py::ptr(Py_False).immref();
 }
 __attribute__((visibility("protected")))
 PyMethodDef parampack_get_visited_method ={
-    "get_visited", (PyCFunction)(void*)get_visited, METH_FASTCALL, 0};
+    "get_visited", (PyCFunction)(void*)py::cfunc<get_visited>, METH_O};
 
 // Helper function for functions that takes an optional parameter pack
-static PyObject *get_param(PyObject*, PyObject *const *args, Py_ssize_t nargs)
+static inline PyObject *get_param(PyObject*, py::ptr<> param)
 {
-    return cxx_catch([&] () -> PyObject* {
-        py::check_num_arg("get_param", nargs, 1, 1);
-        if (args[0] == Py_None)
-            return ParamPack::new_empty();
-        return py::newref(args[0]);
-    });
+    if (param == Py_None)
+        return ParamPack::new_empty();
+    return py::newref(param);
 }
 __attribute__((visibility("protected")))
 PyMethodDef parampack_get_param_method ={
-    "get_param", (PyCFunction)(void*)get_param, METH_FASTCALL, 0};
+    "get_param", (PyCFunction)(void*)py::cfunc<get_param>, METH_O};
 
 __attribute__((constructor))
 static void init()

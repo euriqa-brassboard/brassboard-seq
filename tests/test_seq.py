@@ -34,10 +34,10 @@ def test_seq():
         s.rt_assert(0, "Some message")
     s.rt_assert(1)
 
-    with pytest.raises(TypeError, match="conditional\\(\\) takes exactly 1 positional argument \\(0 given\\)"):
+    with pytest.raises(TypeError, match="SubSeq.conditional\\(\\) takes exactly one argument \\(0 given\\)"):
         s.conditional()
 
-    with pytest.raises(TypeError, match="conditional\\(\\) takes exactly 1 positional argument \\(2 given\\)"):
+    with pytest.raises(TypeError, match="SubSeq.conditional\\(\\) takes exactly one argument \\(2 given\\)"):
         s.conditional(True, 1)
 
     c1 = s.conditional(True)

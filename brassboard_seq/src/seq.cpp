@@ -216,22 +216,15 @@ catch (...) {
 }
 
 template<typename CondSeq>
-static PyObject *condseq_conditional(PyObject *py_self, PyObject *const *args,
-                                     Py_ssize_t nargs) try
+static auto condseq_conditional(py::ptr<CondSeq> self, py::ptr<> cond)
 {
-    py::check_num_arg("conditional", nargs, 1, 1);
-    auto self = (CondSeq*)py_self;
     auto subseq = self->get_seq();
-    CondCombiner cc(self->cond, args[0]);
+    CondCombiner cc(self->cond, cond);
     auto wrapper = py::generic_alloc<ConditionalWrapper>();
     wrapper->seq = py::newref(subseq);
     wrapper->cond = cc.take_cond();
     wrapper->fptr = (void*)condwrapper_vectorcall;
-    return (PyObject*)wrapper.rel();
-}
-catch (...) {
-    handle_cxx_exception();
-    return nullptr;
+    return wrapper;
 }
 
 template<typename CondSeq, AddStepType type>
@@ -396,12 +389,10 @@ inline void TimeSeq::cclear()
 {
 }
 
-static PyObject *get_channel_id(PyObject *self, PyObject *name)
+static auto get_channel_id(py::ptr<TimeSeq> self, PyObject *name)
 {
-    return cxx_catch([&] {
-        auto id = ((TimeSeq*)self)->seqinfo->get_channel_id(name);
-        return py::new_int(id);
-    });
+    auto id = self->seqinfo->get_channel_id(name);
+    return py::new_int(id);
 }
 
 static PyObject *set_time(PyObject *py_self, PyObject *const *args,
@@ -412,7 +403,7 @@ static PyObject *set_time(PyObject *py_self, PyObject *const *args,
         auto [offset] =
             py::parse_pos_or_kw_args<"offset">("set_time", args + 1, nargs - 1, kwnames);
         auto time = (args[0] == Py_None ? py::ptr<EventTime>(Py_None) :
-                     py::arg_cast<EventTime>(args[0], "time"));
+                     py::arg_cast<EventTime,true>(args[0], "time"));
         if (!offset)
             offset = py::int_cached(0);
         auto self = (TimeSeq*)py_self;
@@ -487,7 +478,7 @@ PyTypeObject TimeSeq::Type = {
         return 0;
     },
     .tp_methods = (PyMethodDef[]){
-        {"get_channel_id", (PyCFunction)(void*)get_channel_id, METH_O, 0},
+        {"get_channel_id", py::cfunc<get_channel_id>, METH_O},
         {"set_time", (PyCFunction)(void*)set_time, METH_FASTCALL|METH_KEYWORDS, 0},
         {"rt_assert", (PyCFunction)(void*)rt_assert, METH_FASTCALL|METH_KEYWORDS, 0},
         {0, 0, 0, 0}
@@ -745,8 +736,7 @@ PyTypeObject SubSeq::Type = {
          METH_FASTCALL|METH_KEYWORDS, 0},
         {"wait_for", (PyCFunction)(void*)condseq_wait_for<SubSeq>,
          METH_FASTCALL|METH_KEYWORDS, 0},
-        {"conditional", (PyCFunction)(void*)condseq_conditional<SubSeq>,
-         METH_FASTCALL, 0},
+        {"conditional", py::cfunc<condseq_conditional<SubSeq>>, METH_O},
         {"set", (PyCFunction)(void*)condseq_set<SubSeq>,
          METH_FASTCALL|METH_KEYWORDS, 0},
         {"add_step",
@@ -816,9 +806,7 @@ PyTypeObject ConditionalWrapper::Type = {
          METH_FASTCALL|METH_KEYWORDS, 0},
         {"wait_for", (PyCFunction)(void*)condseq_wait_for<ConditionalWrapper>,
          METH_FASTCALL|METH_KEYWORDS, 0},
-        {"conditional",
-         (PyCFunction)(void*)condseq_conditional<ConditionalWrapper>,
-         METH_FASTCALL, 0},
+        {"conditional", py::cfunc<condseq_conditional<ConditionalWrapper>>, METH_O},
         {"set", (PyCFunction)(void*)condseq_set<ConditionalWrapper>,
          METH_FASTCALL|METH_KEYWORDS, 0},
         {"add_step",
