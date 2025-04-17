@@ -107,7 +107,7 @@ cdef extern from "test_utils.cpp" namespace "brassboard_seq":
     event_time.EventTime timemanager_new_round_time(event_time.TimeManager, event_time.EventTime, object, object, event_time.EventTime) except +
 
     event_time.EventTime timemanager_new_time_int(event_time.TimeManager self, event_time.EventTime prev, int64_t offset, bint floating, object cond, event_time.EventTime wait_for) except +
-    rtval.RuntimeValue round_time_rt "brassboard_seq::event_time::round_time_rt" (rtval.RuntimeValue) except +
+    rtval.rtval_ref round_time_rt "brassboard_seq::event_time::round_time_rt" (rtval.RuntimeValue) except +
 
     object condseq_get_cond(object) except +
 
@@ -249,7 +249,7 @@ def ramp_runtime_eval(action._RampFunctionBase self, t):
 
 def round_time(v):
     if rtval.is_rtval(v):
-        return round_time_rt(<rtval.RuntimeValue>v)
+        return round_time_rt(<rtval.RuntimeValue>v).rel()
     else:
         return event_time.round_time_int(v)
 

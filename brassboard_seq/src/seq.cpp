@@ -251,8 +251,7 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
     }
     else if (type == AddStepType::Floating) {
         auto time_mgr = subseq->seqinfo->time_mgr;
-        start_time.take(time_mgr->new_int((EventTime*)Py_None, 0,
-                                          true, cond, (EventTime*)Py_None));
+        start_time.take(time_mgr->new_int(Py_None, 0, true, cond, Py_None));
     }
     else if (type == AddStepType::At) {
         if (args[0] != Py_None && !py::typeis<event_time::EventTime>(args[0]))
@@ -664,8 +663,7 @@ inline void SubSeq::set(py::ptr<> chn, py::ptr<> value, py::ptr<> cond,
 
 inline void SubSeq::wait_cond(py::ptr<> length, py::ptr<> cond)
 {
-    auto new_time = py::ref(seqinfo->time_mgr->new_round(end_time, length, cond,
-                                                         (EventTime*)Py_None));
+    auto new_time = seqinfo->time_mgr->new_round(end_time, length, cond, Py_None);
     seqinfo->bt_tracker.record(event_time_key(new_time));
     py::assign(end_time, std::move(new_time));
 }
@@ -675,7 +673,7 @@ inline void SubSeq::wait_for_cond(py::ptr<> _tp0, py::ptr<> offset, py::ptr<> co
     auto tp0 = py::cast<EventTime>(_tp0);
     if (!tp0)
         tp0 = py::arg_cast<TimeSeq>(_tp0, "time_point")->end_time;
-    auto new_time = py::ref(seqinfo->time_mgr->new_round(end_time, offset, cond, tp0));
+    auto new_time = seqinfo->time_mgr->new_round(end_time, offset, cond, tp0);
     seqinfo->bt_tracker.record(event_time_key(new_time));
     py::assign(end_time, std::move(new_time));
 }
@@ -704,8 +702,7 @@ SubSeq::add_custom_step(py::ptr<> cond, py::ptr<EventTime> start_time, py::ptr<>
 inline py::ref<TimeStep>
 SubSeq::add_time_step(py::ptr<> cond, py::ptr<EventTime> start_time, py::ptr<> length)
 {
-    py::ref end_time(seqinfo->time_mgr->new_round(start_time, length,
-                                                  cond, (EventTime*)Py_None));
+    auto end_time = seqinfo->time_mgr->new_round(start_time, length, cond, Py_None);
     auto step = py::generic_alloc<TimeStep>();
     call_constructor(&step->actions);
     step->seqinfo = py::newref(seqinfo);
@@ -915,8 +912,8 @@ PyTypeObject Seq::Type = {
             seqinfo->channel_path_map = py::new_dict().rel();
             seqinfo->channel_paths = py::new_list(0).rel();
             seqinfo->C = scan::ParamPack::new_empty();
-            self->end_time = seqinfo->time_mgr->new_int((EventTime*)Py_None, 0, false,
-                                                        Py_True, (EventTime*)Py_None);
+            self->end_time = seqinfo->time_mgr->new_int(Py_None, 0, false,
+                                                        Py_True, Py_None).rel();
             seqinfo->bt_tracker.record(event_time_key(self->end_time));
             self->seqinfo = seqinfo.rel();
             return self;

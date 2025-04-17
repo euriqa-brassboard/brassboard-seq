@@ -47,7 +47,7 @@ static inline int64_t round_time_int(py::ptr<> v)
     return round_time_f64(get_value_f64(v, -1));
 }
 
-__attribute__((returns_nonnull)) RuntimeValue *round_time_rt(rtval::rtval_ptr v);
+rtval::rtval_ref round_time_rt(rtval::rtval_ptr v);
 
 enum TimeOrder {
     NoOrder,
@@ -130,18 +130,19 @@ public:
         _c_offset = (uint64_t)value;
     }
 
-    inline PyObject *get_rt_offset() const
+    inline rtval::rtval_ptr get_rt_offset() const
     {
         if (_is_rt_offset)
             return assume(_rt_offset);
-        return nullptr;
+        return rtval::rtval_ptr();
     }
-    inline void set_rt_offset(RuntimeValue *rv)
+    template<typename T>
+    inline void set_rt_offset(T &&rv)
     {
         assume(rv && !_is_static && !_is_rt_offset);
         _is_rt_offset = true;
         assert(rv->datatype == rtval::DataType::Int64);
-        _rt_offset = py::newref(rv);
+        _rt_offset = py::newref(std::forward<T>(rv));
         // Assume PyObject alignment
         assert(!_is_static);
     }
@@ -163,6 +164,9 @@ struct TimeManagerStatus {
 
 struct EventTime;
 
+using time_ptr = py::ptr<EventTime>;
+using time_ref = py::ref<EventTime>;
+
 struct TimeManager : PyObject {
     std::shared_ptr<TimeManagerStatus> status;
     PyObject *event_times;
@@ -171,22 +175,11 @@ struct TimeManager : PyObject {
     void finalize();
     int64_t compute_all_times(unsigned age);
 
-    __attribute__((returns_nonnull)) EventTime*
-    new_int(EventTime *prev, int64_t offset, bool floating,
-            PyObject *cond, EventTime *wait_for);
-    __attribute__((returns_nonnull)) EventTime*
-    new_rt(EventTime *prev, RuntimeValue *offset, PyObject *cond, EventTime *wait_for);
-    __attribute__((returns_nonnull)) EventTime*
-    new_round(EventTime *prev, PyObject *offset, PyObject *cond, EventTime *wait_for)
-    {
-        if (rtval::is_rtval(offset)) {
-            return new_rt(prev, py::ref(round_time_rt(offset)).get(), cond, wait_for);
-        }
-        else {
-            auto coffset = round_time_int(offset);
-            return new_int(prev, coffset, false, cond, wait_for);
-        }
-    }
+    time_ref new_int(time_ptr prev, int64_t offset, bool floating,
+                     py::ptr<> cond, time_ptr wait_for);
+    time_ref new_rt(time_ptr prev, rtval::rtval_ptr offset,
+                    py::ptr<> cond, time_ptr wait_for);
+    time_ref new_round(time_ptr prev, py::ptr<> offset, py::ptr<> cond, time_ptr wait_for);
 
     static PyTypeObject Type;
     static __attribute__((returns_nonnull)) TimeManager *alloc();
@@ -206,7 +199,7 @@ struct EventTime : PyObject {
     std::vector<int> chain_pos;
 
     // All values are in units of `1/time_scale` seconds
-    void set_base_int(EventTime *base, int64_t offset)
+    void set_base_int(time_ptr base, int64_t offset)
     {
         if (!data.floating)
             py_throw_format(PyExc_ValueError, "Cannot modify non-floating time");
@@ -216,12 +209,13 @@ struct EventTime : PyObject {
         data.set_c_offset(offset);
         data.floating = false;
     }
-    void set_base_rt(EventTime *base, RuntimeValue *offset)
+    template<typename T>
+    void set_base_rt(time_ptr base, T &&offset)
     {
         if (!data.floating)
             py_throw_format(PyExc_ValueError, "Cannot modify non-floating time");
         py::assign(prev, base);
-        data.set_rt_offset(offset);
+        data.set_rt_offset(std::forward<T>(offset));
         data.floating = false;
     }
 
@@ -232,9 +226,8 @@ private:
     friend class TimeManager;
 };
 
-__attribute__((returns_nonnull)) inline EventTime*
-TimeManager::new_int(EventTime *prev, int64_t offset, bool floating,
-                     PyObject *cond, EventTime *wait_for)
+inline time_ref TimeManager::new_int(time_ptr prev, int64_t offset, bool floating,
+                                     py::ptr<> cond, time_ptr wait_for)
 {
     if (status->finalized)
         py_throw_format(PyExc_RuntimeError,
@@ -254,7 +247,19 @@ TimeManager::new_int(EventTime *prev, int64_t offset, bool floating,
     tp->cond = py::newref(cond);
     py::list(event_times).append(tp);
     status->ntimes = ntimes + 1;
-    return tp.rel();
+    return tp;
+}
+
+inline time_ref TimeManager::new_round(time_ptr prev, py::ptr<> offset,
+                                       py::ptr<> cond, time_ptr wait_for)
+{
+    if (rtval::is_rtval(offset)) {
+        return new_rt(prev, round_time_rt(offset), cond, wait_for);
+    }
+    else {
+        auto coffset = round_time_int(offset);
+        return new_int(prev, coffset, false, cond, wait_for);
+    }
 }
 
 static inline TimeOrder is_ordered(EventTime *t1, EventTime *t2)

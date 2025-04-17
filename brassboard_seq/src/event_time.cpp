@@ -32,11 +32,11 @@ py::ptr<> py_time_scale()
     return val;
 }
 
-__attribute__((visibility("protected"),returns_nonnull))
-RuntimeValue *round_time_rt(rtval::rtval_ptr v)
+__attribute__((visibility("protected")))
+rtval::rtval_ref round_time_rt(rtval::rtval_ptr v)
 {
     static RuntimeValue *rt_scale = rtval::new_const(py_time_scale()).rel();
-    return rtval::rt_round_int64(rtval::new_expr2(rtval::Mul, v, rt_scale)).rel();
+    return rtval::rt_round_int64(rtval::new_expr2(rtval::Mul, v, rt_scale));
 }
 
 static inline bool get_cond_val(PyObject *v, unsigned age)
@@ -157,9 +157,9 @@ inline void TimeManager::visit_time(EventTime *t, auto &visited)
     py::list(event_times).append(t);
 }
 
-__attribute__((visibility("protected"),returns_nonnull))
-EventTime *TimeManager::new_rt(EventTime *prev, RuntimeValue *offset,
-                               PyObject *cond, EventTime *wait_for)
+__attribute__((visibility("protected")))
+time_ref TimeManager::new_rt(time_ptr prev, rtval::rtval_ptr offset,
+                               py::ptr<> cond, time_ptr wait_for)
 {
     if (status->finalized)
         py_throw_format(PyExc_RuntimeError,
@@ -177,7 +177,7 @@ EventTime *TimeManager::new_rt(EventTime *prev, RuntimeValue *offset,
     tp->cond = py::newref(cond);
     py::list(event_times).append(tp);
     status->ntimes = ntimes + 1;
-    return tp.rel();
+    return tp;
 }
 
 __attribute__((visibility("protected")))
@@ -323,7 +323,7 @@ static PyObject *eventtime_str(PyObject *py_self)
             return "<floating>"_py.ref();
         if (self->data.is_static())
             return str_time(self->data._get_static());
-        auto rt_offset = py::ptr(self->data.get_rt_offset());
+        auto rt_offset = self->data.get_rt_offset();
         auto str_offset(rt_offset ? rt_offset.str() : str_time(self->data.get_c_offset()));
         auto prev = self->prev;
         auto cond = self->cond;
@@ -473,7 +473,7 @@ inline int64_t EventTime::get_value(int base_id, unsigned age, std::vector<int64
     auto cond_val = get_cond_val(cond, age);
     int64_t offset = 0;
     if (cond_val) {
-        auto rt_offset = (RuntimeValue*)data.get_rt_offset();
+        auto rt_offset = data.get_rt_offset();
         if (rt_offset) {
             rtval::rt_eval_throw(rt_offset, age, event_time_key(this));
             offset = rt_offset->cache_val.i64_val;
