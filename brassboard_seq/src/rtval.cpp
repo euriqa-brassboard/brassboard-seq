@@ -1005,17 +1005,15 @@ PyTypeObject ExternCallback::Type = {
 
 static PyObject *py_get_value(PyObject*, PyObject *const *args, Py_ssize_t nargs)
 {
-    return cxx_catch([&] {
-        py::check_num_arg("get_value", nargs, 2, 2);
-        auto pyage = py::arg_cast<py::int_>(args[1], "age");
-        if (is_rtval(args[0])) {
-            auto age = PyLong_AsLong(pyage);
-            throw_pyerr(age < 0);
-            rt_eval_cache(args[0], age);
-            return rtval_cache(args[0]).to_py();
-        }
-        return py::newref(args[0]);
-    });
+    py::check_num_arg("get_value", nargs, 2, 2);
+    auto pyage = py::arg_cast<py::int_>(args[1], "age");
+    if (is_rtval(args[0])) {
+        auto age = PyLong_AsLong(pyage);
+        throw_pyerr(age < 0);
+        rt_eval_cache(args[0], age);
+        return rtval_cache(args[0]).to_py();
+    }
+    return py::newref(args[0]);
 }
 
 static PyObject *py_inv(PyObject*, py::ptr<> v)
@@ -1039,37 +1037,33 @@ static PyObject *py_convert_bool(PyObject*, py::ptr<> v)
     return py::immref(get_value_bool(v, -1) ? Py_True : Py_False);
 }
 
-static PyObject *py_ifelse(PyObject*, PyObject *const *args, Py_ssize_t nargs)
+static py::ref<> py_ifelse(PyObject*, PyObject *const *args, Py_ssize_t nargs)
 {
-    return cxx_catch([&] () -> py::ref<> {
-        py::check_num_arg("ifelse", nargs, 3, 3);
-        auto b = args[0];
-        auto v1 = py::ptr(args[1]);
-        auto v2 = py::ptr(args[2]);
-        if (same_value(v1, v2))
-            return v1.ref();
-        if (auto rb = py::cast<RuntimeValue>(b))
-            return new_select(rb, v1, v2);
-        return (get_value_bool(b, -1) ? v1 : v2).ref();
-    });
+    py::check_num_arg("ifelse", nargs, 3, 3);
+    auto b = args[0];
+    auto v1 = py::ptr(args[1]);
+    auto v2 = py::ptr(args[2]);
+    if (same_value(v1, v2))
+        return v1.ref();
+    if (auto rb = py::cast<RuntimeValue>(b))
+        return new_select(rb, v1, v2);
+    return (get_value_bool(b, -1) ? v1 : v2).ref();
 }
 
 static PyObject *py_same_value(PyObject*, PyObject *const *args, Py_ssize_t nargs)
 {
-    return cxx_catch([&] () -> PyObject* {
-        py::check_num_arg("same_value", nargs, 2, 2);
-        return py::immref(same_value(args[0], args[1]) ? Py_True : Py_False);
-    });
+    py::check_num_arg("same_value", nargs, 2, 2);
+    return py::immref(same_value(args[0], args[1]) ? Py_True : Py_False);
 }
 
-PyMethodDef get_value_method = {"get_value", (PyCFunction)(void*)py_get_value,
-    METH_FASTCALL, 0};
+PyMethodDef get_value_method = {"get_value",
+    (PyCFunction)(void*)py::cfunc_fast<py_get_value>, METH_FASTCALL};
 PyMethodDef inv_method = {"inv", py::cfunc<py_inv>, METH_O};
 PyMethodDef convert_bool_method = {"convert_bool", py::cfunc<py_convert_bool>, METH_O};
-PyMethodDef ifelse_method = {"ifelse", (PyCFunction)(void*)py_ifelse,
-    METH_FASTCALL, 0};
-PyMethodDef same_value_method = {"same_value", (PyCFunction)(void*)py_same_value,
-    METH_FASTCALL, 0};
+PyMethodDef ifelse_method = {"ifelse", (PyCFunction)(void*)py::cfunc_fast<py_ifelse>,
+    METH_FASTCALL};
+PyMethodDef same_value_method = {"same_value",
+    (PyCFunction)(void*)py::cfunc_fast<py_same_value>, METH_FASTCALL};
 
 static __attribute__((flatten, noinline))
 std::pair<EvalError,GenVal> interpret_func(const int *code, GenVal *data,

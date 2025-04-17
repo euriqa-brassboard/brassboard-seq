@@ -123,8 +123,8 @@ static PyObject *generic_str(PyObject *py_self)
 }
 
 template<typename CondSeq, bool is_pulse=false>
-static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
-                             Py_ssize_t nargs, PyObject *kwnames) try
+static auto condseq_set(py::ptr<CondSeq> self, PyObject *const *args,
+                        Py_ssize_t nargs, PyObject *kwnames)
 {
     py::check_num_arg((is_pulse ? CondSeq::ClsName + ".pulse" :
                        CondSeq::ClsName + ".set"), nargs, 2, 2);
@@ -150,20 +150,15 @@ static PyObject *condseq_set(PyObject *py_self, PyObject *const *args,
             }
         }
     }
-    auto self = (CondSeq*)py_self;
     CondCombiner cc(self->cond, arg_cond);
     self->get_seq()->template set<is_pulse>(chn, value, cc.cond,
                                             exact_time, std::move(kws));
-    return py::newref(py_self);
-}
-catch (...) {
-    handle_cxx_exception();
-    return nullptr;
+    return self.ref();
 }
 
 template<typename CondSeq>
-static PyObject *condseq_wait(PyObject *py_self, PyObject *const *args,
-                              Py_ssize_t nargs, PyObject *kwnames) try
+static void condseq_wait(py::ptr<CondSeq> self, PyObject *const *args,
+                         Py_ssize_t nargs, PyObject *kwnames)
 {
     py::check_num_arg(CondSeq::ClsName + ".wait", nargs, 1, 1);
     py::ptr<> length = args[0];
@@ -180,30 +175,20 @@ static PyObject *condseq_wait(PyObject *py_self, PyObject *const *args,
             }
         }
     }
-    auto self = (CondSeq*)py_self;
     CondCombiner cc(self->cond, cond);
     self->get_seq()->wait_cond(length, cc.cond);
-    Py_RETURN_NONE;
-}
-catch (...) {
-    handle_cxx_exception();
-    return nullptr;
 }
 
 template<typename CondSeq>
-static PyObject *condseq_wait_for(PyObject *py_self, PyObject *const *args,
-                                  Py_ssize_t nargs, PyObject *kwnames)
+static void condseq_wait_for(py::ptr<CondSeq> self, PyObject *const *args,
+                             Py_ssize_t nargs, PyObject *kwnames)
 {
-    return cxx_catch([&] {
-        py::check_num_arg(CondSeq::ClsName + ".wait_for", nargs, 1, 2);
-        auto [offset] =
-            py::parse_pos_or_kw_args<"offset">("wait_for", args + 1, nargs - 1, kwnames);
-        if (!offset)
-            offset = py::int_cached(0);
-        auto self = (CondSeq*)py_self;
-        self->get_seq()->wait_for_cond(args[0], offset, self->cond);
-        Py_RETURN_NONE;
-    });
+    py::check_num_arg(CondSeq::ClsName + ".wait_for", nargs, 1, 2);
+    auto [offset] =
+        py::parse_pos_or_kw_args<"offset">("wait_for", args + 1, nargs - 1, kwnames);
+    if (!offset)
+        offset = py::int_cached(0);
+    self->get_seq()->wait_for_cond(args[0], offset, self->cond);
 }
 
 static PyObject *condwrapper_vectorcall(ConditionalWrapper *self, PyObject *const *args,
@@ -235,10 +220,9 @@ static auto condseq_conditional(py::ptr<CondSeq> self, py::ptr<> cond)
 }
 
 template<typename CondSeq, AddStepType type>
-static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
-                               Py_ssize_t nargs, PyObject *_kwnames) try
+static py::ref<TimeSeq> add_step_real(py::ptr<CondSeq> self, PyObject *const *args,
+                                      Py_ssize_t nargs, py::tuple kwnames)
 {
-    auto self = (CondSeq*)py_self;
     auto subseq = self->get_seq();
     auto cond = self->cond;
     auto nargs_min = type == AddStepType::At ? 2 : 1;
@@ -255,9 +239,9 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
     }
     else if (type == AddStepType::At) {
         if (args[0] != Py_None && !py::typeis<event_time::EventTime>(args[0]))
-            return PyErr_Format(PyExc_TypeError,
-                                "Argument 'tp' has incorrect type (expected EventTime, "
-                                "got %.200s)", Py_TYPE(args[0])->tp_name);
+            py_throw_format(PyExc_TypeError,
+                            "Argument 'tp' has incorrect type (expected EventTime, "
+                            "got %.200s)", Py_TYPE(args[0])->tp_name);
         start_time.assign(args[0]);
     }
     else {
@@ -280,32 +264,28 @@ static PyObject *add_step_real(PyObject *py_self, PyObject *const *args,
     if (Py_TYPE(first_arg)->tp_call) {
         assert(nargs_min >= 1);
         res.take(subseq->add_custom_step(cond, start_time, first_arg,
-                                         tuple_nargs, args + nargs_min, _kwnames));
+                                         tuple_nargs, args + nargs_min, kwnames));
     }
-    else if (auto kwnames = py::tuple(_kwnames); kwnames && kwnames.size()) {
+    else if (kwnames && kwnames.size()) {
         auto kws = py::new_dict();
         auto kwvalues = args + nargs;
         for (auto [i, name]: py::tuple_iter(kwnames))
             kws.set(name, kwvalues[i]);
-        return PyErr_Format(PyExc_ValueError,
-                            "Unexpected arguments when creating new time step, %S, %S.",
-                            get_args_tuple(), kws);
+        py_throw_format(PyExc_ValueError,
+                        "Unexpected arguments when creating new time step, %S, %S.",
+                        get_args_tuple(), kws);
     }
     else if (tuple_nargs == 0) {
         res.take(subseq->add_time_step(cond, start_time, first_arg));
     }
     else {
-        return PyErr_Format(PyExc_ValueError,
-                            "Unexpected arguments when creating new time step, %S.",
-                            get_args_tuple());
+        py_throw_format(PyExc_ValueError,
+                        "Unexpected arguments when creating new time step, %S.",
+                        get_args_tuple());
     }
     if (type == AddStepType::Step)
         py::assign(subseq->end_time, res->end_time);
-    return (PyObject*)res.rel();
-}
-catch (...) {
-    handle_cxx_exception();
-    return nullptr;
+    return res;
 }
 
 inline int SeqInfo::get_channel_id(py::str name)
@@ -402,51 +382,44 @@ static auto get_channel_id(py::ptr<TimeSeq> self, PyObject *name)
     return py::new_int(id);
 }
 
-static PyObject *set_time(PyObject *py_self, PyObject *const *args,
-                          Py_ssize_t nargs, PyObject *kwnames)
+static void set_time(py::ptr<TimeSeq> self, PyObject *const *args,
+                     Py_ssize_t nargs, PyObject *kwnames)
 {
-    return cxx_catch([&] {
-        py::check_num_arg("TimeSeq.set_time", nargs, 1, 2);
-        auto [offset] =
-            py::parse_pos_or_kw_args<"offset">("set_time", args + 1, nargs - 1, kwnames);
-        auto time = (args[0] == Py_None ? py::ptr<EventTime>(Py_None) :
-                     py::arg_cast<EventTime,true>(args[0], "time"));
-        if (!offset)
-            offset = py::int_cached(0);
-        auto self = (TimeSeq*)py_self;
-        if (is_rtval(offset))
-            self->start_time->set_base_rt(time, event_time::round_time_rt(offset));
-        else
-            self->start_time->set_base_int(time, event_time::round_time_int(offset));
-        self->seqinfo->bt_tracker.record(event_time_key(self->start_time));
-        Py_RETURN_NONE;
-    });
+    py::check_num_arg("TimeSeq.set_time", nargs, 1, 2);
+    auto [offset] =
+        py::parse_pos_or_kw_args<"offset">("set_time", args + 1, nargs - 1, kwnames);
+    auto time = (args[0] == Py_None ? py::ptr<EventTime>(Py_None) :
+                 py::arg_cast<EventTime,true>(args[0], "time"));
+    if (!offset)
+        offset = py::int_cached(0);
+    if (is_rtval(offset))
+        self->start_time->set_base_rt(time, event_time::round_time_rt(offset));
+    else
+        self->start_time->set_base_int(time, event_time::round_time_int(offset));
+    self->seqinfo->bt_tracker.record(event_time_key(self->start_time));
 }
 
-static PyObject *rt_assert(PyObject *py_self, PyObject *const *args,
-                           Py_ssize_t nargs, PyObject *kwnames)
+static void rt_assert(py::ptr<TimeSeq> self, PyObject *const *args,
+                      Py_ssize_t nargs, PyObject *kwnames)
 {
-    return cxx_catch([&] {
-        py::check_num_arg("TimeSeq.rt_assert", nargs, 1, 2);
-        auto [msg] = py::parse_pos_or_kw_args<"msg">("rt_assert", args + 1,
-                                                     nargs - 1, kwnames);
-        auto c = py::ptr(args[0]);
-        if (!msg)
-            msg = "Assertion failed"_py;
-        if (is_rtval(c)) {
-            auto seqinfo = ((TimeSeq*)py_self)->seqinfo;
-            auto assertions = py::list(seqinfo->assertions);
-            seqinfo->bt_tracker.record(assert_key(assertions.size()));
-            auto a = py::new_tuple(2);
-            a.SET(0, c);
-            a.SET(1, msg);
-            assertions.append(std::move(a));
-        }
-        else if (!get_value_bool(c, -1)) {
-            py_throw_format(PyExc_AssertionError, "%U", msg);
-        }
-        Py_RETURN_NONE;
-    });
+    py::check_num_arg("TimeSeq.rt_assert", nargs, 1, 2);
+    auto [msg] = py::parse_pos_or_kw_args<"msg">("rt_assert", args + 1,
+                                                 nargs - 1, kwnames);
+    auto c = py::ptr(args[0]);
+    if (!msg)
+        msg = "Assertion failed"_py;
+    if (is_rtval(c)) {
+        auto seqinfo = self->seqinfo;
+        auto assertions = py::list(seqinfo->assertions);
+        seqinfo->bt_tracker.record(assert_key(assertions.size()));
+        auto a = py::new_tuple(2);
+        a.SET(0, c);
+        a.SET(1, msg);
+        assertions.append(std::move(a));
+    }
+    else if (!get_value_bool(c, -1)) {
+        py_throw_format(PyExc_AssertionError, "%U", msg);
+    }
 }
 
 #define py_offsetof(type, member) [] () constexpr {     \
@@ -486,8 +459,10 @@ PyTypeObject TimeSeq::Type = {
     },
     .tp_methods = (PyMethodDef[]){
         {"get_channel_id", py::cfunc<get_channel_id>, METH_O},
-        {"set_time", (PyCFunction)(void*)set_time, METH_FASTCALL|METH_KEYWORDS, 0},
-        {"rt_assert", (PyCFunction)(void*)rt_assert, METH_FASTCALL|METH_KEYWORDS, 0},
+        {"set_time", (PyCFunction)(void*)py::cfunc_fastkw<set_time>,
+         METH_FASTCALL|METH_KEYWORDS},
+        {"rt_assert", (PyCFunction)(void*)py::cfunc_fastkw<rt_assert>,
+         METH_FASTCALL|METH_KEYWORDS},
         {0, 0, 0, 0}
     },
     .tp_members = TimeSeq_members,
@@ -588,10 +563,10 @@ PyTypeObject TimeStep::Type = {
         return 0;
     },
     .tp_methods = (PyMethodDef[]){
-        {"set", (PyCFunction)(void*)condseq_set<TimeStep,false>,
-         METH_FASTCALL|METH_KEYWORDS, 0},
-        {"pulse", (PyCFunction)(void*)condseq_set<TimeStep,true>,
-         METH_FASTCALL|METH_KEYWORDS, 0},
+        {"set", (PyCFunction)(void*)py::cfunc_fastkw<condseq_set<TimeStep,false>>,
+         METH_FASTCALL|METH_KEYWORDS},
+        {"pulse", (PyCFunction)(void*)py::cfunc_fastkw<condseq_set<TimeStep,true>>,
+         METH_FASTCALL|METH_KEYWORDS},
         {0, 0, 0, 0}
     },
     .tp_base = &TimeSeq::Type,
@@ -739,25 +714,25 @@ PyTypeObject SubSeq::Type = {
         return 0;
     },
     .tp_methods = (PyMethodDef[]){
-        {"wait", (PyCFunction)(void*)condseq_wait<SubSeq>,
-         METH_FASTCALL|METH_KEYWORDS, 0},
-        {"wait_for", (PyCFunction)(void*)condseq_wait_for<SubSeq>,
-         METH_FASTCALL|METH_KEYWORDS, 0},
+        {"wait", (PyCFunction)(void*)py::cfunc_fastkw<condseq_wait<SubSeq>>,
+         METH_FASTCALL|METH_KEYWORDS},
+        {"wait_for", (PyCFunction)(void*)py::cfunc_fastkw<condseq_wait_for<SubSeq>>,
+         METH_FASTCALL|METH_KEYWORDS},
         {"conditional", py::cfunc<condseq_conditional<SubSeq>>, METH_O},
-        {"set", (PyCFunction)(void*)condseq_set<SubSeq>,
-         METH_FASTCALL|METH_KEYWORDS, 0},
+        {"set", (PyCFunction)(void*)py::cfunc_fastkw<condseq_set<SubSeq>>,
+         METH_FASTCALL|METH_KEYWORDS},
         {"add_step",
-         (PyCFunction)(void*)add_step_real<SubSeq,AddStepType::Step>,
-         METH_FASTCALL|METH_KEYWORDS, 0},
+         (PyCFunction)(void*)py::cfunc_fastkw<add_step_real<SubSeq,AddStepType::Step>>,
+         METH_FASTCALL|METH_KEYWORDS},
         {"add_background",
-         (PyCFunction)(void*)add_step_real<SubSeq,AddStepType::Background>,
-         METH_FASTCALL|METH_KEYWORDS, 0},
+         (PyCFunction)(void*)py::cfunc_fastkw<add_step_real<SubSeq,AddStepType::Background>>,
+         METH_FASTCALL|METH_KEYWORDS},
         {"add_floating",
-         (PyCFunction)(void*)add_step_real<SubSeq,AddStepType::Floating>,
-         METH_FASTCALL|METH_KEYWORDS, 0},
+         (PyCFunction)(void*)py::cfunc_fastkw<add_step_real<SubSeq,AddStepType::Floating>>,
+         METH_FASTCALL|METH_KEYWORDS},
         {"add_at",
-         (PyCFunction)(void*)add_step_real<SubSeq,AddStepType::At>,
-         METH_FASTCALL|METH_KEYWORDS, 0},
+         (PyCFunction)(void*)py::cfunc_fastkw<add_step_real<SubSeq,AddStepType::At>>,
+         METH_FASTCALL|METH_KEYWORDS},
         {0, 0, 0, 0}
     },
     .tp_members = SubSeq_members,
@@ -809,25 +784,25 @@ PyTypeObject ConditionalWrapper::Type = {
         return 0;
     },
     .tp_methods = (PyMethodDef[]){
-        {"wait", (PyCFunction)(void*)condseq_wait<ConditionalWrapper>,
-         METH_FASTCALL|METH_KEYWORDS, 0},
-        {"wait_for", (PyCFunction)(void*)condseq_wait_for<ConditionalWrapper>,
-         METH_FASTCALL|METH_KEYWORDS, 0},
+        {"wait", (PyCFunction)(void*)py::cfunc_fastkw<condseq_wait<ConditionalWrapper>>,
+         METH_FASTCALL|METH_KEYWORDS},
+        {"wait_for", (PyCFunction)(void*)py::cfunc_fastkw<condseq_wait_for<ConditionalWrapper>>,
+         METH_FASTCALL|METH_KEYWORDS},
         {"conditional", py::cfunc<condseq_conditional<ConditionalWrapper>>, METH_O},
-        {"set", (PyCFunction)(void*)condseq_set<ConditionalWrapper>,
-         METH_FASTCALL|METH_KEYWORDS, 0},
+        {"set", (PyCFunction)(void*)py::cfunc_fastkw<condseq_set<ConditionalWrapper>>,
+         METH_FASTCALL|METH_KEYWORDS},
         {"add_step",
-         (PyCFunction)(void*)add_step_real<ConditionalWrapper,AddStepType::Step>,
-         METH_FASTCALL|METH_KEYWORDS, 0},
+         (PyCFunction)(void*)py::cfunc_fastkw<add_step_real<ConditionalWrapper,AddStepType::Step>>,
+         METH_FASTCALL|METH_KEYWORDS},
         {"add_background",
-         (PyCFunction)(void*)add_step_real<ConditionalWrapper,AddStepType::Background>,
-         METH_FASTCALL|METH_KEYWORDS, 0},
+         (PyCFunction)(void*)py::cfunc_fastkw<add_step_real<ConditionalWrapper,AddStepType::Background>>,
+         METH_FASTCALL|METH_KEYWORDS},
         {"add_floating",
-         (PyCFunction)(void*)add_step_real<ConditionalWrapper,AddStepType::Floating>,
-         METH_FASTCALL|METH_KEYWORDS, 0},
+         (PyCFunction)(void*)py::cfunc_fastkw<add_step_real<ConditionalWrapper,AddStepType::Floating>>,
+         METH_FASTCALL|METH_KEYWORDS},
         {"add_at",
-         (PyCFunction)(void*)add_step_real<ConditionalWrapper,AddStepType::At>,
-         METH_FASTCALL|METH_KEYWORDS, 0},
+         (PyCFunction)(void*)py::cfunc_fastkw<add_step_real<ConditionalWrapper,AddStepType::At>>,
+         METH_FASTCALL|METH_KEYWORDS},
         {0, 0, 0, 0}
     },
     .tp_getset = ConditionalWrapper_getsets,

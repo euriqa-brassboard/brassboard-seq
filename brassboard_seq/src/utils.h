@@ -1614,7 +1614,15 @@ static inline PyObject *cfunc(PyObject *self, PyObject *args)
 template<auto F>
 static inline PyObject *cfunc_fast(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    return (PyObject*)cxx_catch([&] { return F(self, args, nargs); });
+    return (PyObject*)cxx_catch([&] { return F(self, args, PyVectorcall_NARGS(nargs)); });
+}
+
+template<auto F>
+static inline PyObject *cfunc_fastkw(PyObject *self, PyObject *const *args,
+                                     Py_ssize_t nargs, PyObject *kwnames)
+{
+    return (PyObject*)cxx_catch([&] { return F(self, args, PyVectorcall_NARGS(nargs),
+                                               kwnames); });
 }
 
 }

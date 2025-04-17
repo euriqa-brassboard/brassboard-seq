@@ -348,22 +348,20 @@ PyObject *sprint(py::ptr<> obj, int indent)
 
 static PyObject *py_sprint(PyObject*, PyObject *const *args, Py_ssize_t nargs)
 {
-    return cxx_catch([&] {
-        py::check_num_arg("sprint", nargs, 1, 2);
-        int indent = 0;
-        if (nargs >= 2) {
-            indent = PyLong_AsLong(py::arg_cast<py::int_>(args[1], "indent"));
-            if (indent < 0) {
-                throw_pyerr();
-                py_throw_format(PyExc_TypeError, "indent cannot be negative");
-            }
+    py::check_num_arg("sprint", nargs, 1, 2);
+    int indent = 0;
+    if (nargs >= 2) {
+        indent = PyLong_AsLong(py::arg_cast<py::int_>(args[1], "indent"));
+        if (indent < 0) {
+            throw_pyerr();
+            py_throw_format(PyExc_TypeError, "indent cannot be negative");
         }
-        return sprint(args[0], indent);
-    });
+    }
+    return sprint(args[0], indent);
 }
 
-PyMethodDef sprint_method = {"sprint", (PyCFunction)(void*)py_sprint,
-    METH_FASTCALL, 0};
+PyMethodDef sprint_method = {"sprint", (PyCFunction)(void*)py::cfunc_fast<py_sprint>,
+    METH_FASTCALL};
 
 __attribute__((constructor))
 static void init()

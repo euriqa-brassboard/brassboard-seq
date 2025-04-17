@@ -2956,9 +2956,9 @@ PulseCompilerGen::Info::Info()
 
     auto orig_post_init = ToneData.attr("__post_init__");
     static PyMethodDef dummy_post_init_method = {
-        "__post_init__", (PyCFunction)(void*)(_PyCFunctionFast)([] (auto, auto, auto) {
+        "__post_init__", (PyCFunction)(void*)py::cfunc_fast<[] (auto, auto, auto) {
             Py_RETURN_NONE;
-        }), METH_FASTCALL, 0};
+        }>, METH_FASTCALL};
     ToneData.set_attr("__post_init__", py::new_cfunc(&dummy_post_init_method));
     auto dummy_tonedata = ToneData(py_nums[0], py_nums[0], py_nums[0],
                                    py_nums[0], py_nums[0], py_nums[0]);
