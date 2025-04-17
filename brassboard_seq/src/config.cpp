@@ -20,13 +20,6 @@
 
 namespace brassboard_seq::config {
 
-static inline void check_string_arg(py::ptr<> arg, const char *name)
-{
-    if (arg.isa<py::str>())
-        return;
-    py_throw_format(PyExc_TypeError, "%s must be a string", name);
-}
-
 static inline auto split_string_tuple(PyObject *s)
 {
     auto list = py::list_ref(throw_if_not(PyUnicode_Split(s, "/"_py, -1)));
