@@ -201,19 +201,16 @@ PyTypeObject CompositeRTProp_Type = {
             return py::newref(self);
         return cxx_catch([&] { return ((CompositeRTProp*)self)->get_res(obj); });
     },
-    .tp_vectorcall = [] (PyObject *type, PyObject *const *args, size_t _nargs,
-                         PyObject *kwnames) -> PyObject* {
-        auto nargs = PyVectorcall_NARGS(_nargs);
-        return cxx_catch([&] {
-            py::check_no_kwnames("CompositeRTProp.__init__", kwnames);
-            py::check_num_arg("CompositeRTProp.__init__", nargs, 1, 1);
-            auto cb = args[0];
-            auto data = py::generic_alloc<CompositeRTProp>();
-            data->fieldname = py::immref(Py_None);
-            data->cb = py::newref(cb);
-            return data;
-        });
-    },
+    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+                                        ssize_t nargs, py::tuple kwnames) {
+        py::check_no_kwnames("CompositeRTProp.__init__", kwnames);
+        py::check_num_arg("CompositeRTProp.__init__", nargs, 1, 1);
+        auto cb = args[0];
+        auto data = py::generic_alloc<CompositeRTProp>();
+        data->fieldname = py::immref(Py_None);
+        data->cb = py::newref(cb);
+        return data;
+    }>,
 };
 
 namespace {
@@ -369,17 +366,14 @@ PyTypeObject RTProp_Type = {
         }
         return 0;
     },
-    .tp_vectorcall = [] (PyObject *type, PyObject *const *args, size_t _nargs,
-                         PyObject *kwnames) -> PyObject* {
-        auto nargs = PyVectorcall_NARGS(_nargs);
-        return cxx_catch([&] {
-            py::check_no_kwnames("RTProp.__init__", kwnames);
-            py::check_num_arg("RTProp.__init__", nargs, 0, 0);
-            auto self = py::generic_alloc<RTProp>();
-            self->fieldname = py::immref(Py_None);
-            return self;
-        });
-    },
+    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+                                        ssize_t nargs, py::tuple kwnames) {
+        py::check_no_kwnames("RTProp.__init__", kwnames);
+        py::check_num_arg("RTProp.__init__", nargs, 0, 0);
+        auto self = py::generic_alloc<RTProp>();
+        self->fieldname = py::immref(Py_None);
+        return self;
+    }>,
 };
 
 __attribute__((constructor))

@@ -191,20 +191,16 @@ static void condseq_wait_for(py::ptr<CondSeq> self, PyObject *const *args,
     self->get_seq()->wait_for_cond(args[0], offset, self->cond);
 }
 
-static PyObject *condwrapper_vectorcall(ConditionalWrapper *self, PyObject *const *args,
-                                        size_t _nargs, PyObject *kwnames) try {
-    auto nargs = PyVectorcall_NARGS(_nargs);
+static auto condwrapper_vectorcall(py::ptr<ConditionalWrapper> self, PyObject *const *args,
+                                   ssize_t nargs, py::tuple kwnames)
+{
     py::check_no_kwnames("ConditionalWrapper.__call__", kwnames);
     py::check_num_arg("ConditionalWrapper.__call__", nargs, 1, 1);
     // Reuse the args buffer
     auto step = self->seq->add_custom_step(self->cond, self->seq->end_time,
                                            args[0], 0, &args[1], py::tuple());
     py::assign(self->seq->end_time, step->end_time);
-    return (PyObject*)step.rel();
-}
-catch (...) {
-    handle_cxx_exception();
-    return nullptr;
+    return step;
 }
 
 template<typename CondSeq>
@@ -215,7 +211,7 @@ static auto condseq_conditional(py::ptr<CondSeq> self, py::ptr<> cond)
     auto wrapper = py::generic_alloc<ConditionalWrapper>();
     wrapper->seq = py::newref(subseq);
     wrapper->cond = cc.take_cond();
-    wrapper->fptr = (void*)condwrapper_vectorcall;
+    wrapper->fptr = (void*)py::vectorfunc<condwrapper_vectorcall>;
     return wrapper;
 }
 
@@ -849,46 +845,43 @@ PyTypeObject Seq::Type = {
         return 0;
     },
     .tp_base = &SubSeq::Type,
-    .tp_vectorcall = [] (PyObject *type, PyObject *const *args, size_t _nargs,
-                         PyObject *kwnames) -> PyObject* {
-        auto nargs = PyVectorcall_NARGS(_nargs);
-        return cxx_catch([&] {
-            py::check_num_arg("Seq.__init__", nargs, 1, 2);
-            auto [py_max_frame] =
-                py::parse_pos_or_kw_args<"max_frame">("Seq.__init__", args + 1,
-                                                      nargs - 1, kwnames);
-            int max_frame = 0;
-            if (py_max_frame) {
-                max_frame = PyLong_AsLong(py_max_frame);
-                if (max_frame < 0) {
-                    throw_pyerr();
-                    py_throw_format(PyExc_ValueError, "max_frame cannot be negative");
-                }
+    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+                                        ssize_t nargs, py::tuple kwnames) {
+        py::check_num_arg("Seq.__init__", nargs, 1, 2);
+        auto [py_max_frame] =
+            py::parse_pos_or_kw_args<"max_frame">("Seq.__init__", args + 1,
+                                                  nargs - 1, kwnames);
+        int max_frame = 0;
+        if (py_max_frame) {
+            max_frame = PyLong_AsLong(py_max_frame);
+            if (max_frame < 0) {
+                throw_pyerr();
+                py_throw_format(PyExc_ValueError, "max_frame cannot be negative");
             }
-            auto self = py::generic_alloc<Seq>();
-            self->start_time = (EventTime*)py::newref(Py_None);
-            self->cond = py::immref(Py_True);
-            self->sub_seqs = py::new_list(0).rel();
-            self->dummy_step = (TimeStep*)py::immref(Py_None);
-            auto seqinfo = py::generic_alloc<SeqInfo>();
-            call_constructor(&seqinfo->bt_tracker);
-            seqinfo->bt_tracker.max_frame = max_frame;
-            call_constructor(&seqinfo->action_alloc);
-            seqinfo->action_counter = 0;
-            seqinfo->config = py::newref(py::arg_cast<config::Config>(args[0], "config"));
-            seqinfo->time_mgr = event_time::TimeManager::alloc();
-            seqinfo->assertions = py::new_list(0).rel();
-            seqinfo->channel_name_map = py::new_dict().rel();
-            seqinfo->channel_path_map = py::new_dict().rel();
-            seqinfo->channel_paths = py::new_list(0).rel();
-            seqinfo->C = scan::ParamPack::new_empty();
-            self->end_time = seqinfo->time_mgr->new_int(Py_None, 0, false,
-                                                        Py_True, Py_None).rel();
-            seqinfo->bt_tracker.record(event_time_key(self->end_time));
-            self->seqinfo = seqinfo.rel();
-            return self;
-        });
-    },
+        }
+        auto self = py::generic_alloc<Seq>();
+        self->start_time = (EventTime*)py::newref(Py_None);
+        self->cond = py::immref(Py_True);
+        self->sub_seqs = py::new_list(0).rel();
+        self->dummy_step = (TimeStep*)py::immref(Py_None);
+        auto seqinfo = py::generic_alloc<SeqInfo>();
+        call_constructor(&seqinfo->bt_tracker);
+        seqinfo->bt_tracker.max_frame = max_frame;
+        call_constructor(&seqinfo->action_alloc);
+        seqinfo->action_counter = 0;
+        seqinfo->config = py::newref(py::arg_cast<config::Config>(args[0], "config"));
+        seqinfo->time_mgr = event_time::TimeManager::alloc();
+        seqinfo->assertions = py::new_list(0).rel();
+        seqinfo->channel_name_map = py::new_dict().rel();
+        seqinfo->channel_path_map = py::new_dict().rel();
+        seqinfo->channel_paths = py::new_list(0).rel();
+        seqinfo->C = scan::ParamPack::new_empty();
+        self->end_time = seqinfo->time_mgr->new_int(Py_None, 0, false,
+                                                    Py_True, Py_None).rel();
+        seqinfo->bt_tracker.record(event_time_key(self->end_time));
+        self->seqinfo = seqinfo.rel();
+        return self;
+    }>,
 };
 
 __attribute__((constructor))

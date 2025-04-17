@@ -119,15 +119,13 @@ ParamPack::get_value_default(PyObject *default_value)
     return py::newref(res);
 }
 
-static PyObject*
-parampack_vectorcall(ParamPack *self, PyObject *const *args, size_t _nargs,
-                     PyObject *_kwnames) try {
+static PyObject *parampack_vectorcall(py::ptr<ParamPack> self, PyObject *const *args,
+                                      ssize_t nargs, py::tuple kwnames)
+{
     // Supported syntax
     // () -> get value without default
     // (value) -> get value with default
     // (*dicts, **kwargs) -> get parameter pack with default
-    auto nargs = PyVectorcall_NARGS(_nargs);
-    auto kwnames = py::tuple(_kwnames);
     int nkws = kwnames ? kwnames.size() : 0;
     if (nkws == 0) {
         if (nargs == 0)
@@ -152,29 +150,24 @@ parampack_vectorcall(ParamPack *self, PyObject *const *args, size_t _nargs,
         set_dict<false>(self_values, kwnames.get(i), kwvalues[i]);
     return py::newref((PyObject*)self);
 }
-catch (...) {
-    handle_cxx_exception();
-    return nullptr;
-}
 
 static inline py::ref<ParamPack> parampack_alloc()
 {
     auto self = py::generic_alloc<ParamPack>();
-    *(void**)(self.get() + 1) = (void*)parampack_vectorcall;
+    *(void**)(self.get() + 1) = (void*)py::vectorfunc<parampack_vectorcall>;
     return self;
 }
 
-static PyObject *parampack_new(PyObject*, PyObject *const *args, size_t _nargs,
-                               PyObject *_kwnames) try {
+static auto parampack_new(PyObject*, PyObject *const *args, ssize_t nargs,
+                          py::tuple kwnames)
+{
     auto self = parampack_alloc();
     self->visited = py::new_dict().rel();
     self->fieldname = py::newref("root"_py);
-    auto nargs = PyVectorcall_NARGS(_nargs);
-    auto kwnames = py::tuple(_kwnames);
     int nkws = kwnames ? kwnames.size() : 0;
     self->values = py::new_dict().rel();
     if (!nargs && !nkws)
-        return self.rel();
+        return self;
     auto kwargs = py::new_dict();
     py::dict(self->values).set("root"_py, kwargs);
     for (size_t i = 0; i < nargs; i++) {
@@ -187,11 +180,7 @@ static PyObject *parampack_new(PyObject*, PyObject *const *args, size_t _nargs,
     auto kwvalues = args + nargs;
     for (int i = 0; i < nkws; i++)
         set_dict<false>(kwargs, kwnames.get(i), kwvalues[i]);
-    return self.rel();
-}
-catch (...) {
-    handle_cxx_exception();
-    return nullptr;
+    return self;
 }
 
 static PyObject *parampack_str(PyObject *py_self)
@@ -341,7 +330,7 @@ PyTypeObject ParamPack::Type = {
         Py_CLEAR(self->fieldname);
         return 0;
     },
-    .tp_vectorcall = parampack_new,
+    .tp_vectorcall = py::vectorfunc<parampack_new>,
 };
 
 static inline py::ref<> get_visited(PyObject*, py::ptr<> param_pack)
