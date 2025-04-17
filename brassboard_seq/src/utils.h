@@ -760,24 +760,20 @@ struct ptr : common<ptr,T> {
     constexpr ptr() = default;
     constexpr ptr(auto *ptr) : m_ptr{(T*)ptr}
     {
-        check_refcnt(m_ptr);
     }
     template<template<typename> class H, typename T2>
     constexpr ptr(const common<H,T2> &h) : m_ptr{(T*)h._ptr()}
     {
-        check_refcnt(m_ptr);
     }
     ptr &operator=(auto *p) noexcept
     {
         m_ptr = (T*)p;
-        check_refcnt(m_ptr);
         return *this;
     }
     template<template<typename> class H, typename T2>
     ptr &operator=(const common<H,T2> &h) noexcept
     {
         m_ptr = (T*)h._ptr();
-        check_refcnt(m_ptr);
         return *this;
     }
     template<typename T2> ptr &operator=(ref<T2>&&) noexcept = delete;
@@ -785,12 +781,10 @@ struct ptr : common<ptr,T> {
     template<typename T2=py_ptr_type<T>>
     constexpr T2 *get() const
     {
-        check_refcnt(m_ptr);
         return (T2*)m_ptr;
     }
     template<typename T2> constexpr operator T2*() const
     {
-        check_refcnt(m_ptr);
         return (T2*)m_ptr;
     }
 
@@ -1728,6 +1722,15 @@ template<auto F>
 static inline PyObject *tp_richcompare(PyObject *v1, PyObject *v2, int op)
 {
     return cxx_catch([&] { return F(v1, v2, op); });
+}
+
+template<bool gc, auto F>
+static inline void tp_dealloc(PyObject *obj)
+{
+    if constexpr (gc)
+        PyObject_GC_UnTrack(obj);
+    cxx_catch<void>([&] { F(obj); });
+    Py_TYPE(obj)->tp_free(obj);
 }
 
 }

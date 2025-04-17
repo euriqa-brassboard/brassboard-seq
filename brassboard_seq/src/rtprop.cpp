@@ -38,11 +38,7 @@ PyTypeObject composite_rtprop_data::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rtval.composite_rtprop_data",
     .tp_basicsize = sizeof(composite_rtprop_data),
-    .tp_dealloc = [] (PyObject *py_self) {
-        PyObject_GC_UnTrack(py_self);
-        Type.tp_clear(py_self);
-        Py_TYPE(py_self)->tp_free(py_self);
-    },
+    .tp_dealloc = py::tp_dealloc<true,[] (PyObject *self) { Type.tp_clear(self); }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = [] (PyObject *py_self, visitproc visit, void *arg) {
         auto self = (composite_rtprop_data*)py_self;
@@ -170,11 +166,8 @@ PyTypeObject CompositeRTProp_Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rtval.CompositeRTProp",
     .tp_basicsize = sizeof(CompositeRTProp),
-    .tp_dealloc = [] (PyObject *py_self) {
-        PyObject_GC_UnTrack(py_self);
-        CompositeRTProp_Type.tp_clear(py_self);
-        Py_TYPE(py_self)->tp_free(py_self);
-    },
+    .tp_dealloc = py::tp_dealloc<true,[] (PyObject *self) {
+        CompositeRTProp_Type.tp_clear(self); }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = [] (PyObject *py_self, visitproc visit, void *arg) {
         auto self = (CompositeRTProp*)py_self;
@@ -245,11 +238,7 @@ PyTypeObject rtprop_callback::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rtval.rtprop_callback",
     .tp_basicsize = sizeof(rtprop_callback),
-    .tp_dealloc = [] (PyObject *py_self) {
-        PyObject_GC_UnTrack(py_self);
-        Type.tp_clear(py_self);
-        Py_TYPE(py_self)->tp_free(py_self);
-    },
+    .tp_dealloc = py::tp_dealloc<true,[] (PyObject *self) { Type.tp_clear(self); }>,
     .tp_str = py::unifunc<[] (py::ptr<rtprop_callback> self) {
         return py::str_format(
             "<RTProp %U for %S>",
@@ -330,11 +319,8 @@ PyTypeObject RTProp_Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rtval.RTProp",
     .tp_basicsize = sizeof(RTProp),
-    .tp_dealloc = [] (PyObject *py_self) {
-        auto self = (RTProp*)py_self;
-        Py_CLEAR(self->fieldname);
-        Py_TYPE(py_self)->tp_free(py_self);
-    },
+    .tp_dealloc = py::tp_dealloc<false,[] (py::ptr<RTProp> self) {
+        Py_CLEAR(self->fieldname); }>,
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_methods = (py::meth_table<
                    py::meth_o<"get_state",RTProp::get_state>,

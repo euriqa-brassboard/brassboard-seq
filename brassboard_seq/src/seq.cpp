@@ -49,6 +49,12 @@ static inline auto add_step_name()
     }
 }
 
+template<typename T>
+static constexpr auto seq_dealloc = py::tp_dealloc<true,[] (py::ptr<T> self) {
+    self->clear();
+    self->cclear();
+}>;
+
 static inline std::pair<PyObject*,bool>
 _combine_cond(py::ptr<> cond1, py::ptr<> new_cond)
 {
@@ -303,14 +309,11 @@ PyTypeObject SeqInfo::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.seq.SeqInfo",
     .tp_basicsize = sizeof(SeqInfo),
-    .tp_dealloc = [] (PyObject *py_self) {
-        auto self = (SeqInfo*)py_self;
-        PyObject_GC_UnTrack(py_self);
-        Type.tp_clear(py_self);
+    .tp_dealloc = py::tp_dealloc<true,[] (py::ptr<SeqInfo> self) {
+        Type.tp_clear(self);
         call_destructor(&self->bt_tracker);
         call_destructor(&self->action_alloc);
-        Py_TYPE(py_self)->tp_free(py_self);
-    },
+    }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = [] (PyObject *py_self, visitproc visit, void *arg) {
         auto self = (SeqInfo*)py_self;
@@ -340,12 +343,6 @@ inline void TimeSeq::show_cond_suffix(py::stringio &io) const
         io.write_str(cond);
     }
     io.write_ascii("\n");
-}
-
-inline void TimeSeq::dealloc()
-{
-    PyObject_GC_UnTrack(this);
-    Py_TYPE(this)->tp_free(this);
 }
 
 inline int TimeSeq::traverse(visitproc visit, void *arg)
@@ -437,11 +434,7 @@ PyTypeObject TimeSeq::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.seq.TimeSeq",
     .tp_basicsize = sizeof(TimeSeq),
-    .tp_dealloc = [] (PyObject *py_self) {
-        ((TimeSeq*)py_self)->clear();
-        ((TimeSeq*)py_self)->cclear();
-        ((TimeSeq*)py_self)->dealloc();
-    },
+    .tp_dealloc = seq_dealloc<TimeSeq>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = [] (PyObject *py_self, visitproc visit, void *arg) {
         return ((TimeSeq*)py_self)->traverse(visit, arg);
@@ -536,11 +529,7 @@ PyTypeObject TimeStep::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.seq.TimeStep",
     .tp_basicsize = sizeof(TimeStep),
-    .tp_dealloc = [] (PyObject *py_self) {
-        ((TimeStep*)py_self)->clear();
-        ((TimeStep*)py_self)->cclear();
-        ((TimeStep*)py_self)->dealloc();
-    },
+    .tp_dealloc = seq_dealloc<TimeStep>,
     .tp_repr = generic_str<TimeStep>,
     .tp_str = generic_str<TimeStep>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
@@ -683,11 +672,7 @@ PyTypeObject SubSeq::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.seq.SubSeq",
     .tp_basicsize = sizeof(SubSeq),
-    .tp_dealloc = [] (PyObject *py_self) {
-        ((SubSeq*)py_self)->clear();
-        ((SubSeq*)py_self)->cclear();
-        ((SubSeq*)py_self)->dealloc();
-    },
+    .tp_dealloc = seq_dealloc<SubSeq>,
     .tp_repr = generic_str<SubSeq>,
     .tp_str = generic_str<SubSeq>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE|Py_TPFLAGS_HAVE_GC,
@@ -734,11 +719,7 @@ PyTypeObject ConditionalWrapper::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.seq.ConditionalWrapper",
     .tp_basicsize = sizeof(ConditionalWrapper),
-    .tp_dealloc = [] (PyObject *py_self) {
-        PyObject_GC_UnTrack(py_self);
-        Type.tp_clear(py_self);
-        Py_TYPE(py_self)->tp_free(py_self);
-    },
+    .tp_dealloc = py::tp_dealloc<true,[] (PyObject *self) { Type.tp_clear(self); }>,
     .tp_vectorcall_offset = py_offsetof(ConditionalWrapper, fptr),
     .tp_repr = generic_str<ConditionalWrapper>,
     .tp_call = PyVectorcall_Call,
@@ -794,11 +775,7 @@ PyTypeObject Seq::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.seq.Seq",
     .tp_basicsize = sizeof(Seq),
-    .tp_dealloc = [] (PyObject *py_self) {
-        ((Seq*)py_self)->clear();
-        ((Seq*)py_self)->cclear();
-        ((Seq*)py_self)->dealloc();
-    },
+    .tp_dealloc = seq_dealloc<Seq>,
     .tp_repr = generic_str<Seq>,
     .tp_str = generic_str<Seq>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,

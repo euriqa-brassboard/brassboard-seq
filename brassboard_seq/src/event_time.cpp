@@ -292,14 +292,11 @@ PyTypeObject TimeManager::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.event_time.TimeManager",
     .tp_basicsize = sizeof(TimeManager),
-    .tp_dealloc = [] (PyObject *py_self) {
-        auto self = (TimeManager*)py_self;
-        PyObject_GC_UnTrack(self);
+    .tp_dealloc = py::tp_dealloc<true,[] (py::ptr<TimeManager> self) {
         Type.tp_clear(self);
         call_destructor(&self->status);
         call_destructor(&self->time_values);
-        Py_TYPE(self)->tp_free(self);
-    },
+    }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = [] (PyObject *py_self, visitproc visit, void *arg) {
         auto self = (TimeManager*)py_self;
@@ -389,16 +386,10 @@ PyTypeObject EventTimeDiff::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.event_time.EventTimeDiff",
     .tp_basicsize = sizeof(EventTimeDiff),
-    .tp_dealloc = [] (PyObject *py_self) {
-        PyObject_GC_UnTrack(py_self);
-        Type.tp_clear(py_self);
-        Py_TYPE(py_self)->tp_free(py_self);
-    },
-    .tp_str = [] (PyObject *py_self) {
-        auto self = (EventTimeDiff*)py_self;
-        return PyUnicode_FromFormat("(T[%u] - T[%u])",
-                                    self->t1->data.id, self->t2->data.id);
-    },
+    .tp_dealloc = py::tp_dealloc<true,[] (PyObject *self) { Type.tp_clear(self); }>,
+    .tp_str = py::unifunc<[] (py::ptr<EventTimeDiff> self) {
+        return PyUnicode_FromFormat("(T[%u] - T[%u])", self->t1->data.id, self->t2->data.id);
+    }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = [] (PyObject *py_self, visitproc visit, void *arg) {
         auto self = (EventTimeDiff*)py_self;
@@ -514,15 +505,12 @@ PyTypeObject EventTime::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.event_time.EventTime",
     .tp_basicsize = sizeof(EventTime),
-    .tp_dealloc = [] (PyObject *py_self) {
-        auto self = (EventTime*)py_self;
-        PyObject_GC_UnTrack(self);
+    .tp_dealloc = py::tp_dealloc<true,[] (time_ptr self) {
         Type.tp_clear(self);
         call_destructor(&self->manager_status);
         call_destructor(&self->data);
         call_destructor(&self->chain_pos);
-        Py_TYPE(self)->tp_free(self);
-    },
+    }>,
     .tp_repr = eventtime_str,
     .tp_as_number = &EventTime_as_number,
     .tp_str = eventtime_str,

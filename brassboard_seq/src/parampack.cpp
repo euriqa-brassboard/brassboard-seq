@@ -249,11 +249,7 @@ PyTypeObject ParamPack::Type = {
     .tp_name = "brassboard_seq.rtval.ParamPack",
     // extra space for the vectorcall pointer
     .tp_basicsize = sizeof(ParamPack) + sizeof(void*),
-    .tp_dealloc = [] (PyObject *py_self) {
-        PyObject_GC_UnTrack(py_self);
-        Type.tp_clear(py_self);
-        Py_TYPE(py_self)->tp_free(py_self);
-    },
+    .tp_dealloc = py::tp_dealloc<true,[] (PyObject *self) { Type.tp_clear(self); }>,
     .tp_vectorcall_offset = sizeof(ParamPack),
     .tp_repr = parampack_str,
     .tp_as_sequence = &ParamPack_as_sequence,

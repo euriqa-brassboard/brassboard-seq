@@ -933,11 +933,7 @@ PyTypeObject RuntimeValue::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rtval.RuntimeValue",
     .tp_basicsize = sizeof(RuntimeValue),
-    .tp_dealloc = [] (PyObject *py_self) {
-        PyObject_GC_UnTrack(py_self);
-        Type.tp_clear(py_self);
-        Py_TYPE(py_self)->tp_free(py_self);
-    },
+    .tp_dealloc = py::tp_dealloc<true,[] (PyObject *self) { Type.tp_clear(self); }>,
     .tp_repr = rtvalue_str,
     .tp_as_number = &rtvalue_as_number,
     .tp_str = rtvalue_str,
@@ -979,9 +975,7 @@ PyTypeObject ExternCallback::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rtval.ExternCallback",
     .tp_basicsize = sizeof(struct ExternCallback),
-    .tp_dealloc = [] (PyObject *py_self) {
-        Py_TYPE(py_self)->tp_free(py_self);
-    },
+    .tp_dealloc = py::tp_dealloc<false,[] (auto) {}>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,
     .tp_new = py::tp_new<[] (PyTypeObject *t, auto...) { return PyType_GenericAlloc(t, 0); }>,
 };

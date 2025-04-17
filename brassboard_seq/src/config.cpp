@@ -95,13 +95,11 @@ PyTypeObject Config::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.config.Config",
     .tp_basicsize = sizeof(Config),
-    .tp_dealloc = [] (PyObject *py_self) {
-        auto self = (Config*)py_self;
+    .tp_dealloc = py::tp_dealloc<false,[] (py::ptr<Config> self) {
         Py_CLEAR(self->channel_alias);
         Py_CLEAR(self->alias_cache);
         Py_CLEAR(self->supported_prefix);
-        Py_TYPE(py_self)->tp_free(py_self);
-    },
+    }>,
     // All fields are containers of immutable types.
     // No reference loop possible.
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,
