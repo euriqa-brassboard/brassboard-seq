@@ -137,6 +137,7 @@ static inline __attribute__((always_inline)) void assume_not_none(auto *obj)
 }
 
 [[noreturn]] void throw0();
+[[noreturn]] void bb_rethrow(uintptr_t key);
 
 static inline __attribute__((always_inline)) auto throw_if_not(auto &&v)
 {
@@ -144,7 +145,12 @@ static inline __attribute__((always_inline)) auto throw_if_not(auto &&v)
         throw0();
     return std::move(v);
 }
-static inline auto throw_if_not(auto &&v, uintptr_t key);
+static inline __attribute__((always_inline)) auto throw_if_not(auto &&v, uintptr_t key)
+{
+    if (!v)
+        bb_rethrow(key);
+    return std::move(v);
+}
 
 static inline __attribute__((always_inline)) auto throw_if(auto &&v)
 {
@@ -152,7 +158,12 @@ static inline __attribute__((always_inline)) auto throw_if(auto &&v)
         throw0();
     return std::move(v);
 }
-static inline auto throw_if(auto &&v, uintptr_t key);
+static inline __attribute__((always_inline)) auto throw_if(auto &&v, uintptr_t key)
+{
+    if (v)
+        bb_rethrow(key);
+    return std::move(v);
+}
 
 template<typename... Args>
 [[noreturn]] static inline void py_throw_format(PyObject *exc, const char *format,
@@ -229,7 +240,9 @@ namespace py {
 
 struct _common {};
 template<typename T=PyObject> struct _ref;
+template<typename T> _ref(T*) -> _ref<T>;
 template<typename T=PyObject> struct ptr;
+template<typename T> ptr(T*) -> ptr<T>;
 template<template<typename> class H, typename T> struct common;
 template<typename T=PyObject> using ref = _ref<T>;
 
@@ -328,6 +341,13 @@ static inline py_ptr_type<T> *newref(const common<H,T> &h)
 
 template<template<typename> class H, typename T>
 struct common : _common {
+private:
+    template<typename T2=void, typename T3>
+    static auto __ref(T3 *v);
+    template<typename T2=void, typename T3>
+    static auto __ptr(T3 *v);
+
+public:
     static auto checked(auto *p, auto&&... args)
     {
         check_refcnt(p);
@@ -473,22 +493,22 @@ struct common : _common {
     template<typename T2=T>
     auto ptr() const
     {
-        return py::ptr<py_tag_type<T2>>(_ptr());
+        return __ptr<py_tag_type<T2>>(_ptr());
     }
     template<typename T2=T>
     auto immref() const
     {
-        return py::ref<py_tag_type<T2>>(py::immref(_ptr()));
+        return __ref<py_tag_type<T2>>(py::immref(_ptr()));
     }
     template<typename T2=T>
     auto ref() const
     {
-        return py::ref<py_tag_type<T2>>(py::newref(_ptr()));
+        return __ref<py_tag_type<T2>>(py::newref(_ptr()));
     }
     template<typename T2=T>
     auto xref() const
     {
-        return py::ref<py_tag_type<T2>>(py::xnewref(_ptr()));
+        return __ref<py_tag_type<T2>>(py::xnewref(_ptr()));
     }
 
     auto str() const
@@ -503,20 +523,26 @@ struct common : _common {
     {
         return py::int_ref(throw_if_not(PyNumber_Long((PyObject*)_ptr())));
     }
-    auto try_int() const;
+    auto try_int() const
+    {
+        auto res = __ref<_int>(PyNumber_Long((PyObject*)_ptr()));
+        if (!res)
+            PyErr_Clear();
+        return res;
+    }
 
     auto attr(const char *name) const
     {
-        return py::ref(throw_if_not(PyObject_GetAttrString((PyObject*)_ptr(), name)));
+        return __ref(throw_if_not(PyObject_GetAttrString((PyObject*)_ptr(), name)));
     }
     template<typename T2>
     auto attr(T2 &&name) const requires is_py_ptr<T2>
     {
-        return py::ref(throw_if_not(PyObject_GetAttr((PyObject*)_ptr(), (PyObject*)name)));
+        return __ref(throw_if_not(PyObject_GetAttr((PyObject*)_ptr(), (PyObject*)name)));
     }
     auto try_attr(const char *name) const
     {
-        auto res = py::ref(PyObject_GetAttrString((PyObject*)_ptr(), name));
+        auto res = __ref(PyObject_GetAttrString((PyObject*)_ptr(), name));
         if (!res)
             PyErr_Clear();
         return res;
@@ -524,7 +550,7 @@ struct common : _common {
     template<typename T2>
     auto try_attr(T2 &&name) const requires is_py_ptr<T2>
     {
-        auto res = py::ref(PyObject_GetAttr((PyObject*)_ptr(), (PyObject*)name));
+        auto res = __ref(PyObject_GetAttr((PyObject*)_ptr(), (PyObject*)name));
         if (!res)
             PyErr_Clear();
         return res;
@@ -551,14 +577,14 @@ struct common : _common {
     template<typename KW=PyObject*>
     auto vcall(PyObject *const *args, size_t nargsf, KW &&kwnames=nullptr)
     {
-        return py::ref(throw_if_not(PyObject_Vectorcall((PyObject*)_ptr(), args,
-                                                        nargsf, (PyObject*)kwnames)));
+        return __ref(throw_if_not(PyObject_Vectorcall((PyObject*)_ptr(), args,
+                                                      nargsf, (PyObject*)kwnames)));
     }
     template<typename KW=PyObject*>
     auto vcall_dict(PyObject *const *args, size_t nargs, KW &&kws=nullptr)
     {
-        return py::ref(throw_if_not(PyObject_VectorcallDict((PyObject*)_ptr(), args,
-                                                            nargs, (PyObject*)kws)));
+        return __ref(throw_if_not(PyObject_VectorcallDict((PyObject*)_ptr(), args,
+                                                          nargs, (PyObject*)kws)));
     }
     auto operator()(auto&&... args)
     {
@@ -584,8 +610,8 @@ struct common : _common {
     template<typename T2=PyObject>
     auto try_get(auto &&key) const requires std::same_as<T,_dict>
     {
-        auto res = py::ptr<py_tag_type<T2>>(PyDict_GetItemWithError((PyObject*)_ptr(),
-                                                                    (PyObject*)key));
+        auto res = __ptr<py_tag_type<T2>>(PyDict_GetItemWithError((PyObject*)_ptr(),
+                                                                  (PyObject*)key));
         if (!res)
             PyErr_Clear();
         return res;
@@ -651,7 +677,7 @@ struct common : _common {
     template<typename T2=PyObject>
     auto get(Py_ssize_t i) const requires std::same_as<T,_list>
     {
-        return py::ptr<py_tag_type<T2>>(PyList_GET_ITEM((PyObject*)_ptr(), i));
+        return __ptr<py_tag_type<T2>>(PyList_GET_ITEM((PyObject*)_ptr(), i));
     }
     template<typename T2>
     void append(T2 &&x) requires std::same_as<T,_list>
@@ -688,7 +714,7 @@ struct common : _common {
     template<typename T2=PyObject>
     auto get(Py_ssize_t i) const requires std::same_as<T,_tuple>
     {
-        return py::ptr<py_tag_type<T2>>(PyTuple_GET_ITEM((PyObject*)_ptr(), i));
+        return __ptr<py_tag_type<T2>>(PyTuple_GET_ITEM((PyObject*)_ptr(), i));
     }
 
     Py_ssize_t size() const requires std::same_as<T,_bytes>
@@ -725,8 +751,8 @@ private:
     {
         return static_cast<const H<T>*>(this)->get();
     }
-    template<typename T2> friend class ptr;
-    template<typename T2> friend class _ref;
+    template<typename T2> friend struct ptr;
+    template<typename T2> friend struct _ref;
 };
 
 template<typename T>
@@ -770,10 +796,9 @@ struct ptr : common<ptr,T> {
 
 private:
     T *m_ptr{nullptr};
-    template<typename T2> friend class ptr;
-    template<typename T2> friend class _ref;
+    template<typename T2> friend struct ptr;
+    template<typename T2> friend struct _ref;
 };
-template<typename T> ptr(T*) -> ptr<T>;
 
 template<typename T>
 struct _ref : common<_ref,T> {
@@ -869,18 +894,21 @@ struct _ref : common<_ref,T> {
 
 private:
     T *m_ptr{nullptr};
-    template<typename T2> friend class ptr;
-    template<typename T2> friend class _ref;
+    template<typename T2> friend struct ptr;
+    template<typename T2> friend struct _ref;
 };
-template<typename T> _ref(T*) -> _ref<T>;
 
 template<template<typename> class H, typename T>
-inline auto common<H,T>::try_int() const
+template<typename T2, typename T3>
+inline auto common<H,T>::__ref(T3 *v)
 {
-    auto res = py::int_ref(PyNumber_Long((PyObject*)_ptr()));
-    if (!res)
-        PyErr_Clear();
-    return res;
+    return py::ref<std::conditional_t<std::is_void_v<T2>,T3,T2>>(v);
+}
+template<template<typename> class H, typename T>
+template<typename T2, typename T3>
+inline auto common<H,T>::__ptr(T3 *v)
+{
+    return py::ptr<std::conditional_t<std::is_void_v<T2>,T3,T2>>(v);
 }
 
 template<bool exact=false, template<typename> class H, typename T, typename T3>
@@ -1489,7 +1517,7 @@ static inline void call_destructor(T *x)
     x->~T();
 }
 
-static constexpr __attribute__((always_inline,pure))
+static inline __attribute__((always_inline,pure))
 uintptr_t event_time_key(py::ptr<> event_time)
 {
     return (uintptr_t)(void*)event_time;
@@ -1507,7 +1535,6 @@ uintptr_t assert_key(int aid)
 
 void bb_reraise(uintptr_t key);
 
-[[noreturn]] void bb_rethrow(uintptr_t key);
 [[noreturn]] void _bb_throw_format(PyObject *exc, uintptr_t key,
                                    const char *format, ...);
 [[noreturn]] void _py_throw_format(PyObject *exc, const char *format, ...);
@@ -1524,20 +1551,6 @@ template<typename... Args>
                                                 Args&&... args)
 {
     _py_throw_format(exc, format, py::_vararg_decay(std::forward<Args>(args))...);
-}
-
-static inline __attribute__((always_inline)) auto throw_if_not(auto &&v, uintptr_t key)
-{
-    if (!v)
-        bb_rethrow(key);
-    return std::move(v);
-}
-
-static inline __attribute__((always_inline)) auto throw_if(auto &&v, uintptr_t key)
-{
-    if (v)
-        bb_rethrow(key);
-    return std::move(v);
 }
 
 // Wrapper inline function to make it more clear to the C compiler
@@ -2067,7 +2080,7 @@ private:
         res.bits[N - shift_idx - 1] = ELT(UELT(bits[N - 1]) >> shift_bit);
         return res;
     }
-    template<std::integral ELT2,unsigned N2> friend class Bits;
+    template<std::integral ELT2,unsigned N2> friend struct Bits;
 };
 
 template<std::integral ELT,unsigned N>

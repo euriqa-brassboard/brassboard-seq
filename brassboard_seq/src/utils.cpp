@@ -191,9 +191,9 @@ str_ref stringio::getvalue()
     return str_ref::checked(PyUnicode_FromKindAndData(m_kind, m_buff.get(), m_pos));
 }
 
-__attribute__((visibility("protected")))
-[[noreturn]] void num_arg_error(const char *func_name, ssize_t nfound,
-                                ssize_t nmin, ssize_t nmax)
+[[noreturn]] __attribute__((visibility("protected")))
+void num_arg_error(const char *func_name, ssize_t nfound,
+                   ssize_t nmin, ssize_t nmax)
 {
     ssize_t nexpected;
     const char *more_or_less;
@@ -215,8 +215,8 @@ __attribute__((visibility("protected")))
                     (nexpected == 1) ? "" : "s", nfound);
 }
 
-__attribute__((visibility("protected")))
-[[noreturn]] void unexpected_kwarg_error(const char *func_name, py::str name)
+[[noreturn]] __attribute__((visibility("protected")))
+void unexpected_kwarg_error(const char *func_name, py::str name)
 {
     py_throw_format(PyExc_TypeError, "%s got an unexpected keyword argument '%U'",
                     func_name, name);
@@ -344,8 +344,8 @@ static inline PyObject *get_global_backtrace(uintptr_t key)
     return nullptr;
 }
 
-__attribute__((visibility("protected")))
-[[noreturn]] void throw0()
+[[noreturn]] __attribute__((visibility("protected")))
+void throw0()
 {
     throw 0;
 }
@@ -358,15 +358,15 @@ void bb_reraise(uintptr_t key)
     PyErr_Restore(type, exc, combine_traceback(old_tb, get_global_backtrace(key)));
 }
 
-__attribute__((visibility("protected")))
-[[noreturn]] void bb_rethrow(uintptr_t key)
+[[noreturn]] __attribute__((visibility("protected")))
+void bb_rethrow(uintptr_t key)
 {
     bb_reraise(key);
     throw0();
 }
 
-__attribute__((visibility("protected")))
-[[noreturn]] void _bb_throw_format(PyObject *exc, uintptr_t key,
+[[noreturn]] __attribute__((visibility("protected")))
+void _bb_throw_format(PyObject *exc, uintptr_t key,
                                    const char *format, ...)
 {
     // This is slightly less efficient but much simpler to implement.
@@ -377,8 +377,8 @@ __attribute__((visibility("protected")))
     bb_rethrow(key);
 }
 
-__attribute__((visibility("protected")))
-[[noreturn]] void _py_throw_format(PyObject *exc, const char *format, ...)
+[[noreturn]] __attribute__((visibility("protected")))
+void _py_throw_format(PyObject *exc, const char *format, ...)
 {
     // This is slightly less efficient but much simpler to implement.
     va_list vargs;

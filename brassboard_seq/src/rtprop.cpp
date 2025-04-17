@@ -216,7 +216,7 @@ PyTypeObject CompositeRTProp_Type = {
 namespace {
 
 #define RTPROP_PREFIX_STR "_RTProp_value_"
-static constexpr int rtprop_prefix_len = strlen(RTPROP_PREFIX_STR);
+static constexpr int rtprop_prefix_len = sizeof(RTPROP_PREFIX_STR) - 1;
 
 struct rtprop_callback : ExternCallback {
     PyObject *obj;

@@ -1190,8 +1190,8 @@ static const auto interp_label_offsets = [] {
         asm(".L_ZN14brassboard_seq5rtval13label_offsetsE");
     std::array<int,get_size()> res{};
     uint16_t idx = 0;
-#define GEN_UNI_OP(f, t1)                                        \
-    res[get_label_id(f, DataType::t1)] = label_offsets[idx];     \
+#define GEN_UNI_OP(f, t1)                                       \
+    res[get_label_id(f, DataType::t1)] = label_offsets[idx];    \
     idx++;
 #define GEN_BIN_OP(f, t1, t2)                                           \
     res[get_label_id(f, DataType::t1, DataType::t2)] = label_offsets[idx]; \
@@ -1296,32 +1296,32 @@ InterpFunction::visit_value(RuntimeValue *value, Builder &builder)
     case op: return handle_unary(op##_op::return_type(arg0_info.val.type))
 
     switch (type) {
-    HANDLE_UNARY(Not);
-    HANDLE_UNARY(Bool);
-    HANDLE_UNARY(Abs);
-    HANDLE_UNARY(Ceil);
-    HANDLE_UNARY(Floor);
-    HANDLE_UNARY(Exp);
-    HANDLE_UNARY(Expm1);
-    HANDLE_UNARY(Log);
-    HANDLE_UNARY(Log1p);
-    HANDLE_UNARY(Log2);
-    HANDLE_UNARY(Log10);
-    HANDLE_UNARY(Sqrt);
-    HANDLE_UNARY(Asin);
-    HANDLE_UNARY(Acos);
-    HANDLE_UNARY(Atan);
-    HANDLE_UNARY(Asinh);
-    HANDLE_UNARY(Acosh);
-    HANDLE_UNARY(Atanh);
-    HANDLE_UNARY(Sin);
-    HANDLE_UNARY(Cos);
-    HANDLE_UNARY(Tan);
-    HANDLE_UNARY(Sinh);
-    HANDLE_UNARY(Cosh);
-    HANDLE_UNARY(Tanh);
-    HANDLE_UNARY(Rint);
-    HANDLE_UNARY(Int64);
+        HANDLE_UNARY(Not);
+        HANDLE_UNARY(Bool);
+        HANDLE_UNARY(Abs);
+        HANDLE_UNARY(Ceil);
+        HANDLE_UNARY(Floor);
+        HANDLE_UNARY(Exp);
+        HANDLE_UNARY(Expm1);
+        HANDLE_UNARY(Log);
+        HANDLE_UNARY(Log1p);
+        HANDLE_UNARY(Log2);
+        HANDLE_UNARY(Log10);
+        HANDLE_UNARY(Sqrt);
+        HANDLE_UNARY(Asin);
+        HANDLE_UNARY(Acos);
+        HANDLE_UNARY(Atan);
+        HANDLE_UNARY(Asinh);
+        HANDLE_UNARY(Acosh);
+        HANDLE_UNARY(Atanh);
+        HANDLE_UNARY(Sin);
+        HANDLE_UNARY(Cos);
+        HANDLE_UNARY(Tan);
+        HANDLE_UNARY(Sinh);
+        HANDLE_UNARY(Cosh);
+        HANDLE_UNARY(Tanh);
+        HANDLE_UNARY(Rint);
+        HANDLE_UNARY(Int64);
 #undef HANDLE_UNARY
     default:
         break;
@@ -1371,25 +1371,25 @@ InterpFunction::visit_value(RuntimeValue *value, Builder &builder)
                                                        arg1_info.val.type))
 
     switch (type) {
-    HANDLE_BINARY(Add);
-    HANDLE_BINARY(Sub);
-    HANDLE_BINARY(Mul);
-    HANDLE_BINARY(Div);
-    HANDLE_BINARY(Pow);
-    HANDLE_BINARY(Mod);
-    HANDLE_BINARY(And);
-    HANDLE_BINARY(Or);
-    HANDLE_BINARY(Xor);
-    HANDLE_BINARY(CmpLT);
-    HANDLE_BINARY(CmpGT);
-    HANDLE_BINARY(CmpLE);
-    HANDLE_BINARY(CmpGE);
-    HANDLE_BINARY(CmpNE);
-    HANDLE_BINARY(CmpEQ);
-    HANDLE_BINARY(Hypot);
-    HANDLE_BINARY(Atan2);
-    HANDLE_BINARY(Max);
-    HANDLE_BINARY(Min);
+        HANDLE_BINARY(Add);
+        HANDLE_BINARY(Sub);
+        HANDLE_BINARY(Mul);
+        HANDLE_BINARY(Div);
+        HANDLE_BINARY(Pow);
+        HANDLE_BINARY(Mod);
+        HANDLE_BINARY(And);
+        HANDLE_BINARY(Or);
+        HANDLE_BINARY(Xor);
+        HANDLE_BINARY(CmpLT);
+        HANDLE_BINARY(CmpGT);
+        HANDLE_BINARY(CmpLE);
+        HANDLE_BINARY(CmpGE);
+        HANDLE_BINARY(CmpNE);
+        HANDLE_BINARY(CmpEQ);
+        HANDLE_BINARY(Hypot);
+        HANDLE_BINARY(Atan2);
+        HANDLE_BINARY(Max);
+        HANDLE_BINARY(Min);
     default:
         py_throw_format(PyExc_ValueError, "Unknown value type");
     }

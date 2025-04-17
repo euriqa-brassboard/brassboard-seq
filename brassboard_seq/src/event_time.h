@@ -223,7 +223,7 @@ struct EventTime : PyObject {
     int64_t get_value(int base_id, unsigned age, std::vector<int64_t> &cache);
 private:
     void update_chain_pos(EventTime *prev, int nchains);
-    friend class TimeManager;
+    friend struct TimeManager;
 };
 
 inline time_ref TimeManager::new_int(time_ptr prev, int64_t offset, bool floating,
