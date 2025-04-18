@@ -815,6 +815,7 @@ private:
     {
         return static_cast<const H<T>*>(this)->get();
     }
+    template<template<typename> class H2, typename T2> friend struct common;
     template<typename T2> friend struct ptr;
     template<typename T2> friend struct _ref;
 };
@@ -832,6 +833,11 @@ struct ptr : common<ptr,T> {
     ptr &operator=(auto *p) noexcept
     {
         m_ptr = (T*)p;
+        return *this;
+    }
+    ptr &operator=(std::nullptr_t) noexcept
+    {
+        m_ptr = (T*)nullptr;
         return *this;
     }
     template<template<typename> class H, typename T2>
@@ -903,6 +909,11 @@ struct _ref : common<_ref,T> {
     _ref &operator=(_ref &&h) noexcept
     {
         take(std::move(h));
+        return *this;
+    }
+    _ref &operator=(std::nullptr_t) noexcept
+    {
+        CLEAR();
         return *this;
     }
     using common<_ref,T>::get;

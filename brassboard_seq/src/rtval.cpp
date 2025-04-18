@@ -423,7 +423,7 @@ static inline rtval_ref build_addsub(py::ptr<> v0, py::ptr<> v1, bool issub)
     assume(v0);
     assume(v1);
     TagVal nc{};
-    RuntimeValue *nv0 = nullptr;
+    rtval_ptr nv0;
     bool ns0 = false;
     if (!is_rtval(v0)) {
         nc = TagVal::from_py(v0);
@@ -456,7 +456,7 @@ static inline rtval_ref build_addsub(py::ptr<> v0, py::ptr<> v1, bool issub)
         }
     }
     bool ns1 = false;
-    RuntimeValue *nv1 = nullptr;
+    rtval_ptr nv1;
     if (!is_rtval(v1)) {
         nc = tagval_add_or_sub(nc, TagVal::from_py(v1), issub);
     }
