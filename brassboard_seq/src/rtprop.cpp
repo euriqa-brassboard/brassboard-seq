@@ -105,8 +105,7 @@ struct CompositeRTProp : PyObject {
     py::str_ref fieldname;
     py::ref<> cb;
 
-    __attribute__((alias("_ZN14brassboard_seq6rtprop20CompositeRTProp_TypeE")))
-    static PyTypeObject Type;
+    static PyTypeObject Type asm("_ZN14brassboard_seq6rtprop20CompositeRTProp_TypeE");
 
     py::ref<composite_rtprop_data> get_data(py::ptr<> obj)
     {
@@ -256,8 +255,7 @@ PyTypeObject rtprop_callback::Type = {
 struct RTProp : PyObject {
     py::str_ref fieldname;
 
-    __attribute__((alias("_ZN14brassboard_seq6rtprop11RTProp_TypeE")))
-    static PyTypeObject Type;
+    static PyTypeObject Type asm("_ZN14brassboard_seq6rtprop11RTProp_TypeE");
 
     py::ref<> get_res(py::ptr<> obj)
     {
