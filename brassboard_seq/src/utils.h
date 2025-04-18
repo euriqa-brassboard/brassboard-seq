@@ -339,11 +339,13 @@ static inline py_ptr_type<T> *newref(const common<H,T> &h)
     return h.ref().rel();
 }
 
+template<bool nulling=true>
 static inline void CLEAR(auto *&ptr_ref)
 {
     auto obj = (PyObject*)ptr_ref;
     if (obj) {
-        ptr_ref = nullptr;
+        if (nulling)
+            ptr_ref = nullptr;
         check_refcnt(obj);
         Py_DECREF(obj);
     }
@@ -826,10 +828,11 @@ struct _ref : common<_ref,T> {
     _ref(const _ref&) = delete;
     template<typename T2> _ref(const ref<T2>&) = delete;
     template<typename T2> _ref(const ptr<T2>&) = delete;
+    template<bool nulling=true>
     void CLEAR()
     {
         check_refcnt(m_ptr);
-        py::CLEAR(m_ptr);
+        py::CLEAR<nulling>(m_ptr);
     }
     ~_ref()
     {

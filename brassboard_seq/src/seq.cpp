@@ -51,13 +51,13 @@ static inline auto add_step_name()
 
 template<typename T>
 static constexpr auto seq_dealloc = py::tp_dealloc<true,[] (py::ptr<T> self) {
-    self->clear();
+    self->template clear<false>();
     self->cclear();
 }>;
 
 template<typename T>
 static constexpr auto seq_clear = py::iunifunc<[] (py::ptr<T> self) {
-    self->clear();
+    self->template clear<true>();
 }>;
 template<typename T>
 static constexpr auto seq_traverse = py::tp_traverse<[] (py::ptr<T> self, auto &visitor) {
@@ -128,7 +128,7 @@ struct CondCombiner {
 };
 
 template<typename T>
-static constexpr auto generic_str = py::unifunc<[] (py::ptr<T> self) {
+static constexpr auto seq_str = py::unifunc<[] (py::ptr<T> self) {
     py::stringio io;
     self->show(io, 0);
     return io.getvalue();
@@ -358,12 +358,13 @@ inline void TimeSeq::traverse(auto &visitor)
     visitor(cond);
 }
 
+template<bool nulling>
 inline void TimeSeq::clear()
 {
-    py::CLEAR(seqinfo);
-    py::CLEAR(start_time);
-    py::CLEAR(end_time);
-    py::CLEAR(cond);
+    py::CLEAR<nulling>(seqinfo);
+    py::CLEAR<nulling>(start_time);
+    py::CLEAR<nulling>(end_time);
+    py::CLEAR<nulling>(cond);
 }
 
 inline void TimeSeq::cclear()
@@ -462,10 +463,11 @@ inline void TimeStep::traverse(auto &visitor)
     TimeSeq::traverse(visitor);
 }
 
+template<bool nulling>
 inline void TimeStep::clear()
 {
-    TimeSeq::clear();
-    py::CLEAR(length);
+    TimeSeq::clear<nulling>();
+    py::CLEAR<nulling>(length);
 }
 
 template<bool is_pulse>
@@ -529,8 +531,8 @@ PyTypeObject TimeStep::Type = {
     .tp_name = "brassboard_seq.seq.TimeStep",
     .tp_basicsize = sizeof(TimeStep),
     .tp_dealloc = seq_dealloc<TimeStep>,
-    .tp_repr = generic_str<TimeStep>,
-    .tp_str = generic_str<TimeStep>,
+    .tp_repr = seq_str<TimeStep>,
+    .tp_str = seq_str<TimeStep>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = seq_traverse<TimeStep>,
     .tp_clear = seq_clear<TimeStep>,
@@ -552,11 +554,12 @@ inline void SubSeq::traverse(auto &visitor)
     TimeSeq::traverse(visitor);
 }
 
+template<bool nulling>
 inline void SubSeq::clear()
 {
-    TimeSeq::clear();
-    py::CLEAR(sub_seqs);
-    py::CLEAR(dummy_step);
+    TimeSeq::clear<nulling>();
+    py::CLEAR<nulling>(sub_seqs);
+    py::CLEAR<nulling>(dummy_step);
 }
 
 inline void SubSeq::show_subseqs(py::stringio &io, int indent) const
@@ -667,8 +670,8 @@ PyTypeObject SubSeq::Type = {
     .tp_name = "brassboard_seq.seq.SubSeq",
     .tp_basicsize = sizeof(SubSeq),
     .tp_dealloc = seq_dealloc<SubSeq>,
-    .tp_repr = generic_str<SubSeq>,
-    .tp_str = generic_str<SubSeq>,
+    .tp_repr = seq_str<SubSeq>,
+    .tp_str = seq_str<SubSeq>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = seq_traverse<SubSeq>,
     .tp_clear = seq_clear<SubSeq>,
@@ -710,9 +713,9 @@ PyTypeObject ConditionalWrapper::Type = {
     .tp_basicsize = sizeof(ConditionalWrapper),
     .tp_dealloc = py::tp_dealloc<true,[] (PyObject *self) { Type.tp_clear(self); }>,
     .tp_vectorcall_offset = py_offsetof(ConditionalWrapper, fptr),
-    .tp_repr = generic_str<ConditionalWrapper>,
+    .tp_repr = seq_str<ConditionalWrapper>,
     .tp_call = PyVectorcall_Call,
-    .tp_str = generic_str<ConditionalWrapper>,
+    .tp_str = seq_str<ConditionalWrapper>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = py::tp_traverse<[] (py::ptr<ConditionalWrapper> self, auto &visitor) {
         visitor(self->seq);
@@ -761,8 +764,8 @@ PyTypeObject Seq::Type = {
     .tp_name = "brassboard_seq.seq.Seq",
     .tp_basicsize = sizeof(Seq),
     .tp_dealloc = seq_dealloc<Seq>,
-    .tp_repr = generic_str<Seq>,
-    .tp_str = generic_str<Seq>,
+    .tp_repr = seq_str<Seq>,
+    .tp_str = seq_str<Seq>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = seq_traverse<Seq>,
     .tp_clear = seq_clear<Seq>,
