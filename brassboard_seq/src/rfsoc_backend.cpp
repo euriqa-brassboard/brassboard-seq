@@ -2616,10 +2616,10 @@ struct Jaqal_v1_3 {
             int nmasks = std::popcount(uint8_t(mod_type));
             auto names = py::new_list(nmasks);
             int name_added = 0;
-            auto add_name = [&] (PyObject *name, ModTypeMask mask) {
+            auto add_name = [&] (py::ptr<> name, ModTypeMask mask) {
                 if (!(mod_type & mask))
                     return;
-                names.SET(name_added, py::ptr(name));
+                names.SET(name_added, name);
                 name_added++;
             };
             add_name("freq0"_py, FRQMOD0_MASK);
