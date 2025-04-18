@@ -125,7 +125,7 @@ struct CompositeRTProp : PyObject {
     {
         auto data = get_data(obj);
         if (!data->filled || (!data->compiled && _object_compiled(obj))) {
-            data->cache.take(py::ptr(cb)(obj));
+            data->cache.take(cb(obj));
             data->filled = true;
             data->compiled = _object_compiled(obj);
         }
