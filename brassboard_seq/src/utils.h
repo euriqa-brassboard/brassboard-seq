@@ -329,12 +329,12 @@ static inline auto immref(auto *obj)
 #endif
 
 template<typename T>
-static inline py_ptr_type<T> *newref(py::ref<T> &&h)
+static inline auto *newref(py::ref<T> &&h)
 {
     return h.rel();
 }
 template<template<typename> class H, typename T>
-static inline py_ptr_type<T> *newref(const common<H,T> &h)
+static inline auto *newref(const common<H,T> &h)
 {
     return h.ref().rel();
 }
@@ -842,10 +842,10 @@ struct ptr : common<ptr,T> {
     }
     template<typename T2> ptr &operator=(ref<T2>&&) noexcept = delete;
     using common<ptr,T>::get;
-    template<typename T2=py_ptr_type<T>>
-    constexpr T2 *get() const
+    template<typename T2=T>
+    constexpr auto *get() const
     {
-        return (T2*)m_ptr;
+        return (py_ptr_type<T2>*)m_ptr;
     }
     template<typename T2> constexpr operator T2*() const
     {
@@ -906,11 +906,10 @@ struct _ref : common<_ref,T> {
         return *this;
     }
     using common<_ref,T>::get;
-    template<typename T2=py_ptr_type<T>>
-    constexpr T2 *get() const
+    template<typename T2=T> constexpr auto *get() const
     {
         check_refcnt(m_ptr);
-        return (T2*)m_ptr;
+        return (py_ptr_type<T2>*)m_ptr;
     }
     template<typename T2>
     explicit constexpr operator T2*()
@@ -944,12 +943,12 @@ struct _ref : common<_ref,T> {
     {
         take(py::newref(std::forward<T2>(p)));
     }
-    template<typename T2=py_ptr_type<T>> T2 *rel()
+    template<typename T2=T> auto *rel()
     {
         auto p = m_ptr;
         m_ptr = nullptr;
         check_refcnt(p);
-        return (T2*)p;
+        return (py_ptr_type<T2>*)p;
     }
     auto &_get_ptr_slot()
     {
