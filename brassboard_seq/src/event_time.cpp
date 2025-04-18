@@ -298,16 +298,10 @@ PyTypeObject TimeManager::Type = {
         call_destructor(&self->time_values);
     }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = [] (PyObject *py_self, visitproc visit, void *arg) {
-        auto self = (TimeManager*)py_self;
-        Py_VISIT(self->event_times);
-        return 0;
-    },
-    .tp_clear = [] (PyObject *py_self) {
-        auto self = (TimeManager*)py_self;
-        Py_CLEAR(self->event_times);
-        return 0;
-    },
+    .tp_traverse = py::tp_traverse<[] (py::ptr<TimeManager> self, auto &visitor) {
+        visitor(self->event_times);
+    }>,
+    .tp_clear = py::iunifunc<[] (py::ptr<TimeManager> self) { py::CLEAR(self->event_times); }>,
 };
 
 namespace {
@@ -391,18 +385,14 @@ PyTypeObject EventTimeDiff::Type = {
         return PyUnicode_FromFormat("(T[%u] - T[%u])", self->t1->data.id, self->t2->data.id);
     }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = [] (PyObject *py_self, visitproc visit, void *arg) {
-        auto self = (EventTimeDiff*)py_self;
-        Py_VISIT(self->t1);
-        Py_VISIT(self->t2);
-        return 0;
-    },
-    .tp_clear = [] (PyObject *py_self) {
-        auto self = (EventTimeDiff*)py_self;
-        Py_CLEAR(self->t1);
-        Py_CLEAR(self->t2);
-        return 0;
-    },
+    .tp_traverse = py::tp_traverse<[] (py::ptr<EventTimeDiff> self, auto &visitor) {
+        visitor(self->t1);
+        visitor(self->t2);
+    }>,
+    .tp_clear = py::iunifunc<[] (py::ptr<EventTimeDiff> self) {
+        py::CLEAR(self->t1);
+        py::CLEAR(self->t2);
+    }>,
 };
 
 static PyNumberMethods EventTime_as_number = {
@@ -515,22 +505,18 @@ PyTypeObject EventTime::Type = {
     .tp_as_number = &EventTime_as_number,
     .tp_str = eventtime_str,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = [] (PyObject *obj, visitproc visit, void *arg) -> int {
-        auto t = (EventTime*)obj;
-        Py_VISIT(t->prev);
-        Py_VISIT(t->wait_for);
-        Py_VISIT(t->cond);
-        Py_VISIT(t->data.get_rt_offset());
-        return 0;
-    },
-    .tp_clear = [] (PyObject *obj) -> int {
-        auto t = (EventTime*)obj;
+    .tp_traverse = py::tp_traverse<[] (time_ptr t, auto &visitor) {
+        visitor(t->prev);
+        visitor(t->wait_for);
+        visitor(t->cond);
+        visitor(t->data.get_rt_offset());
+    }>,
+    .tp_clear = py::iunifunc<[] (time_ptr t) {
         t->data.clear_rt_offset();
-        Py_CLEAR(t->prev);
-        Py_CLEAR(t->wait_for);
-        Py_CLEAR(t->cond);
-        return 0;
-    },
+        py::CLEAR(t->prev);
+        py::CLEAR(t->wait_for);
+        py::CLEAR(t->cond);
+    }>,
 };
 
 __attribute__((constructor))

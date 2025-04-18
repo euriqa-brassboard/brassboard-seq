@@ -938,20 +938,16 @@ PyTypeObject RuntimeValue::Type = {
     .tp_as_number = &rtvalue_as_number,
     .tp_str = rtvalue_str,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = [] (PyObject *py_self, visitproc visit, void *arg) {
-        auto self = (RuntimeValue*)py_self;
-        Py_VISIT(self->arg0);
-        Py_VISIT(self->arg1);
-        Py_VISIT(self->cb_arg2);
-        return 0;
-    },
-    .tp_clear = [] (PyObject *py_self) {
-        auto self = (RuntimeValue*)py_self;
-        Py_CLEAR(self->arg0);
-        Py_CLEAR(self->arg1);
-        Py_CLEAR(self->cb_arg2);
-        return 0;
-    },
+    .tp_traverse = py::tp_traverse<[] (rtval_ptr self, auto &visitor) {
+        visitor(self->arg0);
+        visitor(self->arg1);
+        visitor(self->cb_arg2);
+    }>,
+    .tp_clear = py::iunifunc<[] (rtval_ptr self) {
+        py::CLEAR(self->arg0);
+        py::CLEAR(self->arg1);
+        py::CLEAR(self->cb_arg2);
+    }>,
     .tp_richcompare = py::tp_richcompare<[] (auto v1, auto v2, int op) -> py::ref<> {
         auto typ = pycmp2valcmp(op);
         if (is_rtval(v2)) {

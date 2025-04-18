@@ -339,6 +339,16 @@ static inline py_ptr_type<T> *newref(const common<H,T> &h)
     return h.ref().rel();
 }
 
+static inline void CLEAR(auto *&ptr_ref)
+{
+    auto obj = (PyObject*)ptr_ref;
+    if (obj) {
+        ptr_ref = nullptr;
+        check_refcnt(obj);
+        Py_DECREF(obj);
+    }
+}
+
 template<template<typename> class H, typename T>
 struct common : _common {
 private:
@@ -1731,6 +1741,39 @@ static inline void tp_dealloc(PyObject *obj)
         PyObject_GC_UnTrack(obj);
     cxx_catch<void>([&] { F(obj); });
     Py_TYPE(obj)->tp_free(obj);
+}
+
+struct tp_visitor {
+    tp_visitor(visitproc visit, void *arg)
+        : visit(visit),
+          arg(arg)
+    {}
+    tp_visitor(const tp_visitor&) = delete;
+    void operator()(auto &&obj)
+    {
+        if (res) [[unlikely]]
+            return;
+        res = real_visit((PyObject*)obj);
+    }
+
+    int res{0};
+private:
+    int real_visit(PyObject *obj)
+    {
+        Py_VISIT(obj);
+        return 0;
+    }
+    const visitproc visit;
+    void *const arg;
+};
+
+template<auto F>
+static inline int tp_traverse(PyObject *self, visitproc visit, void *arg)
+{
+    tp_visitor visitor(visit, arg);
+    if (auto res = cxx_catch<int>([&] { F(self, visitor); })) [[unlikely]]
+        return res;
+    return visitor.res;
 }
 
 }

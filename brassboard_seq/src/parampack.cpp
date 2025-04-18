@@ -297,18 +297,14 @@ PyTypeObject ParamPack::Type = {
         }
     }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC|Py_TPFLAGS_HAVE_VECTORCALL,
-    .tp_traverse = [] (PyObject *py_self, visitproc visit, void *arg) {
-        auto self = (ParamPack*)py_self;
-        Py_VISIT(self->values);
-        return 0;
-    },
-    .tp_clear = [] (PyObject *py_self) {
-        auto self = (ParamPack*)py_self;
-        Py_CLEAR(self->values);
-        Py_CLEAR(self->visited);
-        Py_CLEAR(self->fieldname);
-        return 0;
-    },
+    .tp_traverse = py::tp_traverse<[] (py::ptr<ParamPack> self, auto &visitor) {
+        visitor(self->values);
+    }>,
+    .tp_clear = py::iunifunc<[] (py::ptr<ParamPack> self) {
+        py::CLEAR(self->values);
+        py::CLEAR(self->visited);
+        py::CLEAR(self->fieldname);
+    }>,
     .tp_vectorcall = py::vectorfunc<parampack_new>,
 };
 

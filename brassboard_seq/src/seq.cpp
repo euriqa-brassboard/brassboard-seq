@@ -55,6 +55,15 @@ static constexpr auto seq_dealloc = py::tp_dealloc<true,[] (py::ptr<T> self) {
     self->cclear();
 }>;
 
+template<typename T>
+static constexpr auto seq_clear = py::iunifunc<[] (py::ptr<T> self) {
+    self->clear();
+}>;
+template<typename T>
+static constexpr auto seq_traverse = py::tp_traverse<[] (py::ptr<T> self, auto &visitor) {
+    self->traverse(visitor);
+}>;
+
 static inline std::pair<PyObject*,bool>
 _combine_cond(py::ptr<> cond1, py::ptr<> new_cond)
 {
@@ -315,25 +324,21 @@ PyTypeObject SeqInfo::Type = {
         call_destructor(&self->action_alloc);
     }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = [] (PyObject *py_self, visitproc visit, void *arg) {
-        auto self = (SeqInfo*)py_self;
-        Py_VISIT(self->time_mgr);
-        Py_VISIT(self->assertions);
-        Py_VISIT(self->config);
-        Py_VISIT(self->C);
-        return 0;
-    },
-    .tp_clear = [] (PyObject *py_self) {
-        auto self = (SeqInfo*)py_self;
-        Py_CLEAR(self->time_mgr);
-        Py_CLEAR(self->assertions);
-        Py_CLEAR(self->config);
-        Py_CLEAR(self->channel_name_map);
-        Py_CLEAR(self->channel_path_map);
-        Py_CLEAR(self->channel_paths);
-        Py_CLEAR(self->C);
-        return 0;
-    },
+    .tp_traverse = py::tp_traverse<[] (py::ptr<SeqInfo> self, auto &visitor) {
+        visitor(self->time_mgr);
+        visitor(self->assertions);
+        visitor(self->config);
+        visitor(self->C);
+    }>,
+    .tp_clear = py::iunifunc<[] (py::ptr<SeqInfo> self) {
+        py::CLEAR(self->time_mgr);
+        py::CLEAR(self->assertions);
+        py::CLEAR(self->config);
+        py::CLEAR(self->channel_name_map);
+        py::CLEAR(self->channel_path_map);
+        py::CLEAR(self->channel_paths);
+        py::CLEAR(self->C);
+    }>,
 };
 
 inline void TimeSeq::show_cond_suffix(py::stringio &io) const
@@ -345,21 +350,20 @@ inline void TimeSeq::show_cond_suffix(py::stringio &io) const
     io.write_ascii("\n");
 }
 
-inline int TimeSeq::traverse(visitproc visit, void *arg)
+inline void TimeSeq::traverse(auto &visitor)
 {
-    Py_VISIT(seqinfo);
-    Py_VISIT(start_time);
-    Py_VISIT(end_time);
-    Py_VISIT(cond);
-    return 0;
+    visitor(seqinfo);
+    visitor(start_time);
+    visitor(end_time);
+    visitor(cond);
 }
 
 inline void TimeSeq::clear()
 {
-    Py_CLEAR(seqinfo);
-    Py_CLEAR(start_time);
-    Py_CLEAR(end_time);
-    Py_CLEAR(cond);
+    py::CLEAR(seqinfo);
+    py::CLEAR(start_time);
+    py::CLEAR(end_time);
+    py::CLEAR(cond);
 }
 
 inline void TimeSeq::cclear()
@@ -424,8 +428,8 @@ static PyMemberDef TimeSeq_members[] = {
 };
 
 static PyGetSetDef TimeSeq_getsets[] = {
-    {"C", [] (PyObject *py_self, void*) -> PyObject* {
-        return py::newref(((TimeSeq*)py_self)->seqinfo->C); }},
+    {"C", [] (PyObject *self, void*) -> PyObject* {
+        return py::newref(((TimeSeq*)self)->seqinfo->C); }},
     {}
 };
 
@@ -436,13 +440,8 @@ PyTypeObject TimeSeq::Type = {
     .tp_basicsize = sizeof(TimeSeq),
     .tp_dealloc = seq_dealloc<TimeSeq>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = [] (PyObject *py_self, visitproc visit, void *arg) {
-        return ((TimeSeq*)py_self)->traverse(visit, arg);
-    },
-    .tp_clear = [] (PyObject *py_self) {
-        ((TimeSeq*)py_self)->clear();
-        return 0;
-    },
+    .tp_traverse = seq_traverse<TimeSeq>,
+    .tp_clear = seq_clear<TimeSeq>,
     .tp_methods = (py::meth_table<
                    py::meth_o<"get_channel_id",get_channel_id>,
                    py::meth_fastkw<"set_time",set_time>,
@@ -457,16 +456,16 @@ inline void TimeStep::cclear()
     call_destructor(&actions);
 }
 
-inline int TimeStep::traverse(visitproc visit, void *arg)
+inline void TimeStep::traverse(auto &visitor)
 {
-    Py_VISIT(length);
-    return TimeSeq::traverse(visit, arg);
+    visitor(length);
+    TimeSeq::traverse(visitor);
 }
 
 inline void TimeStep::clear()
 {
     TimeSeq::clear();
-    Py_CLEAR(length);
+    py::CLEAR(length);
 }
 
 template<bool is_pulse>
@@ -533,13 +532,8 @@ PyTypeObject TimeStep::Type = {
     .tp_repr = generic_str<TimeStep>,
     .tp_str = generic_str<TimeStep>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = [] (PyObject *py_self, visitproc visit, void *arg) {
-        return ((TimeStep*)py_self)->traverse(visit, arg);
-    },
-    .tp_clear = [] (PyObject *py_self) {
-        ((TimeStep*)py_self)->clear();
-        return 0;
-    },
+    .tp_traverse = seq_traverse<TimeStep>,
+    .tp_clear = seq_clear<TimeStep>,
     .tp_methods = (py::meth_table<
                    py::meth_fastkw<"set",condseq_set<TimeStep,false>>,
                    py::meth_fastkw<"pulse",condseq_set<TimeStep,true>>>),
@@ -551,18 +545,18 @@ inline void SubSeq::cclear()
     TimeSeq::cclear();
 }
 
-inline int SubSeq::traverse(visitproc visit, void *arg)
+inline void SubSeq::traverse(auto &visitor)
 {
-    Py_VISIT(sub_seqs);
-    Py_VISIT(dummy_step);
-    return TimeSeq::traverse(visit, arg);
+    visitor(sub_seqs);
+    visitor(dummy_step);
+    TimeSeq::traverse(visitor);
 }
 
 inline void SubSeq::clear()
 {
     TimeSeq::clear();
-    Py_CLEAR(sub_seqs);
-    Py_CLEAR(dummy_step);
+    py::CLEAR(sub_seqs);
+    py::CLEAR(dummy_step);
 }
 
 inline void SubSeq::show_subseqs(py::stringio &io, int indent) const
@@ -676,13 +670,8 @@ PyTypeObject SubSeq::Type = {
     .tp_repr = generic_str<SubSeq>,
     .tp_str = generic_str<SubSeq>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = [] (PyObject *py_self, visitproc visit, void *arg) {
-        return ((SubSeq*)py_self)->traverse(visit, arg);
-    },
-    .tp_clear = [] (PyObject *py_self) {
-        ((SubSeq*)py_self)->clear();
-        return 0;
-    },
+    .tp_traverse = seq_traverse<SubSeq>,
+    .tp_clear = seq_clear<SubSeq>,
     .tp_methods = (
         py::meth_table<
         py::meth_fastkw<"wait",condseq_wait<SubSeq>>,
@@ -709,8 +698,8 @@ inline void ConditionalWrapper::show(py::stringio &io, int indent) const
 }
 
 static PyGetSetDef ConditionalWrapper_getsets[] = {
-    {"C", [] (PyObject *py_self, void*) -> PyObject* {
-        return py::newref(((ConditionalWrapper*)py_self)->seq->seqinfo->C); }},
+    {"C", [] (PyObject *self, void*) -> PyObject* {
+        return py::newref(((ConditionalWrapper*)self)->seq->seqinfo->C); }},
     {}
 };
 
@@ -725,18 +714,14 @@ PyTypeObject ConditionalWrapper::Type = {
     .tp_call = PyVectorcall_Call,
     .tp_str = generic_str<ConditionalWrapper>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = [] (PyObject *py_self, visitproc visit, void *arg) {
-        auto self = (ConditionalWrapper*)py_self;
-        Py_VISIT(self->seq);
-        Py_VISIT(self->cond);
-        return 0;
-    },
-    .tp_clear = [] (PyObject *py_self) {
-        auto self = (ConditionalWrapper*)py_self;
-        Py_CLEAR(self->seq);
-        Py_CLEAR(self->cond);
-        return 0;
-    },
+    .tp_traverse = py::tp_traverse<[] (py::ptr<ConditionalWrapper> self, auto &visitor) {
+        visitor(self->seq);
+        visitor(self->cond);
+    }>,
+    .tp_clear = py::iunifunc<[] (py::ptr<ConditionalWrapper> self) {
+        py::CLEAR(self->seq);
+        py::CLEAR(self->cond);
+    }>,
     .tp_methods = (
         py::meth_table<
         py::meth_fastkw<"wait",condseq_wait<ConditionalWrapper>>,
@@ -779,13 +764,8 @@ PyTypeObject Seq::Type = {
     .tp_repr = generic_str<Seq>,
     .tp_str = generic_str<Seq>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = [] (PyObject *py_self, visitproc visit, void *arg) {
-        return ((Seq*)py_self)->traverse(visit, arg);
-    },
-    .tp_clear = [] (PyObject *py_self) {
-        ((Seq*)py_self)->clear();
-        return 0;
-    },
+    .tp_traverse = seq_traverse<Seq>,
+    .tp_clear = seq_clear<Seq>,
     .tp_base = &SubSeq::Type,
     .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {

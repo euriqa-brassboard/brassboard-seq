@@ -40,18 +40,14 @@ PyTypeObject composite_rtprop_data::Type = {
     .tp_basicsize = sizeof(composite_rtprop_data),
     .tp_dealloc = py::tp_dealloc<true,[] (PyObject *self) { Type.tp_clear(self); }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = [] (PyObject *py_self, visitproc visit, void *arg) {
-        auto self = (composite_rtprop_data*)py_self;
-        Py_VISIT(self->ovr);
-        Py_VISIT(self->cache);
-        return 0;
-    },
-    .tp_clear = [] (PyObject *py_self) {
-        auto self = (composite_rtprop_data*)py_self;
-        Py_CLEAR(self->ovr);
-        Py_CLEAR(self->cache);
-        return 0;
-    },
+    .tp_traverse = py::tp_traverse<[] (py::ptr<composite_rtprop_data> self, auto &visitor) {
+        visitor(self->ovr);
+        visitor(self->cache);
+    }>,
+    .tp_clear = py::iunifunc<[] (py::ptr<composite_rtprop_data> self) {
+        py::CLEAR(self->ovr);
+        py::CLEAR(self->cache);
+    }>,
 };
 
 static inline py::ref<> apply_composite_ovr(py::ptr<> val, py::ptr<> ovr);
@@ -169,17 +165,13 @@ PyTypeObject CompositeRTProp_Type = {
     .tp_dealloc = py::tp_dealloc<true,[] (PyObject *self) {
         CompositeRTProp_Type.tp_clear(self); }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = [] (PyObject *py_self, visitproc visit, void *arg) {
-        auto self = (CompositeRTProp*)py_self;
-        Py_VISIT(self->cb);
-        return 0;
-    },
-    .tp_clear = [] (PyObject *py_self) {
-        auto self = (CompositeRTProp*)py_self;
-        Py_CLEAR(self->fieldname);
-        Py_CLEAR(self->cb);
-        return 0;
-    },
+    .tp_traverse = py::tp_traverse<[] (py::ptr<CompositeRTProp> self, auto &visitor) {
+        visitor(self->cb);
+    }>,
+    .tp_clear = py::iunifunc<[] (py::ptr<CompositeRTProp> self) {
+        py::CLEAR(self->fieldname);
+        py::CLEAR(self->cb);
+    }>,
     .tp_methods = (py::meth_table<
                    py::meth_o<"get_state",CompositeRTProp::get_state>,
                    py::meth_fast<"set_state",CompositeRTProp::set_state>,
@@ -246,17 +238,13 @@ PyTypeObject rtprop_callback::Type = {
                                                      PY_SSIZE_T_MAX)), self->obj);
     }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = [] (PyObject *py_self, visitproc visit, void *arg) {
-        auto self = (rtprop_callback*)py_self;
-        Py_VISIT(self->obj);
-        return 0;
-    },
-    .tp_clear = [] (PyObject *py_self) {
-        auto self = (rtprop_callback*)py_self;
-        Py_CLEAR(self->obj);
-        Py_CLEAR(self->fieldname);
-        return 0;
-    },
+    .tp_traverse = py::tp_traverse<[] (py::ptr<rtprop_callback> self, auto &visitor) {
+        visitor(self->obj);
+    }>,
+    .tp_clear = py::iunifunc<[] (py::ptr<rtprop_callback> self) {
+        py::CLEAR(self->obj);
+        py::CLEAR(self->fieldname);
+    }>,
     .tp_base = &ExternCallback::Type,
 };
 
@@ -320,7 +308,7 @@ PyTypeObject RTProp_Type = {
     .tp_name = "brassboard_seq.rtval.RTProp",
     .tp_basicsize = sizeof(RTProp),
     .tp_dealloc = py::tp_dealloc<false,[] (py::ptr<RTProp> self) {
-        Py_CLEAR(self->fieldname); }>,
+        py::CLEAR(self->fieldname); }>,
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_methods = (py::meth_table<
                    py::meth_o<"get_state",RTProp::get_state>,

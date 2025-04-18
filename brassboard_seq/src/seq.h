@@ -75,7 +75,7 @@ struct TimeSeq : PyObject {
 
     static PyTypeObject Type;
     constexpr static str_literal ClsName = "TimeSeq";
-    int traverse(visitproc visit, void *arg);
+    void traverse(auto &visitor);
     void cclear();
     void clear();
 };
@@ -96,7 +96,7 @@ struct TimeStep : TimeSeq {
 
     static PyTypeObject Type;
     constexpr static str_literal ClsName = "TimeStep";
-    int traverse(visitproc visit, void *arg);
+    void traverse(auto &visitor);
     void cclear();
     void clear();
 };
@@ -121,7 +121,7 @@ struct SubSeq : TimeSeq {
 
     static PyTypeObject Type;
     constexpr static str_literal ClsName = "SubSeq";
-    int traverse(visitproc visit, void *arg);
+    void traverse(auto &visitor);
     void cclear();
     void clear();
 };
