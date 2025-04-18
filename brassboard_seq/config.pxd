@@ -23,6 +23,4 @@ cdef extern from "src/config.h" namespace "brassboard_seq::config":
     using _brassboard_seq_config_Config = brassboard_seq::config::Config;
     """
     ctypedef class brassboard_seq._utils.Config [object _brassboard_seq_config_Config, check_size ignore]:
-        cdef dict channel_alias
-        cdef dict alias_cache
-        cdef set supported_prefix
+        pass
