@@ -21,6 +21,7 @@
 
 #include "Python.h"
 #include "frameobject.h"
+#include "structmember.h"
 
 #include <algorithm>
 #include <array>
@@ -105,6 +106,8 @@ static inline constexpr auto _pyx_find_base(T &&p, auto cb)
 #define pyx_fld(p, fld) (pyx_find_base((p), fld)->fld)
 
 namespace brassboard_seq {
+
+#define BB_PREINIT __attribute__((unused,init_priority(101)))
 
 // Replace with C++23 [[assume()]];
 #if bb_has_builtin(__builtin_assume)
@@ -235,6 +238,8 @@ public:
 
 template<size_t N, typename T>
 using ntuple = typename _ntuple<N,T>::type;
+
+template<auto v> static inline auto global_var = v;
 
 namespace py {
 
@@ -1785,16 +1790,11 @@ static inline int itrifunc(PyObject *v1, PyObject *v2, PyObject *v3)
 
 template<str_literal name, auto F, int flags, str_literal doc>
 struct _method_def {
-    static constexpr PyMethodDef get()
+    constexpr operator PyMethodDef() const
     {
         return {name, (PyCFunction)(uintptr_t)F, flags, doc};
     }
-    constexpr operator PyMethodDef() const
-    {
-        return get();
-    }
 };
-static constexpr PyMethodDef null_def = {0, 0, 0, 0};
 
 template<auto F> static constexpr auto cfunc = binfunc<F>;
 template<str_literal name, auto F, str_literal doc="">
@@ -1827,11 +1827,51 @@ template<str_literal name, auto F, str_literal doc="">
 static constexpr auto meth_fastkw = _method_def<name,cfunc_fastkw<F>,
                                                 METH_FASTCALL|METH_KEYWORDS,doc>{};
 
-template<_method_def... defs>
-static inline PyMethodDef meth_table[] = {
-    defs...,
-    null_def
+template<_method_def... defs> static inline PyMethodDef meth_table[] BB_PREINIT = { defs..., {} };
+
+template<str_literal name, int type, auto ptr, int flags, str_literal doc>
+struct _mem_def;
+template<str_literal name, int type, typename T, typename Fld, Fld T::*ptr,
+         int flags, str_literal doc>
+struct _mem_def<name,type,ptr,flags,doc>
+{
+    operator PyMemberDef() const
+    {
+        T v;
+        return {name, type, ((char*)&(v.*ptr)) - (char*)&v, flags, doc};
+    }
 };
+template<str_literal name, int type, auto ptr, int flags, str_literal doc="">
+static constexpr _mem_def<name,type,ptr,flags,doc> mem_def;
+template<_mem_def... defs> static inline PyMemberDef mem_table[] BB_PREINIT = { defs..., {} };
+
+template<auto F>
+static inline PyObject *getter_func(PyObject *self, void*)
+{
+    return cxx_catch([&] { return F(self); });
+}
+
+template<auto F>
+static inline int setter_func(PyObject *self, PyObject *val, void*)
+{
+    return cxx_catch<int>([&] { return F(self, val); });
+}
+
+template<str_literal name, auto get, auto set, str_literal doc>
+struct _getset_def {
+    constexpr operator PyGetSetDef() const
+    {
+        if constexpr (std::is_null_pointer_v<decltype(set)>) {
+            return {name, getter_func<get>, set, doc, nullptr};
+        }
+        else {
+            return {name, getter_func<get>, setter_func<set>, doc, nullptr};
+        }
+    }
+};
+template<str_literal name, auto get, auto set=nullptr, str_literal doc="">
+static constexpr _getset_def<name,get,set,doc> getset_def;
+template<_getset_def... defs> static inline PyGetSetDef getset_table[] BB_PREINIT = { defs..., {} };
 
 template<auto F>
 static inline PyObject *vectorfunc(PyObject *self, PyObject *const *args,

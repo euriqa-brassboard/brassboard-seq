@@ -511,37 +511,6 @@ GET_NP(rint);
 #undef GET_NP
 };
 
-static PyNumberMethods rtvalue_as_number = {
-    .nb_add = py::binfunc<[] (auto v1, auto v2) { return build_addsub(v1, v2, false); }>,
-    .nb_subtract = py::binfunc<[] (auto v1, auto v2) { return build_addsub(v1, v2, true); }>,
-    .nb_multiply = py::binfunc<[] (auto v1, auto v2) { return new_expr2_wrap1(Mul, v1, v2); }>,
-    .nb_remainder = py::binfunc<[] (auto v1, auto v2) { return new_expr2_wrap1(Mod, v1, v2); }>,
-    .nb_power = py::trifunc<[] (auto v1, auto v2, auto v3) {
-        if (v3 != Py_None) [[unlikely]]
-            Py_RETURN_NOTIMPLEMENTED;
-        return new_expr2_wrap1(Pow, v1, v2);
-    }>,
-    .nb_negative = py::unifunc<[] (auto self) {
-        return build_addsub(py::int_cached(0), self, true);
-    }>,
-    .nb_positive = [] (PyObject *self) { return py::newref(self); },
-    .nb_absolute = py::unifunc<[] (rtval_ptr self) {
-        if (self->type_ == Abs)
-            return self.ref();
-        return new_expr1(Abs, self);
-    }>,
-    .nb_bool = [] (PyObject *self) {
-        // It's too easy to accidentally use this in control flow/assertion
-        PyErr_Format(PyExc_TypeError, "Cannot convert runtime value to boolean");
-        return -1;
-    },
-    .nb_and = py::binfunc<[] (auto v1, auto v2) { return new_expr2_wrap1(And, v1, v2); }>,
-    .nb_xor = py::binfunc<[] (auto v1, auto v2) { return new_expr2_wrap1(Xor, v1, v2); }>,
-    .nb_or = py::binfunc<[] (auto v1, auto v2) { return new_expr2_wrap1(Or, v1, v2); }>,
-    .nb_true_divide = py::binfunc<[] (auto v1, auto v2) {
-        return new_expr2_wrap1(Div, v1, v2); }>,
-};
-
 static inline bool is_integer(auto v)
 {
     return (v->datatype != DataType::Float64 || v->type_ == Ceil ||
@@ -883,7 +852,43 @@ PyTypeObject RuntimeValue::Type = {
         call_destructor(&self->cb_arg2);
     }>,
     .tp_repr = rtvalue_str,
-    .tp_as_number = &rtvalue_as_number,
+    .tp_as_number = &global_var<PyNumberMethods{
+        .nb_add = py::binfunc<[] (auto v1, auto v2) {
+            return build_addsub(v1, v2, false); }>,
+        .nb_subtract = py::binfunc<[] (auto v1, auto v2) {
+            return build_addsub(v1, v2, true); }>,
+        .nb_multiply = py::binfunc<[] (auto v1, auto v2) {
+            return new_expr2_wrap1(Mul, v1, v2); }>,
+        .nb_remainder = py::binfunc<[] (auto v1, auto v2) {
+            return new_expr2_wrap1(Mod, v1, v2); }>,
+        .nb_power = py::trifunc<[] (auto v1, auto v2, auto v3) {
+            if (v3 != Py_None) [[unlikely]]
+                Py_RETURN_NOTIMPLEMENTED;
+            return new_expr2_wrap1(Pow, v1, v2);
+        }>,
+        .nb_negative = py::unifunc<[] (auto self) {
+            return build_addsub(py::int_cached(0), self, true);
+        }>,
+        .nb_positive = [] (PyObject *self) { return py::newref(self); },
+        .nb_absolute = py::unifunc<[] (rtval_ptr self) {
+            if (self->type_ == Abs)
+                return self.ref();
+            return new_expr1(Abs, self);
+        }>,
+        .nb_bool = [] (PyObject *self) {
+            // It's too easy to accidentally use this in control flow/assertion
+            PyErr_Format(PyExc_TypeError, "Cannot convert runtime value to boolean");
+            return -1;
+        },
+        .nb_and = py::binfunc<[] (auto v1, auto v2) {
+            return new_expr2_wrap1(And, v1, v2); }>,
+        .nb_xor = py::binfunc<[] (auto v1, auto v2) {
+            return new_expr2_wrap1(Xor, v1, v2); }>,
+        .nb_or = py::binfunc<[] (auto v1, auto v2) {
+            return new_expr2_wrap1(Or, v1, v2); }>,
+        .nb_true_divide = py::binfunc<[] (auto v1, auto v2) {
+            return new_expr2_wrap1(Div, v1, v2); }>,
+    }>,
     .tp_str = rtvalue_str,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = py::tp_traverse<[] (rtval_ptr self, auto &visitor) {
@@ -920,7 +925,8 @@ PyTypeObject ExternCallback::Type = {
     .tp_basicsize = sizeof(struct ExternCallback),
     .tp_dealloc = py::tp_dealloc<false,[] (auto) {}>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,
-    .tp_new = py::tp_new<[] (PyTypeObject *t, auto...) { return PyType_GenericAlloc(t, 0); }>,
+    .tp_new = py::tp_new<[] (PyTypeObject *t, auto...) {
+        return PyType_GenericAlloc(t, 0); }>,
 };
 
 static PyObject *py_get_value(PyObject*, PyObject *const *args, Py_ssize_t nargs)

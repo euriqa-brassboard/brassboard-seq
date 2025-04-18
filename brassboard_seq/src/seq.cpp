@@ -20,8 +20,6 @@
 
 #include <algorithm>
 
-#include "structmember.h"
-
 namespace brassboard_seq::seq {
 
 enum class AddStepType {
@@ -197,7 +195,7 @@ static auto condseq_conditional(py::ptr<CondSeq> self, py::ptr<> cond)
     auto wrapper = py::generic_alloc<ConditionalWrapper>();
     wrapper->seq = py::newref(subseq);
     wrapper->cond = cc.take_cond();
-    wrapper->fptr = (void*)py::vectorfunc<condwrapper_vectorcall>;
+    *(void**)(&wrapper.get()[1]) = (void*)py::vectorfunc<condwrapper_vectorcall>;
     return wrapper;
 }
 
@@ -391,23 +389,6 @@ static void rt_assert(py::ptr<TimeSeq> self, PyObject *const *args,
     }
 }
 
-#define py_offsetof(type, member) [] () constexpr {     \
-        type v;                                         \
-        return ((char*)&v.member) - (char*)&v;          \
-    } ()
-
-static PyMemberDef TimeSeq_members[] = {
-    {"start_time", T_OBJECT_EX, py_offsetof(TimeSeq, start_time), READONLY},
-    {"end_time", T_OBJECT_EX, py_offsetof(TimeSeq, end_time), READONLY},
-    {}
-};
-
-static PyGetSetDef TimeSeq_getsets[] = {
-    {"C", [] (PyObject *self, void*) -> PyObject* {
-        return py::newref(((TimeSeq*)self)->seqinfo->C); }},
-    {}
-};
-
 __attribute__((visibility("protected")))
 PyTypeObject TimeSeq::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
@@ -421,8 +402,12 @@ PyTypeObject TimeSeq::Type = {
                    py::meth_o<"get_channel_id",get_channel_id>,
                    py::meth_fastkw<"set_time",set_time>,
                    py::meth_fastkw<"rt_assert",rt_assert>>),
-    .tp_members = TimeSeq_members,
-    .tp_getset = TimeSeq_getsets,
+    .tp_members = (py::mem_table<
+                   py::mem_def<"start_time",T_OBJECT_EX,&TimeSeq::start_time,READONLY>,
+                   py::mem_def<"end_time",T_OBJECT_EX,&TimeSeq::end_time,READONLY>>),
+    .tp_getset = (py::getset_table<
+                  py::getset_def<"C",[] (py::ptr<TimeSeq> self) {
+                      return py::newref(self->seqinfo->C); }>>),
 };
 
 inline void TimeStep::cclear()
@@ -633,11 +618,6 @@ SubSeq::add_time_step(py::ptr<> cond, py::ptr<EventTime> start_time, py::ptr<> l
     return step;
 }
 
-static PyMemberDef SubSeq_members[] = {
-    {"current_time", T_OBJECT_EX, py_offsetof(SubSeq, end_time), READONLY},
-    {}
-};
-
 __attribute__((visibility("protected")))
 PyTypeObject SubSeq::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
@@ -659,7 +639,8 @@ PyTypeObject SubSeq::Type = {
         py::meth_fastkw<"add_background",add_step_real<SubSeq,AddStepType::Background>>,
         py::meth_fastkw<"add_floating",add_step_real<SubSeq,AddStepType::Floating>>,
         py::meth_fastkw<"add_at",add_step_real<SubSeq,AddStepType::At>>>),
-    .tp_members = SubSeq_members,
+    .tp_members = (py::mem_table<
+                   py::mem_def<"current_time",T_OBJECT_EX,&SubSeq::end_time,READONLY>>),
     .tp_base = &TimeSeq::Type,
 };
 
@@ -674,19 +655,13 @@ inline void ConditionalWrapper::show(py::stringio &io, int indent) const
     seq->show(io, indent + 2);
 }
 
-static PyGetSetDef ConditionalWrapper_getsets[] = {
-    {"C", [] (PyObject *self, void*) -> PyObject* {
-        return py::newref(((ConditionalWrapper*)self)->seq->seqinfo->C); }},
-    {}
-};
-
 __attribute__((visibility("protected")))
 PyTypeObject ConditionalWrapper::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.seq.ConditionalWrapper",
-    .tp_basicsize = sizeof(ConditionalWrapper),
+    .tp_basicsize = sizeof(ConditionalWrapper) + sizeof(void*),
     .tp_dealloc = py::tp_dealloc<true,[] (PyObject *self) { Type.tp_clear(self); }>,
-    .tp_vectorcall_offset = py_offsetof(ConditionalWrapper, fptr),
+    .tp_vectorcall_offset = sizeof(ConditionalWrapper),
     .tp_repr = seq_str<ConditionalWrapper>,
     .tp_call = PyVectorcall_Call,
     .tp_str = seq_str<ConditionalWrapper>,
@@ -709,7 +684,9 @@ PyTypeObject ConditionalWrapper::Type = {
         py::meth_fastkw<"add_background",add_step_real<ConditionalWrapper,AddStepType::Background>>,
         py::meth_fastkw<"add_floating",add_step_real<ConditionalWrapper,AddStepType::Floating>>,
         py::meth_fastkw<"add_at",add_step_real<ConditionalWrapper,AddStepType::At>>>),
-    .tp_getset = ConditionalWrapper_getsets,
+    .tp_getset = (py::getset_table<
+                  py::getset_def<"C",[] (py::ptr<ConditionalWrapper> self) {
+                      return py::newref(self->seq->seqinfo->C); }>>),
 };
 
 inline void Seq::show(py::stringio &io, int indent) const

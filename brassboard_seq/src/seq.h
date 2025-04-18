@@ -132,7 +132,6 @@ struct SubSeq : TimeSeq {
 struct ConditionalWrapper : PyObject {
     SubSeq *seq;
     PyObject *cond;
-    void *fptr;
     SubSeq *get_seq() { return seq; }
     void show(py::stringio &io, int indent) const;
 

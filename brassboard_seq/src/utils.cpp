@@ -367,7 +367,7 @@ void bb_rethrow(uintptr_t key)
 
 [[noreturn]] __attribute__((visibility("protected")))
 void _bb_throw_format(PyObject *exc, uintptr_t key,
-                                   const char *format, ...)
+                      const char *format, ...)
 {
     // This is slightly less efficient but much simpler to implement.
     va_list vargs;

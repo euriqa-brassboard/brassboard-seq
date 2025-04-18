@@ -238,7 +238,8 @@ PyTypeObject rtprop_callback::Type = {
     .tp_str = py::unifunc<[] (py::ptr<rtprop_callback> self) {
         return py::str_format(
             "<RTProp %U for %S>",
-            py::str_ref::checked(PyUnicode_Substring(self->fieldname.get(), rtprop_prefix_len,
+            py::str_ref::checked(PyUnicode_Substring(self->fieldname.get(),
+                                                     rtprop_prefix_len,
                                                      PY_SSIZE_T_MAX)), self->obj);
     }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
@@ -319,7 +320,8 @@ PyTypeObject RTProp_Type = {
                    py::meth_o<"get_state",RTProp::get_state>,
                    py::meth_fast<"set_state",RTProp::set_state>,
                    py::meth_fast<"__set_name__",RTProp::set_name>>),
-    .tp_descr_get = py::trifunc<[] (py::ptr<RTProp> self, py::ptr<> obj, auto) -> py::ref<> {
+    .tp_descr_get = py::trifunc<[] (py::ptr<RTProp> self, py::ptr<> obj,
+                                    auto) -> py::ref<> {
         if (!obj) [[unlikely]]
             return self.ref();
         return self->get_res(obj);
