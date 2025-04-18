@@ -1106,6 +1106,31 @@ static inline str_ref str_format(const char *format, Args&&... args)
         PyUnicode_FromFormat(format, _vararg_decay(std::forward<Args>(args))...));
 }
 
+static inline ref<> new_none()
+{
+    return ref(immref(Py_None));
+}
+
+static inline ref<> new_bool(bool v)
+{
+    return ref(immref(v ? Py_True : Py_False));
+}
+
+static inline ref<> new_true()
+{
+    return new_bool(true);
+}
+
+static inline ref<> new_false()
+{
+    return new_bool(false);
+}
+
+static inline ref<> new_not_implemented()
+{
+    return ref(immref(Py_NotImplemented));
+}
+
 static inline dict_ref new_dict()
 {
     return dict_ref(throw_if_not(PyDict_New()));

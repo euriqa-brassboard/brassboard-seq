@@ -80,7 +80,7 @@ static inline void compiler_finalize(auto comp, _RampFunctionBase*, Backend*)
         std::ranges::sort(actions, [] (auto *a1, auto *a2) {
             return a1->tid < a2->tid;
         });
-        auto value = py::ref(py::immref(Py_False));
+        auto value = py::new_false();
         EventTime *last_time = nullptr;
         bool last_is_start = false;
         int tid = -1;

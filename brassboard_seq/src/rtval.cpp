@@ -27,63 +27,31 @@ namespace brassboard_seq::rtval {
 __attribute__((returns_nonnull,visibility("protected"))) RuntimeValue*
 new_cb_arg2(ValueType type, py::ptr<> cb_arg2, py::ptr<> ty)
 {
-    auto datatype = pytype_to_datatype(ty);
-    auto self = py::generic_alloc<RuntimeValue>();
-    self->datatype = datatype;
-    // self->cache_err = EvalError::NoError;
-    // self->cache_val = { .i64_val = 0 };
-    self->type_ = type;
-    self->age = (unsigned)-1;
-    call_constructor(&self->arg0, py::immref(Py_None));
-    call_constructor(&self->arg1, py::immref(Py_None));
-    call_constructor(&self->cb_arg2, py::newref(cb_arg2));
-    return self.rel();
+    return RuntimeValue::alloc(type, pytype_to_datatype(ty),
+                               py::new_none(), py::new_none(), cb_arg2).rel();
 }
 
 __attribute__((visibility("protected"))) rtval_ref
 new_expr1(ValueType type, rtval_ref &&arg0)
 {
-    auto datatype = unary_return_type(type, arg0->datatype);
-    auto self = py::generic_alloc<RuntimeValue>();
-    self->datatype = datatype;
-    // self->cache_err = EvalError::NoError;
-    // self->cache_val = { .i64_val = 0 };
-    self->type_ = type;
-    self->age = (unsigned)-1;
-    call_constructor(&self->arg0, arg0.rel());
-    call_constructor(&self->arg1, py::immref(Py_None));
-    call_constructor(&self->cb_arg2, py::immref(Py_None));
-    return self;
+    return RuntimeValue::alloc(type, unary_return_type(type, arg0->datatype),
+                               std::move(arg0), py::new_none(), py::new_none());
 }
 
 __attribute__((visibility("protected"))) rtval_ref
 new_expr2(ValueType type, rtval_ref &&arg0, rtval_ref &&arg1)
 {
-    auto datatype = binary_return_type(type, arg0->datatype, arg1->datatype);
-    auto self = py::generic_alloc<RuntimeValue>();
-    self->datatype = datatype;
-    // self->cache_err = EvalError::NoError;
-    // self->cache_val = { .i64_val = 0 };
-    self->type_ = type;
-    self->age = (unsigned)-1;
-    call_constructor(&self->arg0, arg0.rel());
-    call_constructor(&self->arg1, arg1.rel());
-    call_constructor(&self->cb_arg2, py::immref(Py_None));
-    return self;
+    return RuntimeValue::alloc(type,
+                               binary_return_type(type, arg0->datatype, arg1->datatype),
+                               std::move(arg0), std::move(arg1), py::new_none());
 }
 
 __attribute__((visibility("protected"))) rtval_ref
 new_const(TagVal v)
 {
-    auto self = py::generic_alloc<RuntimeValue>();
-    self->datatype = v.type;
-    // self->cache_err = EvalError::NoError;
+    auto self = RuntimeValue::alloc(Const, v.type, py::new_none(),
+                                    py::new_none(), py::new_none());
     self->cache_val = v.val;
-    self->type_ = Const;
-    self->age = (unsigned)-1;
-    call_constructor(&self->arg0, py::immref(Py_None));
-    call_constructor(&self->arg1, py::immref(Py_None));
-    call_constructor(&self->cb_arg2, py::immref(Py_None));
     return self;
 }
 
@@ -104,17 +72,9 @@ static PyObject *new_expr2_wrap1(ValueType type, py::ptr<> arg0, py::ptr<> arg1)
         }
         rtarg0.assign(arg0);
     }
-    auto datatype = binary_return_type(type, rtarg0->datatype, rtarg1->datatype);
-    auto self = py::generic_alloc<RuntimeValue>();
-    self->datatype = datatype;
-    // self->cache_err = EvalError::NoError;
-    // self->cache_val = { .i64_val = 0 };
-    self->type_ = type;
-    self->age = (unsigned)-1;
-    call_constructor(&self->arg0, rtarg0.rel());
-    call_constructor(&self->arg1, rtarg1.rel());
-    call_constructor(&self->cb_arg2, py::immref(Py_None));
-    return self.rel();
+    return RuntimeValue::alloc(type, binary_return_type(type, rtarg0->datatype,
+                                                        rtarg1->datatype),
+                               std::move(rtarg0), std::move(rtarg1), py::new_none()).rel();
 }
 
 static inline rtval_ref wrap_rtval(py::ptr<> v)
@@ -129,18 +89,8 @@ rtval_ref new_select(rtval_ptr arg0, py::ptr<> arg1, py::ptr<> arg2)
 {
     auto rtarg1 = wrap_rtval(arg1);
     auto rtarg2 = wrap_rtval(arg2);
-    auto datatype = promote_type(((RuntimeValue*)rtarg1)->datatype,
-                                 ((RuntimeValue*)rtarg2)->datatype);
-    auto self = py::generic_alloc<RuntimeValue>();
-    self->datatype = datatype;
-    // self->cache_err = EvalError::NoError;
-    // self->cache_val = { .i64_val = 0 };
-    self->type_ = Select;
-    self->age = (unsigned)-1;
-    call_constructor(&self->arg0, py::newref(arg0));
-    call_constructor(&self->arg1, rtarg1.rel());
-    call_constructor(&self->cb_arg2, rtarg2.rel());
-    return self;
+    return RuntimeValue::alloc(Select, promote_type(rtarg1->datatype, rtarg2->datatype),
+                               arg0, std::move(rtarg1), std::move(rtarg2));
 }
 
 static inline bool tagval_equal(const TagVal &v1, const TagVal &v2)
@@ -605,7 +555,7 @@ static py::ref<> rtvalue_array_ufunc(rtval_ptr self, PyObject *const *args,
     auto ufunc = args[0];
     auto methods = args[1];
     if (PyUnicode_CompareWithASCIIString(methods, "__call__"))
-        return py::ptr(Py_NotImplemented).immref();
+        return py::new_not_implemented();
     // numpy type support would dispatch arithmetic operations to this function
     // so we need to implement the corresponding ufuncs to support these.
     if (ufunc == np::add) {
@@ -707,7 +657,7 @@ static py::ref<> rtvalue_array_ufunc(rtval_ptr self, PyObject *const *args,
         return bin_expr(Hypot);
     if (ufunc == np::rint)
         return is_integer(self) ? self.ref() : uni_expr(Rint);
-    return py::ptr(Py_NotImplemented).immref();
+    return py::new_not_implemented();
 }
 
 static auto rtvalue_eval(rtval_ptr self, py::ptr<> pyage)
@@ -950,8 +900,7 @@ PyTypeObject RuntimeValue::Type = {
         auto typ = pycmp2valcmp(op);
         if (is_rtval(v2)) {
             if (v1 == v2)
-                return py::ptr(typ == CmpLE || typ == CmpGE || typ == CmpEQ ?
-                               Py_True : Py_False).immref();
+                return py::new_bool(typ == CmpLE || typ == CmpGE || typ == CmpEQ);
             return new_expr2(typ, v1, v2);
         }
         return new_expr2(typ, v1, new_const(TagVal::from_py(v2)));

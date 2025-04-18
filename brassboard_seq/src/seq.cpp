@@ -81,16 +81,8 @@ _combine_cond(py::ptr<> cond1, py::ptr<> new_cond)
     if (cond1 == Py_True)
         return { cond2.rel(), true };
     assert(is_rtval(cond1));
-    auto self = py::generic_alloc<RuntimeValue>();
-    self->datatype = DataType::Bool;
-    // self->cache_err = EvalError::NoError;
-    // self->cache_val = { .i64_val = 0 };
-    self->type_ = And;
-    self->age = (unsigned)-1;
-    call_constructor(&self->arg0, py::newref(cond1));
-    call_constructor(&self->arg1, cond2.rel());
-    call_constructor(&self->cb_arg2, py::immref(Py_None));
-    return { (PyObject*)self.rel(), true };
+    return { RuntimeValue::alloc(And, DataType::Bool, cond1, std::move(cond2),
+                                 py::new_none()).rel(), true };
 }
 
 static inline __attribute__((returns_nonnull)) PyObject*

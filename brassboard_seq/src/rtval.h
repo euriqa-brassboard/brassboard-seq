@@ -943,6 +943,20 @@ struct RuntimeValue : PyObject {
     rtval_ref arg1;
     py::ref<> cb_arg2;
 
+    template<typename T0, typename T1, typename T2>
+    static rtval_ref alloc(ValueType type_, DataType datatype,
+                           T0 &&arg0, T1 &&arg1, T2 &&arg2)
+    {
+        auto self = py::generic_alloc<RuntimeValue>();
+        self->type_ = type_;
+        self->datatype = datatype;
+        self->age = (unsigned)-1;
+        call_constructor(&self->arg0, py::newref(std::forward<T0>(arg0)));
+        call_constructor(&self->arg1, py::newref(std::forward<T1>(arg1)));
+        call_constructor(&self->cb_arg2, py::newref(std::forward<T2>(arg2)));
+        return self;
+    }
+
     static PyTypeObject Type;
 };
 

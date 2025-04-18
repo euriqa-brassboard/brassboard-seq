@@ -318,7 +318,7 @@ static inline py::ref<> get_visited(PyObject*, py::ptr<> param_pack)
     if (auto value = py::dict(self->values).try_get(fieldname);
         value && value.typeis<py::dict>())
         return set_new_dict(visited, fieldname);
-    return py::ptr(Py_False).immref();
+    return py::new_false();
 }
 __attribute__((visibility("protected")))
 PyMethodDef parampack_get_visited_method = py::meth_o<"get_visited",get_visited>;
