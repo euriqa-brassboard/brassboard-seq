@@ -70,7 +70,7 @@ _combine_cond(py::ptr<> cond1, py::ptr<> new_cond)
     if (cond1 == Py_False)
         return { Py_False, false };
     if (!is_rtval(new_cond)) {
-        if (get_value_bool(new_cond, (uintptr_t)-1)) {
+        if (new_cond.as_bool()) {
             return { cond1, false };
         }
         else {
@@ -89,7 +89,7 @@ _combine_cond(py::ptr<> cond1, py::ptr<> new_cond)
     self->age = (unsigned)-1;
     self->arg0 = (RuntimeValue*)py::newref(cond1);
     self->arg1 = cond2.rel();
-    self->cb_arg2 = py::immref(Py_None);
+    call_constructor(&self->cb_arg2, py::immref(Py_None));
     return { (PyObject*)self.rel(), true };
 }
 
@@ -148,17 +148,17 @@ static auto condseq_set(py::ptr<CondSeq> self, PyObject *const *args,
     if (kwnames) {
         auto kwvalues = args + nargs;
         for (auto [i, name]: py::tuple_iter(kwnames)) {
-            auto value = kwvalues[i];
+            auto kwvalue = py::ptr(kwvalues[i]);
             if (PyUnicode_CompareWithASCIIString(name, "cond") == 0) {
-                arg_cond = value;
+                arg_cond = kwvalue;
             }
             else if (PyUnicode_CompareWithASCIIString(name, "exact_time") == 0) {
-                exact_time = get_value_bool(value, (uintptr_t)-1);
+                exact_time = kwvalue.as_bool();
             }
             else {
                 if (!kws)
                     kws = py::new_dict();
-                kws.set(name, value);
+                kws.set(name, kwvalue);
             }
         }
     }
@@ -299,11 +299,11 @@ static py::ref<TimeSeq> add_step_real(py::ptr<CondSeq> self, PyObject *const *ar
 inline int SeqInfo::get_channel_id(py::str name)
 {
     if (auto chn = py::dict(channel_name_map).try_get(name)) [[likely]]
-        return PyLong_AsLong(chn);
+        return chn.as_int();
     auto path = py::tuple_ref(config->translate_channel(name));
     if (auto chn = py::dict(channel_path_map).try_get(path)) {
         py::dict(channel_name_map).set(name, chn);
-        return PyLong_AsLong(chn);
+        return chn.as_int();
     }
     int cid = py::list(channel_paths).size();
     py::list(channel_paths).append(path);
@@ -412,7 +412,7 @@ static void rt_assert(py::ptr<TimeSeq> self, PyObject *const *args,
         a.SET(1, msg);
         assertions.append(std::move(a));
     }
-    else if (!get_value_bool(c, -1)) {
+    else if (!c.as_bool()) {
         py_throw_format(PyExc_AssertionError, "%U", msg);
     }
 }
@@ -476,7 +476,7 @@ inline void TimeStep::set(py::ptr<> chn, py::ptr<> value, py::ptr<> cond,
 {
     int cid;
     if (chn.typeis<py::int_>()) {
-        auto lcid = PyLong_AsLong(chn);
+        auto lcid = chn.as_int();
         if (lcid < 0 || lcid > py::list(seqinfo->channel_paths).size())
             py_throw_format(PyExc_ValueError, "Channel id %ld out of bound", lcid);
         cid = lcid;
@@ -778,9 +778,8 @@ PyTypeObject Seq::Type = {
                                                   nargs - 1, kwnames);
         int max_frame = 0;
         if (py_max_frame) {
-            max_frame = PyLong_AsLong(py_max_frame);
+            max_frame = py_max_frame.as_int();
             if (max_frame < 0) {
-                throw_pyerr();
                 py_throw_format(PyExc_ValueError, "max_frame cannot be negative");
             }
         }

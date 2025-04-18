@@ -175,7 +175,7 @@ void collect_actions(auto *ab, backend::CompiledSeq &cseq)
             }
         }
         else if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
-            double v = get_value_f64(value, action_key(aid));
+            double v = value.as_float(action_key(aid));
             if (type == DDSFreq) {
                 auto &ddschn = ab->channels.ddschns[chn_idx];
                 artiq_action.value = dds_freq_to_mu(v, ddschn.ftw_per_hz);
@@ -189,7 +189,7 @@ void collect_actions(auto *ab, backend::CompiledSeq &cseq)
             }
         }
         else {
-            artiq_action.value = get_value_bool(value, action_key(aid));
+            artiq_action.value = value.as_bool(action_key(aid));
         }
         if (needs_reloc) {
             artiq_action.reloc_id = (int)relocations.size();

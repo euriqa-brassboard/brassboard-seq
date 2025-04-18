@@ -937,7 +937,7 @@ struct RuntimeValue : PyObject {
     GenVal cache_val;
     RuntimeValue *arg0;
     RuntimeValue *arg1;
-    PyObject *cb_arg2;
+    py::ref<> cb_arg2;
 
     static PyTypeObject Type;
 };
@@ -1058,7 +1058,7 @@ static inline double get_value_f64(py::ptr<> v, unsigned age)
         rt_eval_throw(v, age);
         return rtval_cache(v).get<double>();
     }
-    return brassboard_seq::get_value_f64(v, -1);
+    return v.as_float();
 }
 
 struct InterpFunction {

@@ -542,6 +542,58 @@ public:
             PyErr_Clear();
         return res;
     }
+    bool as_bool(auto &&cb) const requires requires { cb(); }
+    {
+        auto obj = (PyObject*)_ptr();
+        if (obj == Py_True)
+            return true;
+        if (obj == Py_False) [[likely]]
+            return false;
+        int res = PyObject_IsTrue(obj);
+        if (res < 0)
+            cb();
+        assume(res <= 1);
+        return res;
+    }
+    bool as_bool(uintptr_t key=-1) const
+    {
+        return as_bool([&] { bb_rethrow(key); });
+    }
+    template<std::integral Ti=long>
+    Ti as_int(auto &&cb) requires requires { cb(); }
+    {
+        auto obj = (PyObject*)_ptr();
+        Ti res;
+        if constexpr (sizeof(Ti) > sizeof(long)) {
+            static_assert(sizeof(Ti) <= sizeof(long long));
+            res = PyLong_AsLongLong(obj);
+        }
+        else {
+            res = PyLong_AsLong(obj);
+        }
+        if (res == -1 && PyErr_Occurred())
+            cb();
+        return res;
+    }
+    template<std::integral Ti=long>
+    Ti as_int(uintptr_t key=-1)
+    {
+        return as_int<Ti>([&] { bb_rethrow(key); });
+    }
+    double as_float(auto &&cb) const requires requires { cb(); }
+    {
+        auto obj = (PyObject*)_ptr();
+        if (std::same_as<T,_float> || isa<py::float_>())
+            return PyFloat_AS_DOUBLE(obj);
+        auto res = PyFloat_AsDouble(obj);
+        if (res == -1 && PyErr_Occurred())
+            cb();
+        return res;
+    }
+    double as_float(uintptr_t key=-1) const
+    {
+        return as_float([&] { bb_rethrow(key); });
+    }
 
     auto attr(const char *name) const
     {
@@ -1803,44 +1855,6 @@ static inline int tp_traverse(PyObject *self, visitproc visit, void *arg)
 static inline void throw_pyerr(bool cond=true)
 {
     throw_if(cond && PyErr_Occurred());
-}
-
-static __attribute__((always_inline)) inline
-bool get_value_bool(py::ptr<> obj, auto &&cb) requires requires { cb(); }
-{
-    if (obj == Py_True)
-        return true;
-    if (obj == Py_False)
-        return false;
-    int res = PyObject_IsTrue(obj);
-    if (res < 0)
-        cb();
-    return res;
-}
-
-static inline bool get_value_bool(py::ptr<> obj, uintptr_t key)
-{
-    return get_value_bool(obj, [&] {
-        bb_rethrow(key);
-    });
-}
-
-static __attribute__((always_inline)) inline
-double get_value_f64(py::ptr<> obj, auto &&cb) requires requires { cb(); }
-{
-    if (obj.isa<py::float_>()) [[likely]]
-        return PyFloat_AS_DOUBLE(obj.get());
-    auto res = PyFloat_AsDouble(obj);
-    if (res == -1 && PyErr_Occurred())
-        cb();
-    return res;
-}
-
-static inline double get_value_f64(py::ptr<> obj, uintptr_t key)
-{
-    return get_value_f64(obj, [&] {
-        bb_rethrow(key);
-    });
 }
 
 template<str_literal lit>

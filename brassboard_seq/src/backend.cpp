@@ -159,11 +159,10 @@ static inline auto action_get_condval(auto action, unsigned age)
 }
 
 template<typename _RampFunctionBase, typename Backend>
-static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
+static inline void compiler_runtime_finalize(auto comp, py::ptr<> _age,
                                              _RampFunctionBase*, Backend*)
 {
-    unsigned age = PyLong_AsLong(_age);
-    throw_pyerr(age == (unsigned)-1);
+    unsigned age = _age.as_int();
     auto seq = comp->seq;
     auto seqinfo = seq->seqinfo;
     auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);

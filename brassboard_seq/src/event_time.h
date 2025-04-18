@@ -39,12 +39,9 @@ static inline int64_t round_time_f64(double v)
 
 static inline int64_t round_time_int(py::ptr<> v)
 {
-    if (v.typeis<py::int_>()) {
-        auto vi = PyLong_AsLongLong(v);
-        throw_pyerr(vi == -1);
-        return vi * time_scale;
-    }
-    return round_time_f64(get_value_f64(v, -1));
+    if (v.typeis<py::int_>())
+        return v.as_int<int64_t>() * time_scale;
+    return round_time_f64(v.as_float());
 }
 
 rtval::rtval_ref round_time_rt(rtval::rtval_ptr v);

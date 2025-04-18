@@ -3833,7 +3833,7 @@ static inline bool parse_action_kws(py::dict kws, int aid)
     bool sync = false;
     for (auto [key, value]: py::dict_iter(kws)) {
         if (PyUnicode_CompareWithASCIIString(key, "sync") == 0) {
-            sync = get_value_bool(value, action_key(aid));
+            sync = value.as_bool(action_key(aid));
             continue;
         }
         bb_throw_format(PyExc_ValueError, action_key(aid),
@@ -3896,14 +3896,13 @@ void collect_actions(auto *rb, backend::CompiledSeq &cseq)
                 }
                 if (is_ramp) {
                     rfsoc_action.ramp = value;
-                    auto len = action->length;
+                    auto len = py::ptr(action->length);
                     if (rtval::is_rtval(len)) {
                         needs_reloc = true;
                         reloc.val_idx = float_values.get_id(len);
                     }
                     else {
-                        rfsoc_action.float_value =
-                            get_value_f64(len, action_key(action->aid));
+                        rfsoc_action.float_value = len.as_float(action_key(action->aid));
                     }
                 }
                 else if (rtval::is_rtval(value)) {
@@ -3916,12 +3915,10 @@ void collect_actions(auto *rb, backend::CompiledSeq &cseq)
                     }
                 }
                 else if (is_ff) {
-                    rfsoc_action.bool_value = get_value_bool(value,
-                                                             action_key(action->aid));
+                    rfsoc_action.bool_value = value.as_bool(action_key(action->aid));
                 }
                 else {
-                    rfsoc_action.float_value = get_value_f64(value,
-                                                             action_key(action->aid));
+                    rfsoc_action.float_value = value.as_float(action_key(action->aid));
                 }
                 if (needs_reloc) {
                     rfsoc_action.reloc_id = (int)relocations.size();

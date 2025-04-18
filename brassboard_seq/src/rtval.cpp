@@ -36,7 +36,7 @@ new_cb_arg2(ValueType type, py::ptr<> cb_arg2, py::ptr<> ty)
     self->age = (unsigned)-1;
     self->arg0 = (RuntimeValue*)py::immref(Py_None);
     self->arg1 = (RuntimeValue*)py::immref(Py_None);
-    self->cb_arg2 = py::newref(cb_arg2);
+    call_constructor(&self->cb_arg2, py::newref(cb_arg2));
     return self.rel();
 }
 
@@ -52,7 +52,7 @@ new_expr1(ValueType type, rtval_ref &&arg0)
     self->age = (unsigned)-1;
     self->arg0 = arg0.rel();
     self->arg1 = (RuntimeValue*)py::immref(Py_None);
-    self->cb_arg2 = py::immref(Py_None);
+    call_constructor(&self->cb_arg2, py::immref(Py_None));
     return self;
 }
 
@@ -68,7 +68,7 @@ new_expr2(ValueType type, rtval_ref &&arg0, rtval_ref &&arg1)
     self->age = (unsigned)-1;
     self->arg0 = arg0.rel();
     self->arg1 = arg1.rel();
-    self->cb_arg2 = py::immref(Py_None);
+    call_constructor(&self->cb_arg2, py::immref(Py_None));
     return self;
 }
 
@@ -83,7 +83,7 @@ new_const(TagVal v)
     self->age = (unsigned)-1;
     self->arg0 = (RuntimeValue*)py::immref(Py_None);
     self->arg1 = (RuntimeValue*)py::immref(Py_None);
-    self->cb_arg2 = py::immref(Py_None);
+    call_constructor(&self->cb_arg2, py::immref(Py_None));
     return self;
 }
 
@@ -113,7 +113,7 @@ static PyObject *new_expr2_wrap1(ValueType type, py::ptr<> arg0, py::ptr<> arg1)
     self->age = (unsigned)-1;
     self->arg0 = rtarg0.rel();
     self->arg1 = rtarg1.rel();
-    self->cb_arg2 = py::immref(Py_None);
+    call_constructor(&self->cb_arg2, py::immref(Py_None));
     return self.rel();
 }
 
@@ -139,7 +139,7 @@ rtval_ref new_select(rtval_ptr arg0, py::ptr<> arg1, py::ptr<> arg2)
     self->age = (unsigned)-1;
     self->arg0 = py::newref(arg0);
     self->arg1 = rtarg1.rel();
-    self->cb_arg2 = (PyObject*)rtarg2.rel();
+    call_constructor(&self->cb_arg2, rtarg2.rel());
     return self;
 }
 
@@ -163,11 +163,10 @@ static bool _rt_same_value(rtval_ptr v1, rtval_ptr v2)
         return false;
     switch (v1->type_) {
     case Arg: {
-        auto i1 = PyLong_AsLong(v1->cb_arg2);
-        auto i2 = PyLong_AsLong(v2->cb_arg2);
-        // There may or may not be a python error raised
-        // but the caller will clear it anyway.
-        throw_if(i1 < 0 || i2 < 0);
+        auto i1 = v1->cb_arg2.as_int();
+        auto i2 = v2->cb_arg2.as_int();
+        if (i1 < 0 || i2 < 0) [[unlikely]]
+            return false;
         return i1 == i2;
     }
     case Const:
@@ -400,12 +399,9 @@ TagVal TagVal::from_py(py::ptr<> value)
         return true;
     if (value == Py_False)
         return false;
-    if (value.isa<py::int_>() || is_numpy_int(value)) {
-        auto val = PyLong_AsLongLong(value);
-        throw_pyerr(val == -1);
-        return TagVal(val);
-    }
-    return TagVal(brassboard_seq::get_value_f64(value, -1));
+    if (value.isa<py::int_>() || is_numpy_int(value))
+        return TagVal(value.as_int<int64_t>());
+    return TagVal(value.as_float());
 }
 
 static inline TagVal tagval_add_or_sub(TagVal v1, TagVal v2, bool issub)
@@ -716,9 +712,7 @@ static py::ref<> rtvalue_array_ufunc(rtval_ptr self, PyObject *const *args,
 
 static auto rtvalue_eval(rtval_ptr self, py::ptr<> pyage)
 {
-    auto age = PyLong_AsLong(pyage);
-    throw_pyerr(age == -1);
-    rt_eval_cache(self, age);
+    rt_eval_cache(self, pyage.as_int());
     return rtval_cache(self).to_py();
 }
 
@@ -770,27 +764,27 @@ static inline bool needs_parenthesis(auto v, ValueType parent_type)
 namespace {
 
 struct rtvalue_printer : py::stringio {
-    void show_arg(RuntimeValue *v, ValueType parent_type)
+    void show_arg(rtval_ptr v, ValueType parent_type)
     {
         auto p = needs_parenthesis(v, parent_type);
         if (p) write_ascii("(");
         show(v);
         if (p) write_ascii(")");
     }
-    void show_binary(RuntimeValue *v, const char *op, ValueType type_)
+    void show_binary(rtval_ptr v, const char *op, ValueType type_)
     {
         show_arg(v->arg0, type_);
         write_ascii(op);
         show_arg(v->arg1, type_);
     }
-    void show_call1(RuntimeValue *v, const char *f)
+    void show_call1(rtval_ptr v, const char *f)
     {
         write_ascii(f);
         write_ascii("(");
         show(v->arg0);
         write_ascii(")");
     }
-    void show_call2(RuntimeValue *v, const char *f)
+    void show_call2(rtval_ptr v, const char *f)
     {
         write_ascii(f);
         write_ascii("(");
@@ -799,7 +793,7 @@ struct rtvalue_printer : py::stringio {
         show(v->arg1);
         write_ascii(")");
     }
-    void show_call3(RuntimeValue *v, const char *f)
+    void show_call3(rtval_ptr v, const char *f)
     {
         write_ascii(f);
         write_ascii("(");
@@ -810,7 +804,7 @@ struct rtvalue_printer : py::stringio {
         show((RuntimeValue*)v->cb_arg2);
         write_ascii(")");
     }
-    void show(RuntimeValue *v)
+    void show(rtval_ptr v)
     {
         switch (v->type_) {
         case Extern:
@@ -946,7 +940,7 @@ PyTypeObject RuntimeValue::Type = {
     .tp_clear = py::iunifunc<[] (rtval_ptr self) {
         py::CLEAR(self->arg0);
         py::CLEAR(self->arg1);
-        py::CLEAR(self->cb_arg2);
+        self->cb_arg2.CLEAR();
     }>,
     .tp_richcompare = py::tp_richcompare<[] (auto v1, auto v2, int op) -> py::ref<> {
         auto typ = pycmp2valcmp(op);
@@ -981,9 +975,7 @@ static PyObject *py_get_value(PyObject*, PyObject *const *args, Py_ssize_t nargs
     py::check_num_arg("get_value", nargs, 2, 2);
     auto pyage = py::arg_cast<py::int_>(args[1], "age");
     if (is_rtval(args[0])) {
-        auto age = PyLong_AsLong(pyage);
-        throw_pyerr(age < 0);
-        rt_eval_cache(args[0], age);
+        rt_eval_cache(args[0], pyage.as_int());
         return rtval_cache(args[0]).to_py();
     }
     return py::newref(args[0]);
@@ -1000,27 +992,27 @@ static PyObject *py_inv(PyObject*, py::ptr<> v)
             return rt_convert_bool(rv->arg0).rel();
         return new_expr1(Not, rv).rel();
     }
-    return py::immref(get_value_bool(v, -1) ? Py_False : Py_True);
+    return py::immref(v.as_bool() ? Py_False : Py_True);
 }
 
 static PyObject *py_convert_bool(PyObject*, py::ptr<> v)
 {
     if (auto rv = py::cast<RuntimeValue>(v))
         return rt_convert_bool(rv).rel();
-    return py::immref(get_value_bool(v, -1) ? Py_True : Py_False);
+    return py::immref(v.as_bool() ? Py_True : Py_False);
 }
 
 static py::ref<> py_ifelse(PyObject*, PyObject *const *args, Py_ssize_t nargs)
 {
     py::check_num_arg("ifelse", nargs, 3, 3);
-    auto b = args[0];
+    auto b = py::ptr(args[0]);
     auto v1 = py::ptr(args[1]);
     auto v2 = py::ptr(args[2]);
     if (same_value(v1, v2))
         return v1.ref();
     if (auto rb = py::cast<RuntimeValue>(b))
         return new_select(rb, v1, v2);
-    return (get_value_bool(b, -1) ? v1 : v2).ref();
+    return (b.as_bool() ? v1 : v2).ref();
 }
 
 static PyObject *py_same_value(PyObject*, PyObject *const *args, Py_ssize_t nargs)
@@ -1225,11 +1217,9 @@ InterpFunction::visit_value(RuntimeValue *value, Builder &builder)
         return info;
     }
     case Arg: {
-        auto v = PyLong_AsLong(value->cb_arg2);
-        if (v < 0 || v >= builder.nargs) {
-            throw_pyerr();
+        auto v = value->cb_arg2.as_int();
+        if (v < 0 || v >= builder.nargs)
             py_throw_format(PyExc_IndexError, "Argument index out of bound: %ld.", v);
-        }
         info.val.type = builder.types[v];
         info.dynamic = true;
         info.inited = true;

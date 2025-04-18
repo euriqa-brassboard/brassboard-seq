@@ -181,7 +181,7 @@ static inline void print_scalar(py::stringio &io, py::ptr<> obj,
                                 int indent, int cur_indent)
 {
     if (is_bool_obj(obj))
-        return io.write_ascii(get_value_bool(obj, -1) ? "true" : "false");
+        return io.write_ascii(obj.as_bool() ? "true" : "false");
     if (auto s = py::cast<py::str>(obj))
         return print_string(io, s, indent, cur_indent);
     if (auto d = py::cast<py::dict>(obj))
@@ -260,7 +260,7 @@ static inline void print_array_iter(py::stringio &io, auto &&iter,
     bool all_short_scalar = true;
     for (auto [i, v]: iter) {
         if (is_bool_obj(v)) {
-            strary.push_back((get_value_bool(v, -1) ? "true"_py : "false"_py).ref());
+            strary.push_back((v.as_bool() ? "true"_py : "false"_py).ref());
         }
         else if (auto sv = py::cast<py::str>(v)) {
             py::stringio io2;
@@ -351,9 +351,8 @@ static PyObject *py_sprint(PyObject*, PyObject *const *args, Py_ssize_t nargs)
     py::check_num_arg("sprint", nargs, 1, 2);
     int indent = 0;
     if (nargs >= 2) {
-        indent = PyLong_AsLong(py::arg_cast<py::int_>(args[1], "indent"));
+        indent = py::arg_cast<py::int_>(args[1], "indent").as_int();
         if (indent < 0) {
-            throw_pyerr();
             py_throw_format(PyExc_TypeError, "indent cannot be negative");
         }
     }

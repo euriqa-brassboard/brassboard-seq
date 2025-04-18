@@ -86,12 +86,8 @@ static inline py::ref<> apply_composite_ovr(py::ptr<> val, py::ptr<> ovr)
         auto newval = l.list(); // copy
         for (auto [k, v]: py::dict_iter(ovr)) {
             // for scangroup support since only string key is supported
-            auto idx = PyLong_AsLong(k.int_().get());
-            if (idx < 0) {
-                throw_pyerr();
-                py_throw_format(PyExc_IndexError, "list index out of range");
-            }
-            if (idx >= newval.size())
+            auto idx = k.int_().as_int();
+            if (idx < 0 || idx >= newval.size())
                 py_throw_format(PyExc_IndexError, "list index out of range");
             newval.set(idx, apply_composite_ovr(newval.get(idx), v));
         }
