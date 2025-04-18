@@ -103,12 +103,12 @@ bool bits_to_bool(const auto &v)
     return bool(v);
 }
 
-auto bits_to_pylong(const auto &v)
+auto *bits_to_pylong(const auto &v)
 {
     return v.to_pylong();
 }
 
-auto bits_to_pybytes(const auto &v)
+auto *bits_to_pybytes(const auto &v)
 {
     return v.to_pybytes();
 }
@@ -160,8 +160,8 @@ static inline auto *timemanager_new_time_int(auto self, auto prev, auto offset,
 static inline auto *condseq_get_cond(py::ptr<> condseq)
 {
     if (auto cond = py::exact_cast<seq::ConditionalWrapper>(condseq))
-        return cond->cond;
-    return py::arg_cast<seq::TimeSeq>(condseq, "s")->cond;
+        return py::newref(cond->cond);
+    return py::newref(py::arg_cast<seq::TimeSeq>(condseq, "s")->cond);
 }
 
 void init_action_obj(auto *action, py::ptr<> value, py::ptr<> cond, bool is_pulse,
@@ -199,7 +199,7 @@ PyObject *_action_get_end_val(action::Action *action)
     return py::newref(action->end_val);
 }
 
-auto compiledseq_get_all_actions(backend::CompiledSeq &cseq)
+auto *compiledseq_get_all_actions(backend::CompiledSeq &cseq)
 {
     return cseq.all_actions.get();
 }
@@ -207,7 +207,7 @@ auto compiledseq_get_total_time(backend::CompiledSeq &cseq)
 {
     return cseq.total_time;
 }
-auto _timemanager_finalize(auto *self)
+void _timemanager_finalize(auto *self)
 {
     self->finalize();
 }
@@ -215,9 +215,9 @@ auto _timemanager_compute_all_times(auto *self, unsigned age)
 {
     return self->compute_all_times(age);
 }
-auto new_time_rt(auto self, auto prev, auto offset, auto cond, auto wait_for)
+auto *new_time_rt(auto self, auto prev, auto offset, auto cond, auto wait_for)
 {
-    return self->new_rt(prev, offset, cond, wait_for);
+    return self->new_rt(prev, offset, cond, wait_for).rel();
 }
 void event_time_set_base_int(auto self, auto base, int64_t offset)
 {
