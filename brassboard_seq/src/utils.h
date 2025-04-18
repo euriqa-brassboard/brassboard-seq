@@ -426,7 +426,11 @@ public:
         requires std::same_as<py_tag_type<T2>,_set>
     {
         if constexpr (exact) {
+#if PY_VERSION_HEX >= 0x030a0000
             return PySet_CheckExact((PyObject*)_ptr());
+#else
+            return Py_TYPE((PyObject*)_ptr()) == &PySet_Type;
+#endif
         }
         else {
             return PySet_Check((PyObject*)_ptr());
