@@ -105,9 +105,8 @@ static inline void compiler_finalize(auto comp, _RampFunctionBase*, Backend*)
                                     seqinfo->channel_name_from_id(cid));
                 }
             }
-            auto action_value = action->value.get();
-            auto isramp = py_issubtype_nontrivial(Py_TYPE(action_value),
-                                                  rampfunctionbase_type);
+            auto action_value = action->value.ptr();
+            auto isramp = py::isinstance_nontrivial(action_value, rampfunctionbase_type);
             auto cond = action->cond.get();
             last_is_start = false;
             if (!action->is_pulse) {
@@ -122,7 +121,7 @@ static inline void compiler_finalize(auto comp, _RampFunctionBase*, Backend*)
                                                action_key(action->aid));
                     }
                     else {
-                        new_value = py::ptr(action_value).ref();
+                        new_value = action_value.ref();
                     }
                     if (cond == Py_True) {
                         value = std::move(new_value);
@@ -171,7 +170,7 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
     auto time_mgr = seqinfo->time_mgr;
     comp->cseq.total_time = time_mgr->compute_all_times(age);
     for (auto [assert_id, a]: py::list_iter<py::tuple>(seqinfo->assertions)) {
-        auto c = py::ptr<RuntimeValue>(a.get(0));
+        auto c = a.get(0);
         rt_eval_throw(c, age, assert_key(assert_id));
         if (rtval_cache(c).is_zero()) {
             bb_throw_format(PyExc_AssertionError, assert_key(assert_id), "%U", a.get(1));
@@ -187,8 +186,7 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
             if (!cond_val)
                 continue;
             auto action_value = action->value.get();
-            auto isramp = py_issubtype_nontrivial(Py_TYPE(action_value),
-                                                  rampfunctionbase_type);
+            auto isramp = py::isinstance_nontrivial(action_value, rampfunctionbase_type);
             if (isramp) {
                 auto rampf = (_RampFunctionBase*)action_value;
                 throw_if(rampf->__pyx_vtab->set_runtime_params(rampf, age),
@@ -198,9 +196,8 @@ static inline void compiler_runtime_finalize(auto comp, PyObject *_age,
                 rt_eval_throw(action_value, age, action_key(action->aid));
             }
             auto action_end_val = action->end_val.get();
-            if (action_end_val != action_value && is_rtval(action_end_val)) {
+            if (action_end_val != action_value && is_rtval(action_end_val))
                 rt_eval_throw(action_end_val, age, action_key(action->aid));
-            }
             // No need to evaluate action.length since the `compute_all_times`
             // above should've done it already.
             auto start_time = time_mgr->time_values[action->tid];

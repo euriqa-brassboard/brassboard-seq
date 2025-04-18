@@ -225,8 +225,7 @@ void collect_actions(auto *ab, backend::CompiledSeq &cseq)
             if (action->kws)
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "Invalid output keyword argument %S", action->kws);
-            auto value = action->value.get();
-            if (py_issubtype_nontrivial(Py_TYPE(value), rampfunctionbase_type))
+            if (py::isinstance_nontrivial(action->value, rampfunctionbase_type))
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "TTL Channel cannot be ramped");
             if (action->cond == Py_False)
@@ -241,8 +240,7 @@ void collect_actions(auto *ab, backend::CompiledSeq &cseq)
             if (action->kws)
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "Invalid output keyword argument %S", action->kws);
-            auto value = action->value.get();
-            if (py_issubtype_nontrivial(Py_TYPE(value), rampfunctionbase_type))
+            if (py::isinstance_nontrivial(action->value, rampfunctionbase_type))
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "DDS Channel cannot be ramped");
             if (action->cond == Py_False)

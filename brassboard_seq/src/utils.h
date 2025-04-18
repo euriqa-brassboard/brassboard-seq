@@ -1371,6 +1371,20 @@ static inline auto str_iter(T &&h)
     return _iter<_str_iterator,std::remove_cv_t<T>>(std::forward<T>(h));
 }
 
+static inline bool isinstance_nontrivial(py::ptr<> obj, py::ptr<> ty)
+{
+    auto objt = Py_TYPE((PyObject*)obj);
+    // Assume objt != ty and ty != object, and skip the first and last element in mro.
+    // Also assume fully initialized type `ty`
+    py::tuple mro = objt->tp_mro;
+    for (Py_ssize_t i = 1, n = mro.size() - 1; i < n; i++) {
+        if (mro.get(i) == ty) {
+            return true;
+        }
+    }
+    return false;
+}
+
 [[noreturn]] void num_arg_error(const char *func_name, ssize_t nfound,
                                 ssize_t nmin, ssize_t nmax);
 [[noreturn]] void unexpected_kwarg_error(const char *func_name, py::str name);
@@ -1887,19 +1901,6 @@ static inline PyObject *pydict_deepcopy(PyObject *d)
 {
     // Used by cython
     return py::dict_deepcopy(d).rel();
-}
-
-static inline bool py_issubtype_nontrivial(auto *a, auto *b)
-{
-    // Assume a != b and b != object, and skip the first and last element in mro.
-    // Also assume fully initialized type a/b
-    py::tuple mro = ((PyTypeObject*)a)->tp_mro;
-    for (Py_ssize_t i = 1, n = mro.size() - 1; i < n; i++) {
-        if (mro.get(i) == b) {
-            return true;
-        }
-    }
-    return false;
 }
 
 template<typename T, size_t N>

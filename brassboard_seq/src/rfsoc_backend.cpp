@@ -3862,7 +3862,7 @@ void collect_actions(auto *rb, backend::CompiledSeq &cseq)
         for (auto action: cseq.all_actions[seq_chn]) {
             auto sync = parse_action_kws(action->kws, action->aid);
             auto value = action->value.get();
-            auto is_ramp = py_issubtype_nontrivial(Py_TYPE(value), rampfunctionbase_type);
+            auto is_ramp = py::isinstance_nontrivial(value, rampfunctionbase_type);
             if (is_ff && is_ramp)
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "Feed forward control cannot be ramped");
