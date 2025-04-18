@@ -87,8 +87,8 @@ _combine_cond(py::ptr<> cond1, py::ptr<> new_cond)
     // self->cache_val = { .i64_val = 0 };
     self->type_ = And;
     self->age = (unsigned)-1;
-    self->arg0 = (RuntimeValue*)py::newref(cond1);
-    self->arg1 = cond2.rel();
+    call_constructor(&self->arg0, py::newref(cond1));
+    call_constructor(&self->arg1, cond2.rel());
     call_constructor(&self->cb_arg2, py::immref(Py_None));
     return { (PyObject*)self.rel(), true };
 }

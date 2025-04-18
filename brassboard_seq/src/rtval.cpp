@@ -34,8 +34,8 @@ new_cb_arg2(ValueType type, py::ptr<> cb_arg2, py::ptr<> ty)
     // self->cache_val = { .i64_val = 0 };
     self->type_ = type;
     self->age = (unsigned)-1;
-    self->arg0 = (RuntimeValue*)py::immref(Py_None);
-    self->arg1 = (RuntimeValue*)py::immref(Py_None);
+    call_constructor(&self->arg0, py::immref(Py_None));
+    call_constructor(&self->arg1, py::immref(Py_None));
     call_constructor(&self->cb_arg2, py::newref(cb_arg2));
     return self.rel();
 }
@@ -50,8 +50,8 @@ new_expr1(ValueType type, rtval_ref &&arg0)
     // self->cache_val = { .i64_val = 0 };
     self->type_ = type;
     self->age = (unsigned)-1;
-    self->arg0 = arg0.rel();
-    self->arg1 = (RuntimeValue*)py::immref(Py_None);
+    call_constructor(&self->arg0, arg0.rel());
+    call_constructor(&self->arg1, py::immref(Py_None));
     call_constructor(&self->cb_arg2, py::immref(Py_None));
     return self;
 }
@@ -66,8 +66,8 @@ new_expr2(ValueType type, rtval_ref &&arg0, rtval_ref &&arg1)
     // self->cache_val = { .i64_val = 0 };
     self->type_ = type;
     self->age = (unsigned)-1;
-    self->arg0 = arg0.rel();
-    self->arg1 = arg1.rel();
+    call_constructor(&self->arg0, arg0.rel());
+    call_constructor(&self->arg1, arg1.rel());
     call_constructor(&self->cb_arg2, py::immref(Py_None));
     return self;
 }
@@ -81,8 +81,8 @@ new_const(TagVal v)
     self->cache_val = v.val;
     self->type_ = Const;
     self->age = (unsigned)-1;
-    self->arg0 = (RuntimeValue*)py::immref(Py_None);
-    self->arg1 = (RuntimeValue*)py::immref(Py_None);
+    call_constructor(&self->arg0, py::immref(Py_None));
+    call_constructor(&self->arg1, py::immref(Py_None));
     call_constructor(&self->cb_arg2, py::immref(Py_None));
     return self;
 }
@@ -111,8 +111,8 @@ static PyObject *new_expr2_wrap1(ValueType type, py::ptr<> arg0, py::ptr<> arg1)
     // self->cache_val = { .i64_val = 0 };
     self->type_ = type;
     self->age = (unsigned)-1;
-    self->arg0 = rtarg0.rel();
-    self->arg1 = rtarg1.rel();
+    call_constructor(&self->arg0, rtarg0.rel());
+    call_constructor(&self->arg1, rtarg1.rel());
     call_constructor(&self->cb_arg2, py::immref(Py_None));
     return self.rel();
 }
@@ -137,8 +137,8 @@ rtval_ref new_select(rtval_ptr arg0, py::ptr<> arg1, py::ptr<> arg2)
     // self->cache_val = { .i64_val = 0 };
     self->type_ = Select;
     self->age = (unsigned)-1;
-    self->arg0 = py::newref(arg0);
-    self->arg1 = rtarg1.rel();
+    call_constructor(&self->arg0, py::newref(arg0));
+    call_constructor(&self->arg1, rtarg1.rel());
     call_constructor(&self->cb_arg2, rtarg2.rel());
     return self;
 }
@@ -293,7 +293,7 @@ void rt_eval_cache(rtval_ptr self, unsigned age)
         break;
     }
 
-    auto rtarg0 = self->arg0;
+    rtval_ptr rtarg0 = self->arg0;
     rt_eval_cache(rtarg0, age);
     auto arg0 = rtval_cache(rtarg0);
     auto eval1 = [&] (auto op_cls) {
@@ -338,9 +338,9 @@ void rt_eval_cache(rtval_ptr self, unsigned age)
         break;
     }
 
-    auto rtarg1 = self->arg1;
+    rtval_ptr rtarg1 = self->arg1;
     if (type == Select) {
-        auto rtarg2 = (RuntimeValue*)self->cb_arg2;
+        rtval_ptr rtarg2 = self->cb_arg2;
         auto rtres = arg0.template get<bool>() ? rtarg1 : rtarg2;
         rt_eval_cache(rtres, age);
         set_cache(rtval_cache(rtres).convert(self->datatype));
@@ -438,7 +438,7 @@ static inline rtval_ref build_addsub(py::ptr<> v0, py::ptr<> v1, bool issub)
             nv0 = nullptr;
         }
         else if (type == Add) {
-            auto arg0 = nv0->arg0;
+            rtval_ptr arg0 = nv0->arg0;
             // Add/Sub should only have the first argument as constant
             if (arg0->type_ == Const) {
                 nc = rtval_cache(arg0);
@@ -446,7 +446,7 @@ static inline rtval_ref build_addsub(py::ptr<> v0, py::ptr<> v1, bool issub)
             }
         }
         else if (type == Sub) {
-            auto arg0 = nv0->arg0;
+            rtval_ptr arg0 = nv0->arg0;
             // Add/Sub should only have the first argument as constant
             if (arg0->type_ == Const) {
                 ns0 = true;
@@ -468,7 +468,7 @@ static inline rtval_ref build_addsub(py::ptr<> v0, py::ptr<> v1, bool issub)
             nv1 = nullptr;
         }
         else if (type == Add) {
-            auto arg0 = nv1->arg0;
+            rtval_ptr arg0 = nv1->arg0;
             // Add/Sub should only have the first argument as constant
             if (arg0->type_ == Const) {
                 nc = tagval_add_or_sub(nc, rtval_cache(arg0), issub);
@@ -476,7 +476,7 @@ static inline rtval_ref build_addsub(py::ptr<> v0, py::ptr<> v1, bool issub)
             }
         }
         else if (type == Sub) {
-            auto arg0 = nv1->arg0;
+            rtval_ptr arg0 = nv1->arg0;
             // Add/Sub should only have the first argument as constant
             if (arg0->type_ == Const) {
                 ns1 = true;
@@ -927,7 +927,11 @@ PyTypeObject RuntimeValue::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rtval.RuntimeValue",
     .tp_basicsize = sizeof(RuntimeValue),
-    .tp_dealloc = py::tp_dealloc<true,[] (PyObject *self) { Type.tp_clear(self); }>,
+    .tp_dealloc = py::tp_dealloc<true,[] (rtval_ptr self) {
+        call_destructor(&self->arg0);
+        call_destructor(&self->arg1);
+        call_destructor(&self->cb_arg2);
+    }>,
     .tp_repr = rtvalue_str,
     .tp_as_number = &rtvalue_as_number,
     .tp_str = rtvalue_str,
@@ -938,8 +942,8 @@ PyTypeObject RuntimeValue::Type = {
         visitor(self->cb_arg2);
     }>,
     .tp_clear = py::iunifunc<[] (rtval_ptr self) {
-        py::CLEAR(self->arg0);
-        py::CLEAR(self->arg1);
+        self->arg0.CLEAR();
+        self->arg1.CLEAR();
         self->cb_arg2.CLEAR();
     }>,
     .tp_richcompare = py::tp_richcompare<[] (auto v1, auto v2, int op) -> py::ref<> {
@@ -1236,7 +1240,7 @@ InterpFunction::visit_value(RuntimeValue *value, Builder &builder)
         break;
     }
 
-    auto rtarg0 = value->arg0;
+    rtval_ptr rtarg0 = value->arg0;
     auto &arg0_info = visit_value(rtarg0, builder);
     auto handle_unary = [&] (DataType ret_type) -> auto& {
         info.val.type = ret_type;
@@ -1287,7 +1291,7 @@ InterpFunction::visit_value(RuntimeValue *value, Builder &builder)
         break;
     }
 
-    auto rtarg1 = value->arg1;
+    rtval_ptr rtarg1 = value->arg1;
     auto &arg1_info = visit_value(rtarg1, builder);
     if (type == Select) {
         auto rtarg2 = (RuntimeValue*)value->cb_arg2;

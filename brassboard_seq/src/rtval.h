@@ -929,21 +929,22 @@ static inline DataType binary_return_type(ValueType type, DataType t1, DataType 
     }
 }
 
+struct RuntimeValue;
+using rtval_ptr = py::ptr<RuntimeValue>;
+using rtval_ref = py::ref<RuntimeValue>;
+
 struct RuntimeValue : PyObject {
     ValueType type_;
     DataType datatype;
     EvalError cache_err;
     unsigned int age;
     GenVal cache_val;
-    RuntimeValue *arg0;
-    RuntimeValue *arg1;
+    rtval_ref arg0;
+    rtval_ref arg1;
     py::ref<> cb_arg2;
 
     static PyTypeObject Type;
 };
-
-using rtval_ptr = py::ptr<RuntimeValue>;
-using rtval_ref = py::ref<RuntimeValue>;
 
 struct ExternCallback : PyObject {
     void *fptr;
