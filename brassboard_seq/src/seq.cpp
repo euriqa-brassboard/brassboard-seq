@@ -85,15 +85,6 @@ _combine_cond(py::ptr<> cond1, py::ptr<> new_cond)
                                  py::new_none()).rel(), true };
 }
 
-static inline __attribute__((returns_nonnull)) PyObject*
-combine_cond(py::ptr<> cond1, py::ptr<> new_cond)
-{
-    auto [res, needs_free] = _combine_cond(cond1, new_cond);
-    if (!needs_free)
-        return py::newref(res);
-    return res;
-}
-
 struct CondCombiner {
     PyObject *cond{nullptr};
     bool needs_free{false};
