@@ -64,35 +64,26 @@ static constexpr auto seq_traverse = py::tp_traverse<[] (py::ptr<T> self, auto &
     self->traverse(visitor);
 }>;
 
-static inline std::pair<PyObject*,bool>
-_combine_cond(py::ptr<> cond1, py::ptr<> new_cond)
-{
-    if (cond1 == Py_False)
-        return { Py_False, false };
-    if (!is_rtval(new_cond)) {
-        if (new_cond.as_bool()) {
-            return { cond1, false };
-        }
-        else {
-            return { Py_False, false };
-        }
-    }
-    auto cond2 = rt_convert_bool(new_cond);
-    if (cond1 == Py_True)
-        return { cond2.rel(), true };
-    assert(is_rtval(cond1));
-    return { RuntimeValue::alloc(And, DataType::Bool, cond1, std::move(cond2),
-                                 py::new_none()).rel(), true };
-}
-
 struct CondCombiner {
-    PyObject *cond{nullptr};
+    PyObject *cond;
     bool needs_free{false};
-    CondCombiner(PyObject *cond1, PyObject *cond2)
+    CondCombiner(py::ptr<> cond1, py::ptr<> new_cond)
     {
-        auto [_cond, _needs_free] = _combine_cond(cond1, cond2);
-        cond = _cond;
-        needs_free = _needs_free;
+        if (cond1 == Py_False) {
+            cond = Py_False;
+            return;
+        }
+        assert(cond1 == Py_True || is_rtval(cond1));
+        if (!is_rtval(new_cond)) {
+            cond = new_cond.as_bool() ? cond1.get() : Py_False;
+            return;
+        }
+        auto cond2 = rt_convert_bool(new_cond);
+        if (cond1 != Py_True)
+            cond2 = RuntimeValue::alloc(And, DataType::Bool, cond1,
+                                        std::move(cond2), py::new_none());
+        needs_free = true;
+        cond = cond2.rel();
     }
     PyObject *take_cond()
     {
@@ -105,7 +96,7 @@ struct CondCombiner {
     ~CondCombiner()
     {
         if (needs_free) {
-            Py_DECREF(cond);
+            py::DECREF(cond);
         }
     }
 };

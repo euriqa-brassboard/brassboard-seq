@@ -339,6 +339,12 @@ static inline auto *newref(const common<H,T> &h)
     return h.ref().rel();
 }
 
+static inline void DECREF(auto *obj)
+{
+    check_refcnt(obj);
+    Py_DECREF((PyObject*)obj);
+}
+
 template<bool nulling=true>
 static inline void CLEAR(auto *&ptr_ref)
 {
@@ -346,9 +352,13 @@ static inline void CLEAR(auto *&ptr_ref)
     if (obj) {
         if (nulling)
             ptr_ref = nullptr;
-        check_refcnt(obj);
-        Py_DECREF(obj);
+        DECREF(obj);
     }
+}
+
+static inline void XDECREF(auto *obj)
+{
+    CLEAR<false>(obj);
 }
 
 template<template<typename> class H, typename T>
@@ -735,8 +745,7 @@ public:
     {
         auto item = PyList_GET_ITEM((PyObject*)_ptr(), i);
         SET(i, std::forward<T2>(val));
-        check_refcnt(item);
-        Py_DECREF(item);
+        DECREF(item);
     }
     template<typename T2=PyObject>
     auto get(Py_ssize_t i) const requires std::same_as<T,_list>
@@ -889,13 +898,11 @@ struct _ref : common<_ref,T> {
     template<bool nulling=true>
     void CLEAR()
     {
-        check_refcnt(m_ptr);
         py::CLEAR<nulling>(m_ptr);
     }
     ~_ref()
     {
-        check_refcnt(m_ptr);
-        Py_XDECREF((PyObject*)m_ptr);
+        XDECREF(m_ptr);
     }
     template<template<typename> class H, typename T2>
     _ref &operator=(const common<H,T2>&) = delete;
@@ -930,11 +937,10 @@ struct _ref : common<_ref,T> {
     }
     void take(auto *p) noexcept
     {
-        check_refcnt(m_ptr);
+        check_refcnt(p);
         auto ptr = m_ptr;
         m_ptr = (T*)p;
-        Py_XDECREF((PyObject*)ptr);
-        check_refcnt(m_ptr);
+        XDECREF(ptr);
     }
     void take_checked(auto *p, auto&&... args)
     {
@@ -943,10 +949,9 @@ struct _ref : common<_ref,T> {
     template<typename T2>
     void take(ref<T2> &&h) noexcept
     {
-        check_refcnt(m_ptr);
         auto ptr = m_ptr;
         m_ptr = (T*)h.rel();
-        Py_XDECREF((PyObject*)ptr);
+        XDECREF(ptr);
         check_refcnt(m_ptr);
     }
     template<typename T2>
@@ -1574,7 +1579,7 @@ struct BacktraceTracker {
         // copied/moved around when we add the frames.
         for (auto &[key, trace]: traces) {
             for (auto &frame: trace) {
-                Py_DECREF(frame.code);
+                py::DECREF(frame.code);
             }
         }
     }

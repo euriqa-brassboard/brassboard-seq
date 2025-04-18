@@ -83,7 +83,7 @@ public:
     ~EventTimeData()
     {
         if (_is_rt_offset) {
-            Py_DECREF(_rt_offset);
+            py::DECREF(_rt_offset);
         }
     }
 
@@ -146,7 +146,7 @@ public:
     inline void clear_rt_offset()
     {
         if (_is_rt_offset) {
-            Py_DECREF(_rt_offset);
+            py::DECREF(_rt_offset);
             _is_rt_offset = false;
         }
     }

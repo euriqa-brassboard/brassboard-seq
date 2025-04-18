@@ -293,13 +293,13 @@ void BacktraceTracker::_record(uintptr_t key)
         if (!new_frame)
             break;
         if (frame_need_free)
-            Py_DECREF(frame);
+            py::DECREF(frame);
         trace.push_back({new_frame});
         frame = new_frame;
         frame_need_free = true;
     }
     if (frame_need_free) {
-        Py_DECREF(frame);
+        py::DECREF(frame);
     }
 }
 
