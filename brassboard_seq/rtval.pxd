@@ -138,9 +138,6 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
         cdef ValueType type_
         cdef DataType datatype
         cdef GenVal cache_val
-        cdef RuntimeValue arg0
-        cdef RuntimeValue arg1
-        cdef object cb_arg2 # Also used as argument index
 
     ctypedef class brassboard_seq._utils.ExternCallback [object _brassboard_seq_rtval_ExternCallback, check_size ignore]:
         cdef void *fptr
