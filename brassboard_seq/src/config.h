@@ -24,9 +24,9 @@
 namespace brassboard_seq::config {
 
 struct Config : PyObject {
-    PyObject *channel_alias;
-    PyObject *alias_cache;
-    PyObject *supported_prefix;
+    py::dict_ref channel_alias;
+    py::dict_ref alias_cache;
+    py::set_ref supported_prefix;
 
     PyObject *translate_channel(PyObject *name);
 

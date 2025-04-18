@@ -27,8 +27,8 @@ using namespace brassboard_seq::rtval;
 namespace {
 
 struct composite_rtprop_data : PyObject {
-    PyObject *ovr;
-    PyObject *cache;
+    py::ref<> ovr;
+    py::ref<> cache;
     bool compiled;
     bool filled;
 
@@ -38,15 +38,18 @@ PyTypeObject composite_rtprop_data::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rtval.composite_rtprop_data",
     .tp_basicsize = sizeof(composite_rtprop_data),
-    .tp_dealloc = py::tp_dealloc<true,[] (PyObject *self) { Type.tp_clear(self); }>,
+    .tp_dealloc = py::tp_dealloc<true,[] (py::ptr<composite_rtprop_data> self) {
+        call_destructor(&self->ovr);
+        call_destructor(&self->cache);
+    }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = py::tp_traverse<[] (py::ptr<composite_rtprop_data> self, auto &visitor) {
         visitor(self->ovr);
         visitor(self->cache);
     }>,
     .tp_clear = py::iunifunc<[] (py::ptr<composite_rtprop_data> self) {
-        py::CLEAR(self->ovr);
-        py::CLEAR(self->cache);
+        self->ovr.CLEAR();
+        self->cache.CLEAR();
     }>,
 };
 
@@ -103,8 +106,8 @@ static inline bool _object_compiled(py::ptr<> obj)
 }
 
 struct CompositeRTProp : PyObject {
-    PyObject *fieldname;
-    PyObject *cb;
+    py::str_ref fieldname;
+    py::ref<> cb;
 
     __attribute__((alias("_ZN14brassboard_seq6rtprop20CompositeRTProp_TypeE")))
     static PyTypeObject Type;
@@ -117,8 +120,8 @@ struct CompositeRTProp : PyObject {
             val && val.typeis(&composite_rtprop_data::Type))
             return val;
         auto data = py::generic_alloc<composite_rtprop_data>();
-        data->ovr = py::immref(Py_None);
-        data->cache = py::immref(Py_None);
+        call_constructor(&data->ovr, py::immref(Py_None));
+        call_constructor(&data->cache, py::immref(Py_None));
         obj.set_attr(fieldname, data);
         return data;
     }
@@ -127,31 +130,31 @@ struct CompositeRTProp : PyObject {
     {
         auto data = get_data(obj);
         if (!data->filled || (!data->compiled && _object_compiled(obj))) {
-            py::assign(data->cache, py::ptr(cb)(obj));
+            data->cache.take(py::ptr(cb)(obj));
             data->filled = true;
             data->compiled = _object_compiled(obj);
         }
         if (data->ovr == Py_None)
-            return py::ptr(data->cache).ref();
+            return data->cache.ref();
         return apply_composite_ovr(data->cache, data->ovr);
     }
 
-    static PyObject *get_state(py::ptr<CompositeRTProp> self, py::ptr<> obj)
+    static auto get_state(py::ptr<CompositeRTProp> self, py::ptr<> obj)
     {
-        return py::newref(self->get_data(obj)->ovr);
+        return self->get_data(obj)->ovr.ref();
     }
     static void set_state(py::ptr<CompositeRTProp> self,
                           PyObject *const *args, Py_ssize_t nargs)
     {
         py::check_num_arg("CompositeRTProp.set_state", nargs, 2, 2);
-        py::assign(self->get_data(args[0])->ovr, args[1]);
+        self->get_data(args[0])->ovr.assign(args[1]);
     }
 
     static void set_name(py::ptr<CompositeRTProp> self,
                          PyObject *const *args, Py_ssize_t nargs)
     {
         py::check_num_arg("CompositeRTProp.__set_name__", nargs, 2, 2);
-        py::assign(self->fieldname, "__CompositeRTProp__"_py.concat(args[1]));
+        self->fieldname.take("__CompositeRTProp__"_py.concat(args[1]));
     }
 };
 
@@ -162,15 +165,17 @@ PyTypeObject CompositeRTProp_Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rtval.CompositeRTProp",
     .tp_basicsize = sizeof(CompositeRTProp),
-    .tp_dealloc = py::tp_dealloc<true,[] (PyObject *self) {
-        CompositeRTProp_Type.tp_clear(self); }>,
+    .tp_dealloc = py::tp_dealloc<true,[] (py::ptr<CompositeRTProp> self) {
+        call_destructor(&self->fieldname);
+        call_destructor(&self->cb);
+    }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = py::tp_traverse<[] (py::ptr<CompositeRTProp> self, auto &visitor) {
         visitor(self->cb);
     }>,
     .tp_clear = py::iunifunc<[] (py::ptr<CompositeRTProp> self) {
-        py::CLEAR(self->fieldname);
-        py::CLEAR(self->cb);
+        self->fieldname.CLEAR();
+        self->cb.CLEAR();
     }>,
     .tp_methods = (py::meth_table<
                    py::meth_o<"get_state",CompositeRTProp::get_state>,
@@ -187,10 +192,10 @@ PyTypeObject CompositeRTProp_Type = {
         py::check_no_kwnames("CompositeRTProp.__init__", kwnames);
         py::check_num_arg("CompositeRTProp.__init__", nargs, 1, 1);
         auto cb = args[0];
-        auto data = py::generic_alloc<CompositeRTProp>();
-        data->fieldname = py::immref(Py_None);
-        data->cb = py::newref(cb);
-        return data;
+        auto self = py::generic_alloc<CompositeRTProp>();
+        call_constructor(&self->fieldname, py::immref(Py_None));
+        call_constructor(&self->cb, py::newref(cb));
+        return self;
     }>,
 };
 

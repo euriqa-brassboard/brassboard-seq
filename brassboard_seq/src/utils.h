@@ -826,6 +826,11 @@ struct _ref : common<_ref,T> {
     _ref(const _ref&) = delete;
     template<typename T2> _ref(const ref<T2>&) = delete;
     template<typename T2> _ref(const ptr<T2>&) = delete;
+    void CLEAR()
+    {
+        check_refcnt(m_ptr);
+        py::CLEAR(m_ptr);
+    }
     ~_ref()
     {
         check_refcnt(m_ptr);

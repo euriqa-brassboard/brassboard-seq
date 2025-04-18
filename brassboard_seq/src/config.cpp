@@ -33,7 +33,7 @@ static inline auto split_string_tuple(PyObject *s)
 
 static inline void add_supported_prefix(py::ptr<Config> self, py::ptr<> prefix)
 {
-    py::set(self->supported_prefix).add(py::arg_cast<py::str>(prefix, "prefix"));
+    self->supported_prefix.add(py::arg_cast<py::str>(prefix, "prefix"));
 }
 
 static inline void add_channel_alias(py::ptr<Config> self, PyObject *const *args,
@@ -44,14 +44,13 @@ static inline void add_channel_alias(py::ptr<Config> self, PyObject *const *args
     auto target = py::arg_cast<py::str>(args[1], "target");
     if (py::str(name).contains("/"_py))
         py_throw_format(PyExc_ValueError, "Channel alias name may not contain \"/\"");
-    py::dict(self->alias_cache).clear();
-    py::dict(self->channel_alias).set(name, split_string_tuple(target));
+    self->alias_cache.clear();
+    self->channel_alias.set(name, split_string_tuple(target));
 }
 
 inline py::tuple_ref Config::_translate_channel(py::tuple path)
 {
-    auto alias_cache_dict = py::dict(alias_cache);
-    if (auto resolved = alias_cache_dict.try_get(path))
+    if (auto resolved = alias_cache.try_get(path))
         return resolved.ref();
     // Hardcoded limit for loop detection
     auto path_len = path.size();
@@ -59,8 +58,7 @@ inline py::tuple_ref Config::_translate_channel(py::tuple path)
         py_throw_format(PyExc_ValueError, "Channel alias loop detected: %U",
                         channel_name_from_path(path));
     auto prefix = path.get(0);
-    auto channel_alias_dict = py::dict(channel_alias);
-    if (auto new_prefix = py::tuple(channel_alias_dict.try_get(prefix))) {
+    if (auto new_prefix = py::tuple(channel_alias.try_get(prefix))) {
         auto prefix_len = new_prefix.size();
         auto newpath = py::new_tuple(prefix_len + path_len - 1);
         for (auto [i, v]: py::tuple_iter(new_prefix))
@@ -69,13 +67,13 @@ inline py::tuple_ref Config::_translate_channel(py::tuple path)
             if (i != 0)
                 newpath.SET(i + prefix_len - 1, v);
         auto resolved = _translate_channel(newpath);
-        py::dict(alias_cache).set(path, resolved);
+        alias_cache.set(path, resolved);
         return resolved;
     }
-    if (!py::set(supported_prefix).contains(prefix))
+    if (!supported_prefix.contains(prefix))
         py_throw_format(PyExc_ValueError, "Unsupported channel name: %U",
                         channel_name_from_path(path));
-    py::dict(alias_cache).set(path, path);
+    alias_cache.set(path, path);
     return path.ref();
 }
 
@@ -96,9 +94,9 @@ PyTypeObject Config::Type = {
     .tp_name = "brassboard_seq.config.Config",
     .tp_basicsize = sizeof(Config),
     .tp_dealloc = py::tp_dealloc<false,[] (py::ptr<Config> self) {
-        py::CLEAR(self->channel_alias);
-        py::CLEAR(self->alias_cache);
-        py::CLEAR(self->supported_prefix);
+        call_destructor(&self->channel_alias);
+        call_destructor(&self->alias_cache);
+        call_destructor(&self->supported_prefix);
     }>,
     // All fields are containers of immutable types.
     // No reference loop possible.
@@ -109,9 +107,9 @@ PyTypeObject Config::Type = {
                    py::meth_o<"translate_channel",py_translate_channel>>),
     .tp_new = py::tp_new<[] (PyTypeObject *t, auto...) {
         auto self = py::generic_alloc<Config>(t);
-        self->channel_alias = py::new_dict().rel();
-        self->alias_cache = py::new_dict().rel();
-        self->supported_prefix = py::new_set().rel();
+        self->channel_alias = py::new_dict();
+        self->alias_cache = py::new_dict();
+        self->supported_prefix = py::new_set();
         return self;
     }>,
 };
