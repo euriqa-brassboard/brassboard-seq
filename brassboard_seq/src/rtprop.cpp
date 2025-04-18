@@ -205,12 +205,12 @@ namespace {
 static constexpr int rtprop_prefix_len = sizeof(RTPROP_PREFIX_STR) - 1;
 
 struct rtprop_callback : ExternCallback {
-    PyObject *obj;
-    PyObject *fieldname;
+    py::ref<> obj;
+    py::str_ref fieldname;
 
     static TagVal callback(rtprop_callback *self, unsigned age)
     {
-        auto v = py::ptr(self->obj).attr(self->fieldname);
+        auto v = self->obj.attr(self->fieldname);
         if (!is_rtval(v))
             return TagVal::from_py(v);
         auto rv = (RuntimeValue*)v;
@@ -224,8 +224,8 @@ struct rtprop_callback : ExternCallback {
     {
         auto self = py::generic_alloc<rtprop_callback>();
         self->fptr = (void*)callback;
-        self->obj = py::newref(obj);
-        self->fieldname = py::newref(fieldname);
+        call_constructor(&self->obj, py::newref(obj));
+        call_constructor(&self->fieldname, py::newref(fieldname));
         return self;
     }
     static PyTypeObject Type;
@@ -235,11 +235,14 @@ PyTypeObject rtprop_callback::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rtval.rtprop_callback",
     .tp_basicsize = sizeof(rtprop_callback),
-    .tp_dealloc = py::tp_dealloc<true,[] (PyObject *self) { Type.tp_clear(self); }>,
+    .tp_dealloc = py::tp_dealloc<true,[] (py::ptr<rtprop_callback> self) {
+        call_destructor(&self->obj);
+        call_destructor(&self->fieldname);
+    }>,
     .tp_str = py::unifunc<[] (py::ptr<rtprop_callback> self) {
         return py::str_format(
             "<RTProp %U for %S>",
-            py::str_ref::checked(PyUnicode_Substring(self->fieldname, rtprop_prefix_len,
+            py::str_ref::checked(PyUnicode_Substring(self->fieldname.get(), rtprop_prefix_len,
                                                      PY_SSIZE_T_MAX)), self->obj);
     }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
@@ -247,14 +250,14 @@ PyTypeObject rtprop_callback::Type = {
         visitor(self->obj);
     }>,
     .tp_clear = py::iunifunc<[] (py::ptr<rtprop_callback> self) {
-        py::CLEAR(self->obj);
-        py::CLEAR(self->fieldname);
+        self->obj.CLEAR();
+        self->fieldname.CLEAR();
     }>,
     .tp_base = &ExternCallback::Type,
 };
 
 struct RTProp : PyObject {
-    PyObject *fieldname;
+    py::str_ref fieldname;
 
     __attribute__((alias("_ZN14brassboard_seq6rtprop11RTProp_TypeE")))
     static PyTypeObject Type;
@@ -301,7 +304,7 @@ struct RTProp : PyObject {
     static void set_name(py::ptr<RTProp> self, PyObject *const *args, Py_ssize_t nargs)
     {
         py::check_num_arg("RTProp.__set_name__", nargs, 2, 2);
-        py::assign(self->fieldname, RTPROP_PREFIX_STR ""_py.concat(args[1]));
+        self->fieldname.take(RTPROP_PREFIX_STR ""_py.concat(args[1]));
     }
 };
 
@@ -313,7 +316,8 @@ PyTypeObject RTProp_Type = {
     .tp_name = "brassboard_seq.rtval.RTProp",
     .tp_basicsize = sizeof(RTProp),
     .tp_dealloc = py::tp_dealloc<false,[] (py::ptr<RTProp> self) {
-        py::CLEAR(self->fieldname); }>,
+        call_destructor(&self->fieldname);
+    }>,
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_methods = (py::meth_table<
                    py::meth_o<"get_state",RTProp::get_state>,
@@ -332,7 +336,7 @@ PyTypeObject RTProp_Type = {
         py::check_no_kwnames("RTProp.__init__", kwnames);
         py::check_num_arg("RTProp.__init__", nargs, 0, 0);
         auto self = py::generic_alloc<RTProp>();
-        self->fieldname = py::immref(Py_None);
+        call_constructor(&self->fieldname, py::immref(Py_None));
         return self;
     }>,
 };
