@@ -750,7 +750,7 @@ PyTypeObject Seq::Type = {
         seqinfo->channel_name_map = py::new_dict().rel();
         seqinfo->channel_path_map = py::new_dict().rel();
         seqinfo->channel_paths = py::new_list(0).rel();
-        seqinfo->C = scan::ParamPack::new_empty();
+        seqinfo->C = scan::ParamPack::new_empty().rel();
         self->end_time = seqinfo->time_mgr->new_int(Py_None, 0, false,
                                                     Py_True, Py_None).rel();
         seqinfo->bt_tracker.record(event_time_key(self->end_time));

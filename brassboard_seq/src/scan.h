@@ -24,14 +24,14 @@
 namespace brassboard_seq::scan {
 
 struct ParamPack : PyObject {
-    PyObject *values;
-    PyObject *visited;
-    PyObject *fieldname;
+    py::dict_ref values;
+    py::dict_ref visited;
+    py::str_ref fieldname;
 
     py::ref<> ensure_visited();
     py::dict_ref ensure_dict();
 
-    static ParamPack *new_empty();
+    static py::ref<ParamPack> new_empty();
     static PyTypeObject Type;
 };
 

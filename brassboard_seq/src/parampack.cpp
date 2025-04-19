@@ -22,7 +22,7 @@
 
 namespace brassboard_seq::scan {
 
-static inline void check_non_empty_string_arg(PyObject *arg, const char *name)
+static inline void check_non_empty_string_arg(py::ptr<> arg, const char *name)
 {
     if (auto s = py::cast<py::str>(arg); s && s.size())
         return;
@@ -68,7 +68,7 @@ static void merge_dict_into(py::dict tgt, py::dict src)
     }
 }
 
-static inline py::dict_ref set_new_dict(py::dict dict, PyObject *fieldname)
+static inline py::dict_ref set_new_dict(py::dict dict, py::str fieldname)
 {
     auto new_item = py::new_dict();
     dict.set(fieldname, new_item);
@@ -77,14 +77,14 @@ static inline py::dict_ref set_new_dict(py::dict dict, PyObject *fieldname)
 
 inline py::ref<> ParamPack::ensure_visited()
 {
-    if (auto res = py::dict(visited).try_get(fieldname))
+    if (auto res = visited.try_get(fieldname))
         return res.ref();
     return set_new_dict(visited, fieldname);
 }
 
 inline py::dict_ref ParamPack::ensure_dict()
 {
-    if (auto res = py::dict(values).try_get(fieldname)) {
+    if (auto res = values.try_get(fieldname)) {
         if (res.isa<py::dict>())
             return res.ref();
         py_throw_format(PyExc_TypeError, "Cannot access value as parameter pack.");
@@ -102,26 +102,26 @@ static py::ref<> parampack_vectorcall(py::ptr<ParamPack> self, PyObject *const *
     int nkws = kwnames ? kwnames.size() : 0;
     if (nkws == 0) {
         if (nargs == 0) {
-            auto res = py::dict(self->values).try_get(self->fieldname);
+            auto res = self->values.try_get(self->fieldname);
             if (!res)
                 py_throw_format(PyExc_KeyError, "Value is not assigned");
             if (res.isa<py::dict>())
                 py_throw_format(PyExc_TypeError, "Cannot get parameter pack as value");
-            py::dict(self->visited).set(self->fieldname, Py_True);
+            self->visited.set(self->fieldname, Py_True);
             return res.ref();
         }
         if (nargs == 1) {
             auto arg0 = py::ptr(args[0]);
             if (!py::isa<py::dict>(arg0)) {
-                auto res = py::dict(self->values).try_get(self->fieldname);
+                auto res = self->values.try_get(self->fieldname);
                 if (!res) {
-                    py::dict(self->values).set(self->fieldname, arg0);
+                    self->values.set(self->fieldname, arg0);
                     res = arg0;
                 }
                 else if (res.isa<py::dict>()) {
                     py_throw_format(PyExc_TypeError, "Cannot get parameter pack as value");
                 }
-                py::dict(self->visited).set(self->fieldname, Py_True);
+                self->visited.set(self->fieldname, Py_True);
                 return res.ref();
             }
         }
@@ -150,15 +150,12 @@ static inline py::ref<ParamPack> parampack_alloc()
 static auto parampack_new(PyObject*, PyObject *const *args, ssize_t nargs,
                           py::tuple kwnames)
 {
-    auto self = parampack_alloc();
-    self->visited = py::new_dict().rel();
-    self->fieldname = py::newref("root"_py);
+    auto self = ParamPack::new_empty();
     int nkws = kwnames ? kwnames.size() : 0;
-    self->values = py::new_dict().rel();
     if (!nargs && !nkws)
         return self;
     auto kwargs = py::new_dict();
-    py::dict(self->values).set("root"_py, kwargs);
+    self->values.set("root"_py, kwargs);
     for (size_t i = 0; i < nargs; i++) {
         auto arg = args[i];
         if (!py::isa<py::dict>(arg))
@@ -173,9 +170,7 @@ static auto parampack_new(PyObject*, PyObject *const *args, ssize_t nargs,
 }
 
 static constexpr auto parampack_str = py::unifunc<[] (py::ptr<ParamPack> self) {
-    auto fieldname = self->fieldname;
-    auto values = py::dict(self->values);
-    auto field = values.try_get(fieldname);
+    auto field = self->values.try_get(self->fieldname);
     if (!field)
         return py::newref("<Undefined>"_py);
     if (!field.typeis<py::dict>())
@@ -184,13 +179,13 @@ static constexpr auto parampack_str = py::unifunc<[] (py::ptr<ParamPack> self) {
 }>;
 
 __attribute__((visibility("protected")))
-ParamPack *ParamPack::new_empty()
+py::ref<ParamPack> ParamPack::new_empty()
 {
     auto self = parampack_alloc();
-    self->values = py::new_dict().rel();
-    self->visited = py::new_dict().rel();
-    self->fieldname = py::newref("root"_py);
-    return self.rel();
+    call_constructor(&self->values, py::new_dict());
+    call_constructor(&self->visited, py::new_dict());
+    call_constructor(&self->fieldname, "root"_py.ref());
+    return self;
 }
 
 static inline bool is_slice_none(PyObject *key)
@@ -207,14 +202,16 @@ PyTypeObject ParamPack::Type = {
     .tp_name = "brassboard_seq.rtval.ParamPack",
     // extra space for the vectorcall pointer
     .tp_basicsize = sizeof(ParamPack) + sizeof(void*),
-    .tp_dealloc = py::tp_dealloc<true,[] (PyObject *self) { Type.tp_clear(self); }>,
+    .tp_dealloc = py::tp_dealloc<true,[] (py::ptr<ParamPack> self) {
+        call_destructor(&self->values);
+        call_destructor(&self->visited);
+        call_destructor(&self->fieldname);
+    }>,
     .tp_vectorcall_offset = sizeof(ParamPack),
     .tp_repr = parampack_str,
     .tp_as_sequence = &global_var<PySequenceMethods{
-        .sq_contains = py::ibinfunc<[] (py::ptr<ParamPack> self, PyObject *key) -> int {
-            auto fieldname = self->fieldname;
-            auto values = py::dict(self->values);
-            auto field = values.try_get(fieldname);
+        .sq_contains = py::ibinfunc<[] (py::ptr<ParamPack> self, py::ptr<> key) {
+            auto field = self->values.try_get(self->fieldname);
             if (!field)
                 return false;
             if (!field.typeis<py::dict>())
@@ -226,9 +223,7 @@ PyTypeObject ParamPack::Type = {
         .mp_subscript = py::binfunc<[] (py::ptr<ParamPack> self, py::ptr<> key) {
             if (!is_slice_none(key))
                 py_throw_format(PyExc_ValueError, "Invalid index for ParamPack: %S", key);
-            auto fieldname = self->fieldname;
-            auto values = py::dict(self->values);
-            auto field = values.try_get(fieldname);
+            auto field = self->values.try_get(self->fieldname);
             if (!field)
                 return py::new_dict();
             if (!field.typeis<py::dict>())
@@ -246,9 +241,9 @@ PyTypeObject ParamPack::Type = {
         if (PyUnicode_READ_CHAR(name, 0) == '_')
             return py::ref(PyObject_GenericGetAttr(self, name));
         auto res = parampack_alloc();
-        res->values = self->ensure_dict().rel();
-        res->visited = self->ensure_visited().rel();
-        res->fieldname = py::newref(name);
+        call_constructor(&res->values, self->ensure_dict());
+        call_constructor(&res->visited, self->ensure_visited());
+        call_constructor(&res->fieldname, name.ref());
         return res;
     }>,
     .tp_setattro = py::itrifunc<[] (py::ptr<ParamPack> self, py::ptr<> name,
@@ -287,9 +282,9 @@ PyTypeObject ParamPack::Type = {
         visitor(self->values);
     }>,
     .tp_clear = py::iunifunc<[] (py::ptr<ParamPack> self) {
-        py::CLEAR(self->values);
-        py::CLEAR(self->visited);
-        py::CLEAR(self->fieldname);
+        self->values.CLEAR();
+        self->visited.CLEAR();
+        self->fieldname.CLEAR();
     }>,
     .tp_vectorcall = py::vectorfunc<parampack_new>,
 };
@@ -297,24 +292,23 @@ PyTypeObject ParamPack::Type = {
 static inline py::ref<> get_visited(PyObject*, py::ptr<> param_pack)
 {
     auto self = py::arg_cast<ParamPack,true>(param_pack, "param_pack");
-    auto fieldname = self->fieldname;
-    auto visited = py::dict(self->visited);
-    if (auto res = visited.try_get(fieldname))
+    auto fieldname = self->fieldname.ptr();
+    if (auto res = self->visited.try_get(fieldname))
         return res.ref();
-    if (auto value = py::dict(self->values).try_get(fieldname);
+    if (auto value = self->values.try_get(fieldname);
         value && value.typeis<py::dict>())
-        return set_new_dict(visited, fieldname);
+        return set_new_dict(self->visited, fieldname);
     return py::new_false();
 }
 __attribute__((visibility("protected")))
 PyMethodDef parampack_get_visited_method = py::meth_o<"get_visited",get_visited>;
 
 // Helper function for functions that takes an optional parameter pack
-static inline PyObject *get_param(PyObject*, py::ptr<> param)
+static inline py::ref<> get_param(PyObject*, py::ptr<> param)
 {
     if (param == Py_None)
         return ParamPack::new_empty();
-    return py::newref(param);
+    return param.ref();
 }
 __attribute__((visibility("protected")))
 PyMethodDef parampack_get_param_method = py::meth_o<"get_param",get_param>;
