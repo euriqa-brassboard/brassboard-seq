@@ -30,8 +30,6 @@ struct ParamPack : PyObject {
 
     py::ref<> ensure_visited();
     py::dict_ref ensure_dict();
-    __attribute__((returns_nonnull)) PyObject *get_value();
-    __attribute__((returns_nonnull)) PyObject *get_value_default(PyObject *def_value);
 
     static ParamPack *new_empty();
     static PyTypeObject Type;

@@ -92,34 +92,7 @@ inline py::dict_ref ParamPack::ensure_dict()
     return set_new_dict(values, fieldname);
 }
 
-inline __attribute__((returns_nonnull)) PyObject *ParamPack::get_value()
-{
-    auto res = py::dict(values).try_get(fieldname);
-    if (!res)
-        py_throw_format(PyExc_KeyError, "Value is not assigned");
-    if (res.isa<py::dict>())
-        py_throw_format(PyExc_TypeError, "Cannot get parameter pack as value");
-    py::dict(visited).set(fieldname, Py_True);
-    return py::newref(res);
-}
-
-inline __attribute__((returns_nonnull)) PyObject*
-ParamPack::get_value_default(PyObject *default_value)
-{
-    assert(!py::isa<py::dict>(default_value));
-    auto res = py::dict(values).try_get(fieldname);
-    if (!res) {
-        py::dict(values).set(fieldname, default_value);
-        res = default_value;
-    }
-    else if (res.isa<py::dict>()) {
-        py_throw_format(PyExc_TypeError, "Cannot get parameter pack as value");
-    }
-    py::dict(visited).set(fieldname, Py_True);
-    return py::newref(res);
-}
-
-static PyObject *parampack_vectorcall(py::ptr<ParamPack> self, PyObject *const *args,
+static py::ref<> parampack_vectorcall(py::ptr<ParamPack> self, PyObject *const *args,
                                       ssize_t nargs, py::tuple kwnames)
 {
     // Supported syntax
@@ -128,12 +101,28 @@ static PyObject *parampack_vectorcall(py::ptr<ParamPack> self, PyObject *const *
     // (*dicts, **kwargs) -> get parameter pack with default
     int nkws = kwnames ? kwnames.size() : 0;
     if (nkws == 0) {
-        if (nargs == 0)
-            return self->get_value();
+        if (nargs == 0) {
+            auto res = py::dict(self->values).try_get(self->fieldname);
+            if (!res)
+                py_throw_format(PyExc_KeyError, "Value is not assigned");
+            if (res.isa<py::dict>())
+                py_throw_format(PyExc_TypeError, "Cannot get parameter pack as value");
+            py::dict(self->visited).set(self->fieldname, Py_True);
+            return res.ref();
+        }
         if (nargs == 1) {
-            auto arg0 = args[0];
+            auto arg0 = py::ptr(args[0]);
             if (!py::isa<py::dict>(arg0)) {
-                return self->get_value_default(arg0);
+                auto res = py::dict(self->values).try_get(self->fieldname);
+                if (!res) {
+                    py::dict(self->values).set(self->fieldname, arg0);
+                    res = arg0;
+                }
+                else if (res.isa<py::dict>()) {
+                    py_throw_format(PyExc_TypeError, "Cannot get parameter pack as value");
+                }
+                py::dict(self->visited).set(self->fieldname, Py_True);
+                return res.ref();
             }
         }
     }
@@ -148,7 +137,7 @@ static PyObject *parampack_vectorcall(py::ptr<ParamPack> self, PyObject *const *
     auto kwvalues = args + nargs;
     for (int i = 0; i < nkws; i++)
         set_dict<false>(self_values, kwnames.get(i), kwvalues[i]);
-    return py::newref((PyObject*)self);
+    return self.ref();
 }
 
 static inline py::ref<ParamPack> parampack_alloc()

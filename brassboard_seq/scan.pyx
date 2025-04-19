@@ -38,11 +38,7 @@ from libcpp.vector cimport vector
 cdef extern from "src/scan.cpp" namespace "brassboard_seq::scan":
     bint check_field(dict d, tuple path) except +
 
-# Manually set the field since I can't make cython automatically do this
-# without also declaring the c struct again...
-globals()['ParamPack'] = ParamPack
-
-from brassboard_seq._utils import (parampack_get_visited as get_visited,
+from brassboard_seq._utils import (ParamPack, parampack_get_visited as get_visited,
                                    parampack_get_param as get_param)
 
 cdef dict _missing_value = {}
