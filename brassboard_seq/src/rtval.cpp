@@ -55,7 +55,7 @@ new_const(TagVal v)
     return self;
 }
 
-static PyObject *new_expr2_wrap1(ValueType type, py::ptr<> arg0, py::ptr<> arg1)
+static rtval_ref new_expr2_wrap1(ValueType type, py::ptr<> arg0, py::ptr<> arg1)
 {
     rtval_ref rtarg0;
     rtval_ref rtarg1;
@@ -74,7 +74,7 @@ static PyObject *new_expr2_wrap1(ValueType type, py::ptr<> arg0, py::ptr<> arg1)
     }
     return RuntimeValue::alloc(type, binary_return_type(type, rtarg0->datatype,
                                                         rtarg1->datatype),
-                               std::move(rtarg0), std::move(rtarg1), py::new_none()).rel();
+                               std::move(rtarg0), std::move(rtarg1), py::new_none());
 }
 
 static inline rtval_ref wrap_rtval(py::ptr<> v)
@@ -538,7 +538,7 @@ static py::ref<> rtvalue_array_ufunc(rtval_ptr self, PyObject *const *args,
     auto uni_expr = [&] (auto type) { return new_expr1(type, self); };
     auto bin_expr = [&] (auto type) {
         py::check_num_arg("RuntimeValue.__array_ufunc__", nargs, 4, 4);
-        return rtval_ref(new_expr2_wrap1(type, args[2], args[3]));
+        return new_expr2_wrap1(type, args[2], args[3]);
     };
     if (ufunc == np::multiply)
         return bin_expr(Mul);
@@ -861,9 +861,9 @@ PyTypeObject RuntimeValue::Type = {
             return new_expr2_wrap1(Mul, v1, v2); }>,
         .nb_remainder = py::binfunc<[] (auto v1, auto v2) {
             return new_expr2_wrap1(Mod, v1, v2); }>,
-        .nb_power = py::trifunc<[] (auto v1, auto v2, auto v3) {
+        .nb_power = py::trifunc<[] (auto v1, auto v2, auto v3) -> py::ref<> {
             if (v3 != Py_None) [[unlikely]]
-                Py_RETURN_NOTIMPLEMENTED;
+                return py::new_not_implemented();
             return new_expr2_wrap1(Pow, v1, v2);
         }>,
         .nb_negative = py::unifunc<[] (auto self) {
