@@ -23,10 +23,10 @@ namespace brassboard_seq::scan {
 // Check if the struct field reference path is overwritten in `obj`.
 // Overwrite happens if the field itself exists or a parent of the field
 // is overwritten to something that's not scalar struct.
-static inline bool check_field(PyObject *d, PyObject *path)
+static inline bool check_field(py::dict d, py::tuple path)
 {
     for (auto [_, name]: py::tuple_iter(path)) {
-        auto vp = py::dict(d).try_get(name);
+        auto vp = d.try_get(name);
         if (!vp)
             return false;
         if (!vp.typeis<py::dict>())
