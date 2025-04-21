@@ -356,14 +356,14 @@ static inline int eventtime_find_base_id(EventTime *t1, EventTime *t2, unsigned 
 }
 
 struct EventTimeDiff : rtval::ExternCallback {
-    EventTime *t1;
-    EventTime *t2;
+    time_ref t1;
+    time_ref t2;
     bool in_eval;
 
     static rtval::TagVal eval(EventTimeDiff *self, unsigned age)
     {
-        auto t1 = self->t1;
-        auto t2 = self->t2;
+        py::ptr t1 = self->t1;
+        py::ptr t2 = self->t2;
         if (self->in_eval)
             py_throw_format(PyExc_ValueError, "Recursive value dependency detected.");
         self->in_eval = true;
@@ -380,7 +380,7 @@ PyTypeObject EventTimeDiff::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.event_time.EventTimeDiff",
     .tp_basicsize = sizeof(EventTimeDiff),
-    .tp_dealloc = py::tp_dealloc<true,[] (PyObject *self) { Type.tp_clear(self); }>,
+    .tp_dealloc = py::tp_cxx_dealloc<true,EventTimeDiff>,
     .tp_str = py::unifunc<[] (py::ptr<EventTimeDiff> self) {
         return PyUnicode_FromFormat("(T[%u] - T[%u])", self->t1->data.id, self->t2->data.id);
     }>,
@@ -390,8 +390,8 @@ PyTypeObject EventTimeDiff::Type = {
         visitor(self->t2);
     }>,
     .tp_clear = py::iunifunc<[] (py::ptr<EventTimeDiff> self) {
-        py::CLEAR(self->t1);
-        py::CLEAR(self->t2);
+        self->t1.CLEAR();
+        self->t2.CLEAR();
     }>,
 };
 
@@ -482,8 +482,8 @@ static auto EventTime_as_number = PyNumberMethods{
             py_throw_format(PyExc_ValueError,
                             "Cannot take the difference between unrelated times");
         auto diff = py::generic_alloc<EventTimeDiff>();
-        diff->t1 = (EventTime*)py::newref(self);
-        diff->t2 = (EventTime*)py::newref(other);
+        call_constructor(&diff->t1, py::newref(self));
+        call_constructor(&diff->t2, py::newref(other));
         diff->in_eval = false;
         diff->fptr = (void*)EventTimeDiff::eval;
         return rtval::new_extern_age(diff, (PyObject*)&PyFloat_Type);
