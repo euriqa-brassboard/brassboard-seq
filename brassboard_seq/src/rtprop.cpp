@@ -191,10 +191,6 @@ PyTypeObject CompositeRTProp::Type = {
     }>,
 };
 
-}
-
-namespace {
-
 #define RTPROP_PREFIX_STR "_RTProp_value_"
 static constexpr int rtprop_prefix_len = sizeof(RTPROP_PREFIX_STR) - 1;
 

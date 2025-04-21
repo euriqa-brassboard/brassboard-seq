@@ -64,7 +64,7 @@ static inline void compiler_finalize(auto comp, _RampFunctionBase*, Backend*)
         if (py::dict(comp->backends).contains(prefix)) [[likely]]
             continue;
         py_throw_format(PyExc_ValueError, "Unhandled channel: %U",
-                        channel_name_from_path(path));
+                        config::channel_name_from_path(path));
     }
     auto time_mgr = seqinfo->time_mgr;
     time_mgr->finalize();

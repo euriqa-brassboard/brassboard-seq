@@ -20,6 +20,12 @@
 
 namespace brassboard_seq::config {
 
+__attribute__((visibility("protected")))
+py::str_ref channel_name_from_path(py::ptr<> path)
+{
+    return "/"_py.join(path);
+}
+
 static inline auto split_string_tuple(PyObject *s)
 {
     auto list = py::list_ref(throw_if_not(PyUnicode_Split(s, "/"_py, -1)));

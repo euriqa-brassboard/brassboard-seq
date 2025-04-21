@@ -51,7 +51,7 @@ struct SeqInfo : PyObject {
     int get_channel_id(py::str name);
     py::str_ref channel_name_from_id(int cid)
     {
-        return channel_name_from_path(py::list(channel_paths).get(cid));
+        return config::channel_name_from_path(py::list(channel_paths).get(cid));
     }
 
     static PyTypeObject Type;

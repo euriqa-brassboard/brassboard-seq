@@ -433,12 +433,6 @@ void handle_cxx_exception()
     }
 }
 
-__attribute__((visibility("protected")))
-py::str_ref channel_name_from_path(py::ptr<> path)
-{
-    return "/"_py.join(path);
-}
-
 std::streamsize buff_streambuf::xsputn(const char *s, std::streamsize count)
 {
     auto p = extend(count);

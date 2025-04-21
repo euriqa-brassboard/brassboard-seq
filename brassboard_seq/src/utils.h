@@ -2036,8 +2036,6 @@ static inline auto operator ""_pymod()
     return m;
 }
 
-py::str_ref channel_name_from_path(py::ptr<> path);
-
 template<typename T>
 struct ValueIndexer {
     int get_id(void *p)
