@@ -220,9 +220,7 @@ PyTypeObject ParamPack::Type = {
     // extra space for the vectorcall pointer
     .tp_basicsize = sizeof(ParamPack) + sizeof(void*),
     .tp_dealloc = py::tp_dealloc<true,[] (py::ptr<ParamPack> self) {
-        call_destructor(&self->values);
-        call_destructor(&self->visited);
-        call_destructor(&self->fieldname);
+        call_destructor(self.get());
     }>,
     .tp_vectorcall_offset = sizeof(ParamPack),
     .tp_repr = parampack_str,

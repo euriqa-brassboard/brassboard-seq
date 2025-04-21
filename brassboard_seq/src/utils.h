@@ -1976,8 +1976,9 @@ static inline void tp_dealloc(PyObject *obj)
 {
     if constexpr (gc)
         PyObject_GC_UnTrack(obj);
+    auto t = Py_TYPE(obj);
     cxx_catch<void>([&] { F(obj); });
-    Py_TYPE(obj)->tp_free(obj);
+    t->tp_free(obj);
 }
 
 struct tp_visitor {

@@ -49,8 +49,7 @@ static inline auto add_step_name()
 
 template<typename T>
 static constexpr auto seq_dealloc = py::tp_dealloc<true,[] (py::ptr<T> self) {
-    self->template clear<false>();
-    self->cclear();
+    call_destructor(self.get());
 }>;
 
 template<typename T>
@@ -291,15 +290,7 @@ PyTypeObject SeqInfo::Type = {
     .tp_name = "brassboard_seq.seq.SeqInfo",
     .tp_basicsize = sizeof(SeqInfo),
     .tp_dealloc = py::tp_dealloc<true,[] (py::ptr<SeqInfo> self) {
-        call_destructor(&self->time_mgr);
-        call_destructor(&self->assertions);
-        call_destructor(&self->config);
-        call_destructor(&self->channel_name_map);
-        call_destructor(&self->channel_path_map);
-        call_destructor(&self->channel_paths);
-        call_destructor(&self->C);
-        call_destructor(&self->bt_tracker);
-        call_destructor(&self->action_alloc);
+        call_destructor(self.get());
     }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = py::tp_traverse<[] (py::ptr<SeqInfo> self, auto &visitor) {
@@ -343,10 +334,6 @@ inline void TimeSeq::clear()
     start_time.CLEAR<nulling>();
     end_time.CLEAR<nulling>();
     cond.CLEAR<nulling>();
-}
-
-inline void TimeSeq::cclear()
-{
 }
 
 static auto get_channel_id(py::ptr<TimeSeq> self, PyObject *name)
@@ -411,12 +398,6 @@ PyTypeObject TimeSeq::Type = {
                   py::getset_def<"C",[] (py::ptr<TimeSeq> self) {
                       return py::newref(self->seqinfo->C); }>>),
 };
-
-inline void TimeStep::cclear()
-{
-    TimeSeq::cclear();
-    call_destructor(&actions);
-}
 
 inline void TimeStep::traverse(auto &visitor)
 {
@@ -500,11 +481,6 @@ PyTypeObject TimeStep::Type = {
                    py::meth_fastkw<"pulse",condseq_set<TimeStep,true>>>),
     .tp_base = &TimeSeq::Type,
 };
-
-inline void SubSeq::cclear()
-{
-    TimeSeq::cclear();
-}
 
 inline void SubSeq::traverse(auto &visitor)
 {
@@ -657,8 +633,7 @@ PyTypeObject ConditionalWrapper::Type = {
     .tp_name = "brassboard_seq.seq.ConditionalWrapper",
     .tp_basicsize = sizeof(ConditionalWrapper) + sizeof(void*),
     .tp_dealloc = py::tp_dealloc<true,[] (py::ptr<ConditionalWrapper> self) {
-        call_destructor(&self->seq);
-        call_destructor(&self->cond);
+        call_destructor(self.get());
     }>,
     .tp_vectorcall_offset = sizeof(ConditionalWrapper),
     .tp_repr = seq_str<ConditionalWrapper>,

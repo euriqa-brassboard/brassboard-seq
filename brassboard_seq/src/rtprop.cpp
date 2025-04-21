@@ -39,8 +39,7 @@ PyTypeObject composite_rtprop_data::Type = {
     .tp_name = "brassboard_seq.rtval.composite_rtprop_data",
     .tp_basicsize = sizeof(composite_rtprop_data),
     .tp_dealloc = py::tp_dealloc<true,[] (py::ptr<composite_rtprop_data> self) {
-        call_destructor(&self->ovr);
-        call_destructor(&self->cache);
+        call_destructor(self.get());
     }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = py::tp_traverse<[] (py::ptr<composite_rtprop_data> self, auto &visitor) {
@@ -158,8 +157,7 @@ PyTypeObject CompositeRTProp::Type = {
     .tp_name = "brassboard_seq.rtval.CompositeRTProp",
     .tp_basicsize = sizeof(CompositeRTProp),
     .tp_dealloc = py::tp_dealloc<true,[] (py::ptr<CompositeRTProp> self) {
-        call_destructor(&self->fieldname);
-        call_destructor(&self->cb);
+        call_destructor(self.get());
     }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = py::tp_traverse<[] (py::ptr<CompositeRTProp> self, auto &visitor) {
@@ -226,8 +224,7 @@ PyTypeObject rtprop_callback::Type = {
     .tp_name = "brassboard_seq.rtval.rtprop_callback",
     .tp_basicsize = sizeof(rtprop_callback),
     .tp_dealloc = py::tp_dealloc<true,[] (py::ptr<rtprop_callback> self) {
-        call_destructor(&self->obj);
-        call_destructor(&self->fieldname);
+        call_destructor(self.get());
     }>,
     .tp_str = py::unifunc<[] (py::ptr<rtprop_callback> self) {
         return py::str_format(
@@ -303,7 +300,7 @@ PyTypeObject RTProp::Type = {
     .tp_name = "brassboard_seq.rtval.RTProp",
     .tp_basicsize = sizeof(RTProp),
     .tp_dealloc = py::tp_dealloc<false,[] (py::ptr<RTProp> self) {
-        call_destructor(&self->fieldname);
+        call_destructor(self.get());
     }>,
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_methods = (py::meth_table<

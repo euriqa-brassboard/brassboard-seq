@@ -100,9 +100,7 @@ PyTypeObject Config::Type = {
     .tp_name = "brassboard_seq.config.Config",
     .tp_basicsize = sizeof(Config),
     .tp_dealloc = py::tp_dealloc<false,[] (py::ptr<Config> self) {
-        call_destructor(&self->channel_alias);
-        call_destructor(&self->alias_cache);
-        call_destructor(&self->supported_prefix);
+        call_destructor(self.get());
     }>,
     // All fields are containers of immutable types.
     // No reference loop possible.
