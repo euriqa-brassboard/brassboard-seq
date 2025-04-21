@@ -48,14 +48,9 @@ cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
     TimeOrder is_ordered(EventTime t1, EventTime t2) except +
 
     ctypedef class brassboard_seq._utils.TimeManager [object _brassboard_seq_event_time_TimeManager]:
-        cdef list event_times
         cdef vector[int64_t] time_values
 
     ctypedef class brassboard_seq._utils.EventTime [object _brassboard_seq_event_time_EventTime]:
-        cdef EventTime prev
-        cdef EventTime wait_for
-        cdef object cond
-
         cdef EventTimeData data
 
         cdef vector[int] chain_pos

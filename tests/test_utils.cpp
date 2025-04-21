@@ -157,6 +157,11 @@ static inline auto *timemanager_new_time_int(auto self, auto prev, auto offset,
     return self->new_int(prev, offset, floating, cond, wait_for).rel();
 }
 
+static inline auto *timemanager_get_event_times(auto self)
+{
+    return py::newref(self->event_times);
+}
+
 static inline auto *condseq_get_cond(py::ptr<> condseq)
 {
     if (auto cond = py::exact_cast<seq::ConditionalWrapper>(condseq))

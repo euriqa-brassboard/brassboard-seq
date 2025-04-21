@@ -107,6 +107,7 @@ cdef extern from "test_utils.cpp" namespace "brassboard_seq":
     event_time.EventTime timemanager_new_round_time(event_time.TimeManager, event_time.EventTime, object, object, event_time.EventTime) except +
 
     event_time.EventTime timemanager_new_time_int(event_time.TimeManager self, event_time.EventTime prev, int64_t offset, bint floating, object cond, event_time.EventTime wait_for) except +
+    list timemanager_get_event_times(event_time.TimeManager) except +
     rtval.rtval_ref round_time_rt "brassboard_seq::event_time::round_time_rt" (rtval.RuntimeValue) except +
 
     object condseq_get_cond(object) except +
@@ -282,7 +283,7 @@ def time_manager_compute_all_times(event_time.TimeManager time_manager, unsigned
     return max_time, values
 
 def time_manager_nchain(event_time.TimeManager time_manager):
-    event_times = time_manager.event_times
+    event_times = timemanager_get_event_times(time_manager)
     if len(event_times) == 0:
         return 0
     t = <event_time.EventTime>event_times[0]
@@ -320,7 +321,7 @@ def seq_get_channel_paths(seq.Seq s):
     return seq.seq_get_channel_paths(s)
 
 def seq_get_event_time(seq.Seq s, int tid):
-    return seq.seq_get_time_mgr(s).event_times[tid]
+    return timemanager_get_event_times(seq.seq_get_time_mgr(s))[tid]
 
 def seq_get_cond(s):
     return condseq_get_cond(s)
