@@ -948,6 +948,12 @@ struct _ref : common<_ref,T> {
         check_refcnt(m_ptr);
         return (T2*)m_ptr;
     }
+    void swap(_ref &other) noexcept
+    {
+        check_refcnt(m_ptr);
+        check_refcnt(other.m_ptr);
+        std::swap(m_ptr, other.m_ptr);
+    }
     void take(auto *p) noexcept
     {
         check_refcnt(p);

@@ -187,12 +187,11 @@ void TimeManager::finalize()
         py_throw_format(PyExc_RuntimeError, "Event times already finalized");
     status->finalized = true;
     auto _event_times = py::new_list(0);
-    py::ref old_event_times(event_times.rel()); // steal reference
-    event_times.take(std::move(_event_times));
+    event_times.swap(_event_times);
 
     std::unordered_set<int> visited;
     // First, topologically order the times
-    for (auto [i, t]: py::list_iter<EventTime>(old_event_times))
+    for (auto [i, t]: py::list_iter<EventTime>(_event_times))
         visit_time(t, visited);
 
     std::vector<int> chain_lengths;
