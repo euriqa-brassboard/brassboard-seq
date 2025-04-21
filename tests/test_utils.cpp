@@ -204,6 +204,11 @@ PyObject *_action_get_end_val(action::Action *action)
     return py::newref(action->end_val);
 }
 
+PyObject *_action_py_str(action::Action *action)
+{
+    return action->py_str().rel();
+}
+
 auto *compiledseq_get_all_actions(backend::CompiledSeq &cseq)
 {
     return cseq.all_actions.get();

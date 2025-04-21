@@ -262,11 +262,11 @@ struct RTProp : PyObject {
             obj.del_attr(fieldname);
     }
 
-    static PyObject *get_state(py::ptr<RTProp> self, py::ptr<> obj)
+    static auto get_state(py::ptr<RTProp> self, py::ptr<> obj)
     {
         if (auto res = obj.try_attr(self->fieldname))
-            return res.rel();
-        Py_RETURN_NONE;
+            return res;
+        return py::new_none();
     }
 
     static void set_state(py::ptr<RTProp> self, PyObject *const *args, Py_ssize_t nargs)

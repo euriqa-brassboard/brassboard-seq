@@ -339,14 +339,14 @@ void print(py::stringio &io, py::ptr<> obj, int indent)
 }
 
 __attribute__((visibility("protected")))
-PyObject *sprint(py::ptr<> obj, int indent)
+py::str_ref sprint(py::ptr<> obj, int indent)
 {
     py::stringio io;
     print_generic(io, obj, indent, indent);
-    return io.getvalue().rel();
+    return io.getvalue();
 }
 
-static PyObject *py_sprint(PyObject*, PyObject *const *args, Py_ssize_t nargs)
+static auto py_sprint(PyObject*, PyObject *const *args, Py_ssize_t nargs)
 {
     py::check_num_arg("sprint", nargs, 1, 2);
     int indent = 0;

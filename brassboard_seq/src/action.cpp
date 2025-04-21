@@ -20,7 +20,7 @@
 
 namespace brassboard_seq::action {
 
-PyObject *Action::py_str()
+py::str_ref Action::py_str()
 {
     py::stringio io;
     io.write_ascii(is_pulse ? "Pulse(" : "Set(");
@@ -40,7 +40,7 @@ PyObject *Action::py_str()
         }
     }
     io.write_ascii(")");
-    return io.getvalue().rel();
+    return io.getvalue();
 }
 
 }

@@ -937,25 +937,25 @@ static PyObject *py_get_value(PyObject*, PyObject *const *args, Py_ssize_t nargs
     return py::newref(args[0]);
 }
 
-static PyObject *py_inv(PyObject*, py::ptr<> v)
+static py::ref<> py_inv(PyObject*, py::ptr<> v)
 {
     if (v == Py_True)
-        return py::immref(Py_False);
+        return py::new_false();
     if (v == Py_False)
-        return py::immref(Py_True);
+        return py::new_true();
     if (auto rv = py::cast<RuntimeValue>(v)) {
         if (rv->type_ == Not)
-            return rt_convert_bool(rv->arg0).rel();
-        return new_expr1(Not, rv).rel();
+            return rt_convert_bool(rv->arg0);
+        return new_expr1(Not, rv);
     }
-    return py::immref(v.as_bool() ? Py_False : Py_True);
+    return py::new_bool(!v.as_bool());
 }
 
-static PyObject *py_convert_bool(PyObject*, py::ptr<> v)
+static py::ref<> py_convert_bool(PyObject*, py::ptr<> v)
 {
     if (auto rv = py::cast<RuntimeValue>(v))
-        return rt_convert_bool(rv).rel();
-    return py::immref(v.as_bool() ? Py_True : Py_False);
+        return rt_convert_bool(rv);
+    return py::new_bool(v.as_bool());
 }
 
 static py::ref<> py_ifelse(PyObject*, PyObject *const *args, Py_ssize_t nargs)
@@ -971,10 +971,10 @@ static py::ref<> py_ifelse(PyObject*, PyObject *const *args, Py_ssize_t nargs)
     return (b.as_bool() ? v1 : v2).ref();
 }
 
-static PyObject *py_same_value(PyObject*, PyObject *const *args, Py_ssize_t nargs)
+static auto py_same_value(PyObject*, PyObject *const *args, Py_ssize_t nargs)
 {
     py::check_num_arg("same_value", nargs, 2, 2);
-    return py::immref(same_value(args[0], args[1]) ? Py_True : Py_False);
+    return py::new_bool(same_value(args[0], args[1]));
 }
 
 PyMethodDef get_value_method = py::meth_fast<"get_value",py_get_value>;

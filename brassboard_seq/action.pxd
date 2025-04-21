@@ -32,8 +32,6 @@ cdef extern from "src/action.h" namespace "brassboard_seq::action":
         int tid
         int end_tid
 
-        str py_str() except +
-
     cppclass ActionAllocator:
         pass
 

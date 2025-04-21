@@ -118,6 +118,7 @@ cdef extern from "test_utils.cpp" namespace "brassboard_seq":
     object _action_get_value(action.Action *action)
     object _action_get_length(action.Action *action)
     object _action_get_end_val(action.Action *action)
+    str _action_py_str(action.Action *action) except +
     vector[action.Action*] *compiledseq_get_all_actions(backend.CompiledSeq &cseq)
     int64_t compiledseq_get_total_time(backend.CompiledSeq &cseq)
     void py_check_num_arg "brassboard_seq::py::check_num_arg" (
@@ -176,10 +177,10 @@ cdef class Action:
     cdef object ref
 
     def __str__(self):
-        return self.action.py_str()
+        return _action_py_str(self.action)
 
     def __repr__(self):
-        return self.action.py_str()
+        return _action_py_str(self.action)
 
 cdef _ref_action(action.Action *p, parent):
     a = <Action>Action.__new__(Action)

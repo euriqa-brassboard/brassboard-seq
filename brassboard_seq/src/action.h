@@ -48,7 +48,7 @@ struct Action {
     {
     }
 
-    PyObject *py_str();
+    py::str_ref py_str();
 };
 
 using ActionAllocator = PermAllocator<Action,146>;

@@ -172,9 +172,9 @@ static auto parampack_new(PyObject*, PyObject *const *args, ssize_t nargs,
 static constexpr auto parampack_str = py::unifunc<[] (py::ptr<ParamPack> self) {
     auto field = self->values.try_get(self->fieldname);
     if (!field)
-        return py::newref("<Undefined>"_py);
+        return "<Undefined>"_py.ref();
     if (!field.typeis<py::dict>())
-        return PyObject_Str(field);
+        return field.str();
     return yaml::sprint(field);
 }>;
 
