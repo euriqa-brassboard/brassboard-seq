@@ -105,8 +105,6 @@ struct CompositeRTProp : PyObject {
     py::str_ref fieldname;
     py::ref<> cb;
 
-    static PyTypeObject Type asm("_ZN14brassboard_seq6rtprop20CompositeRTProp_TypeE");
-
     py::ref<composite_rtprop_data> get_data(py::ptr<> obj)
     {
         if (fieldname == Py_None)
@@ -151,12 +149,11 @@ struct CompositeRTProp : PyObject {
         py::check_num_arg("CompositeRTProp.__set_name__", nargs, 2, 2);
         self->fieldname.take("__CompositeRTProp__"_py.concat(args[1]));
     }
+
+    static PyTypeObject Type;
 };
 
-}
-
-__attribute__((visibility("protected")))
-PyTypeObject CompositeRTProp_Type = {
+PyTypeObject CompositeRTProp::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rtval.CompositeRTProp",
     .tp_basicsize = sizeof(CompositeRTProp),
@@ -173,9 +170,9 @@ PyTypeObject CompositeRTProp_Type = {
         self->cb.CLEAR();
     }>,
     .tp_methods = (py::meth_table<
-                   py::meth_o<"get_state",CompositeRTProp::get_state>,
-                   py::meth_fast<"set_state",CompositeRTProp::set_state>,
-                   py::meth_fast<"__set_name__",CompositeRTProp::set_name>>),
+                   py::meth_o<"get_state",get_state>,
+                   py::meth_fast<"set_state",set_state>,
+                   py::meth_fast<"__set_name__",set_name>>),
     .tp_descr_get = py::trifunc<[] (py::ptr<CompositeRTProp> self, py::ptr<> obj,
                                     auto) -> py::ref<> {
         if (!obj) [[unlikely]]
@@ -193,6 +190,8 @@ PyTypeObject CompositeRTProp_Type = {
         return self;
     }>,
 };
+
+}
 
 namespace {
 
@@ -255,8 +254,6 @@ PyTypeObject rtprop_callback::Type = {
 struct RTProp : PyObject {
     py::str_ref fieldname;
 
-    static PyTypeObject Type asm("_ZN14brassboard_seq6rtprop11RTProp_TypeE");
-
     py::ref<> get_res(py::ptr<> obj)
     {
         if (fieldname == Py_None)
@@ -301,12 +298,11 @@ struct RTProp : PyObject {
         py::check_num_arg("RTProp.__set_name__", nargs, 2, 2);
         self->fieldname.take(RTPROP_PREFIX_STR ""_py.concat(args[1]));
     }
+
+    static PyTypeObject Type;
 };
 
-}
-
-__attribute__((visibility("protected")))
-PyTypeObject RTProp_Type = {
+PyTypeObject RTProp::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rtval.RTProp",
     .tp_basicsize = sizeof(RTProp),
@@ -315,9 +311,9 @@ PyTypeObject RTProp_Type = {
     }>,
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_methods = (py::meth_table<
-                   py::meth_o<"get_state",RTProp::get_state>,
-                   py::meth_fast<"set_state",RTProp::set_state>,
-                   py::meth_fast<"__set_name__",RTProp::set_name>>),
+                   py::meth_o<"get_state",get_state>,
+                   py::meth_fast<"set_state",set_state>,
+                   py::meth_fast<"__set_name__",set_name>>),
     .tp_descr_get = py::trifunc<[] (py::ptr<RTProp> self, py::ptr<> obj,
                                     auto) -> py::ref<> {
         if (!obj) [[unlikely]]
@@ -337,13 +333,20 @@ PyTypeObject RTProp_Type = {
     }>,
 };
 
+}
+
+__attribute__((visibility("protected")))
+PyTypeObject &CompositeRTProp_Type = CompositeRTProp::Type;
+__attribute__((visibility("protected")))
+PyTypeObject &RTProp_Type = RTProp::Type;
+
 __attribute__((constructor))
 static void init()
 {
     throw_if(PyType_Ready(&composite_rtprop_data::Type) < 0);
-    throw_if(PyType_Ready(&CompositeRTProp_Type) < 0);
+    throw_if(PyType_Ready(&CompositeRTProp::Type) < 0);
     throw_if(PyType_Ready(&rtprop_callback::Type) < 0);
-    throw_if(PyType_Ready(&RTProp_Type) < 0);
+    throw_if(PyType_Ready(&RTProp::Type) < 0);
 }
 
 }
