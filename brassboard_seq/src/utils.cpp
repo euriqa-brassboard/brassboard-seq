@@ -434,17 +434,6 @@ void handle_cxx_exception()
 }
 
 __attribute__((visibility("protected")))
-PyObject *pytuple_append1(py::tuple tuple, py::ptr<> obj)
-{
-    Py_ssize_t nele = tuple.size();
-    auto res = py::new_tuple(nele + 1);
-    for (auto [i, v]: py::tuple_iter(tuple))
-        res.SET(i, v);
-    res.SET(nele, py::ptr(obj));
-    return res.rel();
-}
-
-__attribute__((visibility("protected")))
 py::str_ref channel_name_from_path(py::ptr<> path)
 {
     return "/"_py.join(path);

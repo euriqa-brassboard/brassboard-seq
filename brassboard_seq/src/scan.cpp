@@ -104,7 +104,7 @@ static void _foreach_nondict(auto &cb, py::dict obj)
 static void _foreach_nondict(auto &cb, py::dict obj, py::tuple prefix)
 {
     for (auto [k, v]: py::dict_iter(obj)) {
-        auto path = py::tuple_ref(pytuple_append1(prefix, k));
+        auto path = prefix.append(k);
         if (auto d = py::cast<py::dict>(v)) {
             _foreach_nondict(cb, d, path);
         }
@@ -720,8 +720,7 @@ PyTypeObject ScanWrapper::Type = {
         check_non_empty_string_arg(name, "name");
         if (PyUnicode_READ_CHAR(name, 0) == '_')
             return py::ref(PyObject_GenericGetAttr(self, name));
-        return ScanWrapper::alloc(self->sg, self->scan,
-                                  py::ref(pytuple_append1(self->path, name)), self->idx);
+        return ScanWrapper::alloc(self->sg, self->scan, self->path.append(name), self->idx);
     }>,
     .tp_setattro = py::itrifunc<[] (py::ptr<ScanWrapper> self, py::ptr<> name,
                                     py::ptr<> value) {
@@ -730,8 +729,7 @@ PyTypeObject ScanWrapper::Type = {
         if (PyUnicode_READ_CHAR(name, 0) == '_')
             py_throw_format(PyExc_AttributeError,
                             "'brassboard_seq.scan.ScanWrapper' object has no attribute '%U'", name);
-        self->sg->set_fixed_param(self->scan, pytuple_append1(self->path, name),
-                                  self->idx, value);
+        self->sg->set_fixed_param(self->scan, self->path.append(name), self->idx, value);
     }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = py::tp_traverse<[] (py::ptr<ScanWrapper> self, auto &visitor) {
@@ -1177,7 +1175,7 @@ For sequence running/saving/loading:
             py::tuple_ref path = py::new_tuple();
             while (true) {
                 for (auto [k, v]: py::dict_iter(params)) {
-                    path = py::tuple_ref(pytuple_append1(path, k));
+                    path = path.append(k);
                     if (!v.typeis<py::dict>())
                         return py::new_tuple(v, std::move(path));
                     params = v;

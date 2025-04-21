@@ -134,11 +134,6 @@ static constexpr inline __attribute__((always_inline)) auto assume(auto v)
 }
 #endif
 
-static inline __attribute__((always_inline)) void assume_not_none(auto *obj)
-{
-    assume((PyObject*)obj != Py_None);
-}
-
 [[noreturn]] void throw0();
 [[noreturn]] void bb_rethrow(uintptr_t key);
 
@@ -688,7 +683,7 @@ public:
 
     Py_ssize_t size() const requires std::same_as<T,_dict>
     {
-        return PyDict_Size((PyObject*)_ptr());
+        return PyDict_GET_SIZE((PyObject*)_ptr());
     }
     template<typename Key>
     void set(Key &&key, auto &&val) requires (std::same_as<T,_dict> && is_py_ptr<Key>)
@@ -807,6 +802,7 @@ public:
     {
         return __ptr<py_tag_type<T2>>(PyTuple_GET_ITEM((PyObject*)_ptr(), i));
     }
+    template<typename T2> auto append(T2 &&v) requires std::same_as<T,_tuple>;
 
     Py_ssize_t size() const requires std::same_as<T,_bytes>
     {
@@ -1511,6 +1507,18 @@ static inline auto tuple_iter(T &&h)
     return _iter<_tuple_iterator<Value>,std::remove_cv_t<T>>(std::forward<T>(h));
 }
 
+template<template<typename> class H, typename T>
+template<typename T2>
+auto common<H,T>::append(T2 &&v) requires std::same_as<T,_tuple>
+{
+    Py_ssize_t nele = size();
+    auto res = py::new_tuple(nele + 1);
+    for (auto p = _ptr(); auto [i, v]: py::tuple_iter(p))
+        res.SET(i, v);
+    res.SET(nele, std::forward<T2>(v));
+    return res;
+}
+
 struct _str_iterator {
     _str_iterator(PyObject *str)
         : data(PyUnicode_DATA(str)),
@@ -2067,14 +2075,6 @@ private:
 
 template<typename CB>
 ScopeExit(CB) -> ScopeExit<CB>;
-
-__attribute__((returns_nonnull))
-PyObject *pytuple_append1(py::tuple tuple, py::ptr<> obj);
-static inline PyObject *pydict_deepcopy(PyObject *d)
-{
-    // Used by cython
-    return py::dict_deepcopy(d).rel();
-}
 
 template<typename T, size_t N>
 class PermAllocator {

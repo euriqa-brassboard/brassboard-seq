@@ -51,10 +51,6 @@ cdef extern from "src/utils.h" namespace "brassboard_seq::py":
     ref new_float(double v) except +
 
 cdef extern from * namespace "brassboard_seq":
-    T assume[T](T) noexcept nogil
-    void assume_not_none(object) noexcept nogil
-    void _assume_not_none "brassboard_seq::assume_not_none"(void*) noexcept nogil
-
     cppclass BacktraceTracker:
         int max_frame
         void record(uintptr_t key)
@@ -69,9 +65,6 @@ cdef extern from * namespace "brassboard_seq":
     uintptr_t assert_key(int)
 
     PyObject *PyErr_Format(PyObject *exception, char *format, ...) except NULL
-
-    tuple pytuple_append1(tuple, object) except +
-    object pydict_deepcopy(object) except +
 
     cppclass pybytes_ostream(ostream):
         object get_buf() except +
@@ -92,5 +85,4 @@ cdef extern from *:
     PyObject *PyExc_ValueError
     PyObject *PyExc_RuntimeError
     PyObject *Py_NotImplemented
-    Py_ssize_t PyDict_GET_SIZE(object)
     object PyObject_Vectorcall(PyObject*, PyObject**, size_t, PyObject*)
