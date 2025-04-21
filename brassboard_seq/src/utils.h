@@ -583,7 +583,7 @@ public:
         return as_bool([&] { bb_rethrow(key); });
     }
     template<std::integral Ti=long>
-    Ti as_int(auto &&cb) requires requires { cb(); }
+    Ti as_int(auto &&cb) const requires requires { cb(); }
     {
         auto obj = (PyObject*)_ptr();
         Ti res;
@@ -599,7 +599,7 @@ public:
         return res;
     }
     template<std::integral Ti=long>
-    Ti as_int(uintptr_t key=-1)
+    Ti as_int(uintptr_t key=-1) const
     {
         return as_int<Ti>([&] { bb_rethrow(key); });
     }
@@ -642,55 +642,49 @@ public:
             PyErr_Clear();
         return res;
     }
-    void set_attr(const char *name, auto &&val)
+    void set_attr(const char *name, auto &&val) const
     {
         throw_if(PyObject_SetAttrString((PyObject*)_ptr(), name, (PyObject*)val));
     }
     template<typename T2>
-    void set_attr(T2 &&name, auto &&val) requires is_py_ptr<T2>
+    void set_attr(T2 &&name, auto &&val) const requires is_py_ptr<T2>
     {
         throw_if(PyObject_SetAttr((PyObject*)_ptr(), (PyObject*)name, (PyObject*)val));
     }
-    void del_attr(const char *name)
+    void del_attr(const char *name) const
     {
         throw_if(PyObject_DelAttrString((PyObject*)_ptr(), name));
     }
     template<typename T2>
-    void del_attr(T2 &&name) requires is_py_ptr<T2>
+    void del_attr(T2 &&name) const requires is_py_ptr<T2>
     {
         throw_if(PyObject_DelAttr((PyObject*)_ptr(), (PyObject*)name));
     }
 
     template<typename KW=PyObject*>
-    auto vcall(PyObject *const *args, size_t nargsf, KW &&kwnames=nullptr)
+    auto vcall(PyObject *const *args, size_t nargsf, KW &&kwnames=nullptr) const
     {
         return __ref(throw_if_not(PyObject_Vectorcall((PyObject*)_ptr(), args,
                                                       nargsf, (PyObject*)kwnames)));
     }
-    template<typename KW=PyObject*>
-    auto vcall_dict(PyObject *const *args, size_t nargs, KW &&kws=nullptr)
-    {
-        return __ref(throw_if_not(PyObject_VectorcallDict((PyObject*)_ptr(), args,
-                                                          nargs, (PyObject*)kws)));
-    }
-    auto operator()(auto&&... args)
+    auto operator()(auto&&... args) const
     {
         PyObject *py_args[] = { (PyObject*)args... };
         return vcall(py_args, sizeof...(args));
     }
 
-    template<typename Value=PyObject> auto generic_iter(uintptr_t key=-1);
+    template<typename Value=PyObject> auto generic_iter(uintptr_t key=-1) const;
 
     Py_ssize_t size() const requires std::same_as<T,_dict>
     {
         return PyDict_GET_SIZE((PyObject*)_ptr());
     }
     template<typename Key>
-    void set(Key &&key, auto &&val) requires (std::same_as<T,_dict> && is_py_ptr<Key>)
+    void set(Key &&key, auto &&val) const requires (std::same_as<T,_dict> && is_py_ptr<Key>)
     {
         throw_if(PyDict_SetItem((PyObject*)_ptr(), (PyObject*)key, (PyObject*)val));
     }
-    void set(const char *key, auto &&val) requires std::same_as<T,_dict>
+    void set(const char *key, auto &&val) const requires std::same_as<T,_dict>
     {
         throw_if(PyDict_SetItemString((PyObject*)_ptr(), key, (PyObject*)val));
     }
@@ -710,7 +704,7 @@ public:
         assume(res <= 1);
         return res;
     }
-    void clear() requires std::same_as<T,_dict>
+    void clear() const requires std::same_as<T,_dict>
     {
         PyDict_Clear((PyObject*)_ptr());
     }
@@ -723,7 +717,7 @@ public:
     {
         return PySet_GET_SIZE((PyObject*)_ptr());
     }
-    void add(auto &&item) requires std::same_as<T,_set>
+    void add(auto &&item) const requires std::same_as<T,_set>
     {
         throw_if(PySet_Add((PyObject*)_ptr(), (PyObject*)item));
     }
@@ -734,7 +728,7 @@ public:
         assume(res <= 1);
         return res;
     }
-    void clear() requires std::same_as<T,_set>
+    void clear() const requires std::same_as<T,_set>
     {
         throw_if(PySet_Clear((PyObject*)_ptr()));
     }
@@ -744,17 +738,17 @@ public:
         return PyList_GET_SIZE((PyObject*)_ptr());
     }
     template<typename T2>
-    void SET(Py_ssize_t i, T2 &&val) requires std::same_as<T,_list>
+    void SET(Py_ssize_t i, T2 &&val) const requires std::same_as<T,_list>
     {
         PyList_SET_ITEM((PyObject*)_ptr(), i,
                         (PyObject*)py::newref(std::forward<T2>(val)));
     }
-    void SET(Py_ssize_t i, std::nullptr_t) requires std::same_as<T,_list>
+    void SET(Py_ssize_t i, std::nullptr_t) const requires std::same_as<T,_list>
     {
         PyList_SET_ITEM((PyObject*)_ptr(), i, (PyObject*)nullptr);
     }
     template<typename T2>
-    void set(Py_ssize_t i, T2 &&val) requires std::same_as<T,_list>
+    void set(Py_ssize_t i, T2 &&val) const requires std::same_as<T,_list>
     {
         auto item = PyList_GET_ITEM((PyObject*)_ptr(), i);
         SET(i, std::forward<T2>(val));
@@ -766,7 +760,7 @@ public:
         return __ptr<py_tag_type<T2>>(PyList_GET_ITEM((PyObject*)_ptr(), i));
     }
     template<typename T2>
-    void append(T2 &&x) requires std::same_as<T,_list>
+    void append(T2 &&x) const requires std::same_as<T,_list>
     {
         auto list = (PyObject*)_ptr();
         PyListObject *L = (PyListObject*)list;
@@ -788,12 +782,12 @@ public:
         return PyTuple_GET_SIZE((PyObject*)_ptr());
     }
     template<typename T2>
-    void SET(Py_ssize_t i, T2 &&val) requires std::same_as<T,_tuple>
+    void SET(Py_ssize_t i, T2 &&val) const requires std::same_as<T,_tuple>
     {
         PyTuple_SET_ITEM((PyObject*)_ptr(), i,
                          (PyObject*)newref(std::forward<T2>(val)));
     }
-    void SET(Py_ssize_t i, std::nullptr_t) requires std::same_as<T,_tuple>
+    void SET(Py_ssize_t i, std::nullptr_t) const requires std::same_as<T,_tuple>
     {
         PyTuple_SET_ITEM((PyObject*)_ptr(), i, (PyObject*)nullptr);
     }
@@ -802,13 +796,13 @@ public:
     {
         return __ptr<py_tag_type<T2>>(PyTuple_GET_ITEM((PyObject*)_ptr(), i));
     }
-    template<typename T2> auto append(T2 &&v) requires std::same_as<T,_tuple>;
+    template<typename T2> auto append(T2 &&v) const requires std::same_as<T,_tuple>;
 
     Py_ssize_t size() const requires std::same_as<T,_bytes>
     {
         return PyBytes_GET_SIZE((PyObject*)_ptr());
     }
-    char *data() requires std::same_as<T,_bytes>
+    char *data() const requires std::same_as<T,_bytes>
     {
         return PyBytes_AS_STRING((PyObject*)_ptr());
     }
@@ -944,7 +938,7 @@ struct _ref : common<_ref,T> {
         return (py_ptr_type<T2>*)m_ptr;
     }
     template<typename T2>
-    explicit constexpr operator T2*()
+    explicit constexpr operator T2*() const
     {
         check_refcnt(m_ptr);
         return (T2*)m_ptr;
@@ -1418,7 +1412,7 @@ private:
 
 template<template<typename> class H, typename T>
 template<typename Value>
-inline auto common<H,T>::generic_iter(uintptr_t key)
+inline auto common<H,T>::generic_iter(uintptr_t key) const
 {
     auto it = throw_if_not(PyObject_GetIter((PyObject*)_ptr()), key);
     return _iter<_generic_iterator<Value>,py::ref<>,uintptr_t>(py::ref(it), key);
@@ -1509,7 +1503,7 @@ static inline auto tuple_iter(T &&h)
 
 template<template<typename> class H, typename T>
 template<typename T2>
-auto common<H,T>::append(T2 &&v) requires std::same_as<T,_tuple>
+auto common<H,T>::append(T2 &&v) const requires std::same_as<T,_tuple>
 {
     Py_ssize_t nele = size();
     auto res = py::new_tuple(nele + 1);
