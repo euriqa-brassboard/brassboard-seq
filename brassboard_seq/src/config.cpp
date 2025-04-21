@@ -111,9 +111,9 @@ PyTypeObject Config::Type = {
                    py::meth_o<"translate_channel",py_translate_channel>>),
     .tp_new = py::tp_new<[] (PyTypeObject *t, auto...) {
         auto self = py::generic_alloc<Config>(t);
-        self->channel_alias = py::new_dict();
-        self->alias_cache = py::new_dict();
-        self->supported_prefix = py::new_set();
+        call_constructor(&self->channel_alias, py::new_dict());
+        call_constructor(&self->alias_cache, py::new_dict());
+        call_constructor(&self->supported_prefix, py::new_set());
         return self;
     }>,
 };
