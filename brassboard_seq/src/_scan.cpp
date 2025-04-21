@@ -16,29 +16,24 @@
  *   see <http://www.gnu.org/licenses/>.                                 *
  *************************************************************************/
 
-#ifndef BRASSBOARD_SEQ_SRC_SCAN_H
-#define BRASSBOARD_SEQ_SRC_SCAN_H
-
-#include "utils.h"
+#include "scan.h"
 
 namespace brassboard_seq::scan {
 
-struct ParamPack : PyObject {
-    py::dict_ref values;
-    py::dict_ref visited;
-    py::str_ref fieldname;
-
-    py::ref<> ensure_visited();
-    py::dict_ref ensure_dict();
-
-    static py::ref<ParamPack> new_empty();
-    static PyTypeObject Type;
-};
-
-extern PyMethodDef parampack_get_visited_method;
-extern PyMethodDef parampack_get_param_method;
-extern PyTypeObject &ScanGroup_Type;
-
+// Check if the struct field reference path is overwritten in `obj`.
+// Overwrite happens if the field itself exists or a parent of the field
+// is overwritten to something that's not scalar struct.
+static inline bool check_field(py::dict d, py::tuple path)
+{
+    for (auto [_, name]: py::tuple_iter(path)) {
+        auto vp = d.try_get(name);
+        if (!vp)
+            return false;
+        if (!vp.typeis<py::dict>())
+            return true;
+        d = vp;
+    }
+    return true;
 }
 
-#endif
+}

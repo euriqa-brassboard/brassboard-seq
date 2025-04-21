@@ -1154,6 +1154,14 @@ static inline ref<> new_not_implemented()
     return ref(immref(Py_NotImplemented));
 }
 
+static inline bool is_slice_none(py::ptr<> key)
+{
+    if (!PySlice_Check(key))
+        return false;
+    auto slice = (PySliceObject*)key;
+    return slice->start == Py_None && slice->stop == Py_None && slice->step == Py_None;
+}
+
 static inline dict_ref new_dict()
 {
     return dict_ref(throw_if_not(PyDict_New()));
@@ -1855,8 +1863,8 @@ struct _method_def {
 };
 
 template<auto F> static constexpr auto cfunc = binfunc<F>;
-template<str_literal name, auto F, str_literal doc="">
-static constexpr auto meth_o = _method_def<name,cfunc<F>,METH_O,doc>{};
+template<str_literal name, auto F, str_literal doc="",int flags=0>
+static constexpr auto meth_o = _method_def<name,cfunc<F>,METH_O|flags,doc>{};
 
 template<auto F>
 static inline PyObject *cfunc_noargs(PyObject *self, PyObject *arg)
@@ -1864,16 +1872,16 @@ static inline PyObject *cfunc_noargs(PyObject *self, PyObject *arg)
     assert(!arg);
     return cxx_catch([&] { return F(self); });
 }
-template<str_literal name, auto F, str_literal doc="">
-static constexpr auto meth_noargs = _method_def<name,cfunc_noargs<F>,METH_NOARGS,doc>{};
+template<str_literal name, auto F, str_literal doc="",int flags=0>
+static constexpr auto meth_noargs = _method_def<name,cfunc_noargs<F>,METH_NOARGS|flags,doc>{};
 
 template<auto F>
 static inline PyObject *cfunc_fast(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
     return cxx_catch([&] { return F(self, args, nargs); });
 }
-template<str_literal name, auto F, str_literal doc="">
-static constexpr auto meth_fast = _method_def<name,cfunc_fast<F>,METH_FASTCALL,doc>{};
+template<str_literal name, auto F, str_literal doc="",int flags=0>
+static constexpr auto meth_fast = _method_def<name,cfunc_fast<F>,METH_FASTCALL|flags,doc>{};
 
 template<auto F>
 static inline PyObject *cfunc_fastkw(PyObject *self, PyObject *const *args,
@@ -1881,9 +1889,9 @@ static inline PyObject *cfunc_fastkw(PyObject *self, PyObject *const *args,
 {
     return cxx_catch([&] { return F(self, args, nargs, kwnames); });
 }
-template<str_literal name, auto F, str_literal doc="">
+template<str_literal name, auto F, str_literal doc="",int flags=0>
 static constexpr auto meth_fastkw = _method_def<name,cfunc_fastkw<F>,
-                                                METH_FASTCALL|METH_KEYWORDS,doc>{};
+                                                METH_FASTCALL|METH_KEYWORDS|flags,doc>{};
 
 template<_method_def... defs> static inline PyMethodDef meth_table[] BB_PREINIT = { defs..., {} };
 
@@ -1948,6 +1956,12 @@ template<auto F>
 static inline PyObject *tp_richcompare(PyObject *v1, PyObject *v2, int op)
 {
     return cxx_catch([&] { return F(v1, v2, op); });
+}
+
+template<auto F>
+static inline int sq_ass_item(PyObject *o, Py_ssize_t i, PyObject *v)
+{
+    return cxx_catch<int>([&] { return F(o, i, v); });
 }
 
 template<bool gc, auto F>

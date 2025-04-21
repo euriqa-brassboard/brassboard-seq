@@ -12,6 +12,7 @@ add_library(brassboard_seq_utils SHARED
   src/parampack.cpp
   src/rtprop.cpp
   src/rtval.cpp
+  src/scan.cpp
   src/seq.cpp
   src/utils.cpp
   src/yaml.cpp)

@@ -96,6 +96,7 @@ PyInit__utils(void)
         pymodule_addobjectref(m, "parampack_get_param",
                               py::new_cfunc(&scan::parampack_get_param_method,
                                             nullptr, "brassboard_seq.scan"_py));
+        pymodule_addobjectref(m, "ScanGroup", &scan::ScanGroup_Type);
 
         // seq
         pymodule_addobjectref(m, "SeqInfo", &seq::SeqInfo::Type);

@@ -188,14 +188,6 @@ py::ref<ParamPack> ParamPack::new_empty()
     return self;
 }
 
-static inline bool is_slice_none(PyObject *key)
-{
-    if (!PySlice_Check(key))
-        return false;
-    auto slice = (PySliceObject*)key;
-    return slice->start == Py_None && slice->stop == Py_None && slice->step == Py_None;
-}
-
 __attribute__((visibility("protected")))
 PyTypeObject ParamPack::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
@@ -221,7 +213,7 @@ PyTypeObject ParamPack::Type = {
     }>,
     .tp_as_mapping = &global_var<PyMappingMethods{
         .mp_subscript = py::binfunc<[] (py::ptr<ParamPack> self, py::ptr<> key) {
-            if (!is_slice_none(key))
+            if (!py::is_slice_none(key))
                 py_throw_format(PyExc_ValueError, "Invalid index for ParamPack: %S", key);
             auto field = self->values.try_get(self->fieldname);
             if (!field)

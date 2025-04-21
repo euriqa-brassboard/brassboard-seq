@@ -287,10 +287,10 @@ def test_scan():
     with pytest.raises(SyntaxError, match="Invalid scan syntax"):
         sg[0].a.b([1, 2, 3])
     with pytest.raises(TypeError,
-                       match="Scan syntax takes 1 or 2 arguments, but 0 were given"):
+                       match="ScanWrapper\\(\\) takes at least 1 positional argument \\(0 given\\)"):
         sg[0].a.scan()
     with pytest.raises(TypeError,
-                       match="Scan syntax takes 1 or 2 arguments, but 3 were given"):
+                       match="ScanWrapper\\(\\) takes at most 2 positional arguments \\(3 given\\)"):
         sg[0].a.scan(1, 2, 3)
     with pytest.raises(IndexError,
                        match="Scan dimension must not be negative: -2."):
