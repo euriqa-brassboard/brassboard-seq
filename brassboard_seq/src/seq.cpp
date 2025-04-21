@@ -47,10 +47,7 @@ static inline auto add_step_name()
     }
 }
 
-template<typename T>
-static constexpr auto seq_dealloc = py::tp_dealloc<true,[] (py::ptr<T> self) {
-    call_destructor(self.get());
-}>;
+template<typename T> static constexpr auto seq_dealloc = py::tp_cxx_dealloc<true,T>;
 
 template<typename T>
 static constexpr auto seq_clear = py::iunifunc<[] (py::ptr<T> self) {
@@ -632,9 +629,7 @@ PyTypeObject ConditionalWrapper::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.seq.ConditionalWrapper",
     .tp_basicsize = sizeof(ConditionalWrapper) + sizeof(void*),
-    .tp_dealloc = py::tp_dealloc<true,[] (py::ptr<ConditionalWrapper> self) {
-        call_destructor(self.get());
-    }>,
+    .tp_dealloc = py::tp_cxx_dealloc<true,ConditionalWrapper>,
     .tp_vectorcall_offset = sizeof(ConditionalWrapper),
     .tp_repr = seq_str<ConditionalWrapper>,
     .tp_call = PyVectorcall_Call,

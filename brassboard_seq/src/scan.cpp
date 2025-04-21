@@ -187,9 +187,7 @@ PyTypeObject Scan1D::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.scan.Scan1D",
     .tp_basicsize = sizeof(Scan1D),
-    .tp_dealloc = py::tp_dealloc<true,[] (py::ptr<Scan1D> self) {
-        call_destructor(self.get());
-    }>,
+    .tp_dealloc = py::tp_cxx_dealloc<true,Scan1D>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = py::tp_traverse<[] (py::ptr<Scan1D> self, auto &visitor) {
         visitor(self->params);
@@ -371,9 +369,7 @@ PyTypeObject ScanND::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.scan.ScanND",
     .tp_basicsize = sizeof(ScanND),
-    .tp_dealloc = py::tp_dealloc<true,[] (py::ptr<ScanND> self) {
-        call_destructor(self.get());
-    }>,
+    .tp_dealloc = py::tp_cxx_dealloc<true,ScanND>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = py::tp_traverse<[] (py::ptr<ScanND> self, auto &visitor) {
         visitor(self->fixed);
@@ -705,9 +701,7 @@ PyTypeObject ScanWrapper::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.scan.ScanWrapper",
     .tp_basicsize = sizeof(ScanWrapper) + sizeof(void*),
-    .tp_dealloc = py::tp_dealloc<true,[] (py::ptr<ScanWrapper> self) {
-        call_destructor(self.get());
-    }>,
+    .tp_dealloc = py::tp_cxx_dealloc<true,ScanWrapper>,
     .tp_vectorcall_offset = sizeof(ScanWrapper),
     .tp_repr = py::unifunc<py_str>,
     .tp_as_number = &ScanWrapper_as_number,
@@ -869,9 +863,7 @@ PyTypeObject ScanGroup::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.scan.ScanGroup",
     .tp_basicsize = sizeof(ScanGroup),
-    .tp_dealloc = py::tp_dealloc<true,[] (py::ptr<ScanGroup> self) {
-        call_destructor(self.get());
-    }>,
+    .tp_dealloc = py::tp_cxx_dealloc<true,ScanGroup>,
     .tp_repr = py::unifunc<py_str>,
     .tp_as_number = &ScanGroup_as_number,
     .tp_as_mapping = &ScanGroup_as_mapping,

@@ -883,9 +883,7 @@ PyTypeObject RuntimeValue::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rtval.RuntimeValue",
     .tp_basicsize = sizeof(RuntimeValue),
-    .tp_dealloc = py::tp_dealloc<true,[] (rtval_ptr self) {
-        call_destructor(self.get());
-    }>,
+    .tp_dealloc = py::tp_cxx_dealloc<true,RuntimeValue>,
     .tp_repr = rtvalue_str,
     .tp_as_number = &rtvalue_as_number,
     .tp_str = rtvalue_str,

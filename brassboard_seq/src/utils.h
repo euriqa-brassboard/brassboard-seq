@@ -1981,6 +1981,10 @@ static inline void tp_dealloc(PyObject *obj)
     t->tp_free(obj);
 }
 
+template<bool gc, typename T>
+static constexpr auto tp_cxx_dealloc =
+    tp_dealloc<gc,[] (PyObject *self) { call_destructor((T*)self); }>;
+
 struct tp_visitor {
     tp_visitor(visitproc visit, void *arg)
         : visit(visit),

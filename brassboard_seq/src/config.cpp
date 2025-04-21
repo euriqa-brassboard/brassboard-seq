@@ -99,9 +99,7 @@ PyTypeObject Config::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.config.Config",
     .tp_basicsize = sizeof(Config),
-    .tp_dealloc = py::tp_dealloc<false,[] (py::ptr<Config> self) {
-        call_destructor(self.get());
-    }>,
+    .tp_dealloc = py::tp_cxx_dealloc<false,Config>,
     // All fields are containers of immutable types.
     // No reference loop possible.
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,

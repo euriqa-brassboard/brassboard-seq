@@ -38,9 +38,7 @@ PyTypeObject composite_rtprop_data::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rtval.composite_rtprop_data",
     .tp_basicsize = sizeof(composite_rtprop_data),
-    .tp_dealloc = py::tp_dealloc<true,[] (py::ptr<composite_rtprop_data> self) {
-        call_destructor(self.get());
-    }>,
+    .tp_dealloc = py::tp_cxx_dealloc<true,composite_rtprop_data>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = py::tp_traverse<[] (py::ptr<composite_rtprop_data> self, auto &visitor) {
         visitor(self->ovr);
@@ -156,9 +154,7 @@ PyTypeObject CompositeRTProp::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rtval.CompositeRTProp",
     .tp_basicsize = sizeof(CompositeRTProp),
-    .tp_dealloc = py::tp_dealloc<true,[] (py::ptr<CompositeRTProp> self) {
-        call_destructor(self.get());
-    }>,
+    .tp_dealloc = py::tp_cxx_dealloc<true,CompositeRTProp>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = py::tp_traverse<[] (py::ptr<CompositeRTProp> self, auto &visitor) {
         visitor(self->cb);
@@ -223,9 +219,7 @@ PyTypeObject rtprop_callback::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rtval.rtprop_callback",
     .tp_basicsize = sizeof(rtprop_callback),
-    .tp_dealloc = py::tp_dealloc<true,[] (py::ptr<rtprop_callback> self) {
-        call_destructor(self.get());
-    }>,
+    .tp_dealloc = py::tp_cxx_dealloc<true,rtprop_callback>,
     .tp_str = py::unifunc<[] (py::ptr<rtprop_callback> self) {
         return py::str_format(
             "<RTProp %U for %S>",
@@ -299,9 +293,7 @@ PyTypeObject RTProp::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rtval.RTProp",
     .tp_basicsize = sizeof(RTProp),
-    .tp_dealloc = py::tp_dealloc<false,[] (py::ptr<RTProp> self) {
-        call_destructor(self.get());
-    }>,
+    .tp_dealloc = py::tp_cxx_dealloc<false,RTProp>,
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_methods = (py::meth_table<
                    py::meth_o<"get_state",get_state>,
