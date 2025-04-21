@@ -72,8 +72,8 @@ static inline void compiler_finalize(auto comp, _RampFunctionBase*, Backend*)
     auto all_actions = new std::vector<action::Action*>[nchn];
     comp->cseq.all_actions.reset(all_actions);
     collect_actions(seq, all_actions);
-    auto get_time = [event_times=py::list(time_mgr->event_times)] (int tid) {
-        return event_times.get<EventTime>(tid);
+    auto get_time = [event_times=time_mgr->event_times.ptr()] (int tid) {
+        return event_times.template get<EventTime>(tid);
     };
     for (int cid = 0; cid < nchn; cid++) {
         auto &actions = all_actions[cid];

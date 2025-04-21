@@ -166,7 +166,7 @@ using time_ref = py::ref<EventTime>;
 
 struct TimeManager : PyObject {
     std::shared_ptr<TimeManagerStatus> status;
-    PyObject *event_times;
+    py::list_ref event_times;
     std::vector<int64_t> time_values;
 
     void finalize();
@@ -186,10 +186,10 @@ private:
 
 struct EventTime : PyObject {
     std::shared_ptr<TimeManagerStatus> manager_status;
-    EventTime *prev;
-    EventTime *wait_for;
+    time_ref prev;
+    time_ref wait_for;
     // If cond is false, this time point is the same as prev
-    PyObject *cond;
+    py::ref<> cond;
     EventTimeData data;
     // The largest index in each chain that we are no earlier than,
     // In particular for our own chain, this is the position we are in.
@@ -202,7 +202,7 @@ struct EventTime : PyObject {
             py_throw_format(PyExc_ValueError, "Cannot modify non-floating time");
         if (offset < 0)
             py_throw_format(PyExc_ValueError, "Time delay cannot be negative");
-        py::assign(prev, base);
+        prev.assign(base);
         data.set_c_offset(offset);
         data.floating = false;
     }
@@ -211,7 +211,7 @@ struct EventTime : PyObject {
     {
         if (!data.floating)
             py_throw_format(PyExc_ValueError, "Cannot modify non-floating time");
-        py::assign(prev, base);
+        prev.assign(base);
         data.set_rt_offset(std::forward<T>(offset));
         data.floating = false;
     }
@@ -239,10 +239,10 @@ inline time_ref TimeManager::new_int(time_ptr prev, int64_t offset, bool floatin
     tp->data.floating = floating;
     tp->data.id = ntimes;
     call_constructor(&tp->chain_pos);
-    tp->prev = py::newref(prev);
-    tp->wait_for = py::newref(wait_for);
-    tp->cond = py::newref(cond);
-    py::list(event_times).append(tp);
+    call_constructor(&tp->prev, py::newref(prev));
+    call_constructor(&tp->wait_for, py::newref(wait_for));
+    call_constructor(&tp->cond, py::newref(cond));
+    event_times.append(tp);
     status->ntimes = ntimes + 1;
     return tp;
 }

@@ -3846,7 +3846,7 @@ void collect_actions(auto *rb, backend::CompiledSeq &cseq)
     ValueIndexer<int> bool_values;
     ValueIndexer<double> float_values;
     std::vector<Relocation> &relocations = rb->relocations;
-    auto event_times = seq->seqinfo->time_mgr->event_times;
+    py::list event_times = seq->seqinfo->time_mgr->event_times;
 
     rb->channels.ensure_unused_tones(rb->use_all_channels);
 
@@ -3882,7 +3882,7 @@ void collect_actions(auto *rb, backend::CompiledSeq &cseq)
                 rfsoc_action.tid = tid;
                 rfsoc_action.is_end = is_end;
 
-                auto event_time = py::list(event_times).get<EventTime>(tid);
+                auto event_time = event_times.get<EventTime>(tid);
                 if (event_time->data.is_static()) {
                     rfsoc_action.seq_time = event_time->data._get_static();
                 }

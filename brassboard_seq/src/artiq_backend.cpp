@@ -110,7 +110,7 @@ void collect_actions(auto *ab, backend::CompiledSeq &cseq)
     ValueIndexer<double> float_values;
     std::vector<Relocation> &relocations = ab->relocations;
 
-    auto event_times = seq->seqinfo->time_mgr->event_times;
+    py::list event_times = seq->seqinfo->time_mgr->event_times;
 
     auto add_single_action = [&] (auto *action, ChannelType type, int chn_idx,
                                   int tid, py::ptr<> value, int cond_reloc,
@@ -129,7 +129,7 @@ void collect_actions(auto *ab, backend::CompiledSeq &cseq)
         bool needs_reloc = cond_reloc != -1;
         Relocation reloc{cond_reloc, -1, -1};
 
-        auto event_time = py::list(event_times).get<EventTime>(tid);
+        auto event_time = event_times.get<EventTime>(tid);
         if (event_time->data.is_static()) {
             PyObject *rt_delay;
             int64_t delay;

@@ -39,7 +39,7 @@ rtval::rtval_ref round_time_rt(rtval::rtval_ptr v)
     return rtval::rt_round_int64(rtval::new_expr2(rtval::Mul, v, rt_scale));
 }
 
-static inline bool get_cond_val(PyObject *v, unsigned age)
+static inline bool get_cond_val(py::ptr<> v, unsigned age)
 {
     if (v == Py_True) [[likely]]
         return true;
@@ -121,7 +121,7 @@ inline void TimeManager::visit_time(EventTime *t, auto &visited)
     visited.insert(id);
     int64_t static_offset;
     auto rt_offset = t->data.get_rt_offset();
-    auto cond = t->cond;
+    py::ptr cond = t->cond;
     if (cond == Py_True) {
         static_offset = rt_offset ? -1 : t->data.get_c_offset();
     }
@@ -133,11 +133,11 @@ inline void TimeManager::visit_time(EventTime *t, auto &visited)
     }
     int64_t static_prev = 0;
     int64_t static_wait_for = 0;
-    if (auto prev = t->prev; prev != Py_None) {
+    if (py::ptr prev = t->prev; prev != Py_None) {
         visit_time(prev, visited);
         static_prev = prev->data.get_static();
     }
-    if (auto wait_for = t->wait_for; wait_for != Py_None) {
+    if (py::ptr wait_for = t->wait_for; wait_for != Py_None) {
         visit_time(wait_for, visited);
         static_wait_for = wait_for->data.get_static();
         if (cond == Py_False) {
@@ -154,7 +154,7 @@ inline void TimeManager::visit_time(EventTime *t, auto &visited)
         t->data.set_static(static_prev + static_offset);
     }
     t->data.id = -1;
-    py::list(event_times).append(t);
+    event_times.append(t);
 }
 
 __attribute__((visibility("protected")))
@@ -172,10 +172,10 @@ time_ref TimeManager::new_rt(time_ptr prev, rtval::rtval_ptr offset,
     tp->data.floating = false;
     tp->data.id = ntimes;
     call_constructor(&tp->chain_pos);
-    tp->prev = py::newref(prev);
-    tp->wait_for = py::newref(wait_for);
-    tp->cond = py::newref(cond);
-    py::list(event_times).append(tp);
+    call_constructor(&tp->prev, py::newref(prev));
+    call_constructor(&tp->wait_for, py::newref(wait_for));
+    call_constructor(&tp->cond, py::newref(cond));
+    event_times.append(tp);
     status->ntimes = ntimes + 1;
     return tp;
 }
@@ -187,8 +187,8 @@ void TimeManager::finalize()
         py_throw_format(PyExc_RuntimeError, "Event times already finalized");
     status->finalized = true;
     auto _event_times = py::new_list(0);
-    py::ref old_event_times(event_times); // steal reference
-    event_times = _event_times.rel();
+    py::ref old_event_times(event_times.rel()); // steal reference
+    event_times.take(std::move(_event_times));
 
     std::unordered_set<int> visited;
     // First, topologically order the times
@@ -200,7 +200,7 @@ void TimeManager::finalize()
         t->data.id = tid;
         int chain_id1 = -1;
         int chain_pos1;
-        if (auto prev = t->prev; prev != Py_None) {
+        if (py::ptr prev = t->prev; prev != Py_None) {
             chain_id1 = prev->data.chain_id;
             chain_pos1 = prev->chain_pos[chain_id1];
             if (chain_pos1 + 1 != chain_lengths[chain_id1]) {
@@ -210,7 +210,7 @@ void TimeManager::finalize()
         }
         int chain_id2 = -1;
         int chain_pos2;
-        if (auto wait_for = t->wait_for; wait_for != Py_None) {
+        if (py::ptr wait_for = t->wait_for; wait_for != Py_None) {
             chain_id2 = wait_for->data.chain_id;
             chain_pos2 = wait_for->chain_pos[chain_id2];
             if (chain_pos2 + 1 != chain_lengths[chain_id2]) {
@@ -253,9 +253,9 @@ void TimeManager::finalize()
     int nchains = chain_lengths.size();
     for (auto [tid, t]: py::list_iter<EventTime>(event_times)) {
         t->chain_pos.resize(nchains, -1);
-        if (auto prev = t->prev; prev != Py_None)
+        if (py::ptr prev = t->prev; prev != Py_None)
             t->update_chain_pos(prev, nchains);
-        if (auto wait_for = t->wait_for; wait_for != Py_None)
+        if (py::ptr wait_for = t->wait_for; wait_for != Py_None)
             t->update_chain_pos(wait_for, nchains);
     }
 }
@@ -266,7 +266,7 @@ int64_t TimeManager::compute_all_times(unsigned age)
     if (!status->finalized)
         py_throw_format(PyExc_RuntimeError, "Event times not finalized");
     int64_t max_time = 0;
-    int ntimes = py::list(event_times).size();
+    int ntimes = event_times.size();
     time_values.resize(ntimes);
     std::ranges::fill(time_values, -1);
     for (auto [i, t]: py::list_iter<EventTime>(event_times))
@@ -278,7 +278,7 @@ __attribute__((returns_nonnull,visibility("protected")))
 TimeManager *TimeManager::alloc()
 {
     auto self = py::generic_alloc<TimeManager>();
-    self->event_times = py::new_list(0).rel();
+    call_constructor(&self->event_times, py::new_list(0));
     auto status = new TimeManagerStatus;
     status->finalized = false;
     status->ntimes = 0;
@@ -292,16 +292,12 @@ PyTypeObject TimeManager::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.event_time.TimeManager",
     .tp_basicsize = sizeof(TimeManager),
-    .tp_dealloc = py::tp_dealloc<true,[] (py::ptr<TimeManager> self) {
-        Type.tp_clear(self);
-        call_destructor(&self->status);
-        call_destructor(&self->time_values);
-    }>,
+    .tp_dealloc = py::tp_cxx_dealloc<true,TimeManager>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = py::tp_traverse<[] (py::ptr<TimeManager> self, auto &visitor) {
         visitor(self->event_times);
     }>,
-    .tp_clear = py::iunifunc<[] (py::ptr<TimeManager> self) { py::CLEAR(self->event_times); }>,
+    .tp_clear = py::iunifunc<[] (py::ptr<TimeManager> self) { self->event_times.CLEAR(); }>,
 };
 
 namespace {
@@ -313,13 +309,13 @@ static constexpr auto eventtime_str = py::unifunc<[] (time_ptr self) {
         return str_time(self->data._get_static());
     auto rt_offset = self->data.get_rt_offset();
     auto str_offset(rt_offset ? rt_offset.str() : str_time(self->data.get_c_offset()));
-    auto prev = self->prev;
+    py::ptr prev = self->prev;
     py::ptr cond = self->cond;
     if (prev == Py_None) {
         assert(cond == Py_True);
         return str_offset;
     }
-    auto wait_for = self->wait_for;
+    py::ptr wait_for = self->wait_for;
     if (wait_for == Py_None) {
         if (cond == Py_True)
             return py::str_format("T[%u] + %U", prev->data.id, str_offset);
@@ -343,11 +339,11 @@ static inline int eventtime_find_base_id(EventTime *t1, EventTime *t2, unsigned 
         auto it = --frontier.end();
         auto t = it->second;
         frontier.erase(it);
-        auto prev = t->prev;
+        py::ptr prev = t->prev;
         if (prev == Py_None)
             return -1; // Found the start of the experiment
         frontier[prev->data.id] = prev;
-        if (auto wait_for = t->wait_for;
+        if (py::ptr wait_for = t->wait_for;
             wait_for != Py_None && get_cond_val(t->cond, age)) {
             frontier[wait_for->data.id] = wait_for;
         }
@@ -495,12 +491,7 @@ PyTypeObject EventTime::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.event_time.EventTime",
     .tp_basicsize = sizeof(EventTime),
-    .tp_dealloc = py::tp_dealloc<true,[] (time_ptr self) {
-        Type.tp_clear(self);
-        call_destructor(&self->manager_status);
-        call_destructor(&self->data);
-        call_destructor(&self->chain_pos);
-    }>,
+    .tp_dealloc = py::tp_cxx_dealloc<true,EventTime>,
     .tp_repr = eventtime_str,
     .tp_as_number = &EventTime_as_number,
     .tp_str = eventtime_str,
@@ -513,9 +504,9 @@ PyTypeObject EventTime::Type = {
     }>,
     .tp_clear = py::iunifunc<[] (time_ptr t) {
         t->data.clear_rt_offset();
-        py::CLEAR(t->prev);
-        py::CLEAR(t->wait_for);
-        py::CLEAR(t->cond);
+        t->prev.CLEAR();
+        t->wait_for.CLEAR();
+        t->cond.CLEAR();
     }>,
 };
 
