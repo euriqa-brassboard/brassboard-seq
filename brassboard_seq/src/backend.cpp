@@ -56,9 +56,9 @@ template<typename _RampFunctionBase, typename Backend>
 static inline void compiler_finalize(auto comp, _RampFunctionBase*, Backend*)
 {
     auto seq = comp->seq;
-    auto seqinfo = seq->seqinfo;
+    py::ptr seqinfo = seq->seqinfo;
     auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);
-    auto nchn = py::list(seqinfo->channel_paths).size();
+    auto nchn = seqinfo->channel_paths.size();
     for (auto [i, path]: py::list_iter<py::tuple>(seqinfo->channel_paths)) {
         auto prefix = path.get(0);
         if (py::dict(comp->backends).contains(prefix)) [[likely]]
@@ -66,9 +66,9 @@ static inline void compiler_finalize(auto comp, _RampFunctionBase*, Backend*)
         py_throw_format(PyExc_ValueError, "Unhandled channel: %U",
                         config::channel_name_from_path(path));
     }
-    auto time_mgr = seqinfo->time_mgr;
+    py::ptr time_mgr = seqinfo->time_mgr;
     time_mgr->finalize();
-    py::assign(seqinfo->channel_name_map, Py_None); // Free up memory
+    seqinfo->channel_name_map.take(py::new_none()); // Free up memory
     auto all_actions = new std::vector<action::Action*>[nchn];
     comp->cseq.all_actions.reset(all_actions);
     collect_actions(seq, all_actions);
@@ -164,9 +164,9 @@ static inline void compiler_runtime_finalize(auto comp, py::ptr<> _age,
 {
     unsigned age = _age.as_int();
     auto seq = comp->seq;
-    auto seqinfo = seq->seqinfo;
+    py::ptr seqinfo = seq->seqinfo;
     auto bt_guard = set_global_tracker(&seqinfo->bt_tracker);
-    auto time_mgr = seqinfo->time_mgr;
+    py::ptr time_mgr = seqinfo->time_mgr;
     comp->cseq.total_time = time_mgr->compute_all_times(age);
     for (auto [assert_id, a]: py::list_iter<py::tuple>(seqinfo->assertions)) {
         auto c = a.get(0);
@@ -175,7 +175,7 @@ static inline void compiler_runtime_finalize(auto comp, py::ptr<> _age,
             bb_throw_format(PyExc_AssertionError, assert_key(assert_id), "%U", a.get(1));
         }
     }
-    auto nchn = py::list(seqinfo->channel_paths).size();
+    auto nchn = seqinfo->channel_paths.size();
     for (int cid = 0; cid < nchn; cid++) {
         auto &actions = comp->cseq.all_actions[cid];
         int64_t prev_time = 0;

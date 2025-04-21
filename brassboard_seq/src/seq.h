@@ -30,28 +30,29 @@ namespace brassboard_seq::seq {
 
 using namespace rtval;
 using event_time::EventTime;
+using event_time::time_ref;
 
 struct SeqInfo : PyObject {
     // EventTime manager
-    event_time::TimeManager *time_mgr;
+    py::ref<event_time::TimeManager> time_mgr;
     // Global assumptions
-    PyObject *assertions;
+    py::list_ref assertions;
     // Global config object
-    config::Config *config;
+    py::ref<config::Config> config;
     // Backtrace collection
     BacktraceTracker bt_tracker;
     // Name<->channel ID mapping
-    PyObject *channel_name_map;
-    PyObject *channel_path_map;
-    PyObject *channel_paths;
-    scan::ParamPack *C;
+    py::dict_ref channel_name_map;
+    py::dict_ref channel_path_map;
+    py::list_ref channel_paths;
+    py::ref<scan::ParamPack> C;
     action::ActionAllocator action_alloc;
     int action_counter;
 
     int get_channel_id(py::str name);
     py::str_ref channel_name_from_id(int cid)
     {
-        return config::channel_name_from_path(py::list(channel_paths).get(cid));
+        return config::channel_name_from_path(channel_paths.get(cid));
     }
 
     static PyTypeObject Type;
@@ -59,17 +60,17 @@ struct SeqInfo : PyObject {
 
 struct TimeSeq : PyObject {
     // Toplevel parent sequence
-    SeqInfo *seqinfo;
+    py::ref<SeqInfo> seqinfo;
     // The starting time of this sequence/step
     // This time point may or may not be related to the start time
     // of the parent sequence.
-    EventTime *start_time;
+    time_ref start_time;
     // Ending time, for SubSeq this is also the time the next step is added by default
-    EventTime *end_time;
+    time_ref end_time;
     // Condition for this sequence/step to be enabled.
     // This can be either a runtime value or `True` or `False`.
     // This is also always guaranteed to be true only if the parent's condition is true.
-    PyObject *cond;
+    py::ref<> cond;
 
     void show_cond_suffix(py::stringio &io) const;
 
@@ -86,10 +87,11 @@ struct TimeStep : TimeSeq {
     // to create the step without considering the condition if this step is enabled.
     // This is also the length parameter that'll be passed to the user function
     // if the action added to this step contains ramps.
-    PyObject *length;
+    py::ref<> length;
     // The array of channel -> actions
     std::vector<action::Action*> actions;
-    TimeStep *get_seq() { return this; }
+
+    py::ptr<TimeStep> get_seq() { return this; }
     void show(py::stringio &io, int indent) const;
     template<bool is_pulse>
     void set(py::ptr<> chn, py::ptr<> value, py::ptr<> cond,
@@ -105,9 +107,10 @@ struct TimeStep : TimeSeq {
 
 struct SubSeq : TimeSeq {
     // The list of subsequences and steps in this subsequcne
-    PyObject *sub_seqs;
-    TimeStep *dummy_step;
-    SubSeq *get_seq() { return this; }
+    py::list_ref sub_seqs;
+    py::ref<TimeStep> dummy_step;
+
+    py::ptr<SubSeq> get_seq() { return this; }
     void show_subseqs(py::stringio &io, int indent) const;
     void show(py::stringio &io, int indent) const;
     template<bool is_pulse>
@@ -130,9 +133,9 @@ struct SubSeq : TimeSeq {
 };
 
 struct ConditionalWrapper : PyObject {
-    SubSeq *seq;
-    PyObject *cond;
-    SubSeq *get_seq() { return seq; }
+    py::ref<SubSeq> seq;
+    py::ref<> cond;
+    py::ptr<SubSeq> get_seq() { return seq; }
     void show(py::stringio &io, int indent) const;
 
     static PyTypeObject Type;

@@ -314,7 +314,7 @@ static constexpr auto eventtime_str = py::unifunc<[] (time_ptr self) {
     auto rt_offset = self->data.get_rt_offset();
     auto str_offset(rt_offset ? rt_offset.str() : str_time(self->data.get_c_offset()));
     auto prev = self->prev;
-    auto cond = self->cond;
+    py::ptr cond = self->cond;
     if (prev == Py_None) {
         assert(cond == Py_True);
         return str_offset;

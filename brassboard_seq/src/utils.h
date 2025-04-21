@@ -252,6 +252,7 @@ template<typename T=PyObject> struct _ref;
 template<typename T> _ref(T*) -> _ref<T>;
 template<typename T=PyObject> struct ptr;
 template<typename T> ptr(T*) -> ptr<T>;
+template<typename T> ptr(_ref<T>&) -> ptr<T>;
 template<template<typename> class H, typename T> struct common;
 template<typename T=PyObject> using ref = _ref<T>;
 
