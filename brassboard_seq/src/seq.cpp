@@ -208,7 +208,7 @@ static py::ref<TimeSeq> add_step_real(py::ptr<CondSeq> self, PyObject *const *ar
     auto nargs_min = type == AddStepType::At ? 2 : 1;
     py::check_num_arg(add_step_name<CondSeq,type>(), nargs, nargs_min);
 
-    auto first_arg = args[nargs_min - 1];
+    auto first_arg = py::ptr(args[nargs_min - 1]);
     py::ref<EventTime> start_time;
     if (type == AddStepType::Background) {
         start_time.assign(subseq->end_time);
@@ -241,7 +241,7 @@ static py::ref<TimeSeq> add_step_real(py::ptr<CondSeq> self, PyObject *const *ar
     };
 
     py::ref<TimeSeq> res;
-    if (Py_TYPE(first_arg)->tp_call) {
+    if (first_arg.type()->tp_call) {
         assert(nargs_min >= 1);
         res.take(subseq->add_custom_step(cond, start_time, first_arg,
                                          tuple_nargs, args + nargs_min, kwnames));

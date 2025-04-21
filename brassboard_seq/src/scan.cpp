@@ -130,7 +130,7 @@ static inline auto load_cast(py::ptr<> obj, const char *name)
     if (auto res = py::exact_cast<T>(obj))
         return res;
     py_throw_format(PyExc_TypeError, "Invalid serialization of ScanGroup: "
-                    "wrong %s type %S.", name, Py_TYPE((PyObject*)obj));
+                    "wrong %s type %S.", name, obj.type());
 }
 
 struct Scan1D : PyObject {
@@ -756,8 +756,7 @@ inline void ScanGroup::add_cat_scan(py::ptr<> scan)
         }
     }
     else {
-        py_throw_format(PyExc_TypeError, "Invalid type %S in scan concatenation.",
-                        Py_TYPE(scan.get()));
+        py_throw_format(PyExc_TypeError, "Invalid type %S in scan concatenation.", scan.type());
     }
 }
 
@@ -779,7 +778,7 @@ inline void ScanGroup::set_scan_param(py::ptr<ScanND> scan, py::tuple path, int 
         py_throw_format(PyExc_TypeError, "Scan parameter cannot be a scan.");
     if (_v.typeis<py::dict>())
         py_throw_format(PyExc_TypeError, "Scan parameter cannot be a dict.");
-    if (auto m = Py_TYPE(_v)->tp_as_sequence; !m || !m->sq_length)
+    if (auto m = _v.type()->tp_as_sequence; !m || !m->sq_length)
         return set_fixed_param(scan, path, idx, _v);
     auto v = py::new_list(0);
     for (auto e: _v.generic_iter())
@@ -853,7 +852,7 @@ PyTypeObject ScanGroup::Type = {
             }
             else {
                 py_throw_format(PyExc_TypeError, "Invalid type %S in scan assignment.",
-                                Py_TYPE(v.get()));
+                                v.type());
             }
             if (py::is_slice_none(_idx)) {
                 new_scan->baseidx = -1;

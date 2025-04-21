@@ -93,7 +93,7 @@ static inline py::ref<> apply_composite_ovr(py::ptr<> val, py::ptr<> ovr)
         }
         return newval;
     }
-    py_throw_format(PyExc_TypeError, "Unknown value type '%S'", Py_TYPE(val));
+    py_throw_format(PyExc_TypeError, "Unknown value type '%S'", val.type());
 }
 
 static inline bool _object_compiled(py::ptr<> obj)

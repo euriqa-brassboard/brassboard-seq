@@ -406,11 +406,15 @@ public:
     {
         return (void*)_ptr() == (void*)Py_None;
     }
+    auto type() const
+    {
+        return __ptr(Py_TYPE((PyObject*)_ptr()));
+    }
     template<bool exact=false>
     bool isa(auto &&type) const
     {
         if constexpr (exact) {
-            return Py_TYPE((PyObject*)_ptr()) == (PyTypeObject*)type;
+            return this->type() == (PyTypeObject*)type;
         }
         else {
             return PyObject_TypeCheck((PyObject*)_ptr(), (PyTypeObject*)type);
@@ -438,7 +442,7 @@ public:
 #if PY_VERSION_HEX >= 0x030a0000
             return PySet_CheckExact((PyObject*)_ptr());
 #else
-            return Py_TYPE((PyObject*)_ptr()) == &PySet_Type;
+            return type() == &PySet_Type;
 #endif
         }
         else {
@@ -1545,7 +1549,7 @@ static inline auto str_iter(T &&h)
 
 static inline bool isinstance_nontrivial(py::ptr<> obj, py::ptr<> ty)
 {
-    auto objt = Py_TYPE((PyObject*)obj);
+    auto objt = obj.type();
     // Assume objt != ty and ty != object, and skip the first and last element in mro.
     // Also assume fully initialized type `ty`
     py::tuple mro = objt->tp_mro;
