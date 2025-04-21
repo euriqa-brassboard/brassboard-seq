@@ -21,6 +21,7 @@ from brassboard_seq.action cimport _RampFunctionBase, SeqCubicSpline
 from brassboard_seq.backend cimport CompiledSeq
 from brassboard_seq.event_time cimport round_time_f64
 from brassboard_seq.rtval cimport is_rtval, rtval_cache, rt_eval_throw, RuntimeValue
+from brassboard_seq.seq cimport seq_get_channel_paths
 from brassboard_seq.utils cimport set_global_tracker, \
   PyErr_Format, PyExc_ValueError, PyExc_TypeError, ostream, pybytes_ostream, new_int
 
@@ -274,7 +275,7 @@ cdef class RFSOCBackend:
         cdef int idx = -1
         cdef int ddsnum
         cdef int tonenum
-        for _path in self.seq.seqinfo.channel_paths:
+        for _path in seq_get_channel_paths(self.seq):
             idx += 1
             path = <tuple>_path
             if <str>path[0] != self.prefix:

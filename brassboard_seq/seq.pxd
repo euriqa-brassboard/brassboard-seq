@@ -25,10 +25,20 @@ cdef extern from "src/seq.h" namespace "brassboard_seq::seq":
     """
     using _brassboard_seq_seq_SeqInfo = brassboard_seq::seq::SeqInfo;
     using _brassboard_seq_seq_Seq = brassboard_seq::seq::Seq;
+    namespace brassboard_seq::seq {
+    __attribute__((returns_nonnull))
+    static inline PyObject *seq_get_channel_paths(py::ptr<Seq> seq)
+    {
+        return py::newref(seq->seqinfo->channel_paths);
+    }
+    __attribute__((returns_nonnull))
+    static inline event_time::TimeManager *seq_get_time_mgr(py::ptr<Seq> seq)
+    {
+        return py::newref(seq->seqinfo->time_mgr);
+    }
+    }
     """
-    ctypedef class brassboard_seq._utils.SeqInfo [object _brassboard_seq_seq_SeqInfo]:
-        cdef TimeManager time_mgr
-        cdef list channel_paths
-
     ctypedef class brassboard_seq._utils.Seq [object _brassboard_seq_seq_Seq]:
-        cdef SeqInfo seqinfo
+        pass
+    TimeManager seq_get_time_mgr(Seq)
+    list seq_get_channel_paths(Seq)

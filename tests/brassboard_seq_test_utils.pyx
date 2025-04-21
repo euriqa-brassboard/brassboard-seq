@@ -317,17 +317,17 @@ def event_time_is_ordered(event_time.EventTime t1, event_time.EventTime t2):
     assert False
 
 def seq_get_channel_paths(seq.Seq s):
-    return s.seqinfo.channel_paths
+    return seq.seq_get_channel_paths(s)
 
 def seq_get_event_time(seq.Seq s, int tid):
-    return s.seqinfo.time_mgr.event_times[tid]
+    return seq.seq_get_time_mgr(s).event_times[tid]
 
 def seq_get_cond(s):
     return condseq_get_cond(s)
 
 def compiler_get_all_actions(backend.SeqCompiler comp):
     s = comp.seq
-    cdef int nchn = len(s.seqinfo.channel_paths)
+    cdef int nchn = len(seq.seq_get_channel_paths(s))
     all_actions = compiledseq_get_all_actions(comp.cseq)
     res = []
     for cid in range(nchn):
@@ -337,7 +337,7 @@ def compiler_get_all_actions(backend.SeqCompiler comp):
 
 def compiler_get_all_times(backend.SeqCompiler comp):
     s = comp.seq
-    time_mgr = s.seqinfo.time_mgr
+    time_mgr = seq.seq_get_time_mgr(s)
     ntimes = time_mgr.time_values.size()
     values = []
     for i in range(ntimes):
