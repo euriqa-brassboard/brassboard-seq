@@ -188,6 +188,31 @@ py::ref<ParamPack> ParamPack::new_empty()
     return self;
 }
 
+static auto ParamPack_as_sequence = PySequenceMethods{
+    .sq_contains = py::ibinfunc<[] (py::ptr<ParamPack> self, py::ptr<> key) {
+        auto field = self->values.try_get(self->fieldname);
+        if (!field)
+            return false;
+        if (!field.typeis<py::dict>())
+            py_throw_format(PyExc_TypeError, "Scalar value does not have field");
+        return py::dict(field).contains(key);
+    }>,
+};
+static auto ParamPack_as_mapping = PyMappingMethods{
+    .mp_subscript = py::binfunc<[] (py::ptr<ParamPack> self, py::ptr<> key) {
+        if (!py::is_slice_none(key))
+            py_throw_format(PyExc_ValueError, "Invalid index for ParamPack: %S", key);
+        auto field = self->values.try_get(self->fieldname);
+        if (!field)
+            return py::new_dict();
+        if (!field.typeis<py::dict>())
+            py_throw_format(PyExc_TypeError, "Cannot access value as parameter pack.");
+        auto res = py::new_dict();
+        for (auto [k, v]: py::dict_iter(field))
+            res.set(k, py::dict_deepcopy(v));
+        return res;
+    }>,
+};
 __attribute__((visibility("protected")))
 PyTypeObject ParamPack::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
@@ -201,31 +226,8 @@ PyTypeObject ParamPack::Type = {
     }>,
     .tp_vectorcall_offset = sizeof(ParamPack),
     .tp_repr = parampack_str,
-    .tp_as_sequence = &global_var<PySequenceMethods{
-        .sq_contains = py::ibinfunc<[] (py::ptr<ParamPack> self, py::ptr<> key) {
-            auto field = self->values.try_get(self->fieldname);
-            if (!field)
-                return false;
-            if (!field.typeis<py::dict>())
-                py_throw_format(PyExc_TypeError, "Scalar value does not have field");
-            return py::dict(field).contains(key);
-        }>,
-    }>,
-    .tp_as_mapping = &global_var<PyMappingMethods{
-        .mp_subscript = py::binfunc<[] (py::ptr<ParamPack> self, py::ptr<> key) {
-            if (!py::is_slice_none(key))
-                py_throw_format(PyExc_ValueError, "Invalid index for ParamPack: %S", key);
-            auto field = self->values.try_get(self->fieldname);
-            if (!field)
-                return py::new_dict();
-            if (!field.typeis<py::dict>())
-                py_throw_format(PyExc_TypeError, "Cannot access value as parameter pack.");
-            auto res = py::new_dict();
-            for (auto [k, v]: py::dict_iter(field))
-                res.set(k, py::dict_deepcopy(v));
-            return res;
-        }>,
-    }>,
+    .tp_as_sequence = &ParamPack_as_sequence,
+    .tp_as_mapping = &ParamPack_as_mapping,
     .tp_call = PyVectorcall_Call,
     .tp_str = parampack_str,
     .tp_getattro = py::binfunc<[] (py::ptr<ParamPack> self, py::ptr<> name) -> py::ref<> {

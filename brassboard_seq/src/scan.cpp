@@ -682,6 +682,26 @@ struct ScanWrapper : PyObject {
 
     static PyTypeObject Type;
 };
+static auto ScanWrapper_as_number = PyNumberMethods{
+    .nb_add = py::binfunc<[] (py::ptr<> self, py::ptr<> other) {
+        return ScanGroup::cat_scan(self, other); }>,
+};
+static auto ScanWrapper_as_sequence = PySequenceMethods{
+    .sq_ass_item = py::sq_ass_item<[] (py::ptr<ScanWrapper> self,
+                                       Py_ssize_t idx, py::ptr<> v) {
+        if (idx < 0)
+            py_throw_format(PyExc_IndexError,
+                            "Scan dimension must not be negative: %d.", idx);
+        py::tuple path = self->path;
+        int pathlen = path.size();
+        if (pathlen < 2 || PyUnicode_CompareWithASCIIString(path.get(pathlen - 1),
+                                                            "scan"))
+            py_throw_format(PyExc_SyntaxError, "Invalid scan syntax");
+        self->sg->set_scan_param(self->scan, py::new_ntuple(pathlen - 1, [&] (int i) {
+            return path.get(i);
+        }), self->idx, idx, v);
+    }>
+};
 PyTypeObject ScanWrapper::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.scan.ScanWrapper",
@@ -693,26 +713,8 @@ PyTypeObject ScanWrapper::Type = {
     }>,
     .tp_vectorcall_offset = sizeof(ScanWrapper),
     .tp_repr = py::unifunc<py_str>,
-    .tp_as_number = &global_var<PyNumberMethods{
-        .nb_add = py::binfunc<[] (py::ptr<> self, py::ptr<> other) {
-            return ScanGroup::cat_scan(self, other); }>,
-    }>,
-    .tp_as_sequence = &global_var<PySequenceMethods{
-        .sq_ass_item = py::sq_ass_item<[] (py::ptr<ScanWrapper> self,
-                                           Py_ssize_t idx, py::ptr<> v) {
-            if (idx < 0)
-                py_throw_format(PyExc_IndexError,
-                                "Scan dimension must not be negative: %d.", idx);
-            py::tuple path = self->path;
-            int pathlen = path.size();
-            if (pathlen < 2 || PyUnicode_CompareWithASCIIString(path.get(pathlen - 1),
-                                                                "scan"))
-                py_throw_format(PyExc_SyntaxError, "Invalid scan syntax");
-            self->sg->set_scan_param(self->scan, py::new_ntuple(pathlen - 1, [&] (int i) {
-                return path.get(i);
-            }), self->idx, idx, v);
-        }>
-    }>,
+    .tp_as_number = &ScanWrapper_as_number,
+    .tp_as_sequence = &ScanWrapper_as_sequence,
     .tp_call = PyVectorcall_Call,
     .tp_str = py::unifunc<py_str>,
     .tp_getattro = py::binfunc<[] (py::ptr<ScanWrapper> self,
@@ -802,25 +804,54 @@ inline void ScanGroup::set_scan_param(py::ptr<ScanND> scan, py::tuple path, int 
     recursive_assign(s1d->params, path, v);
 }
 
-PyTypeObject ScanGroup::Type = {
-    .ob_base = PyVarObject_HEAD_INIT(0, 0)
-    .tp_name = "brassboard_seq.scan.ScanGroup",
-    .tp_basicsize = sizeof(ScanGroup),
-    .tp_dealloc = py::tp_dealloc<true,[] (py::ptr<ScanGroup> self) {
-        call_destructor(&self->base);
-        call_destructor(&self->scans);
-        call_destructor(&self->scanscache);
+static auto ScanGroup_as_number = PyNumberMethods{
+    .nb_add = py::binfunc<[] (py::ptr<> self, py::ptr<> other) {
+        return ScanGroup::cat_scan(self, other); }>,
+};
+static auto ScanGroup_as_mapping = PyMappingMethods{
+    .mp_subscript = py::binfunc<[] (py::ptr<ScanGroup> self, py::ptr<> _idx) {
+        if (py::is_slice_none(_idx))
+            return ScanWrapper::alloc(self, self->base, py::empty_tuple, -1);
+        auto idx = py::arg_cast<py::int_>(_idx, "scanidx").as_int();
+        py::list scans = self->scans;
+        int nscans = scans.size();
+        if (idx < 0) {
+            idx += nscans;
+            if (idx < 0) {
+                py_throw_format(PyExc_IndexError,
+                                "Scan group index out of bound: %d.", idx);
+            }
+        }
+        else {
+            self->add_empty(idx - nscans + 1);
+        }
+        return ScanWrapper::alloc(self, scans.get(idx), py::empty_tuple, idx);
     }>,
-    .tp_repr = py::unifunc<py_str>,
-    .tp_as_number = &global_var<PyNumberMethods{
-        .nb_add = py::binfunc<[] (py::ptr<> self, py::ptr<> other) {
-            return cat_scan(self, other); }>,
-    }>,
-    .tp_as_mapping = &global_var<PyMappingMethods{
-        .mp_subscript = py::binfunc<[] (py::ptr<ScanGroup> self, py::ptr<> _idx) {
-            if (py::is_slice_none(_idx))
-                return ScanWrapper::alloc(self, self->base, py::empty_tuple, -1);
-            auto idx = py::arg_cast<py::int_>(_idx, "scanidx").as_int();
+    .mp_ass_subscript = py::itrifunc<[] (py::ptr<ScanGroup> self,
+                                         py::ptr<> _idx, py::ptr<> v) {
+        py::ref<ScanND> new_scan;
+        if (auto sw = py::exact_cast<ScanWrapper>(v)) {
+            if (sw->sg != self)
+                py_throw_format(PyExc_ValueError, "ScanGroup mismatch in assignment.");
+            if (sw->path != py::empty_tuple)
+                py_throw_format(PyExc_ValueError,
+                                "Only top-level Scan can be assigned.");
+            new_scan = sw->scan->copy();
+        }
+        else if (auto d = py::cast<py::dict>(v)) {
+            new_scan = ScanND::alloc();
+            new_scan->fixed = py::dict_deepcopy(d);
+        }
+        else {
+            py_throw_format(PyExc_TypeError, "Invalid type %S in scan assignment.",
+                            v.type());
+        }
+        if (py::is_slice_none(_idx)) {
+            new_scan->baseidx = -1;
+            self->base = std::move(new_scan);
+        }
+        else {
+            int idx = py::arg_cast<py::int_>(_idx, "scanidx").as_int();
             py::list scans = self->scans;
             int nscans = scans.size();
             if (idx < 0) {
@@ -833,49 +864,22 @@ PyTypeObject ScanGroup::Type = {
             else {
                 self->add_empty(idx - nscans + 1);
             }
-            return ScanWrapper::alloc(self, scans.get(idx), py::empty_tuple, idx);
-        }>,
-        .mp_ass_subscript = py::itrifunc<[] (py::ptr<ScanGroup> self,
-                                             py::ptr<> _idx, py::ptr<> v) {
-            py::ref<ScanND> new_scan;
-            if (auto sw = py::exact_cast<ScanWrapper>(v)) {
-                if (sw->sg != self)
-                    py_throw_format(PyExc_ValueError, "ScanGroup mismatch in assignment.");
-                if (sw->path != py::empty_tuple)
-                    py_throw_format(PyExc_ValueError,
-                                    "Only top-level Scan can be assigned.");
-                new_scan = sw->scan->copy();
-            }
-            else if (auto d = py::cast<py::dict>(v)) {
-                new_scan = ScanND::alloc();
-                new_scan->fixed = py::dict_deepcopy(d);
-            }
-            else {
-                py_throw_format(PyExc_TypeError, "Invalid type %S in scan assignment.",
-                                v.type());
-            }
-            if (py::is_slice_none(_idx)) {
-                new_scan->baseidx = -1;
-                self->base = std::move(new_scan);
-            }
-            else {
-                int idx = py::arg_cast<py::int_>(_idx, "scanidx").as_int();
-                py::list scans = self->scans;
-                int nscans = scans.size();
-                if (idx < 0) {
-                    idx += nscans;
-                    if (idx < 0) {
-                        py_throw_format(PyExc_IndexError,
-                                        "Scan group index out of bound: %d.", idx);
-                    }
-                }
-                else {
-                    self->add_empty(idx - nscans + 1);
-                }
-                scans.set(idx, std::move(new_scan));
-            }
-        }>,
+            scans.set(idx, std::move(new_scan));
+        }
     }>,
+};
+PyTypeObject ScanGroup::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.scan.ScanGroup",
+    .tp_basicsize = sizeof(ScanGroup),
+    .tp_dealloc = py::tp_dealloc<true,[] (py::ptr<ScanGroup> self) {
+        call_destructor(&self->base);
+        call_destructor(&self->scans);
+        call_destructor(&self->scanscache);
+    }>,
+    .tp_repr = py::unifunc<py_str>,
+    .tp_as_number = &ScanGroup_as_number,
+    .tp_as_mapping = &ScanGroup_as_mapping,
     .tp_str = py::unifunc<py_str>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_doc = R"__pydoc__(

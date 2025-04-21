@@ -841,6 +841,43 @@ static constexpr auto rtvalue_str = py::unifunc<[] (rtval_ptr self) {
     return io.getvalue();
 }>;
 
+static auto rtvalue_as_number = PyNumberMethods{
+    .nb_add = py::binfunc<[] (auto v1, auto v2) {
+        return build_addsub(v1, v2, false); }>,
+    .nb_subtract = py::binfunc<[] (auto v1, auto v2) {
+        return build_addsub(v1, v2, true); }>,
+    .nb_multiply = py::binfunc<[] (auto v1, auto v2) {
+        return new_expr2_wrap1(Mul, v1, v2); }>,
+    .nb_remainder = py::binfunc<[] (auto v1, auto v2) {
+        return new_expr2_wrap1(Mod, v1, v2); }>,
+    .nb_power = py::trifunc<[] (auto v1, auto v2, auto v3) -> py::ref<> {
+        if (v3 != Py_None) [[unlikely]]
+            return py::new_not_implemented();
+        return new_expr2_wrap1(Pow, v1, v2);
+    }>,
+    .nb_negative = py::unifunc<[] (auto self) {
+        return build_addsub(py::int_cached(0), self, true);
+    }>,
+    .nb_positive = [] (PyObject *self) { return py::newref(self); },
+    .nb_absolute = py::unifunc<[] (rtval_ptr self) {
+        if (self->type_ == Abs)
+            return self.ref();
+        return new_expr1(Abs, self);
+    }>,
+    .nb_bool = [] (PyObject *self) {
+        // It's too easy to accidentally use this in control flow/assertion
+        PyErr_Format(PyExc_TypeError, "Cannot convert runtime value to boolean");
+        return -1;
+    },
+    .nb_and = py::binfunc<[] (auto v1, auto v2) {
+        return new_expr2_wrap1(And, v1, v2); }>,
+    .nb_xor = py::binfunc<[] (auto v1, auto v2) {
+        return new_expr2_wrap1(Xor, v1, v2); }>,
+    .nb_or = py::binfunc<[] (auto v1, auto v2) {
+        return new_expr2_wrap1(Or, v1, v2); }>,
+    .nb_true_divide = py::binfunc<[] (auto v1, auto v2) {
+        return new_expr2_wrap1(Div, v1, v2); }>,
+};
 __attribute__((visibility("protected")))
 PyTypeObject RuntimeValue::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
@@ -852,43 +889,7 @@ PyTypeObject RuntimeValue::Type = {
         call_destructor(&self->cb_arg2);
     }>,
     .tp_repr = rtvalue_str,
-    .tp_as_number = &global_var<PyNumberMethods{
-        .nb_add = py::binfunc<[] (auto v1, auto v2) {
-            return build_addsub(v1, v2, false); }>,
-        .nb_subtract = py::binfunc<[] (auto v1, auto v2) {
-            return build_addsub(v1, v2, true); }>,
-        .nb_multiply = py::binfunc<[] (auto v1, auto v2) {
-            return new_expr2_wrap1(Mul, v1, v2); }>,
-        .nb_remainder = py::binfunc<[] (auto v1, auto v2) {
-            return new_expr2_wrap1(Mod, v1, v2); }>,
-        .nb_power = py::trifunc<[] (auto v1, auto v2, auto v3) -> py::ref<> {
-            if (v3 != Py_None) [[unlikely]]
-                return py::new_not_implemented();
-            return new_expr2_wrap1(Pow, v1, v2);
-        }>,
-        .nb_negative = py::unifunc<[] (auto self) {
-            return build_addsub(py::int_cached(0), self, true);
-        }>,
-        .nb_positive = [] (PyObject *self) { return py::newref(self); },
-        .nb_absolute = py::unifunc<[] (rtval_ptr self) {
-            if (self->type_ == Abs)
-                return self.ref();
-            return new_expr1(Abs, self);
-        }>,
-        .nb_bool = [] (PyObject *self) {
-            // It's too easy to accidentally use this in control flow/assertion
-            PyErr_Format(PyExc_TypeError, "Cannot convert runtime value to boolean");
-            return -1;
-        },
-        .nb_and = py::binfunc<[] (auto v1, auto v2) {
-            return new_expr2_wrap1(And, v1, v2); }>,
-        .nb_xor = py::binfunc<[] (auto v1, auto v2) {
-            return new_expr2_wrap1(Xor, v1, v2); }>,
-        .nb_or = py::binfunc<[] (auto v1, auto v2) {
-            return new_expr2_wrap1(Or, v1, v2); }>,
-        .nb_true_divide = py::binfunc<[] (auto v1, auto v2) {
-            return new_expr2_wrap1(Div, v1, v2); }>,
-    }>,
+    .tp_as_number = &rtvalue_as_number,
     .tp_str = rtvalue_str,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = py::tp_traverse<[] (rtval_ptr self, auto &visitor) {

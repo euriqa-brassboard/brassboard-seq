@@ -475,6 +475,21 @@ inline void EventTime::update_chain_pos(EventTime *prev, int nchains)
     }
 }
 
+static auto EventTime_as_number = PyNumberMethods{
+    .nb_subtract = py::binfunc<[] (time_ptr self, PyObject *v) {
+        auto other = py::arg_cast<EventTime,true>(v, "other");
+        if (self->manager_status != other->manager_status)
+            py_throw_format(PyExc_ValueError,
+                            "Cannot take the difference between unrelated times");
+        auto diff = py::generic_alloc<EventTimeDiff>();
+        diff->t1 = (EventTime*)py::newref(self);
+        diff->t2 = (EventTime*)py::newref(other);
+        diff->in_eval = false;
+        diff->fptr = (void*)EventTimeDiff::eval;
+        return rtval::new_extern_age(diff, (PyObject*)&PyFloat_Type);
+    }>,
+};
+
 __attribute__((visibility("protected")))
 PyTypeObject EventTime::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
@@ -487,20 +502,7 @@ PyTypeObject EventTime::Type = {
         call_destructor(&self->chain_pos);
     }>,
     .tp_repr = eventtime_str,
-    .tp_as_number = &global_var<PyNumberMethods{
-        .nb_subtract = py::binfunc<[] (time_ptr self, PyObject *v) {
-            auto other = py::arg_cast<EventTime,true>(v, "other");
-            if (self->manager_status != other->manager_status)
-                py_throw_format(PyExc_ValueError,
-                                "Cannot take the difference between unrelated times");
-            auto diff = py::generic_alloc<EventTimeDiff>();
-            diff->t1 = (EventTime*)py::newref(self);
-            diff->t2 = (EventTime*)py::newref(other);
-            diff->in_eval = false;
-            diff->fptr = (void*)EventTimeDiff::eval;
-            return rtval::new_extern_age(diff, (PyObject*)&PyFloat_Type);
-        }>,
-    }>,
+    .tp_as_number = &EventTime_as_number,
     .tp_str = eventtime_str,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = py::tp_traverse<[] (time_ptr t, auto &visitor) {
