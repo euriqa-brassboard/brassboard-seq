@@ -1235,18 +1235,16 @@ struct Jaqal_v1 {
             dict.set("param"_py, name);
             dict.set("tone"_py, py::int_cached(tone));
             dict.set("cycles"_py, py::new_int(cycles));
-            auto py_spl = py::new_list(4);
-            for (int i = 0; i < 4; i++)
-                py_spl.SET(i, py::new_int(spl.orders[i]));
-            dict.set("spline_mu"_py, py_spl);
+            dict.set("spline_mu"_py, py::new_list(py::new_int(spl.orders[0]),
+                                                  py::new_int(spl.orders[1]),
+                                                  py::new_int(spl.orders[2]),
+                                                  py::new_int(spl.orders[3])));
             dict.set("spline_shift"_py, py::int_cached(spl.shift));
             auto fspl = spl.get_spline(cycles);
-            auto py_fspl = py::new_list(4);
-            py_fspl.SET(0, py::new_float(fspl.order0));
-            py_fspl.SET(1, py::new_float(fspl.order1));
-            py_fspl.SET(2, py::new_float(fspl.order2));
-            py_fspl.SET(3, py::new_float(fspl.order3));
-            dict.set("spline"_py, py_fspl);
+            dict.set("spline"_py, py::new_list(py::new_float(fspl.order0),
+                                               py::new_float(fspl.order1),
+                                               py::new_float(fspl.order2),
+                                               py::new_float(fspl.order3)));
         }
     };
 
@@ -2556,10 +2554,10 @@ struct Jaqal_v1_3 {
             }
             set_channels(chn_mask);
             dict.set("cycles"_py, py::new_int(cycles));
-            auto py_spl = py::new_list(4);
-            for (int i = 0; i < 4; i++)
-                py_spl.SET(i, py::new_int(spl.orders[i]));
-            dict.set("spline_mu"_py, py_spl);
+            dict.set("spline_mu"_py, py::new_list(py::new_int(spl.orders[0]),
+                                                  py::new_int(spl.orders[1]),
+                                                  py::new_int(spl.orders[2]),
+                                                  py::new_int(spl.orders[3])));
             dict.set("spline_shift"_py, py::int_cached(spl.shift));
             bool freq = mod_type & (FRQMOD0_MASK | FRQMOD1_MASK) || is_plut;
             bool amp = mod_type & (AMPMOD0_MASK | AMPMOD1_MASK) || is_plut;
@@ -2570,11 +2568,10 @@ struct Jaqal_v1_3 {
                 if (!cond)
                     return;
                 auto fspl = cb(spl, cycles);
-                auto py_fspl = py::new_list(4);
-                py_fspl.SET(0, py::new_float(fspl.order0));
-                py_fspl.SET(1, py::new_float(fspl.order1));
-                py_fspl.SET(2, py::new_float(fspl.order2));
-                py_fspl.SET(3, py::new_float(fspl.order3));
+                auto py_fspl = py::new_list(py::new_float(fspl.order0),
+                                            py::new_float(fspl.order1),
+                                            py::new_float(fspl.order2),
+                                            py::new_float(fspl.order3));
                 if (unprefix_spline)
                     dict.set("spline"_py, py_fspl);
                 dict.set(name, py_fspl);
@@ -2894,8 +2891,7 @@ struct PulseCompilerGen: SyncChannelGen {
             tonedatas = output.try_get(key);
         }
         if (!tonedatas) {
-            auto tonedatas = py::new_list(1);
-            tonedatas.SET(0, std::move(tonedata));
+            auto tonedatas = py::new_list(std::move(tonedata));
             output.set(key, tonedatas);
             last_tonedatas = tonedatas.ptr();
         }

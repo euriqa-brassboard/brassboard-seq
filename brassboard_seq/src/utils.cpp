@@ -271,11 +271,10 @@ PyObject *BacktraceTracker::FrameInfo::get_traceback(PyObject *next)
 {
     PyThreadState *tstate = PyThreadState_Get();
     auto globals = py::new_dict();
-    auto args = py::new_tuple(4);
-    args.SET(0, py::ptr(next));
-    args.SET(1, py::ref<>(throw_if_not(PyFrame_New(tstate, code, globals.get(), nullptr))));
-    args.SET(2, py::new_int(lasti));
-    args.SET(3, py::new_int(lineno));
+    auto args = py::new_tuple(
+        py::ptr(next),
+        py::ref<>(throw_if_not(PyFrame_New(tstate, code, globals.get(), nullptr))),
+        py::new_int(lasti), py::new_int(lineno));
     return throw_if_not(traceback_new(&PyTraceBack_Type, args.get(), nullptr));
 }
 

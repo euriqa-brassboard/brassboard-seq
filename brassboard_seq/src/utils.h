@@ -241,6 +241,15 @@ using ntuple = typename _ntuple<N,T>::type;
 
 template<auto v> static inline auto global_var = v;
 
+template<typename T>
+static inline char *to_chars(std::span<char> buf, T &&t)
+{
+    auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), t);
+    if (ec != std::errc())
+        throw std::system_error(std::make_error_code(ec));
+    return ptr;
+}
+
 namespace py {
 
 struct _common {};
@@ -1161,11 +1170,53 @@ static inline list_ref new_list(Py_ssize_t n)
 {
     return list_ref(throw_if_not(PyList_New(n)));
 }
+template<typename T, typename... Args>
+static inline list_ref new_list(T &&first, Args&&... args)
+    requires (!std::integral<std::remove_cvref_t<T>>)
+{
+    Py_ssize_t n = sizeof...(Args) + 1;
+    auto res = new_list(n);
+    PyObject *objs[] = { newref(std::forward<T>(first)),
+        newref(std::forward<Args>(args))... };
+    for (int i = 0; i < n; i++)
+        res.SET(i, py::ref(objs[i]));
+    return res;
+}
+static inline list_ref new_nlist(Py_ssize_t n, auto &&cb)
+{
+    auto res = new_list(n);
+    for (int i = 0; i < n; i++)
+        res.SET(i, cb(i));
+    return res;
+}
 
 extern tuple empty_tuple;
 static inline tuple_ref new_tuple(Py_ssize_t n)
 {
     return tuple_ref(throw_if_not(PyTuple_New(n)));
+}
+static inline tuple_ref new_tuple()
+{
+    return empty_tuple.immref();
+}
+template<typename T, typename... Args>
+static inline tuple_ref new_tuple(T &&first, Args&&... args)
+    requires (!std::integral<std::remove_cvref_t<T>>)
+{
+    Py_ssize_t n = sizeof...(Args) + 1;
+    auto res = new_tuple(n);
+    PyObject *objs[] = { newref(std::forward<T>(first)),
+        newref(std::forward<Args>(args))... };
+    for (int i = 0; i < n; i++)
+        res.SET(i, py::ref(objs[i]));
+    return res;
+}
+static inline tuple_ref new_ntuple(Py_ssize_t n, auto &&cb)
+{
+    auto res = new_tuple(n);
+    for (int i = 0; i < n; i++)
+        res.SET(i, cb(i));
+    return res;
 }
 
 extern bytes empty_bytes;
@@ -1259,6 +1310,13 @@ struct stringio {
     void write_rep_ascii(int nrep, const char *s)
     {
         write_rep_ascii(nrep, s, strlen(s));
+    }
+    template<size_t N, typename T>
+    void write_cxx(T &&v)
+    {
+        std::array<char,N> str_buff;
+        auto ptr = to_chars(str_buff, std::forward<T>(v));
+        write_ascii(str_buff.data(), ptr - str_buff.data());
     }
     std::pair<int,void*> reserve_buffer(int kind, ssize_t len);
     str_ref getvalue();
@@ -2523,15 +2581,6 @@ static void foreach_max_range(std::span<int> value, auto &&cb)
     for (auto [prev_v, prev_idx]: std::ranges::views::reverse(maxv_stack)) {
         cb(prev_idx, N - 1, prev_v);
     }
-}
-
-template<typename T>
-static inline char *to_chars(std::span<char> buf, T &&t)
-{
-    auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), t);
-    if (ec != std::errc())
-        throw std::system_error(std::make_error_code(ec));
-    return ptr;
 }
 
 }

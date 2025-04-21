@@ -379,10 +379,7 @@ static void rt_assert(py::ptr<TimeSeq> self, PyObject *const *args,
         auto seqinfo = self->seqinfo;
         auto assertions = py::list(seqinfo->assertions);
         seqinfo->bt_tracker.record(assert_key(assertions.size()));
-        auto a = py::new_tuple(2);
-        a.SET(0, c);
-        a.SET(1, msg);
-        assertions.append(std::move(a));
+        assertions.append(py::new_tuple(c, msg));
     }
     else if (!c.as_bool()) {
         py_throw_format(PyExc_AssertionError, "%U", msg);
@@ -466,9 +463,7 @@ inline void TimeStep::show(py::stringio &io, int indent) const
     io.write_ascii("TimeStep(");
     io.write_str(length);
     io.write_ascii(")@T[");
-    std::array<char, 32> str_buff;
-    auto ptr = to_chars(str_buff, start_time->data.id);
-    io.write_ascii(str_buff.data(), ptr - str_buff.data());
+    io.write_cxx<32>(start_time->data.id);
     io.write_ascii("]");
     show_cond_suffix(io);
     int nactions = actions.size();
@@ -537,12 +532,9 @@ inline void SubSeq::show(py::stringio &io, int indent) const
 {
     io.write_rep_ascii(indent, " ");
     io.write_ascii("SubSeq@T[");
-    std::array<char, 32> str_buff;
-    auto ptr = to_chars(str_buff, start_time->data.id);
-    io.write_ascii(str_buff.data(), ptr - str_buff.data());
+    io.write_cxx<32>(start_time->data.id);
     io.write_ascii("] - T[");
-    ptr = to_chars(str_buff, end_time->data.id);
-    io.write_ascii(str_buff.data(), ptr - str_buff.data());
+    io.write_cxx<32>(end_time->data.id);
     io.write_ascii("]");
     show_cond_suffix(io);
     show_subseqs(io, indent + 2);
@@ -693,15 +685,12 @@ inline void Seq::show(py::stringio &io, int indent) const
 {
     io.write_rep_ascii(indent, " ");
     io.write_ascii("Seq - T[");
-    std::array<char, 32> str_buff;
-    auto ptr = to_chars(str_buff, end_time->data.id);
-    io.write_ascii(str_buff.data(), ptr - str_buff.data());
+    io.write_cxx<32>(end_time->data.id);
     io.write_ascii("]\n");
     for (auto [i, t]: py::list_iter(seqinfo->time_mgr->event_times)) {
         io.write_rep_ascii(indent + 1, " ");
         io.write_ascii("T[");
-        auto ptr = to_chars(str_buff, i);
-        io.write_ascii(str_buff.data(), ptr - str_buff.data());
+        io.write_cxx<32>(i);
         io.write_ascii("]: ");
         io.write_str(t);
         io.write_ascii("\n");
