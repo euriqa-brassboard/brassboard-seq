@@ -201,7 +201,7 @@ void collect_actions(auto *ab, backend::CompiledSeq &cseq)
         artiq_actions.push_back(artiq_action);
     };
     auto add_action = [&] (auto *action, ChannelType type, int chn_idx) {
-        auto cond = action->cond.get();
+        py::ptr cond = action->cond;
         int cond_reloc = -1;
         if (rtval::is_rtval(cond)) {
             cond_reloc = bool_values.get_id(cond);

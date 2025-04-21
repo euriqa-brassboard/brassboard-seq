@@ -107,7 +107,7 @@ static inline void compiler_finalize(auto comp, _RampFunctionBase*, Backend*)
             }
             auto action_value = action->value.ptr();
             auto isramp = py::isinstance_nontrivial(action_value, rampfunctionbase_type);
-            auto cond = action->cond.get();
+            py::ptr cond = action->cond;
             last_is_start = false;
             if (!action->is_pulse) {
                 last_is_start = !isramp;
@@ -143,7 +143,7 @@ static inline void compiler_finalize(auto comp, _RampFunctionBase*, Backend*)
 
 static inline auto action_get_condval(auto action, unsigned age)
 {
-    auto cond = action->cond.get();
+    py::ptr cond = action->cond;
     if (cond == Py_True)
         return true;
     if (cond == Py_False)
@@ -184,7 +184,7 @@ static inline void compiler_runtime_finalize(auto comp, py::ptr<> _age,
             action->cond_val = cond_val;
             if (!cond_val)
                 continue;
-            auto action_value = action->value.get();
+            py::ptr  action_value = action->value;
             auto isramp = py::isinstance_nontrivial(action_value, rampfunctionbase_type);
             if (isramp) {
                 auto rampf = (_RampFunctionBase*)action_value;
@@ -194,7 +194,7 @@ static inline void compiler_runtime_finalize(auto comp, py::ptr<> _age,
             else if (is_rtval(action_value)) {
                 rt_eval_throw(action_value, age, action_key(action->aid));
             }
-            auto action_end_val = action->end_val.get();
+            py::ptr action_end_val = action->end_val;
             if (action_end_val != action_value && is_rtval(action_end_val))
                 rt_eval_throw(action_end_val, age, action_key(action->aid));
             // No need to evaluate action.length since the `compute_all_times`
