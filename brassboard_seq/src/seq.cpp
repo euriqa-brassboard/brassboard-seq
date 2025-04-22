@@ -228,7 +228,7 @@ static py::ref<TimeSeq> add_step_real(py::ptr<CondSeq> self, PyObject *const *ar
     auto tuple_nargs = nargs - nargs_min;
     auto get_args_tuple = [&] {
         if (tuple_nargs == 0)
-            return py::empty_tuple.immref();
+            return py::new_tuple();
         auto res = py::new_tuple(tuple_nargs);
         auto *tuple_args = args + nargs_min;
         for (auto i = 0; i < tuple_nargs; i++)
