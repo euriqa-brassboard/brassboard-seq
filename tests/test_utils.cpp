@@ -209,6 +209,12 @@ PyObject *_action_py_str(action::Action *action)
     return action->py_str().rel();
 }
 
+__attribute__((returns_nonnull))
+static inline event_time::TimeManager *seq_get_time_mgr(py::ptr<seq::Seq> seq)
+{
+    return py::newref(seq->seqinfo->time_mgr);
+}
+
 auto *compiledseq_get_all_actions(backend::CompiledSeq &cseq)
 {
     return cseq.all_actions.get();

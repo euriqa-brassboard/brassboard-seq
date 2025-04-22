@@ -119,6 +119,7 @@ cdef extern from "test_utils.cpp" namespace "brassboard_seq":
     object _action_get_length(action.Action *action)
     object _action_get_end_val(action.Action *action)
     str _action_py_str(action.Action *action) except +
+    event_time.TimeManager seq_get_time_mgr(seq.Seq)
     vector[action.Action*] *compiledseq_get_all_actions(backend.CompiledSeq &cseq)
     int64_t compiledseq_get_total_time(backend.CompiledSeq &cseq)
     void py_check_num_arg "brassboard_seq::py::check_num_arg" (
@@ -322,7 +323,7 @@ def seq_get_channel_paths(seq.Seq s):
     return seq.seq_get_channel_paths(s)
 
 def seq_get_event_time(seq.Seq s, int tid):
-    return timemanager_get_event_times(seq.seq_get_time_mgr(s))[tid]
+    return timemanager_get_event_times(seq_get_time_mgr(s))[tid]
 
 def seq_get_cond(s):
     return condseq_get_cond(s)
@@ -339,7 +340,7 @@ def compiler_get_all_actions(backend.SeqCompiler comp):
 
 def compiler_get_all_times(backend.SeqCompiler comp):
     s = comp.seq
-    time_mgr = seq.seq_get_time_mgr(s)
+    time_mgr = seq_get_time_mgr(s)
     ntimes = time_mgr.time_values.size()
     values = []
     for i in range(ntimes):
