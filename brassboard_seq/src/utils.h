@@ -282,6 +282,9 @@ using float_ref = ref<_float>;
 struct _int : _pyobj_tag_type {};
 using int_ = ptr<_int>;
 using int_ref = ref<_int>;
+struct _bool : _pyobj_tag_type {};
+using bool_ = ptr<_bool>;
+using bool_ref = ref<_bool>;
 struct _str : _pyobj_tag_type {};
 using str = ptr<_str>;
 using str_ref = ref<_str>;
@@ -498,6 +501,17 @@ public:
         }
         else {
             return PyLong_Check((PyObject*)_ptr());
+        }
+    }
+    template<typename T2, bool exact=false> bool isa() const
+        requires std::same_as<py_tag_type<T2>,_bool>
+    {
+        if constexpr (exact) {
+            auto obj = (PyObject*)_ptr();
+            return obj == Py_True || obj == Py_False;
+        }
+        else {
+            return PyBool_Check((PyObject*)_ptr());
         }
     }
     template<typename T2, bool exact=false> bool isa() const
