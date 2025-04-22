@@ -22,7 +22,7 @@ from brassboard_seq.backend cimport CompiledSeq
 from brassboard_seq.event_time cimport round_time_int
 from brassboard_seq.rtval cimport ExternCallback, TagVal, is_rtval, new_extern
 from brassboard_seq.seq cimport Seq, seq_get_channel_paths
-from brassboard_seq.utils cimport set_global_tracker, PyErr_Format, \
+from brassboard_seq.utils cimport PyErr_Format, \
   PyExc_RuntimeError, PyExc_TypeError, PyExc_ValueError
 
 from cpython cimport PyMethod_Check, PyMethod_GET_FUNCTION, PyMethod_GET_SELF

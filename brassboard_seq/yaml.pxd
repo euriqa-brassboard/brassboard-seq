@@ -15,7 +15,3 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library. If not,
 # see <http://www.gnu.org/licenses/>.
-
-cdef extern from "src/yaml.h" namespace "brassboard_seq::yaml":
-    str sprint(obj)
-    str sprint(obj, int indent)

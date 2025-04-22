@@ -22,8 +22,8 @@ from brassboard_seq.backend cimport CompiledSeq
 from brassboard_seq.event_time cimport round_time_f64
 from brassboard_seq.rtval cimport is_rtval, rtval_cache, rt_eval_throw, RuntimeValue
 from brassboard_seq.seq cimport seq_get_channel_paths
-from brassboard_seq.utils cimport set_global_tracker, \
-  PyErr_Format, PyExc_ValueError, PyExc_TypeError, ostream, pybytes_ostream, new_int
+from brassboard_seq.utils cimport PyErr_Format, PyExc_ValueError, PyExc_TypeError, \
+  ostream, pybytes_ostream, new_int
 
 cimport cython
 from cython.operator cimport dereference as deref

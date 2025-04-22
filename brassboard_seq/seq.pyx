@@ -17,5 +17,4 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-
 globals()['Seq'] = Seq

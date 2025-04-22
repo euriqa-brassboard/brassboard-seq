@@ -19,7 +19,8 @@
 # Do not use relative import since it messes up cython file name tracking
 
 from brassboard_seq._utils import CompositeRTProp, RTProp, \
-     rtval_get_value as get_value, rtval_inv as inv, rtval_convert_bool as convert_bool, \
+     rtval_get_value as get_value, rtval_inv as inv, \
+     rtval_convert_bool as convert_bool, \
      rtval_ifelse as ifelse, rtval_same_value as same_value
 # Manually set the field since I can't make cython automatically do this
 # without also declaring the c struct again...

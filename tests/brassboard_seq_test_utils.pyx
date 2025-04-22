@@ -14,6 +14,9 @@ from libc.stdint cimport *
 from cpython cimport PyObject, Py_INCREF, Py_EQ, Py_NE, Py_GT, Py_LT, Py_GE, Py_LE, \
   PyBytes_GET_SIZE, PyBytes_AS_STRING, PyBytes_FromStringAndSize
 
+cdef extern from "src/yaml.h" namespace "brassboard_seq":
+    void _yaml_io_print "brassboard_seq::yaml::print" (utils.stringio &io, object, int indent) except +
+
 cdef extern from "test_utils.cpp" namespace "brassboard_seq":
     char *to_chars(char[], int) except +
     int throw_if_not(int) except +
@@ -134,7 +137,6 @@ cdef extern from "test_utils.cpp" namespace "brassboard_seq":
                                  int64_t offset) except +
     void event_time_set_base_rt(event_time.EventTime self, event_time.EventTime base,
                                 rtval.RuntimeValue offset) except +
-    void _yaml_io_print "brassboard_seq::yaml::print" (utils.stringio &io, object, int indent) except +
 
 def new_invalid_rtval():
     # This should only happen if something really wrong happens.
