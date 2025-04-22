@@ -19,6 +19,7 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.action cimport _RampFunctionBase, SeqCubicSpline
 from brassboard_seq.backend cimport CompiledSeq
+from brassboard_seq.config cimport raise_invalid_channel
 from brassboard_seq.event_time cimport round_time_f64
 from brassboard_seq.rtval cimport is_rtval, rtval_cache, rt_eval_throw, RuntimeValue
 from brassboard_seq.seq cimport seq_get_channel_paths
@@ -232,10 +233,6 @@ cdef class Jaqalv1_3Generator(RFSOCGenerator):
 
     def get_sequence(self, n):
         return (<Jaqalv1_3StreamGen*>self.gen.get()).get_sequence(n)
-
-cdef PyObject *raise_invalid_channel(tuple path) except NULL:
-    name = '/'.join(path)
-    return PyErr_Format(PyExc_ValueError, 'Invalid channel name %U', <PyObject*>name)
 
 cdef match_rfsoc_dds = re.compile('^dds(\\d+)$').match
 

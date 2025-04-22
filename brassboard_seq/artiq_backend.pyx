@@ -19,6 +19,7 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.action cimport _RampFunctionBase
 from brassboard_seq.backend cimport CompiledSeq
+from brassboard_seq.config cimport raise_invalid_channel
 from brassboard_seq.event_time cimport round_time_int
 from brassboard_seq.rtval cimport ExternCallback, TagVal, is_rtval, new_extern
 from brassboard_seq.seq cimport Seq, seq_get_channel_paths
@@ -85,10 +86,6 @@ artiq_consts.URUKUL_DEFAULT_PROFILE = urukul.DEFAULT_PROFILE if hasattr(urukul, 
 artiq_consts.SPI_DATA_ADDR = <int?>spi2.SPI_DATA_ADDR
 artiq_consts.SPI_CONFIG_ADDR = <int?>spi2.SPI_CONFIG_ADDR
 rampfunctionbase_type = <PyObject*>_RampFunctionBase
-
-cdef PyObject *raise_invalid_channel(tuple path) except NULL:
-    name = '/'.join(path)
-    return PyErr_Format(PyExc_ValueError, 'Invalid channel name %U', <PyObject*>name)
 
 cdef get_artiq_device(sys, str name):
     if hasattr(sys, 'registry'):

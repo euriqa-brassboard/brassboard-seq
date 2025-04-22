@@ -22,13 +22,6 @@
 
 namespace brassboard_seq::scan {
 
-static inline void check_non_empty_string_arg(py::ptr<> arg, const char *name)
-{
-    if (auto s = py::cast<py::str>(arg); s && s.size())
-        return;
-    py_throw_format(PyExc_TypeError, "%s must be a string", name);
-}
-
 template<bool ovr>
 static void merge_dict_into(py::dict tgt, py::dict src);
 
@@ -227,7 +220,7 @@ PyTypeObject ParamPack::Type = {
     .tp_call = PyVectorcall_Call,
     .tp_str = parampack_str,
     .tp_getattro = py::binfunc<[] (py::ptr<ParamPack> self, py::ptr<> name) -> py::ref<> {
-        check_non_empty_string_arg(name, "name");
+        py::check_non_empty_string(name, "name");
         if (PyUnicode_READ_CHAR(name, 0) == '_')
             return py::ref(PyObject_GenericGetAttr(self, name));
         auto res = parampack_alloc();
@@ -238,7 +231,7 @@ PyTypeObject ParamPack::Type = {
     }>,
     .tp_setattro = py::itrifunc<[] (py::ptr<ParamPack> self, py::ptr<> name,
                                     py::ptr<> value) {
-        check_non_empty_string_arg(name, "name");
+        py::check_non_empty_string(name, "name");
         // To be consistent with __getattribute__
         if (PyUnicode_READ_CHAR(name, 0) == '_')
             py_throw_format(PyExc_AttributeError,

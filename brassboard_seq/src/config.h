@@ -36,6 +36,11 @@ private:
 };
 
 py::str_ref channel_name_from_path(py::ptr<> path);
+[[noreturn]] static inline void raise_invalid_channel(py::tuple path)
+{
+    py_throw_format(PyExc_ValueError, "Invalid channel name %U",
+                    channel_name_from_path(path));
+}
 
 }
 

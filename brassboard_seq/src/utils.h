@@ -1601,6 +1601,13 @@ check_no_kwnames(const char *name, tuple kwnames)
     }
 }
 
+static inline void check_non_empty_string(py::ptr<> arg, const char *name)
+{
+    if (auto s = py::cast<py::str>(arg); s && s.size())
+        return;
+    py_throw_format(PyExc_TypeError, "%s must be a string", name);
+}
+
 template<str_literal... argnames>
 static inline auto parse_pos_or_kw_args(const char *fname, PyObject *const *args,
                                         Py_ssize_t nargs, tuple kwnames)
