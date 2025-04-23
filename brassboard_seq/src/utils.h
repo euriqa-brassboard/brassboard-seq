@@ -1613,6 +1613,15 @@ check_no_kwnames(const char *name, tuple kwnames)
     }
 }
 
+static inline void check_required_pos_arg(ptr<> arg, const char *func,
+                                          const char *name)
+{
+    if (!arg) {
+        py_throw_format(PyExc_TypeError,
+                        "%s missing 1 required positional argument: '%s'", func, name);
+    }
+}
+
 static inline void check_non_empty_string(ptr<> arg, const char *name)
 {
     if (auto s = cast<str>(arg); s && s.size())

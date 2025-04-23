@@ -127,10 +127,7 @@ PyTypeObject SeqCubicSpline::Type = {
         auto [order0, order1, order2, order3] =
             py::parse_pos_or_kw_args<"order0","order1","order2","order2">(
                 "SeqCubicSpline.__init__", args, nargs, kwnames);
-        if (!order0)
-            py_throw_format(PyExc_TypeError,
-                            "SeqCubicSpline.__init__ missing 1 required "
-                            "positional argument: 'order0'");
+        py::check_required_pos_arg(order0, "SeqCubicSpline.__init__", "order0");
         if (!order1)
             order1 = py::int_cached(0);
         if (!order2)
@@ -359,10 +356,7 @@ PyTypeObject Blackman::Type = {
         auto [amp, offset] =
             py::parse_pos_or_kw_args<"amp","offset">(
                 "Blackman.__init__", args, nargs, kwnames);
-        if (!amp)
-            py_throw_format(PyExc_TypeError,
-                            "Blackman.__init__ missing 1 required "
-                            "positional argument: 'amp'");
+        py::check_required_pos_arg(amp, "Blackman.__init__", "amp");
         if (!offset)
             offset = py::int_cached(0);
         auto self = py::generic_alloc<Blackman>();
@@ -449,10 +443,7 @@ PyTypeObject BlackmanSquare::Type = {
         auto [amp, offset] =
             py::parse_pos_or_kw_args<"amp","offset">(
                 "BlackmanSquare.__init__", args, nargs, kwnames);
-        if (!amp)
-            py_throw_format(PyExc_TypeError,
-                            "BlackmanSquare.__init__ missing 1 required "
-                            "positional argument: 'amp'");
+        py::check_required_pos_arg(amp, "BlackmanSquare.__init__", "amp");
         if (!offset)
             offset = py::int_cached(0);
         auto self = py::generic_alloc<BlackmanSquare>();
@@ -537,14 +528,8 @@ PyTypeObject LinearRamp::Type = {
         auto [start, end] =
             py::parse_pos_or_kw_args<"start","end">(
                 "LinearRamp.__init__", args, nargs, kwnames);
-        if (!start)
-            py_throw_format(PyExc_TypeError,
-                            "LinearRamp.__init__ missing 1 required "
-                            "positional argument: 'start'");
-        if (!end)
-            py_throw_format(PyExc_TypeError,
-                            "LinearRamp.__init__ missing 1 required "
-                            "positional argument: 'end'");
+        py::check_required_pos_arg(start, "LinearRamp.__init__", "start");
+        py::check_required_pos_arg(end, "LinearRamp.__init__", "end");
         auto self = py::generic_alloc<LinearRamp>();
         call_constructor(data(self.get()), start, end);
         return self;
