@@ -149,19 +149,19 @@ struct RampFunction : RampFunctionBase {
         py::ref<> fvalue;
         std::unique_ptr<rtval::InterpFunction> interp_func;
 
+        Data(py::ptr<PyTypeObject> type)
+        {
+            eval = type.attr("eval"_py);
+            _spline_segments = type.try_attr("spline_segments"_py);
+        }
+
         py::ptr<> py_self()
         {
             return py::ptr<>(((char*)this) - sizeof(RampFunctionBase));
         }
-        py::ptr<> py_type()
-        {
-            return py_self().type();
-        }
 
         py::ref<> call_eval(py::ptr<> t, py::ptr<> length, py::ptr<> oldval)
         {
-            if (!eval)
-                eval = py_type().attr("eval"_py);
             return eval(py_self(), t, length, oldval);
         }
         void compile()
@@ -199,13 +199,7 @@ struct RampFunction : RampFunctionBase {
                 interp_func->data[1].f64_val = length;
                 interp_func->data[2].f64_val = oldval;
             }
-            if (!_spline_segments) {
-                _spline_segments = py_type().try_attr("spline_segments"_py);
-                if (!_spline_segments) {
-                    _spline_segments = py::new_none();
-                }
-            }
-            if (_spline_segments.is_none())
+            if (!_spline_segments)
                 return py::new_none();
             return _spline_segments(py_self(), py::new_float(length),
                                     py::new_float(oldval));
@@ -272,7 +266,7 @@ PyTypeObject RampFunction::Type = {
     }>,
     .tp_new = py::tp_new<[] (PyTypeObject *t, auto...) {
         auto self = py::generic_alloc<RampFunction>(t);
-        call_constructor(data(self.get()));
+        call_constructor(data(self.get()), t);
         return self;
     }>,
 };
