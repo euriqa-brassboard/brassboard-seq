@@ -5,13 +5,12 @@ from brassboard_seq cimport action, backend, event_time, rtval, seq, utils
 import numpy as np
 
 from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
 from libcpp.vector cimport vector
 from libcpp.string cimport string as cppstr
 
 from libc.stdint cimport *
 
-from cpython cimport PyObject, Py_INCREF, Py_EQ, Py_NE, Py_GT, Py_LT, Py_GE, Py_LE, \
+from cpython cimport Py_EQ, Py_NE, Py_GT, Py_LT, Py_GE, Py_LE, \
   PyBytes_GET_SIZE, PyBytes_AS_STRING, PyBytes_FromStringAndSize
 
 cdef extern from "src/yaml.h" namespace "brassboard_seq":
@@ -25,9 +24,10 @@ cdef extern from "test_utils.cpp" namespace "brassboard_seq":
     int throw_if_not(int) except +
     int throw_if(int) except +
 
+    object _new_invalid_rtval() except +
+    object _new_const(object) except +
     rtval.TagVal test_callback_extern(TestCallback) except +
     rtval.TagVal test_callback_extern_age(TestCallback, unsigned) except +
-    rtval.RuntimeValue _new_invalid_rtval() except +
     vector[int] _get_suffix_array(vector[int])
     vector[int] _get_height_array(vector[int], vector[int])
     cppclass MaxRange:
@@ -146,12 +146,7 @@ cdef extern from "test_utils.cpp" namespace "brassboard_seq":
                                 rtval.RuntimeValue offset) except +
 
 def new_invalid_rtval():
-    # This should only happen if something really wrong happens.
-    # We'll just test that we behave reasonably enough.
-    # (it's unavoidable that we'll crash in some cases)
-    rt = rtval.new_expr2(rtval.ValueType.Add, rtval.new_const(1).rel(), rtval.new_const(1).rel()).rel()
-    rt.type_ = <rtval.ValueType>1000
-    return rt
+    return _new_invalid_rtval()
 
 cdef class TestCallback(rtval.ExternCallback):
     cdef object cb
@@ -170,7 +165,7 @@ cdef TestCallback new_test_callback(cb, bint has_age):
     return self
 
 def new_const(c):
-    return rtval.new_const(c).rel()
+    return _new_const(c)
 
 def new_arg(idx):
     return rtval.new_arg(idx, float)

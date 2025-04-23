@@ -5,6 +5,22 @@
 
 namespace brassboard_seq {
 
+static PyObject *_new_invalid_rtval()
+{
+    // This should only happen if something really wrong happens.
+    // We'll just test that we behave reasonably enough.
+    // (it's unavoidable that we'll crash in some cases)
+    using namespace rtval;
+    auto rt = new_expr2(Add, new_const(1), new_const(1));
+    rt->type_ = (ValueType)1000;
+    return (PyObject*)rt.rel();
+}
+
+static PyObject *_new_const(PyObject *c)
+{
+    return rtval::new_const(c).rel();
+}
+
 static rtval::TagVal test_callback_extern(auto *self)
 {
     auto res = py::ptr(self->cb)();

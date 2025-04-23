@@ -123,8 +123,6 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
     RuntimeValue new_arg(object idx, object ty) except +
     RuntimeValue new_extern(ExternCallback cb, ty) except +
     RuntimeValue new_extern_age(ExternCallback cb, ty) except +
-    rtval_ref new_expr2(ValueType, RuntimeValue, RuntimeValue) except +
-    rtval_ref new_const(object) except +
 
     void rt_eval_throw(RuntimeValue self, unsigned age) except +
     double get_value_f64(object, unsigned age) except +
