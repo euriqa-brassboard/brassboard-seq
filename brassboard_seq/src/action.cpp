@@ -105,12 +105,8 @@ PyTypeObject SeqCubicSpline::Type = {
     .tp_basicsize = sizeof(RampFunctionBase) + sizeof(SeqCubicSpline::Data),
     .tp_dealloc = py::tp_cxx_dealloc<true,SeqCubicSpline>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = py::tp_traverse<[] (py::ptr<SeqCubicSpline> self, auto &visitor) {
-        data(self.get())->traverse(visitor);
-    }>,
-    .tp_clear = py::iunifunc<[] (py::ptr<SeqCubicSpline> self) {
-        data(self.get())->clear();
-    }>,
+    .tp_traverse = traverse<SeqCubicSpline>,
+    .tp_clear = clear<SeqCubicSpline>,
     .tp_getset = (py::getset_table<
                   py::getset_def<"order0",[] (py::ptr<SeqCubicSpline> self) {
                       return py::newref(data(self.get())->order0); }>,
@@ -134,9 +130,7 @@ PyTypeObject SeqCubicSpline::Type = {
             order2 = py::int_cached(0);
         if (!order3)
             order3 = py::int_cached(0);
-        auto self = py::generic_alloc<SeqCubicSpline>();
-        call_constructor(data(self.get()), order0, order1, order2, order3);
-        return self;
+        return alloc<SeqCubicSpline>(order0, order1, order2, order3);
     }>
 };
 
@@ -247,12 +241,8 @@ PyTypeObject RampFunction::Type = {
     .tp_basicsize = sizeof(RampFunctionBase) + sizeof(RampFunction::Data),
     .tp_dealloc = py::tp_cxx_dealloc<true,RampFunction>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = py::tp_traverse<[] (py::ptr<RampFunction> self, auto &visitor) {
-        data(self.get())->traverse(visitor);
-    }>,
-    .tp_clear = py::iunifunc<[] (py::ptr<RampFunction> self) {
-        data(self.get())->clear();
-    }>,
+    .tp_traverse = traverse<RampFunction>,
+    .tp_clear = clear<RampFunction>,
     .tp_base = &RampFunctionBase::Type,
     .tp_init = py::itrifunc<[] (py::ptr<RampFunction> self, py::tuple args, py::dict kws) {
         if (args)
@@ -332,12 +322,8 @@ PyTypeObject Blackman::Type = {
     .tp_basicsize = sizeof(RampFunctionBase) + sizeof(Blackman::Data),
     .tp_dealloc = py::tp_cxx_dealloc<true,Blackman>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = py::tp_traverse<[] (py::ptr<Blackman> self, auto &visitor) {
-        data(self.get())->traverse(visitor);
-    }>,
-    .tp_clear = py::iunifunc<[] (py::ptr<Blackman> self) {
-        data(self.get())->clear();
-    }>,
+    .tp_traverse = traverse<Blackman>,
+    .tp_clear = clear<Blackman>,
     .tp_getset = (py::getset_table<
                   py::getset_def<"amp",[] (py::ptr<Blackman> self) {
                       return py::newref(data(self.get())->amp); }>,
@@ -353,9 +339,7 @@ PyTypeObject Blackman::Type = {
         py::check_required_pos_arg(amp, "Blackman.__init__", "amp");
         if (!offset)
             offset = py::int_cached(0);
-        auto self = py::generic_alloc<Blackman>();
-        call_constructor(data(self.get()), amp, offset);
-        return self;
+        return alloc<Blackman>(amp, offset);
     }>
 };
 
@@ -419,12 +403,8 @@ PyTypeObject BlackmanSquare::Type = {
     .tp_basicsize = sizeof(RampFunctionBase) + sizeof(BlackmanSquare::Data),
     .tp_dealloc = py::tp_cxx_dealloc<true,BlackmanSquare>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = py::tp_traverse<[] (py::ptr<BlackmanSquare> self, auto &visitor) {
-        data(self.get())->traverse(visitor);
-    }>,
-    .tp_clear = py::iunifunc<[] (py::ptr<BlackmanSquare> self) {
-        data(self.get())->clear();
-    }>,
+    .tp_traverse = traverse<BlackmanSquare>,
+    .tp_clear = clear<BlackmanSquare>,
     .tp_getset = (py::getset_table<
                   py::getset_def<"amp",[] (py::ptr<BlackmanSquare> self) {
                       return py::newref(data(self.get())->amp); }>,
@@ -440,9 +420,7 @@ PyTypeObject BlackmanSquare::Type = {
         py::check_required_pos_arg(amp, "BlackmanSquare.__init__", "amp");
         if (!offset)
             offset = py::int_cached(0);
-        auto self = py::generic_alloc<BlackmanSquare>();
-        call_constructor(data(self.get()), amp, offset);
-        return self;
+        return alloc<BlackmanSquare>(amp, offset);
     }>
 };
 
@@ -504,12 +482,8 @@ PyTypeObject LinearRamp::Type = {
     .tp_basicsize = sizeof(RampFunctionBase) + sizeof(LinearRamp::Data),
     .tp_dealloc = py::tp_cxx_dealloc<true,LinearRamp>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = py::tp_traverse<[] (py::ptr<LinearRamp> self, auto &visitor) {
-        data(self.get())->traverse(visitor);
-    }>,
-    .tp_clear = py::iunifunc<[] (py::ptr<LinearRamp> self) {
-        data(self.get())->clear();
-    }>,
+    .tp_traverse = traverse<LinearRamp>,
+    .tp_clear = clear<LinearRamp>,
     .tp_getset = (py::getset_table<
                   py::getset_def<"start",[] (py::ptr<LinearRamp> self) {
                       return py::newref(data(self.get())->start); }>,
@@ -524,9 +498,7 @@ PyTypeObject LinearRamp::Type = {
                 "LinearRamp.__init__", args, nargs, kwnames);
         py::check_required_pos_arg(start, "LinearRamp.__init__", "start");
         py::check_required_pos_arg(end, "LinearRamp.__init__", "end");
-        auto self = py::generic_alloc<LinearRamp>();
-        call_constructor(data(self.get()), start, end);
-        return self;
+        return alloc<LinearRamp>(start, end);
     }>
 };
 

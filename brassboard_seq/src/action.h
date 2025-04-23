@@ -93,6 +93,21 @@ protected:
     {
         return (typename T::Data*)(((char*)p) + sizeof(RampFunctionBase));
     }
+    template<typename T, typename... Args>
+    static py::ref<T> alloc(Args&&... args)
+    {
+        auto self = py::generic_alloc<T>();
+        call_constructor(data(self.get()), std::forward<Args>(args)...);
+        return self;
+    }
+    template<typename T>
+    static constexpr auto traverse =
+        py::tp_traverse<[] (py::ptr<T> self, auto &visitor) {
+            data(self.get())->traverse(visitor); }>;
+
+    template<typename T>
+    static constexpr auto clear =
+        py::iunifunc<[] (py::ptr<T> self) { data(self.get())->clear(); }>;
 };
 
 static inline bool isramp(py::ptr<> obj)
