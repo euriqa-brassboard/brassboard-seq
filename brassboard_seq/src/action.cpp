@@ -504,13 +504,9 @@ PyTypeObject LinearRamp::Type = {
 
 }
 
-__attribute__((visibility("protected")))
 PyTypeObject &RampFunction_Type = RampFunction::Type;
-__attribute__((visibility("protected")))
 PyTypeObject &Blackman_Type = Blackman::Type;
-__attribute__((visibility("protected")))
 PyTypeObject &BlackmanSquare_Type = BlackmanSquare::Type;
-__attribute__((visibility("protected")))
 PyTypeObject &LinearRamp_Type = LinearRamp::Type;
 
 __attribute__((visibility("hidden")))

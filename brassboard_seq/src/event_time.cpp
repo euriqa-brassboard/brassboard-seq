@@ -31,7 +31,6 @@ static inline py::ptr<> py_time_scale()
     return val;
 }
 
-__attribute__((visibility("protected")))
 PyMethodDef time_scale_method = py::meth_noargs<"time_scale",[] (auto) {
     return py_time_scale().ref();
 }>;

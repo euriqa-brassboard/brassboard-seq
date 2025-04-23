@@ -346,20 +346,18 @@ py::str_ref sprint(py::ptr<> obj, int indent)
     return io.getvalue();
 }
 
-static auto py_sprint(PyObject*, PyObject *const *args, Py_ssize_t nargs)
-{
-    py::check_num_arg("sprint", nargs, 1, 2);
-    int indent = 0;
-    if (nargs >= 2) {
-        indent = py::arg_cast<py::int_>(args[1], "indent").as_int();
-        if (indent < 0) {
-            py_throw_format(PyExc_TypeError, "indent cannot be negative");
+PyMethodDef sprint_method =
+    py::meth_fast<"sprint",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
+        py::check_num_arg("sprint", nargs, 1, 2);
+        int indent = 0;
+        if (nargs >= 2) {
+            indent = py::arg_cast<py::int_>(args[1], "indent").as_int();
+            if (indent < 0) {
+                py_throw_format(PyExc_TypeError, "indent cannot be negative");
+            }
         }
-    }
-    return sprint(args[0], indent);
-}
-
-PyMethodDef sprint_method = py::meth_fast<"sprint",py_sprint>;
+        return sprint(args[0], indent);
+    }>;
 
 __attribute__((visibility("hidden")))
 void init()

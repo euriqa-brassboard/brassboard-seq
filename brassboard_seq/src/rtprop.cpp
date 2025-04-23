@@ -320,9 +320,7 @@ PyTypeObject RTProp::Type = {
 
 }
 
-__attribute__((visibility("protected")))
 PyTypeObject &CompositeRTProp_Type = CompositeRTProp::Type;
-__attribute__((visibility("protected")))
 PyTypeObject &RTProp_Type = RTProp::Type;
 
 __attribute__((visibility("hidden")))

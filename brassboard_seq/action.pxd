@@ -26,6 +26,3 @@ cdef extern from "src/action.h" namespace "brassboard_seq::action":
         int aid
         int tid
         int end_tid
-
-    cppclass ActionAllocator:
-        pass

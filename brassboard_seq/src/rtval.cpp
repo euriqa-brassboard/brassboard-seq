@@ -926,19 +926,18 @@ PyTypeObject ExternCallback::Type = {
         return PyType_GenericAlloc(t, 0); }>,
 };
 
-static PyObject *py_get_value(PyObject*, PyObject *const *args, Py_ssize_t nargs)
-{
-    py::check_num_arg("get_value", nargs, 2, 2);
-    auto pyage = py::arg_cast<py::int_>(args[1], "age");
-    if (is_rtval(args[0])) {
-        rt_eval_cache(args[0], pyage.as_int());
-        return rtval_cache(args[0]).to_py();
-    }
-    return py::newref(args[0]);
-}
-
-static py::ref<> py_inv(PyObject*, py::ptr<> v)
-{
+PyMethodDef get_value_method =
+    py::meth_fast<"get_value",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
+        py::check_num_arg("get_value", nargs, 2, 2);
+        auto pyage = py::arg_cast<py::int_>(args[1], "age");
+        if (is_rtval(args[0])) {
+            rt_eval_cache(args[0], pyage.as_int());
+            return rtval_cache(args[0]).to_py();
+        }
+        return py::newref(args[0]);
+    }>;
+PyMethodDef inv_method =
+    py::meth_o<"inv",[] (auto, py::ptr<> v) -> py::ref<> {
     if (v == Py_True)
         return py::new_false();
     if (v == Py_False)
@@ -949,17 +948,15 @@ static py::ref<> py_inv(PyObject*, py::ptr<> v)
         return new_expr1(Not, rv);
     }
     return py::new_bool(!v.as_bool());
-}
-
-static py::ref<> py_convert_bool(PyObject*, py::ptr<> v)
-{
+}>;
+PyMethodDef convert_bool_method =
+    py::meth_o<"convert_bool",[] (auto, py::ptr<> v) -> py::ref<> {
     if (auto rv = py::cast<RuntimeValue>(v))
         return rt_convert_bool(rv);
     return py::new_bool(v.as_bool());
-}
-
-static py::ref<> py_ifelse(PyObject*, PyObject *const *args, Py_ssize_t nargs)
-{
+}>;
+PyMethodDef ifelse_method =
+    py::meth_fast<"ifelse",[] (auto, PyObject *const *args, Py_ssize_t nargs) -> py::ref<> {
     py::check_num_arg("ifelse", nargs, 3, 3);
     auto b = py::ptr(args[0]);
     auto v1 = py::ptr(args[1]);
@@ -969,19 +966,12 @@ static py::ref<> py_ifelse(PyObject*, PyObject *const *args, Py_ssize_t nargs)
     if (auto rb = py::cast<RuntimeValue>(b))
         return new_select(rb, v1, v2);
     return (b.as_bool() ? v1 : v2).ref();
-}
-
-static auto py_same_value(PyObject*, PyObject *const *args, Py_ssize_t nargs)
-{
-    py::check_num_arg("same_value", nargs, 2, 2);
-    return py::new_bool(same_value(args[0], args[1]));
-}
-
-PyMethodDef get_value_method = py::meth_fast<"get_value",py_get_value>;
-PyMethodDef inv_method = py::meth_o<"inv",py_inv>;
-PyMethodDef convert_bool_method = py::meth_o<"convert_bool",py_convert_bool>;
-PyMethodDef ifelse_method = py::meth_fast<"ifelse",py_ifelse>;
-PyMethodDef same_value_method = py::meth_fast<"same_value",py_same_value>;
+}>;
+PyMethodDef same_value_method =
+    py::meth_fast<"same_value",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
+        py::check_num_arg("same_value", nargs, 2, 2);
+        return py::new_bool(same_value(args[0], args[1]));
+    }>;
 
 static __attribute__((flatten, noinline))
 std::pair<EvalError,GenVal> interpret_func(const int *code, GenVal *data,

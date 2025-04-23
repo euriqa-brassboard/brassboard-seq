@@ -16,6 +16,4 @@
 # License along with this library. If not,
 # see <http://www.gnu.org/licenses/>.
 
-# Manually set the field since I can't make cython automatically do this
-# without also declaring the c struct again...
-globals()['Config'] = Config
+from brassboard_seq._utils import Config

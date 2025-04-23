@@ -1222,7 +1222,6 @@ For sequence running/saving/loading:
 
 }
 
-__attribute__((visibility("protected")))
 PyTypeObject &ScanGroup_Type = ScanGroup::Type;
 
 __attribute__((visibility("hidden")))

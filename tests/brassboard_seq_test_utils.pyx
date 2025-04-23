@@ -1,6 +1,6 @@
 # cython: language_level=3
 
-from brassboard_seq cimport action, backend, event_time, rtval, seq, utils, yaml
+from brassboard_seq cimport action, backend, event_time, rtval, seq, utils
 
 import numpy as np
 

@@ -18,7 +18,4 @@
 
 # Do not use relative import since it messes up cython file name tracking
 
-cdef yaml_sprint
-from brassboard_seq._utils import yaml_sprint
-
-globals()['sprint'] = yaml_sprint
+from brassboard_seq._utils import yaml_sprint as sprint

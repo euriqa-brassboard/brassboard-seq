@@ -129,11 +129,6 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
     void rt_eval_throw(RuntimeValue self, unsigned age) except +
     double get_value_f64(object, unsigned age) except +
 
-    cppclass InterpFunction:
-        void set_value(RuntimeValue, vector[DataType]&) except +
-        void eval_all(unsigned) except +
-        TagVal call()
-
     ctypedef class brassboard_seq._utils.RuntimeValue [object _brassboard_seq_rtval_RuntimeValue, check_size ignore]:
         cdef ValueType type_
         cdef DataType datatype
