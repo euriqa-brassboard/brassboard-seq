@@ -209,6 +209,25 @@ PyObject *_action_py_str(action::Action *action)
     return action->py_str().rel();
 }
 
+PyObject *rampfunc_eval_end(py::ptr<> func, py::ptr<> length, py::ptr<> oldval)
+{
+    return py::arg_cast<action::RampFunctionBase>(func, "func")
+        ->eval_end(length, oldval).rel();
+}
+PyObject *rampfunc_spline_segments(py::ptr<> func, double length, double oldval)
+{
+    return py::arg_cast<action::RampFunctionBase>(func, "func")
+        ->spline_segments(length, oldval).rel();
+}
+void rampfunc_set_runtime_params(py::ptr<> func, unsigned age)
+{
+    py::arg_cast<action::RampFunctionBase>(func, "func")->set_runtime_params(age);
+}
+rtval::TagVal rampfunc_runtime_eval(py::ptr<> func, double t)
+{
+    return py::arg_cast<action::RampFunctionBase>(func, "func")->runtime_eval(t);
+}
+
 __attribute__((returns_nonnull))
 static inline event_time::TimeManager *seq_get_time_mgr(py::ptr<seq::Seq> seq)
 {

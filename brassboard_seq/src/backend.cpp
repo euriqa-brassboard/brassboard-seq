@@ -23,8 +23,6 @@
 
 namespace brassboard_seq::backend {
 
-static PyObject *rampfunctionbase_type;
-
 using namespace rtval;
 using seq::TimeStep;
 using seq::SubSeq;
@@ -52,8 +50,8 @@ static void collect_actions(SubSeq *self, std::vector<action::Action*> *actions)
     }
 }
 
-template<typename _RampFunctionBase, typename Backend>
-static inline void compiler_finalize(auto comp, _RampFunctionBase*, Backend*)
+template<typename Backend>
+static inline void compiler_finalize(auto comp, Backend*)
 {
     auto seq = comp->seq;
     py::ptr seqinfo = seq->seqinfo;
@@ -106,7 +104,7 @@ static inline void compiler_finalize(auto comp, _RampFunctionBase*, Backend*)
                 }
             }
             auto action_value = action->value.ptr();
-            auto isramp = py::isinstance_nontrivial(action_value, rampfunctionbase_type);
+            auto isramp = action::isramp(action_value);
             py::ptr cond = action->cond;
             last_is_start = false;
             if (!action->is_pulse) {
@@ -114,11 +112,13 @@ static inline void compiler_finalize(auto comp, _RampFunctionBase*, Backend*)
                 if (cond != Py_False) {
                     py::ref<> new_value;
                     if (isramp) {
-                        auto rampf = (_RampFunctionBase*)action_value;
-                        auto length = action->length;
-                        auto vt = rampf->__pyx_vtab;
-                        new_value.take_checked(vt->eval_end(rampf, length, value.get()),
-                                               action_key(action->aid));
+                        auto rampf = (action::RampFunctionBase*)action_value;
+                        try {
+                            new_value.take(rampf->eval_end(action->length, value));
+                        }
+                        catch (...) {
+                            bb_rethrow(action_key(action->aid));
+                        }
                     }
                     else {
                         new_value = action_value.ref();
@@ -158,9 +158,8 @@ static inline auto action_get_condval(auto action, unsigned age)
     }
 }
 
-template<typename _RampFunctionBase, typename Backend>
-static inline void compiler_runtime_finalize(auto comp, py::ptr<> _age,
-                                             _RampFunctionBase*, Backend*)
+template<typename Backend>
+static inline void compiler_runtime_finalize(auto comp, py::ptr<> _age, Backend*)
 {
     unsigned age = _age.as_int();
     auto seq = comp->seq;
@@ -185,11 +184,15 @@ static inline void compiler_runtime_finalize(auto comp, py::ptr<> _age,
             if (!cond_val)
                 continue;
             py::ptr  action_value = action->value;
-            auto isramp = py::isinstance_nontrivial(action_value, rampfunctionbase_type);
+            auto isramp = action::isramp(action_value);
             if (isramp) {
-                auto rampf = (_RampFunctionBase*)action_value;
-                throw_if(rampf->__pyx_vtab->set_runtime_params(rampf, age),
-                         action_key(action->aid));
+                auto rampf = (action::RampFunctionBase*)action_value;
+                try {
+                    rampf->set_runtime_params(age);
+                }
+                catch (...) {
+                    bb_rethrow(action_key(action->aid));
+                }
             }
             else if (is_rtval(action_value)) {
                 rt_eval_throw(action_value, age, action_key(action->aid));

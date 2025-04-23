@@ -22,6 +22,7 @@
 
 #include "src/utils.h"
 
+#include "src/action.h"
 #include "src/config.h"
 #include "src/event_time.h"
 #include "src/rtprop.h"
@@ -58,6 +59,13 @@ PyInit__utils(void)
 {
     return cxx_catch([&] {
         auto m = py::new_module(&_utils_module);
+        // action
+        pymodule_addobjectref(m, "RampFunction", &action::RampFunction_Type);
+        pymodule_addobjectref(m, "SeqCubicSpline", &action::SeqCubicSpline::Type);
+        pymodule_addobjectref(m, "Blackman", &action::Blackman_Type);
+        pymodule_addobjectref(m, "BlackmanSquare", &action::BlackmanSquare_Type);
+        pymodule_addobjectref(m, "LinearRamp", &action::LinearRamp_Type);
+
         // config
         pymodule_addobjectref(m, "Config", &config::Config::Type);
 

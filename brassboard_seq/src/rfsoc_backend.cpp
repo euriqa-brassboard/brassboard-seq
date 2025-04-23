@@ -198,9 +198,6 @@ struct TimedID {
     int16_t id;
 };
 
-static PyObject *rampfunctionbase_type;
-static PyObject *seqcubicspline_type;
-
 // order of the coefficient is order0, order1, order2, order3
 template<int nbits> static constexpr inline std::pair<std::array<int64_t,4>,int>
 convert_pdq_spline(std::array<double,4> sp, int64_t cycles, double scale)
@@ -3858,7 +3855,7 @@ void collect_actions(auto *rb, backend::CompiledSeq &cseq)
         for (auto action: cseq.all_actions[seq_chn]) {
             auto sync = parse_action_kws(action->kws, action->aid);
             py::ptr value = action->value;
-            auto is_ramp = py::isinstance_nontrivial(value, rampfunctionbase_type);
+            auto is_ramp = action::isramp(value);
             if (is_ff && is_ramp)
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "Feed forward control cannot be ramped");
@@ -4139,10 +4136,8 @@ SyncTimeMgr::add_action(std::vector<DDSParamAction> &actions, int64_t start_cycl
     }
 }
 
-template<typename _RampFunctionBase, typename SeqCubicSpline>
 static __attribute__((always_inline)) inline
-void gen_rfsoc_data(auto *rb, backend::CompiledSeq &cseq,
-                    _RampFunctionBase*, SeqCubicSpline*)
+void gen_rfsoc_data(auto *rb, backend::CompiledSeq &cseq)
 {
     bb_debug("gen_rfsoc_data: start\n");
     auto seq = pyx_fld(rb, seq);
@@ -4324,7 +4319,7 @@ void gen_rfsoc_data(auto *rb, backend::CompiledSeq &cseq,
                     continue;
                 }
                 auto len = action.float_value;
-                auto ramp_func = (_RampFunctionBase*)action.ramp;
+                auto ramp_func = (action::RampFunctionBase*)action.ramp;
                 bb_debug("processing ramp on %s: @%" PRId64 ", len=%f, func=%p\n",
                          param_name(param), cur_cycle, len, ramp_func);
                 double sp_time;
@@ -4350,11 +4345,11 @@ void gen_rfsoc_data(auto *rb, backend::CompiledSeq &cseq,
                                         sp, sp_seq_time, prev_tid, param);
                 };
                 if (auto py_spline =
-                    py::cast<SeqCubicSpline,true>(ramp_func, seqcubicspline_type)) {
+                    py::cast<action::SeqCubicSpline,true>(ramp_func)) {
                     bb_debug("found SeqCubicSpline on %s spline: "
                              "old cycle:%" PRId64 "\n", param_name(param), cur_cycle);
-                    cubic_spline_t sp{py_spline->f_order0, py_spline->f_order1,
-                        py_spline->f_order2, py_spline->f_order3};
+                    auto _sp = py_spline->spline();
+                    cubic_spline_t sp{_sp[0], _sp[1], _sp[2], _sp[3]};
                     val = sp.order0 + sp.order1 + sp.order2 + sp.order3;
                     add_spline(len, sp);
                     cur_cycle = sp_cycle;
@@ -4367,14 +4362,18 @@ void gen_rfsoc_data(auto *rb, backend::CompiledSeq &cseq,
                     add_spline(t2, spline_from_values(v0, v1, v2, v3));
                     val = v3;
                 };
-                auto _runtime_eval = ramp_func->__pyx_vtab->runtime_eval;
                 auto eval_ramp = [&] (double t) {
-                    auto v = _runtime_eval(ramp_func, t);
+                    auto v = ramp_func->runtime_eval(t);
                     throw_py_error(v.err);
                     return v.val.f64_val;
                 };
-                auto pts = py::ref(ramp_func->__pyx_vtab->spline_segments(ramp_func, len, val));
-                bb_rethrow_if(!pts, action_key(action.aid));
+                py::ref<> pts;
+                try {
+                    pts = ramp_func->spline_segments(len, val);
+                }
+                catch (...) {
+                    bb_rethrow(action_key(action.aid));
+                }
                 if (pts == Py_None) {
                     bb_debug("Use adaptive segments on %s spline: "
                              "old cycle:%" PRId64 "\n", param_name(param), cur_cycle);

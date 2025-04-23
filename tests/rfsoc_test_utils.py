@@ -2,7 +2,6 @@
 
 from brassboard_seq_rfsoc_backend_utils import *
 
-from brassboard_seq.action import _RampFunctionBase
 from brassboard_seq.config import Config
 from brassboard_seq import backend, rtval, seq
 from brassboard_seq.rfsoc_backend import RFSOCBackend
@@ -77,7 +76,7 @@ class Compiler(backend.SeqCompiler):
                         assert static_time == rfsoc_action.seq_time
 
                     action_value = test_utils.action_get_value(action)
-                    isramp = isinstance(action_value, _RampFunctionBase)
+                    isramp = test_utils.isramp(action_value)
                     if rfsoc_action.tid == action_info['tid']:
                         assert not seen[0]
                         seen[0] = True
@@ -85,8 +84,7 @@ class Compiler(backend.SeqCompiler):
                         assert isramp == rfsoc_action.isramp
                     else:
                         assert rfsoc_action.tid == action_info['end_tid']
-                        isramp = isinstance(test_utils.action_get_value(action),
-                                            _RampFunctionBase)
+                        isramp = test_utils.isramp(test_utils.action_get_value(action))
                         assert test_utils.action_get_is_pulse(action) or isramp
                         assert not seen[1]
                         seen[1] = True
@@ -120,7 +118,7 @@ class Compiler(backend.SeqCompiler):
         for chn, action, seen in all_actions.values():
             assert seen[0]
             action_value = test_utils.action_get_value(action)
-            isramp = isinstance(action_value, _RampFunctionBase)
+            isramp = test_utils.isramp(action_value)
             if test_utils.action_get_is_pulse(action) or isramp:
                 assert seen[1]
             else:

@@ -17,6 +17,9 @@ from cpython cimport PyObject, Py_INCREF, Py_EQ, Py_NE, Py_GT, Py_LT, Py_GE, Py_
 cdef extern from "src/yaml.h" namespace "brassboard_seq":
     void _yaml_io_print "brassboard_seq::yaml::print" (utils.stringio &io, object, int indent) except +
 
+cdef extern from "src/action.h" namespace "brassboard_seq::action":
+    bint action_isramp "brassboard_seq::action::isramp" (object)
+
 cdef extern from "test_utils.cpp" namespace "brassboard_seq":
     char *to_chars(char[], int) except +
     int throw_if_not(int) except +
@@ -122,6 +125,10 @@ cdef extern from "test_utils.cpp" namespace "brassboard_seq":
     object _action_get_length(action.Action *action)
     object _action_get_end_val(action.Action *action)
     str _action_py_str(action.Action *action) except +
+    object rampfunc_eval_end(object, object, object) except +
+    object rampfunc_spline_segments(object, double length, double oldval) except +
+    void rampfunc_set_runtime_params(object, unsigned age) except +
+    rtval.TagVal rampfunc_runtime_eval(object, double t) except +
     event_time.TimeManager seq_get_time_mgr(seq.Seq)
     vector[action.Action*] *compiledseq_get_all_actions(backend.CompiledSeq &cseq)
     int64_t compiledseq_get_total_time(backend.CompiledSeq &cseq)
@@ -173,6 +180,9 @@ def new_extern_age(cb, ty=float):
 
 def new_extern(cb, ty=float):
     return rtval.new_extern(new_test_callback(cb, False), ty)
+
+def isramp(v):
+    return action_isramp(v)
 
 cdef class Action:
     cdef unique_ptr[action.Action] tofree
@@ -228,7 +238,7 @@ cdef double tagval_to_float(rtval.TagVal tv):
     return tv.val.f64_val
 
 cdef class RampTest:
-    cdef action._RampFunctionBase func
+    cdef object func
     cdef object length
     cdef object oldval
 
@@ -238,19 +248,19 @@ cdef class RampTest:
         self.oldval = oldval
 
     def eval_compile_end(self):
-        return self.func.eval_end(self.length, self.oldval)
+        return rampfunc_eval_end(self.func, self.length, self.oldval)
 
     def eval_runtime(self, unsigned age, ts):
-        self.func.set_runtime_params(age)
-        self.func.spline_segments(rtval.get_value_f64(self.length, age),
-                                  rtval.get_value_f64(self.oldval, age))
-        return [tagval_to_float(self.func.runtime_eval(t)) for t in ts]
+        rampfunc_set_runtime_params(self.func, age)
+        rampfunc_spline_segments(self.func, rtval.get_value_f64(self.length, age),
+                                 rtval.get_value_f64(self.oldval, age))
+        return [tagval_to_float(rampfunc_runtime_eval(self.func, t)) for t in ts]
 
-def ramp_get_spline_segments(action._RampFunctionBase self, length, oldval):
-    return self.spline_segments(length, oldval)
+def ramp_get_spline_segments(self, length, oldval):
+    return rampfunc_spline_segments(self, length, oldval)
 
-def ramp_runtime_eval(action._RampFunctionBase self, t):
-    return tagval_to_float(self.runtime_eval(t))
+def ramp_runtime_eval(self, t):
+    return tagval_to_float(rampfunc_runtime_eval(self, t))
 
 def round_time(v):
     if rtval.is_rtval(v):

@@ -17,7 +17,6 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.action cimport _RampFunctionBase
 from brassboard_seq.backend cimport CompiledSeq
 from brassboard_seq.config cimport raise_invalid_channel
 from brassboard_seq.event_time cimport round_time_int
@@ -69,7 +68,6 @@ cdef extern from "src/artiq_backend.cpp" namespace "brassboard_seq::artiq_backen
         int SPI_DATA_ADDR
 
     ArtiqConsts artiq_consts
-    PyObject *rampfunctionbase_type
 
     void collect_actions(ArtiqBackend ab, CompiledSeq&) except +
 
@@ -85,7 +83,6 @@ artiq_consts.URUKUL_SPIT_DDS_WR = <int?>urukul.SPIT_DDS_WR
 artiq_consts.URUKUL_DEFAULT_PROFILE = urukul.DEFAULT_PROFILE if hasattr(urukul, 'DEFAULT_PROFILE') else 0
 artiq_consts.SPI_DATA_ADDR = <int?>spi2.SPI_DATA_ADDR
 artiq_consts.SPI_CONFIG_ADDR = <int?>spi2.SPI_CONFIG_ADDR
-rampfunctionbase_type = <PyObject*>_RampFunctionBase
 
 cdef get_artiq_device(sys, str name):
     if hasattr(sys, 'registry'):

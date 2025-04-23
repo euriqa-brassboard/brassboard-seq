@@ -21,6 +21,8 @@
 
 #include "utils.h"
 
+#include "rtval.h"
+
 namespace brassboard_seq::action {
 
 struct Action {
@@ -52,6 +54,92 @@ struct Action {
 };
 
 using ActionAllocator = PermAllocator<Action,146>;
+
+struct RampFunctionBase : PyObject {
+    struct Data {
+        virtual py::ref<> eval_end(py::ptr<> length, py::ptr<> oldval) = 0;
+        // Currently this function is also used to pass the runtime length and oldval
+        // info to the ramp function to be used in subsequent runtime_eval calls.
+        // This may be moved into a different function if/when we have a caller
+        // that only need one of the effects of this function.
+        // Also note that this API mutates the object and currently means
+        // we cannot compute multiple ramps concurrently.
+        virtual py::ref<> spline_segments(double length, double oldval) = 0;
+        virtual void set_runtime_params(unsigned age) = 0;
+        virtual rtval::TagVal runtime_eval(double t) noexcept = 0;
+    };
+
+    py::ref<> eval_end(py::ptr<> length, py::ptr<> oldval)
+    {
+        return data(this)->eval_end(length, oldval);
+    }
+    py::ref<> spline_segments(double length, double oldval)
+    {
+        return data(this)->spline_segments(length, oldval);
+    }
+    void set_runtime_params(unsigned age)
+    {
+        data(this)->set_runtime_params(age);
+    }
+    rtval::TagVal runtime_eval(double t) noexcept
+    {
+        return data(this)->runtime_eval(t);
+    }
+
+    static PyTypeObject Type;
+protected:
+    template<typename T>
+    static typename T::Data *data(T *p)
+    {
+        return (typename T::Data*)(((char*)p) + sizeof(RampFunctionBase));
+    }
+};
+
+static inline bool isramp(py::ptr<> obj)
+{
+    return py::isinstance_nontrivial(obj, &RampFunctionBase::Type);
+}
+
+struct SeqCubicSpline : RampFunctionBase {
+    struct Data : RampFunctionBase::Data {
+        double f_order0;
+        double f_order1;
+        double f_order2;
+        double f_order3;
+        double f_inv_length;
+
+        py::ref<> order0;
+        py::ref<> order1;
+        py::ref<> order2;
+        py::ref<> order3;
+
+        Data(py::ptr<> o0, py::ptr<> o1, py::ptr<> o2, py::ptr<> o3)
+            : order0(o0.ref()), order1(o1.ref()), order2(o2.ref()), order3(o3.ref())
+        {}
+
+        py::ref<> eval_end(py::ptr<> length, py::ptr<> oldval) override;
+        py::ref<> spline_segments(double length, double oldval) override;
+        void set_runtime_params(unsigned age) override;
+        rtval::TagVal runtime_eval(double t) noexcept override;
+
+        void traverse(auto &visitor);
+        void clear();
+    };
+    ~SeqCubicSpline();
+
+    std::array<double,4> spline()
+    {
+        auto d = data(this);
+        return {d->f_order0, d->f_order1, d->f_order2, d->f_order3};
+    }
+
+    static PyTypeObject Type;
+};
+
+extern PyTypeObject &RampFunction_Type;
+extern PyTypeObject &Blackman_Type;
+extern PyTypeObject &BlackmanSquare_Type;
+extern PyTypeObject &LinearRamp_Type;
 
 }
 

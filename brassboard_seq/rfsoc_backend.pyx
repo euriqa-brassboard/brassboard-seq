@@ -17,7 +17,6 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.action cimport _RampFunctionBase, SeqCubicSpline
 from brassboard_seq.backend cimport CompiledSeq
 from brassboard_seq.config cimport raise_invalid_channel
 from brassboard_seq.event_time cimport round_time_f64
@@ -38,10 +37,8 @@ cdef re # hide import
 import re
 
 cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backend":
-    PyObject *rampfunctionbase_type
-    PyObject *seqcubicspline_type
     void collect_actions(RFSOCBackend ab, CompiledSeq&) except+
-    void gen_rfsoc_data(RFSOCBackend ab, CompiledSeq&, _RampFunctionBase, SeqCubicSpline) except +
+    void gen_rfsoc_data(RFSOCBackend ab, CompiledSeq&) except +
 
     Generator *new_pulse_compiler_generator() except +
     cppclass PulseCompilerGen(Generator):
@@ -194,9 +191,6 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
         @staticmethod
         dict inst_to_dict(const JaqalInst &inst) except +
 
-rampfunctionbase_type = <PyObject*>_RampFunctionBase
-seqcubicspline_type = <PyObject*>SeqCubicSpline
-
 cdef class RFSOCGenerator:
     pass
 
@@ -316,7 +310,7 @@ cdef class RFSOCBackend:
         for dds, delay in self.rt_dds_delay.items():
             rt_eval_throw(<RuntimeValue>delay, age)
             set_dds_delay(self, dds, rtval_cache(<RuntimeValue>delay).get[double]())
-        gen_rfsoc_data(self, cseq, None, None)
+        gen_rfsoc_data(self, cseq)
 
 cdef cubic_spline_t _to_spline(spline):
     if isinstance(spline, tuple):

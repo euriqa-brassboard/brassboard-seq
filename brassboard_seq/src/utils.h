@@ -691,6 +691,18 @@ public:
         PyObject *py_args[] = { (PyObject*)args... };
         return vcall(py_args, sizeof...(args));
     }
+    auto operator+(auto &&o) const
+    {
+        return __ref(throw_if_not(PyNumber_Add((PyObject*)_ptr(), (PyObject*)o)));
+    }
+    auto operator-(auto &&o) const
+    {
+        return __ref(throw_if_not(PyNumber_Subtract((PyObject*)_ptr(), (PyObject*)o)));
+    }
+    auto operator*(auto &&o) const
+    {
+        return __ref(throw_if_not(PyNumber_Multiply((PyObject*)_ptr(), (PyObject*)o)));
+    }
 
     template<typename Value=PyObject> auto generic_iter(uintptr_t key=-1) const;
 

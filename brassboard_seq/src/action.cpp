@@ -43,4 +43,534 @@ py::str_ref Action::py_str()
     return io.getvalue();
 }
 
+__attribute__((visibility("protected")))
+PyTypeObject RampFunctionBase::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.action.RampFunctionBase",
+    .tp_basicsize = sizeof(RampFunctionBase),
+    .tp_dealloc = py::tp_cxx_dealloc<true,RampFunctionBase>,
+    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,
+};
+
+py::ref<> SeqCubicSpline::Data::eval_end(py::ptr<>, py::ptr<>)
+{
+    return order0 + order1 + order2 + order3;
+}
+
+py::ref<> SeqCubicSpline::Data::spline_segments(double length, double oldval)
+{
+    f_inv_length = 1 / length;
+    return py::new_tuple();
+}
+
+void SeqCubicSpline::Data::set_runtime_params(unsigned age)
+{
+    f_order0 = rtval::get_value_f64(order0, age);
+    f_order1 = rtval::get_value_f64(order1, age);
+    f_order2 = rtval::get_value_f64(order2, age);
+    f_order3 = rtval::get_value_f64(order3, age);
+}
+
+rtval::TagVal SeqCubicSpline::Data::runtime_eval(double t) noexcept
+{
+    t = t * f_inv_length;
+    return rtval::TagVal(f_order0 + (f_order1 + (f_order2 + f_order3 * t) * t) * t);
+}
+
+inline void SeqCubicSpline::Data::traverse(auto &visitor)
+{
+    visitor(order0);
+    visitor(order1);
+    visitor(order2);
+    visitor(order3);
+}
+
+inline void SeqCubicSpline::Data::clear()
+{
+    order0.CLEAR();
+    order1.CLEAR();
+    order2.CLEAR();
+    order3.CLEAR();
+}
+
+inline SeqCubicSpline::~SeqCubicSpline()
+{
+    call_destructor(data(this));
+}
+
+__attribute__((visibility("protected")))
+PyTypeObject SeqCubicSpline::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.action.SeqCubicSpline",
+    .tp_basicsize = sizeof(RampFunctionBase) + sizeof(SeqCubicSpline::Data),
+    .tp_dealloc = py::tp_cxx_dealloc<true,SeqCubicSpline>,
+    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
+    .tp_traverse = py::tp_traverse<[] (py::ptr<SeqCubicSpline> self, auto &visitor) {
+        data(self.get())->traverse(visitor);
+    }>,
+    .tp_clear = py::iunifunc<[] (py::ptr<SeqCubicSpline> self) {
+        data(self.get())->clear();
+    }>,
+    .tp_getset = (py::getset_table<
+                  py::getset_def<"order0",[] (py::ptr<SeqCubicSpline> self) {
+                      return py::newref(data(self.get())->order0); }>,
+                  py::getset_def<"order1",[] (py::ptr<SeqCubicSpline> self) {
+                      return py::newref(data(self.get())->order1); }>,
+                  py::getset_def<"order2",[] (py::ptr<SeqCubicSpline> self) {
+                      return py::newref(data(self.get())->order2); }>,
+                  py::getset_def<"order3",[] (py::ptr<SeqCubicSpline> self) {
+                      return py::newref(data(self.get())->order3); }>>),
+    .tp_base = &RampFunctionBase::Type,
+    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+                                        ssize_t nargs, py::tuple kwnames) {
+        py::check_num_arg("SeqCubicSpline.__init__", nargs, 0, 4);
+        auto [order0, order1, order2, order3] =
+            py::parse_pos_or_kw_args<"order0","order1","order2","order2">(
+                "SeqCubicSpline.__init__", args, nargs, kwnames);
+        if (!order0)
+            py_throw_format(PyExc_TypeError,
+                            "SeqCubicSpline.__init__ missing 1 required "
+                            "positional argument: 'order0'");
+        if (!order1)
+            order1 = py::int_cached(0);
+        if (!order2)
+            order2 = py::int_cached(0);
+        if (!order3)
+            order3 = py::int_cached(0);
+        auto self = py::generic_alloc<SeqCubicSpline>();
+        call_constructor(data(self.get()), order0, order1, order2, order3);
+        return self;
+    }>
+};
+
+namespace {
+
+struct RampFunction : RampFunctionBase {
+    struct Data : RampFunctionBase::Data {
+        py::ref<> eval;
+        py::ref<> _spline_segments;
+        py::ref<> fvalue;
+        std::unique_ptr<rtval::InterpFunction> interp_func;
+
+        py::ptr<> py_self()
+        {
+            return py::ptr<>(((char*)this) - sizeof(RampFunctionBase));
+        }
+        py::ptr<> py_type()
+        {
+            return py_self().type();
+        }
+
+        py::ref<> call_eval(py::ptr<> t, py::ptr<> length, py::ptr<> oldval)
+        {
+            if (!eval)
+                eval = py_type().attr("eval"_py);
+            return eval(py_self(), t, length, oldval);
+        }
+        void compile()
+        {
+            static rtval::rtval_ptr arg0 =
+                py::ref(rtval::new_arg(py::int_cached(0), &PyFloat_Type)).rel();
+            static rtval::rtval_ptr arg1 =
+                py::ref(rtval::new_arg(py::int_cached(1), &PyFloat_Type)).rel();
+            static rtval::rtval_ptr arg2 =
+                py::ref(rtval::new_arg(py::int_cached(2), &PyFloat_Type)).rel();
+            static rtval::rtval_ptr const0 = rtval::new_const(0.0).rel();
+            fvalue = call_eval(arg0, arg1, arg2);
+            if (rtval::is_rtval(fvalue)) {
+                interp_func.reset(new rtval::InterpFunction);
+                std::vector<rtval::DataType> args{
+                    rtval::DataType::Float64,
+                    rtval::DataType::Float64,
+                    rtval::DataType::Float64};
+                if (rtval::rtval_ptr(fvalue)->datatype != rtval::DataType::Float64)
+                    fvalue = rtval::new_expr2(rtval::Add, fvalue, const0);
+                interp_func->set_value(fvalue, args);
+            }
+            else if (!fvalue.typeis<py::float_>()) {
+                fvalue = py::new_float(fvalue.as_float());
+            }
+        }
+
+        py::ref<> eval_end(py::ptr<> length, py::ptr<> oldval) override
+        {
+            return call_eval(length, length, oldval);
+        }
+        py::ref<> spline_segments(double length, double oldval) override
+        {
+            if (interp_func) {
+                interp_func->data[1].f64_val = length;
+                interp_func->data[2].f64_val = oldval;
+            }
+            if (!_spline_segments) {
+                _spline_segments = py_type().try_attr("spline_segments"_py);
+                if (!_spline_segments) {
+                    _spline_segments = py::new_none();
+                }
+            }
+            if (_spline_segments.is_none())
+                return py::new_none();
+            return _spline_segments(py_self(), py::new_float(length),
+                                    py::new_float(oldval));
+        }
+        void set_runtime_params(unsigned age) override
+        {
+            if (!fvalue)
+                py_throw_format(PyExc_RuntimeError, "RampFunction.__init__ not called");
+            if (interp_func) {
+                interp_func->eval_all(age);
+            }
+        }
+        rtval::TagVal runtime_eval(double t) noexcept override
+        {
+            if (!interp_func)
+                return rtval::TagVal(PyFloat_AS_DOUBLE(fvalue.get()));
+            interp_func->data[0].f64_val = t;
+            return interp_func->call();
+        }
+
+        void traverse(auto &visitor)
+        {
+            visitor(eval);
+            visitor(_spline_segments);
+            visitor(fvalue);
+        }
+        void clear()
+        {
+            eval.CLEAR();
+            _spline_segments.CLEAR();
+            fvalue.CLEAR();
+        }
+    };
+    ~RampFunction()
+    {
+        call_destructor(data(this));
+    }
+
+    static PyTypeObject Type;
+};
+
+PyTypeObject RampFunction::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.action.RampFunction",
+    .tp_basicsize = sizeof(RampFunctionBase) + sizeof(RampFunction::Data),
+    .tp_dealloc = py::tp_cxx_dealloc<true,RampFunction>,
+    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE|Py_TPFLAGS_HAVE_GC,
+    .tp_traverse = py::tp_traverse<[] (py::ptr<RampFunction> self, auto &visitor) {
+        data(self.get())->traverse(visitor);
+    }>,
+    .tp_clear = py::iunifunc<[] (py::ptr<RampFunction> self) {
+        data(self.get())->clear();
+    }>,
+    .tp_base = &RampFunctionBase::Type,
+    .tp_init = py::itrifunc<[] (py::ptr<RampFunction> self, py::tuple args, py::dict kws) {
+        if (args)
+            py::check_num_arg("RampFunction.__init__", args.size(), 0, 0);
+        if (kws) {
+            for (auto [name, value]: py::dict_iter(kws)) {
+                self.set_attr(name, value);
+            }
+        }
+        data(self.get())->compile();
+    }>,
+    .tp_new = py::tp_new<[] (PyTypeObject *t, auto...) {
+        auto self = py::generic_alloc<RampFunction>(t);
+        call_constructor(data(self.get()));
+        return self;
+    }>,
+};
+
+// These ramp functions can be implemented in python code but are provided here
+// to be slightly more efficient.
+struct Blackman : RampFunctionBase {
+    struct Data : RampFunctionBase::Data {
+        double f_amp;
+        double f_offset;
+        double f_t_scale;
+
+        py::ref<> amp;
+        py::ref<> offset;
+
+        Data(py::ptr<> amp, py::ptr<> offset)
+            : amp(amp.ref()), offset(offset.ref())
+        {}
+
+        py::ref<> eval_end(py::ptr<>, py::ptr<>) override
+        {
+            return offset.ref();
+        }
+        py::ref<> spline_segments(double length, double oldval) override
+        {
+            f_t_scale = length == 0 ? 0.0 : (M_PI * 2 / length);
+            return py::new_none();
+        }
+        void set_runtime_params(unsigned age) override
+        {
+            f_amp = rtval::get_value_f64(amp, age);
+            f_offset = rtval::get_value_f64(offset, age);
+        }
+        rtval::TagVal runtime_eval(double t) noexcept override
+        {
+            auto cost = cos(t * f_t_scale);
+            auto val = f_amp * (0.34 - cost * (0.5 - 0.16 * cost));
+            return rtval::TagVal(val + f_offset);
+        }
+
+        void traverse(auto &visitor)
+        {
+            visitor(amp);
+            visitor(offset);
+        }
+        void clear()
+        {
+            amp.CLEAR();
+            offset.CLEAR();
+        }
+    };
+    ~Blackman()
+    {
+        call_destructor(data(this));
+    }
+
+    static PyTypeObject Type;
+};
+
+PyTypeObject Blackman::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.action.Blackman",
+    .tp_basicsize = sizeof(RampFunctionBase) + sizeof(Blackman::Data),
+    .tp_dealloc = py::tp_cxx_dealloc<true,Blackman>,
+    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
+    .tp_traverse = py::tp_traverse<[] (py::ptr<Blackman> self, auto &visitor) {
+        data(self.get())->traverse(visitor);
+    }>,
+    .tp_clear = py::iunifunc<[] (py::ptr<Blackman> self) {
+        data(self.get())->clear();
+    }>,
+    .tp_getset = (py::getset_table<
+                  py::getset_def<"amp",[] (py::ptr<Blackman> self) {
+                      return py::newref(data(self.get())->amp); }>,
+                  py::getset_def<"offset",[] (py::ptr<Blackman> self) {
+                      return py::newref(data(self.get())->offset); }>>),
+    .tp_base = &RampFunctionBase::Type,
+    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+                                        ssize_t nargs, py::tuple kwnames) {
+        py::check_num_arg("Blackman.__init__", nargs, 0, 2);
+        auto [amp, offset] =
+            py::parse_pos_or_kw_args<"amp","offset">(
+                "Blackman.__init__", args, nargs, kwnames);
+        if (!amp)
+            py_throw_format(PyExc_TypeError,
+                            "Blackman.__init__ missing 1 required "
+                            "positional argument: 'amp'");
+        if (!offset)
+            offset = py::int_cached(0);
+        auto self = py::generic_alloc<Blackman>();
+        call_constructor(data(self.get()), amp, offset);
+        return self;
+    }>
+};
+
+struct BlackmanSquare : RampFunctionBase {
+    struct Data : RampFunctionBase::Data {
+        double f_amp;
+        double f_offset;
+        double f_t_scale;
+
+        py::ref<> amp;
+        py::ref<> offset;
+
+        Data(py::ptr<> amp, py::ptr<> offset)
+            : amp(amp.ref()), offset(offset.ref())
+        {}
+
+        py::ref<> eval_end(py::ptr<>, py::ptr<>) override
+        {
+            return offset.ref();
+        }
+        py::ref<> spline_segments(double length, double oldval) override
+        {
+            f_t_scale = length == 0 ? 0.0 : (M_PI * 2 / length);
+            return py::new_none();
+        }
+        void set_runtime_params(unsigned age) override
+        {
+            f_amp = rtval::get_value_f64(amp, age);
+            f_offset = rtval::get_value_f64(offset, age);
+        }
+        rtval::TagVal runtime_eval(double t) noexcept override
+        {
+            auto cost = cos(t * f_t_scale);
+            auto val = 0.34 - cost * (0.5 - 0.16 * cost);
+            val = f_amp * val * val;
+            return rtval::TagVal(val + f_offset);
+        }
+
+        void traverse(auto &visitor)
+        {
+            visitor(amp);
+            visitor(offset);
+        }
+        void clear()
+        {
+            amp.CLEAR();
+            offset.CLEAR();
+        }
+    };
+    ~BlackmanSquare()
+    {
+        call_destructor(data(this));
+    }
+
+    static PyTypeObject Type;
+};
+
+PyTypeObject BlackmanSquare::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.action.BlackmanSquare",
+    .tp_basicsize = sizeof(RampFunctionBase) + sizeof(BlackmanSquare::Data),
+    .tp_dealloc = py::tp_cxx_dealloc<true,BlackmanSquare>,
+    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
+    .tp_traverse = py::tp_traverse<[] (py::ptr<BlackmanSquare> self, auto &visitor) {
+        data(self.get())->traverse(visitor);
+    }>,
+    .tp_clear = py::iunifunc<[] (py::ptr<BlackmanSquare> self) {
+        data(self.get())->clear();
+    }>,
+    .tp_getset = (py::getset_table<
+                  py::getset_def<"amp",[] (py::ptr<BlackmanSquare> self) {
+                      return py::newref(data(self.get())->amp); }>,
+                  py::getset_def<"offset",[] (py::ptr<BlackmanSquare> self) {
+                      return py::newref(data(self.get())->offset); }>>),
+    .tp_base = &RampFunctionBase::Type,
+    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+                                        ssize_t nargs, py::tuple kwnames) {
+        py::check_num_arg("BlackmanSquare.__init__", nargs, 0, 2);
+        auto [amp, offset] =
+            py::parse_pos_or_kw_args<"amp","offset">(
+                "BlackmanSquare.__init__", args, nargs, kwnames);
+        if (!amp)
+            py_throw_format(PyExc_TypeError,
+                            "BlackmanSquare.__init__ missing 1 required "
+                            "positional argument: 'amp'");
+        if (!offset)
+            offset = py::int_cached(0);
+        auto self = py::generic_alloc<BlackmanSquare>();
+        call_constructor(data(self.get()), amp, offset);
+        return self;
+    }>
+};
+
+struct LinearRamp : RampFunctionBase {
+    struct Data : RampFunctionBase::Data {
+        double f_start;
+        double f_end;
+        double f_inv_length;
+
+        py::ref<> start;
+        py::ref<> end;
+
+        Data(py::ptr<> start, py::ptr<> end)
+            : start(start.ref()), end(end.ref())
+        {}
+
+        py::ref<> eval_end(py::ptr<>, py::ptr<>) override
+        {
+            return end.ref();
+        }
+        py::ref<> spline_segments(double length, double oldval) override
+        {
+            f_inv_length = 1 / length;
+            return py::new_tuple();
+        }
+        void set_runtime_params(unsigned age) override
+        {
+            f_start = rtval::get_value_f64(start, age);
+            f_end = rtval::get_value_f64(end, age);
+        }
+        rtval::TagVal runtime_eval(double t) noexcept override
+        {
+            t = t * f_inv_length;
+            return rtval::TagVal(f_start * (1 - t) + f_end * t);
+        }
+
+        void traverse(auto &visitor)
+        {
+            visitor(start);
+            visitor(end);
+        }
+        void clear()
+        {
+            start.CLEAR();
+            end.CLEAR();
+        }
+    };
+    ~LinearRamp()
+    {
+        call_destructor(data(this));
+    }
+
+    static PyTypeObject Type;
+};
+
+PyTypeObject LinearRamp::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.action.LinearRamp",
+    .tp_basicsize = sizeof(RampFunctionBase) + sizeof(LinearRamp::Data),
+    .tp_dealloc = py::tp_cxx_dealloc<true,LinearRamp>,
+    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
+    .tp_traverse = py::tp_traverse<[] (py::ptr<LinearRamp> self, auto &visitor) {
+        data(self.get())->traverse(visitor);
+    }>,
+    .tp_clear = py::iunifunc<[] (py::ptr<LinearRamp> self) {
+        data(self.get())->clear();
+    }>,
+    .tp_getset = (py::getset_table<
+                  py::getset_def<"start",[] (py::ptr<LinearRamp> self) {
+                      return py::newref(data(self.get())->start); }>,
+                  py::getset_def<"end",[] (py::ptr<LinearRamp> self) {
+                      return py::newref(data(self.get())->end); }>>),
+    .tp_base = &RampFunctionBase::Type,
+    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+                                        ssize_t nargs, py::tuple kwnames) {
+        py::check_num_arg("LinearRamp.__init__", nargs, 0, 2);
+        auto [start, end] =
+            py::parse_pos_or_kw_args<"start","end">(
+                "LinearRamp.__init__", args, nargs, kwnames);
+        if (!start)
+            py_throw_format(PyExc_TypeError,
+                            "LinearRamp.__init__ missing 1 required "
+                            "positional argument: 'start'");
+        if (!end)
+            py_throw_format(PyExc_TypeError,
+                            "LinearRamp.__init__ missing 1 required "
+                            "positional argument: 'end'");
+        auto self = py::generic_alloc<LinearRamp>();
+        call_constructor(data(self.get()), start, end);
+        return self;
+    }>
+};
+
+}
+
+__attribute__((visibility("protected")))
+PyTypeObject &RampFunction_Type = RampFunction::Type;
+__attribute__((visibility("protected")))
+PyTypeObject &Blackman_Type = Blackman::Type;
+__attribute__((visibility("protected")))
+PyTypeObject &BlackmanSquare_Type = BlackmanSquare::Type;
+__attribute__((visibility("protected")))
+PyTypeObject &LinearRamp_Type = LinearRamp::Type;
+
+__attribute__((constructor))
+static void init()
+{
+    throw_if(PyType_Ready(&RampFunctionBase::Type) < 0);
+    throw_if(PyType_Ready(&RampFunction::Type) < 0);
+    throw_if(PyType_Ready(&SeqCubicSpline::Type) < 0);
+    throw_if(PyType_Ready(&Blackman::Type) < 0);
+    throw_if(PyType_Ready(&BlackmanSquare::Type) < 0);
+    throw_if(PyType_Ready(&LinearRamp::Type) < 0);
+}
+
 }

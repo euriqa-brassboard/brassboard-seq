@@ -26,17 +26,6 @@ def test_action():
     check_action_str(a2, "Set(1.2, a=1, b=2)")
     check_action_str(a3, "Pulse(2.3, cond=False, exact_time=True)")
 
-def test_ramp_base():
-    r = action._RampFunctionBase()
-    test = test_utils.RampTest(r, 1, 0)
-    with pytest.raises(NotImplementedError):
-        test.eval_compile_end()
-    with pytest.raises(NotImplementedError):
-        test.eval_runtime(1, [1, 2, 3])
-    with pytest.raises(NotImplementedError):
-        test_utils.ramp_get_spline_segments(r, 1, 0)
-    assert test_utils.ramp_runtime_eval(r, 1) == 0
-
 def test_ramp_eval():
     rt = test_utils.new_extern(lambda: 1)
     rlen = test_utils.new_extern(lambda: 2)
