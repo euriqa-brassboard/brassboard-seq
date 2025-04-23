@@ -342,7 +342,7 @@ static inline auto immref(auto *obj)
 #endif
 
 template<typename T>
-static inline auto *newref(py::ref<T> &&h)
+static inline auto *newref(ref<T> &&h)
 {
     return h.rel();
 }
@@ -1135,7 +1135,7 @@ auto arg_cast(T2 &&self, const char *name)
 template<typename T>
 static inline void assign(auto *&field, T &&v)
 {
-    ref((PyObject*)std::exchange(field, py::newref(std::forward<T>(v))));
+    ref((PyObject*)std::exchange(field, newref(std::forward<T>(v))));
 }
 
 template<typename T>
@@ -1181,7 +1181,7 @@ static inline ref<> new_not_implemented()
     return ref(immref(Py_NotImplemented));
 }
 
-static inline bool is_slice_none(py::ptr<> key)
+static inline bool is_slice_none(ptr<> key)
 {
     if (!PySlice_Check(key))
         return false;
@@ -1214,7 +1214,7 @@ static inline list_ref new_list(T &&first, Args&&... args)
     PyObject *objs[] = { newref(std::forward<T>(first)),
         newref(std::forward<Args>(args))... };
     for (int i = 0; i < n; i++)
-        res.SET(i, py::ref(objs[i]));
+        res.SET(i, ref(objs[i]));
     return res;
 }
 static inline list_ref new_nlist(Py_ssize_t n, auto &&cb)
@@ -1243,7 +1243,7 @@ static inline tuple_ref new_tuple(T &&first, Args&&... args)
     PyObject *objs[] = { newref(std::forward<T>(first)),
         newref(std::forward<Args>(args))... };
     for (int i = 0; i < n; i++)
-        res.SET(i, py::ref(objs[i]));
+        res.SET(i, ref(objs[i]));
     return res;
 }
 static inline tuple_ref new_ntuple(Py_ssize_t n, auto &&cb)
@@ -1434,7 +1434,7 @@ struct _generic_iterator {
         throw_if(!item && PyErr_Occurred(), key);
         return *this;
     }
-    ptr<py::py_tag_type<Value>> operator*()
+    ptr<py_tag_type<Value>> operator*()
     {
         return item.ptr();
     }
@@ -1466,9 +1466,9 @@ struct _dict_iterator {
         has_next = PyDict_Next(dict, &pos, &key, &value);
         return *this;
     }
-    std::pair<ptr<py::py_tag_type<Key>>,ptr<py::py_tag_type<Value>>> operator*()
+    std::pair<ptr<py_tag_type<Key>>,ptr<py_tag_type<Value>>> operator*()
     {
-        return { ptr((py::py_tag_type<Key>*)key), ptr((py::py_tag_type<Value>*)value) };
+        return { ptr((py_tag_type<Key>*)key), ptr((py_tag_type<Value>*)value) };
     }
     bool operator==(std::nullptr_t) { return !has_next; }
     static std::nullptr_t end(auto&&) { return nullptr; };
@@ -1494,9 +1494,9 @@ struct _list_iterator {
         ++pos;
         return *this;
     }
-    std::pair<Py_ssize_t,ptr<py::py_tag_type<Value>>> operator*()
+    std::pair<Py_ssize_t,ptr<py_tag_type<Value>>> operator*()
     {
-        return { pos, ptr((py::py_tag_type<Value>*)PyList_GET_ITEM(list, pos)) };
+        return { pos, ptr((py_tag_type<Value>*)PyList_GET_ITEM(list, pos)) };
     }
     bool operator==(Py_ssize_t n) { return pos == n; }
     static Py_ssize_t end(PyObject *list) { return PyList_GET_SIZE(list); }
@@ -1520,9 +1520,9 @@ struct _tuple_iterator {
         ++pos;
         return *this;
     }
-    std::pair<Py_ssize_t,ptr<py::py_tag_type<Value>>> operator*()
+    std::pair<Py_ssize_t,ptr<py_tag_type<Value>>> operator*()
     {
-        return { pos, ptr((py::py_tag_type<Value>*)PyTuple_GET_ITEM(tuple, pos)) };
+        return { pos, ptr((py_tag_type<Value>*)PyTuple_GET_ITEM(tuple, pos)) };
     }
     bool operator==(Py_ssize_t n) { return pos == n; }
     static Py_ssize_t end(PyObject *tuple) { return PyTuple_GET_SIZE(tuple); }
@@ -1543,8 +1543,8 @@ template<typename T2>
 auto common<H,T>::append(T2 &&v) const requires std::same_as<T,_tuple>
 {
     Py_ssize_t nele = size();
-    auto res = py::new_tuple(nele + 1);
-    for (auto p = _ptr(); auto [i, v]: py::tuple_iter(p))
+    auto res = new_tuple(nele + 1);
+    for (auto p = _ptr(); auto [i, v]: tuple_iter(p))
         res.SET(i, v);
     res.SET(nele, std::forward<T2>(v));
     return res;
@@ -1580,12 +1580,12 @@ static inline auto str_iter(T &&h)
     return _iter<_str_iterator,std::remove_cv_t<T>>(std::forward<T>(h));
 }
 
-static inline bool isinstance_nontrivial(py::ptr<> obj, py::ptr<> ty)
+static inline bool isinstance_nontrivial(ptr<> obj, ptr<> ty)
 {
     auto objt = obj.type();
     // Assume objt != ty and ty != object, and skip the first and last element in mro.
     // Also assume fully initialized type `ty`
-    py::tuple mro = objt->tp_mro;
+    tuple mro = objt->tp_mro;
     for (Py_ssize_t i = 1, n = mro.size() - 1; i < n; i++) {
         if (mro.get(i) == ty) {
             return true;
@@ -1596,7 +1596,7 @@ static inline bool isinstance_nontrivial(py::ptr<> obj, py::ptr<> ty)
 
 [[noreturn]] void num_arg_error(const char *func_name, ssize_t nfound,
                                 ssize_t nmin, ssize_t nmax);
-[[noreturn]] void unexpected_kwarg_error(const char *func_name, py::str name);
+[[noreturn]] void unexpected_kwarg_error(const char *func_name, str name);
 static __attribute__((always_inline)) inline void
 check_num_arg(const char *func_name, ssize_t nfound, ssize_t nmin, ssize_t nmax=-1)
 {
@@ -1613,9 +1613,9 @@ check_no_kwnames(const char *name, tuple kwnames)
     }
 }
 
-static inline void check_non_empty_string(py::ptr<> arg, const char *name)
+static inline void check_non_empty_string(ptr<> arg, const char *name)
 {
-    if (auto s = py::cast<py::str>(arg); s && s.size())
+    if (auto s = cast<str>(arg); s && s.size())
         return;
     py_throw_format(PyExc_TypeError, "%s must be a string", name);
 }
@@ -1624,13 +1624,13 @@ template<str_literal... argnames>
 static inline auto parse_pos_or_kw_args(const char *fname, PyObject *const *args,
                                         Py_ssize_t nargs, tuple kwnames)
 {
-    std::array<py::ptr<>,sizeof...(argnames)> res;
+    std::array<ptr<>,sizeof...(argnames)> res;
     const char *argnames_ary[] = { argnames.value... };
     for (Py_ssize_t i = 0; i < nargs; i++)
         res[i] = args[i];
     if (kwnames) {
         auto kwargs = args + nargs;
-        for (auto [i, kwname]: tuple_iter<py::str>(kwnames)) {
+        for (auto [i, kwname]: tuple_iter<str>(kwnames)) {
             bool found = false;
             for (size_t j = 0; j < sizeof...(argnames); j++) {
                 if (PyUnicode_CompareWithASCIIString(kwname, argnames_ary[j]) == 0) {
