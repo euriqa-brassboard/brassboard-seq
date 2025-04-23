@@ -48,7 +48,6 @@ static void set_dict(py::dict tgt, py::ptr<> key, py::ptr<> value)
         }
     }
     else {
-        throw_pyerr();
         tgt.set(key, py::dict_deepcopy(value));
     }
 }

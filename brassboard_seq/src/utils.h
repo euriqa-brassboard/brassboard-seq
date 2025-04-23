@@ -216,24 +216,6 @@ struct str_literal {
     char value[N];
 };
 
-template<size_t N, typename T>
-class _ntuple {
-    template<typename=std::make_index_sequence<N>> struct impl;
-
-    template<size_t... Is>
-    struct impl<std::index_sequence<Is...>> {
-        template<size_t> using wrap = T;
-        using type = std::tuple<wrap<Is>...>;
-    };
-public:
-    using type = typename impl<>::type;
-};
-
-template<size_t N, typename T>
-using ntuple = typename _ntuple<N,T>::type;
-
-template<auto v> static inline auto global_var = v;
-
 template<typename T>
 static inline char *to_chars(std::span<char> buf, T &&t)
 {
@@ -2064,11 +2046,6 @@ static inline int tp_traverse(PyObject *self, visitproc visit, void *arg)
     return visitor.res;
 }
 
-}
-
-static inline void throw_pyerr(bool cond=true)
-{
-    throw_if(cond && PyErr_Occurred());
 }
 
 template<str_literal lit>
