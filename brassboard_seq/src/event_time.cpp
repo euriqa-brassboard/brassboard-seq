@@ -25,12 +25,16 @@
 
 namespace brassboard_seq::event_time {
 
-__attribute__((visibility("protected")))
-py::ptr<> py_time_scale()
+static inline py::ptr<> py_time_scale()
 {
     static auto val = py::new_int(time_scale).rel();
     return val;
 }
+
+__attribute__((visibility("protected")))
+PyMethodDef time_scale_method = py::meth_noargs<"time_scale",[] (auto) {
+    return py_time_scale().ref();
+}>;
 
 __attribute__((visibility("protected")))
 rtval::rtval_ref round_time_rt(rtval::rtval_ptr v)

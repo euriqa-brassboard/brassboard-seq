@@ -73,6 +73,9 @@ PyInit__utils(void)
         // event_time
         pymodule_addobjectref(m, "TimeManager", &event_time::TimeManager::Type);
         pymodule_addobjectref(m, "EventTime", &event_time::EventTime::Type);
+        pymodule_addobjectref(m, "event_time_time_scale",
+                              py::new_cfunc(&event_time::time_scale_method,
+                                            nullptr, "brassboard_seq.event_time"_py));
 
         // rtprop
         pymodule_addobjectref(m, "CompositeRTProp", &rtprop::CompositeRTProp_Type);

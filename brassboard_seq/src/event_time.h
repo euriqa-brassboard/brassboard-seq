@@ -30,8 +30,6 @@ using brassboard_seq::rtval::RuntimeValue;
 // 1ps for internal time unit
 static constexpr int64_t time_scale = 1000000000000ll;
 
-py::ptr<> py_time_scale();
-
 static inline int64_t round_time_f64(double v)
 {
     return round<int64_t>(v * double(time_scale));
@@ -279,6 +277,8 @@ static inline TimeOrder is_ordered(EventTime *t1, EventTime *t2)
         return OrderAfter;
     return NoOrder;
 }
+
+extern PyMethodDef time_scale_method;
 
 void init();
 

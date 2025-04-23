@@ -18,14 +18,7 @@
 
 # Do not use relative import since it messes up cython file name tracking
 
-from cpython cimport PyObject
-
-cdef extern from * namespace "brassboard_seq::event_time":
-    PyObject *py_time_scale()
-
+from brassboard_seq._utils import event_time_time_scale as time_scale
 # Manually set the field since I can't make cython automatically do this
 # without also declaring the c struct again...
 globals()['EventTime'] = EventTime
-
-def time_scale():
-    return <object>py_time_scale()
