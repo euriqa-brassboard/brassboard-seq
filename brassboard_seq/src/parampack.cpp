@@ -275,7 +275,7 @@ PyTypeObject ParamPack::Type = {
 PyMethodDef parampack_get_visited_method =
     py::meth_o<"get_visited", [] (auto, py::ptr<> param_pack) -> py::ref<> {
     auto self = py::arg_cast<ParamPack,true>(param_pack, "param_pack");
-    auto fieldname = self->fieldname.ptr();
+    py::ptr fieldname = self->fieldname;
     if (auto res = self->visited.try_get(fieldname))
         return res.ref();
     if (auto value = self->values.try_get(fieldname);

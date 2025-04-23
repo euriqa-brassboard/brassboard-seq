@@ -77,7 +77,7 @@ static void recursive_assign(py::dict d, py::tuple path, py::ptr<> v)
         else {
             auto newd = py::new_dict();
             d.set(f, newd);
-            d = newd.ptr(); // the parent dict would be keeping newd alive.
+            d = newd; // the parent dict would be keeping newd alive.
         }
     }
 }
@@ -521,7 +521,7 @@ struct ScanGroup : PyObject {
             });
             s1d->size = sz;
         }
-        auto scanp = scan.ptr();
+        py::ptr scanp = scan;
         scanscache.set(idx, std::move(scan));
         return scanp;
     }

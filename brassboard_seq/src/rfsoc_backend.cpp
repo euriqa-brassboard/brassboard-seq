@@ -2890,7 +2890,7 @@ struct PulseCompilerGen: SyncChannelGen {
         if (!tonedatas) {
             auto tonedatas = py::new_list(std::move(tonedata));
             output.set(key, tonedatas);
-            last_tonedatas = tonedatas.ptr();
+            last_tonedatas = tonedatas;
         }
         else {
             py::list(tonedatas).append(std::move(tonedata));

@@ -103,7 +103,7 @@ static inline void compiler_finalize(auto comp, Backend*)
                                     seqinfo->channel_name_from_id(cid));
                 }
             }
-            auto action_value = action->value.ptr();
+            py::ptr action_value = action->value;
             auto isramp = action::isramp(action_value);
             py::ptr cond = action->cond;
             last_is_start = false;
@@ -183,7 +183,7 @@ static inline void compiler_runtime_finalize(auto comp, py::ptr<> _age, Backend*
             action->cond_val = cond_val;
             if (!cond_val)
                 continue;
-            py::ptr  action_value = action->value;
+            py::ptr action_value = action->value;
             auto isramp = action::isramp(action_value);
             if (isramp) {
                 auto rampf = (action::RampFunctionBase*)action_value;
