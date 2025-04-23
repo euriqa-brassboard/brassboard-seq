@@ -58,6 +58,7 @@ PyMODINIT_FUNC
 PyInit__utils(void)
 {
     return cxx_catch([&] {
+        init();
         auto m = py::new_module(&_utils_module);
         // action
         pymodule_addobjectref(m, "RampFunction", &action::RampFunction_Type);

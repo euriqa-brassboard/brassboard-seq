@@ -141,6 +141,8 @@ extern PyTypeObject &Blackman_Type;
 extern PyTypeObject &BlackmanSquare_Type;
 extern PyTypeObject &LinearRamp_Type;
 
+void init();
+
 }
 
 #endif

@@ -107,8 +107,6 @@ static inline constexpr auto _pyx_find_base(T &&p, auto cb)
 
 namespace brassboard_seq {
 
-#define BB_PREINIT __attribute__((unused,init_priority(101)))
-
 // Replace with C++23 [[assume()]];
 #if bb_has_builtin(__builtin_assume)
 static constexpr inline __attribute__((always_inline)) auto assume(auto v)
@@ -1948,7 +1946,7 @@ template<str_literal name, auto F, str_literal doc="",int flags=0>
 static constexpr auto meth_fastkw = _method_def<name,cfunc_fastkw<F>,
                                                 METH_FASTCALL|METH_KEYWORDS|flags,doc>{};
 
-template<_method_def... defs> static inline PyMethodDef meth_table[] BB_PREINIT = { defs..., {} };
+template<_method_def... defs> static inline PyMethodDef meth_table[] = { defs..., {} };
 
 template<str_literal name, int type, auto ptr, int flags, str_literal doc>
 struct _mem_def;
@@ -1964,7 +1962,7 @@ struct _mem_def<name,type,ptr,flags,doc>
 };
 template<str_literal name, int type, auto ptr, int flags, str_literal doc="">
 static constexpr _mem_def<name,type,ptr,flags,doc> mem_def;
-template<_mem_def... defs> static inline PyMemberDef mem_table[] BB_PREINIT = { defs..., {} };
+template<_mem_def... defs> static inline PyMemberDef mem_table[] = { defs..., {} };
 
 template<auto F>
 static inline PyObject *getter_func(PyObject *self, void*)
@@ -1992,7 +1990,7 @@ struct _getset_def {
 };
 template<str_literal name, auto get, auto set=nullptr, str_literal doc="">
 static constexpr _getset_def<name,get,set,doc> getset_def;
-template<_getset_def... defs> static inline PyGetSetDef getset_table[] BB_PREINIT = { defs..., {} };
+template<_getset_def... defs> static inline PyGetSetDef getset_table[] = { defs..., {} };
 
 template<auto F>
 static inline PyObject *vectorfunc(PyObject *self, PyObject *const *args,
@@ -2646,6 +2644,8 @@ static void foreach_max_range(std::span<int> value, auto &&cb)
         cb(prev_idx, N - 1, prev_v);
     }
 }
+
+void init();
 
 }
 

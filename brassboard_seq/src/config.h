@@ -42,6 +42,8 @@ py::str_ref channel_name_from_path(py::ptr<> path);
                     channel_name_from_path(path));
 }
 
+void init();
+
 }
 
 #endif

@@ -724,8 +724,8 @@ PyTypeObject Seq::Type = {
     }>,
 };
 
-__attribute__((constructor))
-static void init()
+__attribute__((visibility("hidden")))
+void init()
 {
     throw_if(PyType_Ready(&SeqInfo::Type) < 0);
     throw_if(PyType_Ready(&TimeSeq::Type) < 0);

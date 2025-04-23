@@ -51,6 +51,7 @@ cdef extern from "src/utils.h" namespace "brassboard_seq::py":
     ref new_float(double v) except +
 
 cdef extern from * namespace "brassboard_seq":
+    void init() except +
     PyObject *PyErr_Format(PyObject *exception, char *format, ...) except NULL
 
     cppclass pybytes_ostream(ostream):

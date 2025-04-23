@@ -541,8 +541,8 @@ PyTypeObject &BlackmanSquare_Type = BlackmanSquare::Type;
 __attribute__((visibility("protected")))
 PyTypeObject &LinearRamp_Type = LinearRamp::Type;
 
-__attribute__((constructor))
-static void init()
+__attribute__((visibility("hidden")))
+void init()
 {
     throw_if(PyType_Ready(&RampFunctionBase::Type) < 0);
     throw_if(PyType_Ready(&RampFunction::Type) < 0);

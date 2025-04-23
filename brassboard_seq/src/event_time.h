@@ -280,6 +280,8 @@ static inline TimeOrder is_ordered(EventTime *t1, EventTime *t2)
     return NoOrder;
 }
 
+void init();
+
 }
 
 #endif

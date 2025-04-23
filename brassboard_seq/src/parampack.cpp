@@ -296,8 +296,8 @@ static inline py::ref<> get_param(PyObject*, py::ptr<> param)
 __attribute__((visibility("protected")))
 PyMethodDef parampack_get_param_method = py::meth_o<"get_param",get_param>;
 
-__attribute__((constructor))
-static void init()
+__attribute__((visibility("hidden")))
+void init_parampack()
 {
     throw_if(PyType_Ready(&ParamPack::Type) < 0);
 }

@@ -116,8 +116,8 @@ PyTypeObject Config::Type = {
     }>,
 };
 
-__attribute__((constructor))
-static void init()
+__attribute__((visibility("hidden")))
+void init()
 {
     throw_if(PyType_Ready(&Config::Type) < 0);
 }

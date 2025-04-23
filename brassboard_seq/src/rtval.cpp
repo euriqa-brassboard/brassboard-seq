@@ -200,8 +200,8 @@ catch (...) {
     return false;
 }
 
-__attribute__((constructor))
-static void init()
+__attribute__((visibility("hidden")))
+void init()
 {
     _import_array();
     throw_if(PyType_Ready(&RuntimeValue::Type) < 0);

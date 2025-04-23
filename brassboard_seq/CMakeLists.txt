@@ -9,6 +9,7 @@ add_library(brassboard_seq_utils SHARED
   src/action.cpp
   src/config.cpp
   src/event_time.cpp
+  src/init.cpp
   src/parampack.cpp
   src/rtprop.cpp
   src/rtval.cpp

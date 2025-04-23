@@ -325,8 +325,8 @@ PyTypeObject &CompositeRTProp_Type = CompositeRTProp::Type;
 __attribute__((visibility("protected")))
 PyTypeObject &RTProp_Type = RTProp::Type;
 
-__attribute__((constructor))
-static void init()
+__attribute__((visibility("hidden")))
+void init()
 {
     throw_if(PyType_Ready(&composite_rtprop_data::Type) < 0);
     throw_if(PyType_Ready(&CompositeRTProp::Type) < 0);

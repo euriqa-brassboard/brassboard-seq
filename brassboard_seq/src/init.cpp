@@ -16,32 +16,34 @@
  *   see <http://www.gnu.org/licenses/>.                                 *
  *************************************************************************/
 
-#ifndef BRASSBOARD_SEQ_SRC_SCAN_H
-#define BRASSBOARD_SEQ_SRC_SCAN_H
+#include "action.h"
+#include "config.h"
+#include "event_time.h"
+#include "rtprop.h"
+#include "rtval.h"
+#include "scan.h"
+#include "seq.h"
+#include "yaml.h"
 
-#include "utils.h"
+#include <mutex>
 
-namespace brassboard_seq::scan {
+namespace brassboard_seq {
 
-struct ParamPack : PyObject {
-    py::dict_ref values;
-    py::dict_ref visited;
-    py::str_ref fieldname;
+static std::once_flag init_flag;
 
-    py::ref<> ensure_visited();
-    py::dict_ref ensure_dict();
-
-    static py::ref<ParamPack> new_empty();
-    static PyTypeObject Type;
-};
-
-extern PyMethodDef parampack_get_visited_method;
-extern PyMethodDef parampack_get_param_method;
-extern PyTypeObject &ScanGroup_Type;
-
-void init();
-void init_parampack();
-
+void init()
+{
+    std::call_once(init_flag, [] {
+        rtval::init();
+        action::init();
+        config::init();
+        event_time::init();
+        rtprop::init();
+        scan::init();
+        seq::init();
+        yaml::init();
+        return 0;
+    });
 }
 
-#endif
+}

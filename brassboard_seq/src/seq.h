@@ -146,6 +146,8 @@ struct Seq : SubSeq {
     constexpr static str_literal ClsName = "Seq";
 };
 
+void init();
+
 }
 
 #endif

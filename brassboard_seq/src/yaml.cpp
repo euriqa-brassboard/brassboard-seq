@@ -361,8 +361,8 @@ static auto py_sprint(PyObject*, PyObject *const *args, Py_ssize_t nargs)
 
 PyMethodDef sprint_method = py::meth_fast<"sprint",py_sprint>;
 
-__attribute__((constructor))
-static void init()
+__attribute__((visibility("hidden")))
+void init()
 {
     _import_array();
 }

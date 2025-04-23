@@ -1225,10 +1225,11 @@ For sequence running/saving/loading:
 __attribute__((visibility("protected")))
 PyTypeObject &ScanGroup_Type = ScanGroup::Type;
 
-__attribute__((constructor))
-static void init()
+__attribute__((visibility("hidden")))
+void init()
 {
     _import_array();
+    init_parampack();
     throw_if(PyType_Ready(&Scan1D::Type) < 0);
     throw_if(PyType_Ready(&ScanND::Type) < 0);
     throw_if(PyType_Ready(&ScanWrapper::Type) < 0);
