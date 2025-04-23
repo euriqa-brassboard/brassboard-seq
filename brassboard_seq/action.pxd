@@ -17,11 +17,7 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.rtval cimport InterpFunction, TagVal
-
-from libcpp.memory cimport unique_ptr
-
-from cpython cimport PyObject
+from brassboard_seq.rtval cimport TagVal
 
 cdef extern from "src/action.h" namespace "brassboard_seq::action":
     cppclass Action:
@@ -46,12 +42,6 @@ cdef class _RampFunctionBase:
     cdef spline_segments(self, double length, double oldval)
     cdef int set_runtime_params(self, unsigned age) except -1
     cdef TagVal runtime_eval(self, double t) noexcept
-
-cdef class RampFunction(_RampFunctionBase):
-    cdef object _eval
-    cdef object _spline_segments
-    cdef object _fvalue
-    cdef unique_ptr[InterpFunction] interp_func
 
 cdef class SeqCubicSpline(_RampFunctionBase):
     cdef readonly object order0

@@ -17,16 +17,17 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.rtval cimport get_value_f64, is_rtval, \
+from brassboard_seq.rtval cimport InterpFunction, get_value_f64, is_rtval, \
   new_arg, new_const, new_expr2, ValueType, DataType, RuntimeValue
 from brassboard_seq.utils cimport PyObject_Vectorcall, new_float, \
   PyErr_Format, PyExc_RuntimeError
 
 cimport cython
 from cython.operator cimport dereference as deref
-from cpython cimport PyFloat_AS_DOUBLE
+from cpython cimport PyObject, PyFloat_AS_DOUBLE
 
 from libc cimport math as cmath
+from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 from libcpp.utility cimport move
 
@@ -66,6 +67,11 @@ cdef rampfunction_eval(RampFunction self, t, length, oldval):
     return PyObject_Vectorcall(_eval, args, 4, NULL)
 
 cdef class RampFunction(_RampFunctionBase):
+    cdef object _eval
+    cdef object _spline_segments
+    cdef object _fvalue
+    cdef unique_ptr[InterpFunction] interp_func
+
     def __init__(self, *, **params):
         for (name, value) in params.items():
             setattr(self, name, value)
