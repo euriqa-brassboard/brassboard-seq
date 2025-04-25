@@ -5,6 +5,20 @@
 
 namespace brassboard_seq {
 
+struct _IntCollector : PermAllocator<int,13> {
+    void add_int(int v)
+    {
+        *alloc() = v;
+    }
+    int sum()
+    {
+        int s = 0;
+        for (int &i: *this)
+            s += i;
+        return s;
+    }
+};
+
 static PyObject *_new_invalid_rtval()
 {
     // This should only happen if something really wrong happens.

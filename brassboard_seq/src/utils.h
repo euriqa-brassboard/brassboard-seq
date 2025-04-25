@@ -2104,6 +2104,40 @@ ScopeExit(CB) -> ScopeExit<CB>;
 template<typename T, size_t N>
 class PermAllocator {
 public:
+    struct iterator {
+        T **pages;
+        T **const pages_last;
+        T *page;
+        size_t ele_idx{0};
+        size_t const last_page_cnt;
+
+        iterator(PermAllocator &allocator)
+            : pages(allocator.pages.data()),
+              pages_last(pages + allocator.pages.size() - 1),
+              page(allocator.pages.size() ? assume(pages[0]) : nullptr),
+              last_page_cnt(N - allocator.space_left)
+        {}
+        iterator &operator++()
+        {
+            ele_idx++;
+            if (pages == pages_last) {
+                if (ele_idx == last_page_cnt) {
+                    page = nullptr;
+                }
+            }
+            else if (ele_idx == N) {
+                pages++;
+                page = assume(pages[0]);
+                ele_idx = 0;
+            }
+            return *this;
+        }
+        T &operator*()
+        {
+            return page[ele_idx];
+        }
+        bool operator==(std::nullptr_t) const { return !page; }
+    };
     template<typename ... Args>
     T *alloc(Args&&... args)
     {
@@ -2120,6 +2154,15 @@ public:
     PermAllocator() = default;
     PermAllocator(const PermAllocator&) = delete;
     PermAllocator(PermAllocator&&) = delete;
+
+    auto begin()
+    {
+        return iterator(*this);
+    }
+    auto end()
+    {
+        return nullptr;
+    }
 
     ~PermAllocator()
     {

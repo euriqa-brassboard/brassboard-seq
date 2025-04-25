@@ -3,6 +3,7 @@
 import py_test_utils as test_utils
 
 import pytest
+import random
 
 def test_to_chars():
     assert test_utils.int_to_chars(123) == b'123'
@@ -19,6 +20,16 @@ def test_cpp_throw():
         test_utils.int_throw_if(2)
     with pytest.raises(RuntimeError):
         test_utils.int_throw_if_not(0)
+
+def test_perm_alloc_iter():
+    s = 0
+    c = test_utils.IntCollector()
+    assert c.sum() == 0
+    for i in range(20000):
+        v = random.randint(-10000, 10000)
+        s += v
+        c.add_int(v)
+        assert c.sum() == s
 
 def test_check_num_arg():
     test_utils.check_num_arg(b"aaa", 0, 0, 4)

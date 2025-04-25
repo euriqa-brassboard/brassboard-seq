@@ -20,6 +20,10 @@ cdef extern from "src/action.h" namespace "brassboard_seq::action":
     bint action_isramp "brassboard_seq::action::isramp" (object)
 
 cdef extern from "test_utils.cpp" namespace "brassboard_seq":
+    cppclass _IntCollector:
+        void add_int(int)
+        int sum()
+
     char *to_chars(char[], int) except +
     int throw_if_not(int) except +
     int throw_if(int) except +
@@ -144,6 +148,16 @@ cdef extern from "test_utils.cpp" namespace "brassboard_seq":
                                  int64_t offset) except +
     void event_time_set_base_rt(event_time.EventTime self, event_time.EventTime base,
                                 rtval.RuntimeValue offset) except +
+
+cdef class IntCollector:
+    cdef _IntCollector c
+
+    def add_int(self, v):
+        self.c.add_int(v)
+
+    def sum(self):
+        return self.c.sum()
+
 
 def new_invalid_rtval():
     return _new_invalid_rtval()
