@@ -2120,6 +2120,7 @@ public:
         iterator &operator++()
         {
             ele_idx++;
+            assume(page);
             if (pages == pages_last) {
                 if (ele_idx == last_page_cnt) {
                     page = nullptr;
