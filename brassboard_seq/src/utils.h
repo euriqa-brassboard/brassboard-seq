@@ -1827,9 +1827,6 @@ auto cxx_catch(auto &&cb)
             if constexpr (std::is_pointer_v<T>) {
                 return (T)py::immref(Py_None);
             }
-            else if constexpr (std::is_void_v<T>) {
-                return;
-            }
             else {
                 static_assert(std::is_integral_v<T>);
                 return (T)0;
@@ -1840,9 +1837,6 @@ auto cxx_catch(auto &&cb)
         handle_cxx_exception();
         if constexpr (std::is_pointer_v<T>) {
             return (T)nullptr;
-        }
-        else if constexpr (std::is_void_v<T>) {
-            return;
         }
         else {
             static_assert(std::is_integral_v<T>);
@@ -2005,7 +1999,7 @@ static inline void tp_dealloc(PyObject *obj)
     if constexpr (gc)
         PyObject_GC_UnTrack(obj);
     auto t = Py_TYPE(obj);
-    cxx_catch<void>([&] { F(obj); });
+    cxx_catch<int>([&] { F(obj); });
     t->tp_free(obj);
 }
 
