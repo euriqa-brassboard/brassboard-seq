@@ -126,8 +126,51 @@ def test_spline():
         assert list(test_seq.eval_runtime(2, [0, 0.5, 1])) == pytest.approx([0.1, 0.4875, 1.6])
         assert list(test_py.eval_runtime(2, [0, 0.5, 1])) == pytest.approx([0.1, 0.4875, 1.6])
 
+    def check_spline_args(has0, has1, has2, has3):
+        max_arg = 0
+        if has0:
+            max_arg = 1
+            if has1:
+                max_arg = 2
+                if has2:
+                    max_arg = 3
+                    if has3:
+                        max_arg = 4
+
+        def test_field(has, v, o):
+            assert v == (o if has else 0.0)
+
+        def test_args(args, kwargs):
+            if not has0:
+                with pytest.raises(TypeError):
+                    action.SeqCubicSpline(*args, **kwargs)
+            else:
+                sp = action.SeqCubicSpline(*args, **kwargs)
+                test_field(has0, sp.order0, o0)
+                test_field(has1, sp.order1, o1)
+                test_field(has2, sp.order2, o2)
+                test_field(has3, sp.order3, o3)
+
+        for narg in range(max_arg):
+            args = ()
+            kwargs = {}
+            def add_arg(idx, has, v):
+                nonlocal args
+                if idx < max_arg:
+                    assert has
+                    args = (*args, v)
+                    return
+                if has:
+                    kwargs[f"order{idx}"] = v
+            add_arg(0, has0, o0)
+            add_arg(1, has1, o1)
+            add_arg(2, has2, o2)
+            add_arg(3, has3, o3)
+            test_args(args, kwargs)
+
     for i in range(15):
         check_spline(i & 1, i & 2, i & 4, i & 8)
+        check_spline_args(i & 1, i & 2, i & 4, i & 8)
 
 def blackman_func(t): # t in [0, 1]
     theta = (t - 0.5) * 2 * np.pi

@@ -121,7 +121,7 @@ PyTypeObject SeqCubicSpline::Type = {
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg("SeqCubicSpline.__init__", nargs, 0, 4);
         auto [order0, order1, order2, order3] =
-            py::parse_pos_or_kw_args<"order0","order1","order2","order2">(
+            py::parse_pos_or_kw_args<"order0","order1","order2","order3">(
                 "SeqCubicSpline.__init__", args, nargs, kwnames);
         py::check_required_pos_arg(order0, "SeqCubicSpline.__init__", "order0");
         if (!order1)
