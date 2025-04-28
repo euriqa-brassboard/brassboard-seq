@@ -274,14 +274,15 @@ function(_cython_compile SOURCE_FILE OUT_PYX OUT_PXD OUT_C OUT_SO OUT_TGT)
     foreach(dir ${cython_include_dirs})
       set(include_args ${include_args} -I "${dir}")
     endforeach()
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E touch "${dst_c}.dep2")
     add_custom_command(
       OUTPUT "${dst_c}"
       COMMAND "${CYTHON_PATH}" ${lang_args} ${include_args} -o "${dst_c}"
       -w "${basedir}" --depfile ${coverage_args} "${src}"
       COMMAND ${Python_EXECUTABLE} "${_py_cmake_module_dir}/fix-deps-file.py"
-      "${dst_c}.dep" "${basedir}"
+      "${dst_c}.dep" "${dst_c}.dep2" "${basedir}"
       DEPENDS "${src}" ${pyx_dep}
-      DEPFILE "${dst_c}.dep"
+      DEPFILE "${dst_c}.dep2"
     )
     if(NOT TARGET cython-copyback)
       add_custom_target(cython-copyback)
