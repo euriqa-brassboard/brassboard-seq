@@ -19,6 +19,38 @@ struct _IntCollector : PermAllocator<int,13> {
     }
 };
 
+static int _cxx_error(int type, const char *str)
+{
+    return cxx_catch<int>([&] {
+        switch (type) {
+        case 0:
+            throw std::bad_alloc();
+        case 1:
+            throw std::bad_cast();
+        case 2:
+            throw std::bad_typeid();
+        case 3:
+            throw std::domain_error(str);
+        case 4:
+            throw std::invalid_argument(str);
+        case 5:
+            throw std::ios_base::failure(str);
+        case 6:
+            throw std::out_of_range(str);
+        case 7:
+            throw std::overflow_error(str);
+        case 8:
+            throw std::range_error(str);
+        case 9:
+            throw std::underflow_error(str);
+        case 10:
+            throw std::exception();
+        default:
+            throw 0;
+        }
+    });
+}
+
 static PyObject *_new_invalid_rtval()
 {
     // This should only happen if something really wrong happens.

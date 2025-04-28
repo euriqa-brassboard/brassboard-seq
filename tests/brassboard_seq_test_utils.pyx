@@ -28,6 +28,8 @@ cdef extern from "test_utils.cpp" namespace "brassboard_seq":
     int throw_if_not(int) except +
     int throw_if(int) except +
 
+    int _cxx_error(int type, const char *str) except -1
+
     object _new_invalid_rtval() except +
     object _new_const(object) except +
     rtval.TagVal test_callback_extern(TestCallback) except +
@@ -158,6 +160,8 @@ cdef class IntCollector:
     def sum(self):
         return self.c.sum()
 
+def cxx_error(int type, str s):
+    _cxx_error(type, s.encode())
 
 def new_invalid_rtval():
     return _new_invalid_rtval()

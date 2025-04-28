@@ -21,6 +21,32 @@ def test_cpp_throw():
     with pytest.raises(RuntimeError):
         test_utils.int_throw_if_not(0)
 
+def test_cpp_catch():
+    with pytest.raises(MemoryError):
+        test_utils.cxx_error(0, "")
+    with pytest.raises(TypeError):
+        test_utils.cxx_error(1, "")
+    with pytest.raises(TypeError):
+        test_utils.cxx_error(2, "")
+    with pytest.raises(ValueError, match="XYZXYZ1"):
+        test_utils.cxx_error(3, "XYZXYZ1")
+    with pytest.raises(ValueError, match="XYZXYZ2"):
+        test_utils.cxx_error(4, "XYZXYZ2")
+    with pytest.raises(IOError, match="ABCABC1"):
+        test_utils.cxx_error(5, "ABCABC1")
+    with pytest.raises(IndexError, match="ABCABC2"):
+        test_utils.cxx_error(6, "ABCABC2")
+    with pytest.raises(OverflowError, match="AKJFIODFA"):
+        test_utils.cxx_error(7, "AKJFIODFA")
+    with pytest.raises(ArithmeticError, match="JIAIDFJAD"):
+        test_utils.cxx_error(8, "JIAIDFJAD")
+    with pytest.raises(ArithmeticError, match="asJPIOADf"):
+        test_utils.cxx_error(9, "asJPIOADf")
+    with pytest.raises(RuntimeError):
+        test_utils.cxx_error(10, "")
+    with pytest.raises(RuntimeError, match="Unknown exception"):
+        test_utils.cxx_error(-1, "")
+
 def test_perm_alloc_iter():
     s = 0
     c = test_utils.IntCollector()
