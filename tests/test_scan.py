@@ -28,6 +28,8 @@ def test_parampack():
     assert 'a' in p
     with pytest.raises(TypeError, match="Scalar value"):
         assert 'b' not in p.a
+    with pytest.raises(RuntimeError, match="Deleting attribute"):
+        del p.a
     assert 'b' not in p
     assert scan.get_visited(p) == dict(a=True)
     assert scan.get_visited(p.a) is True
@@ -295,6 +297,9 @@ def test_scan():
     with pytest.raises(IndexError,
                        match="Scan dimension must not be negative: -2."):
         sg[0].a.scan(-2, [2])
+    with pytest.raises(TypeError,
+                       match="Scan only support 1D array"):
+        sg[0].a.scan(1, [np.array([[1, 2], [2, 3]])])
 
     sg.new_empty()
     assert sg.groupsize() == 1
@@ -335,6 +340,11 @@ def test_scan():
     sg.new_empty()
     assert sg.groupsize() == 1
     assert sg.nseq() == 1
+
+    sg = scan.ScanGroup()
+    sg[:].a.scan(1, [1, 2, 3])
+    assert sg.axisnum(0, 0) == 0
+    assert sg.axisnum(0, 1) == 1
 
     sg = scan.ScanGroup()
     sg[0].a = 1
@@ -434,6 +444,10 @@ def test_scan():
     assert str(sg[:].a) == """Scan Base [.a]:
   Scan dimension 0: (size 3)
      [1, 2, 3]
+"""
+    assert str(sg[:].a.b) == """Scan Base [.a.b]:
+  Scan dimension 0: (size 3)
+     <empty>
 """
     assert str(sg[0].a) == """Scan 0 [.a]:
   Fixed parameters:
@@ -627,6 +641,9 @@ def test_scan():
     with pytest.raises(ValueError,
                        match="ScanGroup mismatch in assignment."):
         sg2[:] = sg[0]
+    with pytest.raises(ValueError,
+                       match="Only top-level Scan can be assigned."):
+        sg2[:] = sg2[:].a
 
     with pytest.raises(ValueError,
                        match="Invalid serialization of ScanGroup: empty scans array."):

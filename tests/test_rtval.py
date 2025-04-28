@@ -107,6 +107,9 @@ def test_rtval():
 
     assert rtval.same_value(test_utils.new_arg(0), test_utils.new_arg(0))
     assert not rtval.same_value(test_utils.new_arg(0), test_utils.new_arg(1))
+    assert not rtval.same_value(test_utils.new_arg(0), test_utils.new_arg(-1))
+    assert not rtval.same_value(test_utils.new_arg(-1), test_utils.new_arg(0))
+    assert not rtval.same_value(test_utils.new_arg(-1), test_utils.new_arg(-1))
     assert not rtval.same_value(test_utils.new_extern(lambda: 1), test_utils.new_extern(lambda: 1))
     assert not rtval.same_value(test_utils.new_extern_age(lambda age: 1),
                                 test_utils.new_extern_age(lambda age: 1))

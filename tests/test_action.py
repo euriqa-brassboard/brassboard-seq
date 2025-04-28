@@ -83,6 +83,8 @@ def test_ramp_eval():
         test_utils.ValueFunction(np.empty((2, 2)))
     with pytest.raises(IndexError, match="Argument index out of bound: 3."):
         test_utils.ValueFunction(test_utils.new_arg(3))
+    with pytest.raises(IndexError, match="Argument index out of bound: -1."):
+        test_utils.ValueFunction(test_utils.new_arg(-1))
     with pytest.raises(TypeError):
         test_utils.ValueFunction(test_utils.new_arg([]))
     with pytest.raises(ValueError, match="Unknown value type"):
