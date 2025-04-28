@@ -703,3 +703,15 @@ def test_ramp_noinit_error(max_bt):
     with pytest.raises(RuntimeError, match="RampFunction.__init__ not called") as exc:
         comp.runtime_finalize(1)
     test_utils.check_bt(exc, max_bt, 'jaksdjfpoiasdnqeurfsda8u2jadf')
+
+@test_utils.with_seq_params
+def test_ramp_eval_end_error(max_bt):
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
+    def j8sjdfas():
+        s.add_step(2) \
+          .set('artiq/urukul0_ch0/amp', test_utils.ErrorEndFunction(ValueError("XYZ")))
+    j8sjdfas()
+    with pytest.raises(ValueError, match="XYZ") as exc:
+        comp.finalize()
+    test_utils.check_bt(exc, max_bt, 'j8sjdfas')

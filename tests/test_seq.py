@@ -10,6 +10,9 @@ def test_seq():
     conf.add_supported_prefix('artiq')
     conf.add_channel_alias('test_ttl', 'artiq/ttl1')
 
+    with pytest.raises(ValueError, match="max_frame cannot be negative"):
+        seq.Seq(conf, -2)
+
     s = seq.Seq(conf)
     assert str(s) == """Seq - T[0]
  T[0]: 0 ps
@@ -93,6 +96,8 @@ def test_seq():
 
     with pytest.raises(ValueError, match="Time delay cannot be negative"):
         s.wait(-0.001)
+    with pytest.raises(TypeError, match="unexpected"):
+        s.wait(0.001, unknown=False)
 
     s.wait(0)
     t1 = s.end_time

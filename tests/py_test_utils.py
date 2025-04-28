@@ -45,6 +45,16 @@ class ErrorFunction(RampFunction):
     def eval(self, t, length, oldval):
         raise self.err
 
+class ErrorEndFunction(RampFunction):
+    def __init__(self, err):
+        self.err = err
+        super().__init__()
+
+    def eval(self, t, length, oldval):
+        if t is length:
+            raise self.err
+        return t / length
+
 class PyCubicSpline(RampFunction):
     def __init__(self, order0, order1=0.0, order2=0.0, order3=0.0):
         super().__init__(order0=order0, order1=order1, order2=order2, order3=order3)
