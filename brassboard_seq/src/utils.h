@@ -923,11 +923,6 @@ struct _ref : common<_ref,T> {
     _ref(const _ref&) = delete;
     template<typename T2> _ref(const ref<T2>&) = delete;
     template<typename T2> _ref(const ptr<T2>&) = delete;
-    template<bool nulling=true>
-    void CLEAR()
-    {
-        py::CLEAR<nulling>(m_ptr);
-    }
     ~_ref()
     {
         XDECREF(m_ptr);
@@ -948,7 +943,7 @@ struct _ref : common<_ref,T> {
     }
     _ref &operator=(std::nullptr_t) noexcept
     {
-        CLEAR();
+        CLEAR(*this);
         return *this;
     }
     using common<_ref,T>::get;
@@ -1009,12 +1004,13 @@ private:
     T *m_ptr{nullptr};
     template<typename T2> friend struct ptr;
     template<typename T2> friend struct _ref;
+    template<bool nulling, typename T2> friend void CLEAR(ref<T2> &r);
 };
 
 template<bool nulling=true, typename T>
 static inline void CLEAR(ref<T> &r)
 {
-    r.template CLEAR<nulling>();
+    py::CLEAR<nulling>(r.m_ptr);
 }
 
 template<template<typename> class H, typename T>
