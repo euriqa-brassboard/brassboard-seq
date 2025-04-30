@@ -573,7 +573,7 @@ PyTypeObject ConditionalWrapper::Type = {
     .tp_repr = seq_str<ConditionalWrapper>,
     .tp_call = PyVectorcall_Call,
     .tp_str = seq_str<ConditionalWrapper>,
-    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
+    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC|Py_TPFLAGS_HAVE_VECTORCALL,
     .tp_traverse = py::tp_field_traverse<ConditionalWrapper,&ConditionalWrapper::seq,
     &ConditionalWrapper::cond>,
     .tp_clear = py::tp_field_clear<ConditionalWrapper,&ConditionalWrapper::seq,

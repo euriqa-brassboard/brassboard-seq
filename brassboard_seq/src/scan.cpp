@@ -707,7 +707,7 @@ PyTypeObject ScanWrapper::Type = {
                             "'brassboard_seq.scan.ScanWrapper' object has no attribute '%U'", name);
         self->sg->set_fixed_param(self->scan, self->path.append(name), self->idx, value);
     }>,
-    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
+    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC|Py_TPFLAGS_HAVE_VECTORCALL,
     .tp_traverse = py::tp_field_traverse<ScanWrapper,&ScanWrapper::sg,&ScanWrapper::scan>,
     .tp_clear = py::tp_field_clear<ScanWrapper,&ScanWrapper::sg,&ScanWrapper::scan,&ScanWrapper::path>,
 };
