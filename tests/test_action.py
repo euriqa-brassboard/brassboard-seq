@@ -94,6 +94,12 @@ def test_ramp_eval():
         test_utils.ErrorFunction(ValueError("AAAAA"))
 
 def test_spline():
+    with pytest.raises(TypeError):
+        action.SeqCubicSpline()
+    with pytest.raises(TypeError):
+        action.SeqCubicSpline(1.0, order0=0.1)
+    with pytest.raises(TypeError):
+        action.SeqCubicSpline(1.0, order4=0.1)
     assert test_utils.ramp_get_spline_segments(test_utils.SinFunction(1.0, 2.0, 0.1), 1, 0) is None
 
     o0 = 0.1
@@ -179,6 +185,19 @@ def blackman_func(t): # t in [0, 1]
     return 21/50 + 1/2 * np.cos(theta) + 2/25 * np.cos(2 * theta)
 
 def test_blackman():
+    with pytest.raises(TypeError):
+        action.Blackman()
+    with pytest.raises(TypeError):
+        action.Blackman(0.9, 0.1, offset=2)
+    with pytest.raises(TypeError):
+        action.Blackman(0.9, offset10=2)
+    with pytest.raises(TypeError):
+        action.BlackmanSquare()
+    with pytest.raises(TypeError):
+        action.BlackmanSquare(0.9, 0.1, offset=2)
+    with pytest.raises(TypeError):
+        action.BlackmanSquare(0.9, offset10=2)
+
     bp = action.Blackman(0.9, 0.1)
     assert bp.amp == 0.9
     assert bp.offset == 0.1
@@ -197,6 +216,10 @@ def test_blackman():
     assert v2 == pytest.approx(expect2)
 
 def test_linear():
+    with pytest.raises(TypeError):
+        action.LinearRamp()
+    with pytest.raises(TypeError):
+        action.LinearRamp(0.9)
     lp = action.LinearRamp(0.2, 0.8)
     assert lp.start == 0.2
     assert lp.end == 0.8

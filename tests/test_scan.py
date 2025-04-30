@@ -19,6 +19,9 @@ def test_parampack():
     assert isinstance(p.a, scan.ParamPack)
     assert isinstance(p.b, scan.ParamPack)
 
+    with pytest.raises(TypeError, match="non-empty string"):
+        getattr(p, '')
+
     assert str(p) == '{}'
     assert repr(p) == '{}'
     assert 'a' not in p

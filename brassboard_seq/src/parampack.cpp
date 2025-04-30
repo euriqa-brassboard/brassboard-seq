@@ -218,7 +218,7 @@ PyTypeObject ParamPack::Type = {
     .tp_as_mapping = &ParamPack_as_mapping,
     .tp_call = PyVectorcall_Call,
     .tp_str = parampack_str,
-    .tp_getattro = py::binfunc<[] (py::ptr<ParamPack> self, py::ptr<> name) -> py::ref<> {
+    .tp_getattro = py::binfunc<[] (py::ptr<ParamPack> self, py::str name) -> py::ref<> {
         py::check_non_empty_string(name, "name");
         if (PyUnicode_READ_CHAR(name, 0) == '_')
             return py::ref(PyObject_GenericGetAttr(self, name));
@@ -228,7 +228,7 @@ PyTypeObject ParamPack::Type = {
         call_constructor(&res->fieldname, name.ref());
         return res;
     }>,
-    .tp_setattro = py::itrifunc<[] (py::ptr<ParamPack> self, py::ptr<> name,
+    .tp_setattro = py::itrifunc<[] (py::ptr<ParamPack> self, py::str name,
                                     py::ptr<> value) {
         py::check_non_empty_string(name, "name");
         // To be consistent with __getattribute__

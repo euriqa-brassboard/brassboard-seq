@@ -702,13 +702,13 @@ PyTypeObject ScanWrapper::Type = {
     .tp_call = PyVectorcall_Call,
     .tp_str = py::unifunc<py_str>,
     .tp_getattro = py::binfunc<[] (py::ptr<ScanWrapper> self,
-                                   py::ptr<> name) -> py::ref<> {
+                                   py::str name) -> py::ref<> {
         py::check_non_empty_string(name, "name");
         if (PyUnicode_READ_CHAR(name, 0) == '_')
             return py::ref(PyObject_GenericGetAttr(self, name));
         return ScanWrapper::alloc(self->sg, self->scan, self->path.append(name), self->idx);
     }>,
-    .tp_setattro = py::itrifunc<[] (py::ptr<ScanWrapper> self, py::ptr<> name,
+    .tp_setattro = py::itrifunc<[] (py::ptr<ScanWrapper> self, py::str name,
                                     py::ptr<> value) {
         py::check_non_empty_string(name, "name");
         // To be consistent with __getattribute__

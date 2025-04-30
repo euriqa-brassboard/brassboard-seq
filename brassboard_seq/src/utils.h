@@ -1606,7 +1606,7 @@ static inline void check_non_empty_string(ptr<> arg, const char *name)
 {
     if (auto s = cast<str>(arg); s && s.size())
         return;
-    py_throw_format(PyExc_TypeError, "%s must be a string", name);
+    py_throw_format(PyExc_TypeError, "%s must be a non-empty string", name);
 }
 
 template<str_literal... argnames>
