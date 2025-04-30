@@ -386,9 +386,7 @@ PyTypeObject PyJaqalInstBase::Type = {
         auto v2 = py::cast<PyJaqalInstBase>(_v2);
         if (!v2 || op != Py_EQ)
             return py::new_not_implemented();
-        if (v1.type() != v2.type())
-            return py::new_false();
-        return py::new_bool(v1->inst == v2->inst);
+        return py::new_bool(v1.type() == v2.type() && v1->inst == v2->inst);
     }>,
     .tp_methods = (py::meth_table<
                    py::meth_noargs<"to_bytes",[] (py::ptr<PyJaqalInstBase> self) {
