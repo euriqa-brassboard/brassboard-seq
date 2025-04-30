@@ -289,7 +289,7 @@ def test_insts():
                                         'spline_mu': [0, 0, 0, 0], 'spline_shift': 0,
                                         'trig': False, 'sync': False,
                                         'enable': False, 'ff': False}
-    with pytest.raises(TypeError, match=f"Invalid type '{int}'"):
+    with pytest.raises(TypeError, match=f"Unexpected type '{int}' for data"):
         JaqalInst_v1(2)
     with pytest.raises(ValueError, match=f"Invalid address '-1'"):
         Jaqal_v1.program_PLUT(JaqalInst_v1(), -1)
@@ -407,7 +407,7 @@ def test_pulse_inst():
         Jaqal_v1.freq_pulse(3, -1, (0, 0, 0, 0), 100, False, False, False)
     with pytest.raises(ValueError, match="Invalid tone number '2'"):
         Jaqal_v1.freq_pulse(4, 2, (0, 0, 0, 0), 100, False, False, False)
-    with pytest.raises(TypeError, match=f"Invalid spline type '{int}'"):
+    with pytest.raises(TypeError, match=f"Unexpected type '{int}' for spline"):
         Jaqal_v1.freq_pulse(0, 1, 0, 100, False, False, False)
     with pytest.raises(ValueError, match="Invalid cycle count '1099511627776'"):
         Jaqal_v1.freq_pulse(0, 1, (0, 0, 0, 0), 2**40, False, False, False)
@@ -420,7 +420,7 @@ def test_pulse_inst():
         Jaqal_v1.amp_pulse(3, -1, (0, 0, 0, 0), 100, False, False, False)
     with pytest.raises(ValueError, match="Invalid tone number '2'"):
         Jaqal_v1.amp_pulse(4, 2, (0, 0, 0, 0), 100, False, False, False)
-    with pytest.raises(TypeError, match=f"Invalid spline type '{int}'"):
+    with pytest.raises(TypeError, match=f"Unexpected type '{int}' for spline"):
         Jaqal_v1.amp_pulse(0, 1, 0, 100, False, False, False)
     with pytest.raises(ValueError, match="Invalid cycle count '1099511627776'"):
         Jaqal_v1.amp_pulse(0, 1, (0, 0, 0, 0), 2**40, False, False, False)
@@ -433,7 +433,7 @@ def test_pulse_inst():
         Jaqal_v1.phase_pulse(3, -1, (0, 0, 0, 0), 100, False, False, False)
     with pytest.raises(ValueError, match="Invalid tone number '2'"):
         Jaqal_v1.phase_pulse(4, 2, (0, 0, 0, 0), 100, False, False, False)
-    with pytest.raises(TypeError, match=f"Invalid spline type '{int}'"):
+    with pytest.raises(TypeError, match=f"Unexpected type '{int}' for spline"):
         Jaqal_v1.phase_pulse(0, 1, 0, 100, False, False, False)
     with pytest.raises(ValueError, match="Invalid cycle count '1099511627776'"):
         Jaqal_v1.phase_pulse(0, 1, (0, 0, 0, 0), 2**40, False, False, False)
@@ -446,7 +446,7 @@ def test_pulse_inst():
         Jaqal_v1.frame_pulse(3, -1, (0, 0, 0, 0), 100, False, False, False, 0, 0)
     with pytest.raises(ValueError, match="Invalid tone number '2'"):
         Jaqal_v1.frame_pulse(4, 2, (0, 0, 0, 0), 100, False, False, False, 0, 0)
-    with pytest.raises(TypeError, match=f"Invalid spline type '{int}'"):
+    with pytest.raises(TypeError, match=f"Unexpected type '{int}' for spline"):
         Jaqal_v1.frame_pulse(0, 1, 0, 100, False, False, False, 0, 0)
     with pytest.raises(ValueError, match="Invalid cycle count '1099511627776'"):
         Jaqal_v1.frame_pulse(0, 1, (0, 0, 0, 0), 2**40, False, False, False, 0, 0)

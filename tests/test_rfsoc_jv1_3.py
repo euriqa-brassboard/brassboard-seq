@@ -342,7 +342,7 @@ def test_insts():
                                           'trig': False, 'sync': False, 'enable': False,
                                           'ff': False, 'eof': False, 'clr': False,
                                           'fwd': 0, 'inv': 0}
-    with pytest.raises(TypeError, match=f"Invalid type '{int}'"):
+    with pytest.raises(TypeError, match=f"Unexpected type '{int}' for data"):
         JaqalInst_v1_3(2)
     with pytest.raises(ValueError, match=f"Invalid address '-1'"):
         Jaqal_v1_3.program_PLUT(JaqalInst_v1_3(), -1)
@@ -504,19 +504,19 @@ def test_pulse_inst():
     with pytest.raises(ValueError, match="Invalid mod type 'xyz'"):
         Jaqal_v1_3.apply_modtype_mask(JaqalInst_v1_3(), ('freq0', 'xyz'))
 
-    with pytest.raises(TypeError, match=f"Invalid spline type '{int}'"):
+    with pytest.raises(TypeError, match=f"Unexpected type '{int}' for spline"):
         Jaqal_v1_3.freq_pulse(0, 100, False, False, False)
     with pytest.raises(ValueError, match="Invalid cycle count '1099511627776'"):
         Jaqal_v1_3.freq_pulse((0, 0, 0, 0), 2**40, False, False, False)
-    with pytest.raises(TypeError, match=f"Invalid spline type '{int}'"):
+    with pytest.raises(TypeError, match=f"Unexpected type '{int}' for spline"):
         Jaqal_v1_3.amp_pulse(0, 100, False, False, False)
     with pytest.raises(ValueError, match="Invalid cycle count '1099511627776'"):
         Jaqal_v1_3.amp_pulse((0, 0, 0, 0), 2**40, False, False, False)
-    with pytest.raises(TypeError, match=f"Invalid spline type '{int}'"):
+    with pytest.raises(TypeError, match=f"Unexpected type '{int}' for spline"):
         Jaqal_v1_3.phase_pulse(0, 100, False, False, False)
     with pytest.raises(ValueError, match="Invalid cycle count '1099511627776'"):
         Jaqal_v1_3.phase_pulse((0, 0, 0, 0), 2**40, False, False, False)
-    with pytest.raises(TypeError, match=f"Invalid spline type '{int}'"):
+    with pytest.raises(TypeError, match=f"Unexpected type '{int}' for spline"):
         Jaqal_v1_3.frame_pulse(0, 100, False, False, False, 0, 0)
     with pytest.raises(ValueError, match="Invalid cycle count '1099511627776'"):
         Jaqal_v1_3.frame_pulse((0, 0, 0, 0), 2**40, False, False, False, 0, 0)

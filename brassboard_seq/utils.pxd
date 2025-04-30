@@ -47,8 +47,6 @@ cdef extern from "src/utils.h" namespace "brassboard_seq::py":
         void write_rep_ascii(int, const char*)
         ref getvalue() except +
 
-    ref new_int[T](T v) except +
-
 cdef extern from * namespace "brassboard_seq":
     PyObject *PyErr_Format(PyObject *exception, char *format, ...) except NULL
 

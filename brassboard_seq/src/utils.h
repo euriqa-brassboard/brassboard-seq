@@ -668,6 +668,22 @@ public:
     {
         throw_if(PyObject_DelAttr((PyObject*)_ptr(), (PyObject*)name));
     }
+    template<typename T2>
+    void setitem(Py_ssize_t i, T2 &&val) const
+    {
+        throw_if(PySequence_SetItem((PyObject*)_ptr(), i, (PyObject*)val));
+    }
+    template<typename T2=PyObject>
+    auto getitem(Py_ssize_t i) const
+    {
+        return __ref<py_tag_type<T2>>(throw_if_not(PySequence_GetItem((PyObject*)_ptr(), i)));
+    }
+    auto length() const
+    {
+        auto len = PySequence_Length((PyObject*)_ptr());
+        throw_if(len < 0);
+        return len;
+    }
 
     template<typename KW=PyObject*>
     auto vcall(PyObject *const *args, size_t nargsf, KW &&kwnames=nullptr) const

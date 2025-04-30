@@ -349,6 +349,89 @@ test_bits(const JaqalInst &inst, unsigned b1, unsigned b2)
     return inst & JaqalInst::mask(b1, b2);
 }
 
+struct PyJaqalInstBase : PyObject {
+    JaqalInst inst;
+
+    template<typename T>
+    static auto vectornew(PyObject*, PyObject *const *args, ssize_t nargs, py::tuple kwnames)
+    {
+        py::check_num_arg(T::ClsName + ".__init__", nargs, 0, 1);
+        auto [data] =
+            py::parse_pos_or_kw_args<"data">(T::ClsName + ".__init__", args, nargs, kwnames);
+        auto self = py::generic_alloc<T>();
+        call_constructor(&self->inst);
+        if (!data || data.is_none())
+            return self;
+        auto bytes = py::arg_cast<py::bytes>(data, "data");
+        memcpy(&self->inst[0], bytes.data(), std::min((int)bytes.size(), 32));
+        return self;
+    }
+
+    static PyTypeObject Type;
+};
+static auto jaqalinstbase_as_number = PyNumberMethods{
+    .nb_index = py::unifunc<[] (py::ptr<PyJaqalInstBase> self) {
+        return self->inst.to_pylong(); }>
+};
+__attribute__((visibility("internal")))
+PyTypeObject PyJaqalInstBase::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.rfsoc_backend.JaqalInstBase",
+    .tp_basicsize = sizeof(PyJaqalInstBase),
+    .tp_dealloc = py::tp_cxx_dealloc<false,PyJaqalInstBase>,
+    .tp_as_number = &jaqalinstbase_as_number,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_richcompare = py::tp_richcompare<[] (py::ptr<PyJaqalInstBase> v1,
+                                             py::ptr<> _v2, int op) {
+        auto v2 = py::cast<PyJaqalInstBase>(_v2);
+        if (!v2 || op != Py_EQ)
+            return py::new_not_implemented();
+        if (v1.type() != v2.type())
+            return py::new_false();
+        return py::new_bool(v1->inst == v2->inst);
+    }>,
+    .tp_methods = (py::meth_table<
+                   py::meth_noargs<"to_bytes",[] (py::ptr<PyJaqalInstBase> self) {
+                       return self->inst.to_pybytes(); }>>),
+};
+
+struct PyJaqalBase {
+    static cubic_spline_t to_spline(py::ptr<> spline)
+    {
+        auto tu = py::arg_cast<py::tuple>(spline, "spline");
+        return {tu.get(0).as_float(), tu.get(1).as_float(),
+            tu.get(2).as_float(), tu.get(3).as_float()};
+    }
+    static int to_chn(py::ptr<> _chn)
+    {
+        int chn = _chn.as_int();
+        if (chn < 0 || chn > 7)
+            py_throw_format(PyExc_ValueError, "Invalid channel number '%d'", chn);
+        return chn;
+    }
+    static int to_tone(py::ptr<> _tone)
+    {
+        int tone = _tone.as_int();
+        if (tone < 0 || tone > 1)
+            py_throw_format(PyExc_ValueError, "Invalid tone number '%d'", tone);
+        return tone;
+    }
+    static int64_t to_cycles(py::ptr<> _cycles)
+    {
+        auto cycles = py::arg_cast<py::int_>(_cycles, "cycles").as_int<int64_t>();
+        if (cycles >> 40)
+            py_throw_format(PyExc_ValueError, "Invalid cycle count '%lld'", cycles);
+        return cycles;
+    }
+    template<typename T>
+    static auto alloc(const JaqalInst &inst)
+    {
+        auto self = py::generic_alloc<T>();
+        call_constructor(&self->inst, inst);
+        return self;
+    }
+};
+
 struct Jaqal_v1 {
     // All the instructions are 256 bits (32 bytes) and there are 7 types of
     // instructions roughly divided into 2 groups, programming and sequence output.
@@ -1609,31 +1692,261 @@ struct Jaqal_v1 {
         Executor::execute(printer, inst);
     }
 
-    static void print_insts(std::ostream &io, const char *p, size_t sz, bool print_float)
-    {
-        Printer printer{io, print_float};
-        Executor::execute(printer, std::span(p, sz));
-    }
-
-    static auto extract_pulses(const char *p, size_t sz)
-    {
-        PulseSequencer sequencer;
-        Executor::execute(sequencer, std::span(p, sz));
-        return sequencer.pulses;
-    }
-
-    __attribute__((returns_nonnull))
-    static PyObject *inst_to_dict(const JaqalInst &inst)
-    {
-        DictConverter converter;
-        Executor::execute(converter, inst);
-        return converter.dict.rel();
-    }
-
     // Set the minimum clock cycles for a pulse to help avoid underflows. This time
     // is determined by state machine transitions for loading another gate, but does
     // not account for serialization of pulse words.
     static constexpr int MINIMUM_PULSE_CLOCK_CYCLES = 4;
+
+    struct PyInst : PyJaqalInstBase {
+        static PyTypeObject Type;
+        constexpr static str_literal ClsName = "JaqalInst_v1";
+    };
+    struct PyJaqal : PyJaqalBase {
+        static auto parse_pulse_args(PyObject *const *args, Py_ssize_t nargs)
+        {
+            int chn = to_chn(py::arg_cast<py::int_>(args[0], "chn"));
+            int tone = to_tone(py::arg_cast<py::int_>(args[1], "tone"));
+            auto spline = to_spline(args[2]);
+            auto cycles = to_cycles(args[3]);
+            auto trig = py::arg_cast<py::bool_,true>(args[4], "waittrig").as_bool();
+            return std::tuple(chn, tone, spline, cycles, trig);
+        }
+        static auto parse_param_pulse_args(const char *name, PyObject *const *args,
+                                           Py_ssize_t nargs)
+        {
+            py::check_num_arg(name, nargs, 7, 7);
+            auto [chn, tone, spline, cycles, trig] = parse_pulse_args(args, nargs);
+            auto sync = py::arg_cast<py::bool_,true>(args[5], "sync").as_bool();
+            auto ff = py::arg_cast<py::bool_,true>(args[6], "fb_enable").as_bool();
+            return std::tuple(chn, tone, spline, cycles, trig, sync, ff);
+        }
+        static auto parse_frame_pulse_args(const char *name, PyObject *const *args,
+                                           Py_ssize_t nargs)
+        {
+            py::check_num_arg(name, nargs, 9, 9);
+            auto [chn, tone, spline, cycles, trig] = parse_pulse_args(args, nargs);
+            auto apply_end = py::arg_cast<py::bool_,true>(args[5], "apply_at_end").as_bool();
+            auto rst = py::arg_cast<py::bool_,true>(args[6], "rst_frame").as_bool();
+            auto fwd = py::arg_cast<py::int_>(args[7], "fwd_frame_mask").as_int();
+            auto inv = py::arg_cast<py::int_>(args[8], "inv_frame_mask").as_int();
+            return std::tuple(chn, tone, spline, cycles, trig, apply_end, rst, fwd, inv);
+        }
+        static PyTypeObject Type;
+    };
+    struct PyChannelGen : PyObject {
+        ChannelGen chn_gen;
+
+        static PyTypeObject Type;
+    };
+};
+__attribute__((visibility("internal")))
+PyTypeObject Jaqal_v1::PyInst::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.rfsoc_backend.JaqalInst_v1",
+    .tp_basicsize = sizeof(PyInst),
+    .tp_dealloc = py::tp_cxx_dealloc<false,PyInst>,
+    .tp_repr = py::unifunc<[] (py::ptr<PyInst> self) {
+        pybytes_ostream io;
+        print_inst(io, self->inst, false);
+        py::bytes_ref bytes(io.get_buf());
+        return PyUnicode_DecodeUTF8(bytes.data(), bytes.size(), nullptr);
+    }>,
+    .tp_str = py::unifunc<[] (py::ptr<PyInst> self) {
+        pybytes_ostream io;
+        print_inst(io, self->inst, true);
+        py::bytes_ref bytes(io.get_buf());
+        return PyUnicode_DecodeUTF8(bytes.data(), bytes.size(), nullptr);
+    }>,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_methods = (py::meth_table<
+                   py::meth_noargs<"to_dict",[] (py::ptr<PyInst> self) {
+                       DictConverter converter;
+                       Executor::execute(converter, self->inst);
+                       return std::move(converter.dict);
+                   }>>),
+    .tp_getset = (py::getset_table<
+                  py::getset_def<"channel",[] (py::ptr<PyInst> self) {
+                      return py::new_int(get_chn(self->inst)); }>>),
+    .tp_base = &PyJaqalInstBase::Type,
+    .tp_vectorcall = py::vectorfunc<vectornew<PyInst>>,
+};
+__attribute__((visibility("internal")))
+PyTypeObject Jaqal_v1::PyJaqal::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.rfsoc_backend.Jaqal_v1",
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_methods = (
+        py::meth_table<
+        py::meth_fast<"freq_pulse",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
+            auto [chn, tone, spline, cycles, trig, sync, ff] =
+                parse_param_pulse_args("Jaqal_v1.freq_pulse", args, nargs);
+            return alloc<PyInst>(freq_pulse(chn, tone, spline, cycles, trig, sync, ff));
+        },"",METH_STATIC>,
+        py::meth_fast<"amp_pulse",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
+            auto [chn, tone, spline, cycles, trig, sync, ff] =
+                parse_param_pulse_args("Jaqal_v1.amp_pulse", args, nargs);
+            return alloc<PyInst>(amp_pulse(chn, tone, spline, cycles, trig, sync, ff));
+        },"",METH_STATIC>,
+        py::meth_fast<"phase_pulse",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
+            auto [chn, tone, spline, cycles, trig, sync, ff] =
+                parse_param_pulse_args("Jaqal_v1.phase_pulse", args, nargs);
+            return alloc<PyInst>(phase_pulse(chn, tone, spline, cycles, trig, sync, ff));
+        },"",METH_STATIC>,
+        py::meth_fast<"frame_pulse",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
+            auto [chn, tone, spline, cycles, trig, apply_end, rst, fwd, inv] =
+                parse_frame_pulse_args("Jaqal_v1.frame_pulse", args, nargs);
+            return alloc<PyInst>(frame_pulse(chn, tone, spline, cycles, trig,
+                                             apply_end, rst, fwd, inv));
+        },"",METH_STATIC>,
+        py::meth_o<"stream",[] (auto, py::ptr<> _pulse) {
+            auto pulse = py::arg_cast<PyInst>(_pulse, "pulse");
+            return alloc<PyInst>(stream(pulse->inst));
+        },"",METH_STATIC>,
+        py::meth_fast<"program_PLUT",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
+            py::check_num_arg("Jaqal_v1.program_PLUT", nargs, 2, 2);
+            auto pulse = py::arg_cast<PyInst>(args[0], "pulse");
+            auto addr = py::arg_cast<py::int_>(args[1], "addr").as_int();
+            if (addr < 0 || addr >= 4096)
+                py_throw_format(PyExc_ValueError, "Invalid address '%d'", addr);
+            return alloc<PyInst>(program_PLUT(pulse->inst, addr));
+        },"",METH_STATIC>,
+        py::meth_fast<"program_SLUT",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
+            py::check_num_arg("Jaqal_v1.program_SLUT", nargs, 3, 3);
+            auto chn = to_chn(py::arg_cast<py::int_>(args[0], "chn"));
+            py::ptr _saddrs = args[1];
+            py::ptr _paddrs = args[2];
+            uint16_t saddrs[9];
+            uint16_t paddrs[9];
+            int n = _saddrs.length();
+            if (_paddrs.length() != n)
+                py_throw_format(PyExc_ValueError, "Mismatch address length");
+            if (n >= 10)
+                py_throw_format(PyExc_ValueError, "Too many SLUT addresses to program");
+            for (int i = 0; i < n; i++) {
+                saddrs[i] = _saddrs.getitem(i).as_int();
+                paddrs[i] = _paddrs.getitem(i).as_int();
+            }
+            return alloc<PyInst>(program_SLUT(chn, saddrs, paddrs, n));
+        },"",METH_STATIC>,
+        py::meth_fast<"program_GLUT",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
+            py::check_num_arg("Jaqal_v1.program_GLUT", nargs, 4, 4);
+            auto chn = to_chn(py::arg_cast<py::int_>(args[0], "chn"));
+            py::ptr _gaddrs = args[1];
+            py::ptr _starts = args[2];
+            py::ptr _ends = args[3];
+            uint16_t gaddrs[6];
+            uint16_t starts[6];
+            uint16_t ends[6];
+            int n = _gaddrs.length();
+            if (_starts.length() != n || _ends.length() != n)
+                py_throw_format(PyExc_ValueError, "Mismatch address length");
+            if (n >= 7)
+                py_throw_format(PyExc_ValueError, "Too many GLUT addresses to program");
+            for (int i = 0; i < n; i++) {
+                gaddrs[i] = _gaddrs.getitem(i).as_int();
+                starts[i] = _starts.getitem(i).as_int();
+                ends[i] = _ends.getitem(i).as_int();
+            }
+            return alloc<PyInst>(program_GLUT(chn, gaddrs, starts, ends, n));
+        },"",METH_STATIC>,
+        py::meth_fast<"sequence",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
+            py::check_num_arg("Jaqal_v1.sequence", nargs, 3, 3);
+            auto chn = to_chn(py::arg_cast<py::int_>(args[0], "chn"));
+            auto mode = py::arg_cast<py::int_>(args[1], "mode").as_int();
+            py::ptr _gaddrs = args[2];
+            uint16_t gaddrs[24];
+            int n = _gaddrs.length();
+            if (n >= 25)
+                py_throw_format(PyExc_ValueError, "Too many GLUT addresses to sequence");
+            for (int i = 0; i < n; i++)
+                gaddrs[i] = _gaddrs.getitem(i).as_int();
+            if (mode != int(SeqMode::GATE) && mode != int(SeqMode::WAIT_ANC) &&
+                mode != int(SeqMode::CONT_ANC))
+                py_throw_format(PyExc_ValueError, "Invalid sequencing mode %d.", mode);
+            return alloc<PyInst>(sequence(chn, (SeqMode)mode, gaddrs, n));
+        },"",METH_STATIC>,
+        py::meth_fastkw<"dump_insts",[] (auto, PyObject *const *args, Py_ssize_t nargs,
+                                         py::tuple kwnames) {
+            py::check_num_arg("Jaqal_v1.dump_insts", nargs, 1, 2);
+            auto b = py::arg_cast<py::bytes>(args[0], "b");
+            auto [_pfloat] =
+                py::parse_pos_or_kw_args<"print_float">("Jaqal_v1.dump_insts",
+                                                        args + 1, nargs - 1, kwnames);
+            bool pfloat = true;
+            if (_pfloat)
+                pfloat = py::arg_cast<py::bool_,true>(_pfloat, "print_float").as_bool();
+            pybytes_ostream io;
+            Printer printer{io, pfloat};
+            Executor::execute(printer, std::span(b.data(), b.size()));
+            py::bytes_ref bytes(io.get_buf());
+            return PyUnicode_DecodeUTF8(bytes.data(), bytes.size(), nullptr);
+        },"",METH_STATIC>,
+        py::meth_o<"extract_pulses",[] (auto, py::ptr<> _b) {
+            auto b = py::arg_cast<py::bytes>(_b, "b");
+            PulseSequencer sequencer;
+            Executor::execute(sequencer, std::span(b.data(), b.size()));
+            return py::new_nlist(sequencer.pulses.size(), [&] (int i) {
+                return alloc<PyInst>(sequencer.pulses[i]);
+            });
+        },"",METH_STATIC>>),
+};
+__attribute__((visibility("internal")))
+PyTypeObject Jaqal_v1::PyChannelGen::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.rfsoc_backend.JaqalChannelGen_v1",
+    .tp_basicsize = sizeof(PyChannelGen),
+    .tp_dealloc = py::tp_cxx_dealloc<false,PyChannelGen>,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_methods = (
+        py::meth_table<
+        py::meth_fast<"add_pulse",[] (py::ptr<PyChannelGen> self, PyObject *const *args,
+                                      Py_ssize_t nargs) {
+            py::check_num_arg("JaqalChannelGen_v1.add_pulse", nargs, 2, 2);
+            auto pulse = py::arg_cast<PyInst>(args[0], "pulse");
+            auto cycle = py::arg_cast<py::int_>(args[1], "cycle").as_int<int64_t>();
+            self->chn_gen.add_pulse(pulse->inst, cycle);
+        }>,
+        py::meth_noargs<"clear",[] (py::ptr<PyChannelGen> self) {
+            self->chn_gen.clear();
+        }>,
+        py::meth_noargs<"end",[] (py::ptr<PyChannelGen> self) {
+            self->chn_gen.end();
+        }>,
+        py::meth_noargs<"get_plut",[] (py::ptr<PyChannelGen> self) {
+            auto &pulses = self->chn_gen.pulses.pulses;
+            auto res = py::new_list(pulses.size());
+            for (auto [inst, i]: pulses)
+                res.SET(i, PyJaqal::alloc<PyInst>(inst));
+            return res;
+        }>,
+        py::meth_noargs<"get_slut",[] (py::ptr<PyChannelGen> self) {
+            auto &slut = self->chn_gen.slut;
+            return py::new_nlist(slut.size(), [&] (int i) {
+                return py::new_int(slut[i]);
+            });
+        }>,
+        py::meth_noargs<"get_glut",[] (py::ptr<PyChannelGen> self) {
+            auto &glut = self->chn_gen.glut;
+            return py::new_nlist(glut.size(), [&] (int i) {
+                auto gate = glut[i];
+                return py::new_tuple(py::new_int(gate.first), py::new_int(gate.second));
+            });
+        }>,
+        py::meth_noargs<"get_gseq",[] (py::ptr<PyChannelGen> self) {
+            auto &gate_ids = self->chn_gen.gate_ids;
+            return py::new_nlist(gate_ids.size(), [&] (int i) {
+                auto gate = gate_ids[i];
+                return py::new_tuple(py::new_int(gate.time), py::new_int(gate.id));
+            });
+        }>>),
+    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const*,
+                                        ssize_t nargs, py::tuple kwnames) {
+        py::check_num_arg("JaqalChannelGen_v1.__init__", nargs, 0, 0);
+        py::check_no_kwnames("JaqalChannelGen_v1.__init__", kwnames);
+        auto self = py::generic_alloc<PyChannelGen>();
+        call_constructor(&self->chn_gen);
+        return self;
+    }>,
 };
 
 struct Jaqal_v1_3 {
@@ -2775,31 +3088,274 @@ struct Jaqal_v1_3 {
         Executor::execute(printer, inst);
     }
 
-    static void print_insts(std::ostream &io, const char *p, size_t sz, bool print_float)
-    {
-        Printer printer{io, print_float};
-        Executor::execute(printer, std::span(p, sz));
-    }
-
-    static auto extract_pulses(const char *p, size_t sz, bool single_action)
-    {
-        PulseSequencer sequencer(single_action);
-        Executor::execute(sequencer, std::span(p, sz));
-        return sequencer.pulses;
-    }
-
-    __attribute__((returns_nonnull))
-    static PyObject *inst_to_dict(const JaqalInst &inst)
-    {
-        DictConverter converter;
-        Executor::execute(converter, inst);
-        return converter.dict.rel();
-    }
-
     // Set the minimum clock cycles for a pulse to help avoid underflows. This time
     // is determined by state machine transitions for loading another gate, but does
     // not account for serialization of pulse words.
     static constexpr int MINIMUM_PULSE_CLOCK_CYCLES = 4;
+
+    struct PyInst : PyJaqalInstBase {
+        static PyTypeObject Type;
+        constexpr static str_literal ClsName = "JaqalInst_v1_3";
+    };
+    struct PyJaqal : PyJaqalBase {
+        static ModTypeMask get_modtype_mask(py::ptr<> modtype)
+        {
+            static py::dict modtype_name_map = [] {
+                auto map = py::new_dict();
+                map.set("freq0"_py, py::int_cached(int(FRQMOD0_MASK)));
+                map.set("amp0"_py, py::int_cached(int(AMPMOD0_MASK)));
+                map.set("phase0"_py, py::int_cached(int(PHSMOD0_MASK)));
+                map.set("frame_rot0"_py, py::int_cached(int(FRMROT0_MASK)));
+                map.set("freq1"_py, py::int_cached(int(FRQMOD1_MASK)));
+                map.set("amp1"_py, py::int_cached(int(AMPMOD1_MASK)));
+                map.set("phase1"_py, py::int_cached(int(PHSMOD1_MASK)));
+                map.set("frame_rot1"_py, py::int_cached(int(FRMROT1_MASK)));
+                return map.rel();
+            } ();
+            if (auto _modmask = py::cast<py::int_>(modtype)) {
+                auto modmask = _modmask.as_int();
+                if (modmask < 0 || modmask > 255)
+                    py_throw_format(PyExc_ValueError, "Invalid mod type '%d'", modmask);
+                return (ModTypeMask)modmask;
+            }
+            else if (auto modname = py::cast<py::str>(modtype)) {
+                auto mask = modtype_name_map.try_get(modname);
+                if (!mask)
+                    py_throw_format(PyExc_ValueError, "Invalid mod type '%U'", modtype);
+                return (ModTypeMask)mask.as_int();
+            }
+            int modmask = 0;
+            for (auto name: modtype.generic_iter()) {
+                auto mask = modtype_name_map.try_get(name);
+                if (!mask)
+                    py_throw_format(PyExc_ValueError, "Invalid mod type '%S'", name);
+                modmask |= mask.as_int();
+            }
+            return (ModTypeMask)modmask;
+        }
+        static int get_chn_mask(py::ptr<> channels)
+        {
+            if (auto chn = py::cast<py::int_>(channels))
+                return 1 << to_chn(chn);
+            int chnmask = 0;
+            for (auto chn: channels.generic_iter())
+                chnmask |= 1 << to_chn(py::arg_cast<py::int_>(chn, "chn"));
+            return chnmask;
+        }
+
+        static auto parse_pulse_args(PyObject *const *args, Py_ssize_t nargs)
+        {
+            auto spline = to_spline(args[0]);
+            auto cycles = to_cycles(args[1]);
+            auto trig = py::arg_cast<py::bool_,true>(args[2], "waittrig").as_bool();
+            return std::tuple(spline, cycles, trig);
+        }
+        static auto parse_param_pulse_args(const char *name, PyObject *const *args,
+                                           Py_ssize_t nargs)
+        {
+            py::check_num_arg(name, nargs, 5, 5);
+            auto [spline, cycles, trig] = parse_pulse_args(args, nargs);
+            auto sync = py::arg_cast<py::bool_,true>(args[3], "sync").as_bool();
+            auto ff = py::arg_cast<py::bool_,true>(args[4], "fb_enable").as_bool();
+            return std::tuple(spline, cycles, trig, sync, ff);
+        }
+        static auto parse_frame_pulse_args(const char *name, PyObject *const *args,
+                                           Py_ssize_t nargs)
+        {
+            py::check_num_arg(name, nargs, 7, 7);
+            auto [spline, cycles, trig] = parse_pulse_args(args, nargs);
+            auto apply_end = py::arg_cast<py::bool_,true>(args[3], "apply_at_end").as_bool();
+            auto rst = py::arg_cast<py::bool_,true>(args[4], "rst_frame").as_bool();
+            auto fwd = py::arg_cast<py::int_>(args[5], "fwd_frame_mask").as_int();
+            auto inv = py::arg_cast<py::int_>(args[6], "inv_frame_mask").as_int();
+            return std::tuple(spline, cycles, trig, apply_end, rst, fwd, inv);
+        }
+        static PyTypeObject Type;
+    };
+};
+__attribute__((visibility("internal")))
+PyTypeObject Jaqal_v1_3::PyInst::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.rfsoc_backend.JaqalInst_v1_3",
+    .tp_basicsize = sizeof(PyInst),
+    .tp_dealloc = py::tp_cxx_dealloc<false,PyInst>,
+    .tp_repr = py::unifunc<[] (py::ptr<PyInst> self) {
+        pybytes_ostream io;
+        print_inst(io, self->inst, false);
+        py::bytes_ref bytes(io.get_buf());
+        return PyUnicode_DecodeUTF8(bytes.data(), bytes.size(), nullptr);
+    }>,
+    .tp_str = py::unifunc<[] (py::ptr<PyInst> self) {
+        pybytes_ostream io;
+        print_inst(io, self->inst, true);
+        py::bytes_ref bytes(io.get_buf());
+        return PyUnicode_DecodeUTF8(bytes.data(), bytes.size(), nullptr);
+    }>,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_methods = (py::meth_table<
+                   py::meth_noargs<"to_dict",[] (py::ptr<PyInst> self) {
+                       DictConverter converter;
+                       Executor::execute(converter, self->inst);
+                       return std::move(converter.dict);
+                   }>>),
+    .tp_getset = (py::getset_table<
+                  py::getset_def<"channel_mask",[] (py::ptr<PyInst> self) {
+                      return py::new_int(get_chn_mask(self->inst)); }>,
+                  py::getset_def<"channels",[] (py::ptr<PyInst> self) {
+                      auto res = py::new_list(0);
+                      auto chn_mask = get_chn_mask(self->inst);
+                      for (int i = 0; i < 8; i++) {
+                          if ((chn_mask >> i) & 1) {
+                              res.append(py::new_int(i));
+                          }
+                      }
+                      return res;
+                  }>>),
+    .tp_base = &PyJaqalInstBase::Type,
+    .tp_vectorcall = py::vectorfunc<vectornew<PyInst>>,
+};
+__attribute__((visibility("internal")))
+PyTypeObject Jaqal_v1_3::PyJaqal::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.rfsoc_backend.Jaqal_v1_3",
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_methods = (
+        py::meth_table<
+        py::meth_fast<"freq_pulse",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
+            auto [spline, cycles, trig, sync, ff] =
+                parse_param_pulse_args("Jaqal_v1_3.freq_pulse", args, nargs);
+            return alloc<PyInst>(freq_pulse(spline, cycles, trig, sync, ff));
+        },"",METH_STATIC>,
+        py::meth_fast<"amp_pulse",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
+            auto [spline, cycles, trig, sync, ff] =
+                parse_param_pulse_args("Jaqal_v1_3.amp_pulse", args, nargs);
+            return alloc<PyInst>(amp_pulse(spline, cycles, trig, sync, ff));
+        },"",METH_STATIC>,
+        py::meth_fast<"phase_pulse",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
+            auto [spline, cycles, trig, sync, ff] =
+                parse_param_pulse_args("Jaqal_v1_3.phase_pulse", args, nargs);
+            return alloc<PyInst>(phase_pulse(spline, cycles, trig, sync, ff));
+        },"",METH_STATIC>,
+        py::meth_fast<"frame_pulse",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
+            auto [spline, cycles, trig, apply_end, rst, fwd, inv] =
+                parse_frame_pulse_args("Jaqal_v1_3.frame_pulse", args, nargs);
+            return alloc<PyInst>(frame_pulse(spline, cycles, trig,
+                                             apply_end, rst, fwd, inv));
+        },"",METH_STATIC>,
+        py::meth_fast<"apply_channel_mask",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
+            py::check_num_arg("Jaqal_v1_3.apply_channel_mask", nargs, 2, 2);
+            auto pulse = py::arg_cast<PyInst>(args[0], "pulse");
+            auto chnmask = get_chn_mask(args[1]);
+            return alloc<PyInst>(apply_channel_mask(pulse->inst, chnmask));
+        },"",METH_STATIC>,
+        py::meth_fast<"apply_modtype_mask",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
+            py::check_num_arg("Jaqal_v1_3.apply_modtype_mask", nargs, 2, 2);
+            auto pulse = py::arg_cast<PyInst>(args[0], "pulse");
+            auto modmask = get_modtype_mask(args[1]);
+            return alloc<PyInst>(apply_modtype_mask(pulse->inst, modmask));
+        },"",METH_STATIC>,
+        py::meth_o<"stream",[] (auto, py::ptr<> _pulse) {
+            auto pulse = py::arg_cast<PyInst>(_pulse, "pulse");
+            return alloc<PyInst>(stream(pulse->inst));
+        },"",METH_STATIC>,
+        py::meth_fast<"program_PLUT",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
+            py::check_num_arg("Jaqal_v1_3.program_PLUT", nargs, 2, 2);
+            auto pulse = py::arg_cast<PyInst>(args[0], "pulse");
+            auto addr = py::arg_cast<py::int_>(args[1], "addr").as_int();
+            if (addr < 0 || addr >= 4096)
+                py_throw_format(PyExc_ValueError, "Invalid address '%d'", addr);
+            return alloc<PyInst>(program_PLUT(pulse->inst, addr));
+        },"",METH_STATIC>,
+        py::meth_fast<"program_SLUT",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
+            py::check_num_arg("Jaqal_v1_3.program_SLUT", nargs, 4, 4);
+            auto chnmask = get_chn_mask(args[0]);
+            py::ptr _saddrs = args[1];
+            py::ptr _paddrs = args[2];
+            py::ptr _modtypes = args[3];
+            uint16_t saddrs[6];
+            uint16_t paddrs[6];
+            ModTypeMask modtypes[6];
+            int n = _saddrs.length();
+            if (_paddrs.length() != n || _modtypes.length() != n)
+                py_throw_format(PyExc_ValueError, "Mismatch address length");
+            if (n >= 7)
+                py_throw_format(PyExc_ValueError, "Too many SLUT addresses to program");
+            for (int i = 0; i < n; i++) {
+                saddrs[i] = _saddrs.getitem(i).as_int();
+                paddrs[i] = _paddrs.getitem(i).as_int();
+                modtypes[i] = get_modtype_mask(_modtypes.getitem(i));
+            }
+            return alloc<PyInst>(program_SLUT(chnmask, saddrs, modtypes, paddrs, n));
+        },"",METH_STATIC>,
+        py::meth_fast<"program_GLUT",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
+            py::check_num_arg("Jaqal_v1_3.program_GLUT", nargs, 4, 4);
+            auto chnmask = get_chn_mask(args[0]);
+            py::ptr _gaddrs = args[1];
+            py::ptr _starts = args[2];
+            py::ptr _ends = args[3];
+            uint16_t gaddrs[6];
+            uint16_t starts[6];
+            uint16_t ends[6];
+            int n = _gaddrs.length();
+            if (_starts.length() != n || _ends.length() != n)
+                py_throw_format(PyExc_ValueError, "Mismatch address length");
+            if (n >= 7)
+                py_throw_format(PyExc_ValueError, "Too many GLUT addresses to program");
+            for (int i = 0; i < n; i++) {
+                gaddrs[i] = _gaddrs.getitem(i).as_int();
+                starts[i] = _starts.getitem(i).as_int();
+                ends[i] = _ends.getitem(i).as_int();
+            }
+            return alloc<PyInst>(program_GLUT(chnmask, gaddrs, starts, ends, n));
+        },"",METH_STATIC>,
+        py::meth_fast<"sequence",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
+            py::check_num_arg("Jaqal_v1_3.sequence", nargs, 3, 3);
+            auto chnmask = get_chn_mask(args[0]);
+            auto mode = py::arg_cast<py::int_>(args[1], "mode").as_int();
+            py::ptr _gaddrs = args[2];
+            uint16_t gaddrs[20];
+            int n = _gaddrs.length();
+            if (n >= 21)
+                py_throw_format(PyExc_ValueError, "Too many GLUT addresses to sequence");
+            for (int i = 0; i < n; i++)
+                gaddrs[i] = _gaddrs.getitem(i).as_int();
+            if (mode != int(SeqMode::GATE) && mode != int(SeqMode::WAIT_ANC) &&
+                mode != int(SeqMode::CONT_ANC))
+                py_throw_format(PyExc_ValueError, "Invalid sequencing mode %d.", mode);
+            return alloc<PyInst>(sequence(chnmask, (SeqMode)mode, gaddrs, n));
+        },"",METH_STATIC>,
+        py::meth_fastkw<"dump_insts",[] (auto, PyObject *const *args, Py_ssize_t nargs,
+                                         py::tuple kwnames) {
+            py::check_num_arg("Jaqal_v1_3.dump_insts", nargs, 1, 2);
+            auto b = py::arg_cast<py::bytes>(args[0], "b");
+            auto [_pfloat] =
+                py::parse_pos_or_kw_args<"print_float">("Jaqal_v1_3.dump_insts",
+                                                        args + 1, nargs - 1, kwnames);
+            bool pfloat = true;
+            if (_pfloat)
+                pfloat = py::arg_cast<py::bool_,true>(_pfloat, "print_float").as_bool();
+            pybytes_ostream io;
+            Printer printer{io, pfloat};
+            Executor::execute(printer, std::span(b.data(), b.size()));
+            py::bytes_ref bytes(io.get_buf());
+            return PyUnicode_DecodeUTF8(bytes.data(), bytes.size(), nullptr);
+        },"",METH_STATIC>,
+        py::meth_fastkw<"extract_pulses",[] (auto, PyObject *const *args, Py_ssize_t nargs,
+                                             py::tuple kwnames) {
+            py::check_num_arg("Jaqal_v1_3.extract_pulses", nargs, 1, 2);
+            auto b = py::arg_cast<py::bytes>(args[0], "b");
+            auto [_single] =
+                py::parse_pos_or_kw_args<"single_action">("Jaqal_v1_3.dump_insts",
+                                                          args + 1, nargs - 1, kwnames);
+            bool single = true;
+            if (_single)
+                single = py::arg_cast<py::bool_,true>(_single, "single_action").as_bool();
+            PulseSequencer sequencer(single);
+            Executor::execute(sequencer, std::span(b.data(), b.size()));
+            return py::new_nlist(sequencer.pulses.size(), [&] (int i) {
+                return alloc<PyInst>(sequencer.pulses[i]);
+            });
+        },"",METH_STATIC>>),
 };
 
 struct SyncChannelGen: Generator {
@@ -4439,6 +4995,21 @@ void gen_rfsoc_data(auto *rb, backend::CompiledSeq &cseq)
     }
     gen->end();
     bb_debug("gen_rfsoc_data: finish\n");
+}
+
+static void init(py::dict globals)
+{
+    throw_if(PyType_Ready(&PyJaqalInstBase::Type) < 0);
+    throw_if(PyType_Ready(&Jaqal_v1::PyInst::Type) < 0);
+    globals.set("JaqalInst_v1"_py, &Jaqal_v1::PyInst::Type);
+    throw_if(PyType_Ready(&Jaqal_v1::PyJaqal::Type) < 0);
+    globals.set("Jaqal_v1"_py, &Jaqal_v1::PyJaqal::Type);
+    throw_if(PyType_Ready(&Jaqal_v1::PyChannelGen::Type) < 0);
+    globals.set("JaqalChannelGen_v1"_py, &Jaqal_v1::PyChannelGen::Type);
+    throw_if(PyType_Ready(&Jaqal_v1_3::PyInst::Type) < 0);
+    globals.set("JaqalInst_v1_3"_py, &Jaqal_v1_3::PyInst::Type);
+    throw_if(PyType_Ready(&Jaqal_v1_3::PyJaqal::Type) < 0);
+    globals.set("Jaqal_v1_3"_py, &Jaqal_v1_3::PyJaqal::Type);
 }
 
 }
