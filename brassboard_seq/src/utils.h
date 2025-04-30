@@ -842,6 +842,10 @@ public:
     {
         return PyBytes_AS_STRING((PyObject*)_ptr());
     }
+    auto decode() const requires std::same_as<T,_bytes>
+    {
+        return str_ref(throw_if_not(PyUnicode_DecodeUTF8(data(), size(), nullptr)));
+    }
 
     Py_ssize_t size() const requires std::same_as<T,_str>
     {

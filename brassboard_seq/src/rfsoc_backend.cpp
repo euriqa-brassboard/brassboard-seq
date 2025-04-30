@@ -1748,14 +1748,12 @@ PyTypeObject Jaqal_v1::PyInst::Type = {
     .tp_repr = py::unifunc<[] (py::ptr<PyInst> self) {
         pybytes_ostream io;
         print_inst(io, self->inst, false);
-        py::bytes_ref bytes(io.get_buf());
-        return PyUnicode_DecodeUTF8(bytes.data(), bytes.size(), nullptr);
+        return py::bytes_ref(io.get_buf()).decode();
     }>,
     .tp_str = py::unifunc<[] (py::ptr<PyInst> self) {
         pybytes_ostream io;
         print_inst(io, self->inst, true);
-        py::bytes_ref bytes(io.get_buf());
-        return PyUnicode_DecodeUTF8(bytes.data(), bytes.size(), nullptr);
+        return py::bytes_ref(io.get_buf()).decode();
     }>,
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_methods = (py::meth_table<
@@ -1878,8 +1876,7 @@ PyTypeObject Jaqal_v1::PyJaqal::Type = {
             pybytes_ostream io;
             Printer printer{io, pfloat};
             Executor::execute(printer, std::span(b.data(), b.size()));
-            py::bytes_ref bytes(io.get_buf());
-            return PyUnicode_DecodeUTF8(bytes.data(), bytes.size(), nullptr);
+            return py::bytes_ref(io.get_buf()).decode();
         },"",METH_STATIC>,
         py::meth_o<"extract_pulses",[] (auto, py::ptr<> _b) {
             auto b = py::arg_cast<py::bytes>(_b, "b");
@@ -3182,14 +3179,12 @@ PyTypeObject Jaqal_v1_3::PyInst::Type = {
     .tp_repr = py::unifunc<[] (py::ptr<PyInst> self) {
         pybytes_ostream io;
         print_inst(io, self->inst, false);
-        py::bytes_ref bytes(io.get_buf());
-        return PyUnicode_DecodeUTF8(bytes.data(), bytes.size(), nullptr);
+        return py::bytes_ref(io.get_buf()).decode();
     }>,
     .tp_str = py::unifunc<[] (py::ptr<PyInst> self) {
         pybytes_ostream io;
         print_inst(io, self->inst, true);
-        py::bytes_ref bytes(io.get_buf());
-        return PyUnicode_DecodeUTF8(bytes.data(), bytes.size(), nullptr);
+        return py::bytes_ref(io.get_buf()).decode();
     }>,
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_methods = (py::meth_table<
@@ -3337,8 +3332,7 @@ PyTypeObject Jaqal_v1_3::PyJaqal::Type = {
             pybytes_ostream io;
             Printer printer{io, pfloat};
             Executor::execute(printer, std::span(b.data(), b.size()));
-            py::bytes_ref bytes(io.get_buf());
-            return PyUnicode_DecodeUTF8(bytes.data(), bytes.size(), nullptr);
+            return py::bytes_ref(io.get_buf()).decode();
         },"",METH_STATIC>,
         py::meth_fastkw<"extract_pulses",[] (auto, PyObject *const *args, Py_ssize_t nargs,
                                              py::tuple kwnames) {
