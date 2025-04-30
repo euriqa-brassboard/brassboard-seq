@@ -111,11 +111,6 @@ PyInit__utils(void)
         pymodule_addobjectref(m, "ScanGroup", &scan::ScanGroup_Type);
 
         // seq
-        pymodule_addobjectref(m, "SeqInfo", &seq::SeqInfo::Type);
-        pymodule_addobjectref(m, "TimeSeq", &seq::TimeSeq::Type);
-        pymodule_addobjectref(m, "TimeStep", &seq::TimeStep::Type);
-        pymodule_addobjectref(m, "SubSeq", &seq::SubSeq::Type);
-        pymodule_addobjectref(m, "ConditionalWrapper", &seq::ConditionalWrapper::Type);
         pymodule_addobjectref(m, "Seq", &seq::Seq::Type);
 
         // yaml
