@@ -78,6 +78,8 @@ static inline bool parse_action_kws(py::dict kws, int aid)
 static __attribute__((always_inline)) inline
 void rfsoc_finalize(auto *rb, backend::CompiledSeq &cseq)
 {
+    if (cseq.basic_cseqs.size() != 1)
+        py_throw_format(PyExc_ValueError, "Branch not yet supported in rfsoc backend");
     auto seq = pyx_fld(rb, seq);
     rb->channels.collect_channel(seq, pyx_fld(rb, prefix));
 
@@ -93,7 +95,7 @@ void rfsoc_finalize(auto *rb, backend::CompiledSeq &cseq)
         auto is_ff = param == ToneFF;
         auto &channel = rb->channels.channels[chn_idx];
         auto &rfsoc_actions = channel.actions[(int)param];
-        for (auto action: cseq.all_actions[seq_chn]) {
+        for (auto action: cseq.basic_cseqs[0]->chn_actions[seq_chn]->actions) {
             auto sync = parse_action_kws(action->kws, action->aid);
             py::ptr value = action->value;
             auto is_ramp = action::isramp(value);
@@ -350,7 +352,7 @@ void rfsoc_runtime_finalize(auto *rb, backend::CompiledSeq &cseq, unsigned age)
     gen->start();
 
     // Add extra cycles to be able to handle the requirement of minimum 4 cycles.
-    auto total_cycle = seq_time_to_cycle(cseq.total_time + max_delay) + 8;
+    auto total_cycle = seq_time_to_cycle(cseq.basic_cseqs[0]->total_time + max_delay) + 8;
     for (auto &channel: rb->channels.channels) {
         ScopeExit cleanup([&] {
             rb->tone_buffer.clear();

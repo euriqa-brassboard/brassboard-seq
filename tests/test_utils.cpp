@@ -293,9 +293,9 @@ double rampfunc_runtime_eval(py::ptr<> func, double t)
 }
 
 __attribute__((returns_nonnull))
-static inline event_time::TimeManager *seq_get_time_mgr(py::ptr<seq::Seq> seq)
+static inline event_time::TimeManager *seq_get_time_mgr(py::ptr<seq::Seq> seq, int i)
 {
-    return py::newref(seq->seqinfo->time_mgr);
+    return py::newref(seq->basic_seqs.get<seq::BasicSeq>(i)->seqinfo->time_mgr);
 }
 
 __attribute__((returns_nonnull))
@@ -304,13 +304,36 @@ static inline PyObject *_seq_get_channel_paths(py::ptr<seq::Seq> seq)
     return py::newref(seq->seqinfo->channel_paths);
 }
 
-auto *compiledseq_get_all_actions(backend::CompiledSeq &cseq)
+auto compiledseq_get_nbasicseq(backend::CompiledSeq &cseq)
 {
-    return cseq.all_actions.get();
+    return (int)cseq.basic_cseqs.size();
 }
-auto compiledseq_get_total_time(backend::CompiledSeq &cseq)
+auto &compiledseq_get_channel_actions(backend::CompiledSeq &cseq, int i, int chn)
 {
-    return cseq.total_time;
+    return cseq.basic_cseqs[i]->chn_actions[chn]->actions;
+}
+auto *compiledseq_get_channel_start_value(backend::CompiledSeq &cseq, int i, int chn)
+{
+    return py::newref(cseq.basic_cseqs[i]->chn_actions[chn]->start_value);
+}
+bool compiledseq_check_action_reuse(backend::CompiledSeq &cseq, int i1, int i2, int chn)
+{
+    return cseq.basic_cseqs[i1]->chn_actions[chn] == cseq.basic_cseqs[i2]->chn_actions[chn];
+}
+auto compiledseq_get_total_time(backend::CompiledSeq &cseq, int i)
+{
+    return cseq.basic_cseqs[i]->total_time;
+}
+auto compiledseq_get_bseq_id(backend::CompiledSeq &cseq, int i)
+{
+    return cseq.basic_cseqs[i]->bseq_id;
+}
+auto compiledseq_get_next_cbseq(backend::CompiledSeq &cseq, int i)
+{
+    auto res = cseq.basic_cseqs[i]->next_bseq;
+    if (cseq.basic_cseqs[i]->may_term)
+        res.push_back(-1);
+    return res;
 }
 void _timemanager_finalize(auto *self)
 {
