@@ -225,6 +225,15 @@ static inline char *to_chars(std::span<char> buf, T &&t)
     return ptr;
 }
 
+template<typename T, auto... fld> struct _field_pack {};
+template<typename T, auto... fld>
+struct __field_pack { using type = _field_pack<T,fld...>; };
+template<typename T, auto... fld, typename T2, typename R, R T2::*fld1, auto... fld2>
+struct __field_pack<_field_pack<T,fld...>,fld1,fld2...> {
+    using type = _field_pack<T2,fld...,fld1,fld2...>;
+};
+template<typename T, auto... fld> using field_pack = typename __field_pack<T,fld...>::type;
+
 namespace py {
 
 struct _common {};
@@ -1001,6 +1010,12 @@ private:
     template<typename T2> friend struct ptr;
     template<typename T2> friend struct _ref;
 };
+
+template<bool nulling=true, typename T>
+static inline void CLEAR(ref<T> &r)
+{
+    r.template CLEAR<nulling>();
+}
 
 template<template<typename> class H, typename T>
 template<typename T2, typename T3>
@@ -2039,6 +2054,40 @@ static inline int tp_traverse(PyObject *self, visitproc visit, void *arg)
         return res;
     return visitor.res;
 }
+
+template<typename Flds> struct _field_visit {};
+template<typename T, auto ...flds> struct _field_visit<_field_pack<T,flds...>> {
+    static inline void visit(py::ptr<T> self, tp_visitor &visitor)
+    {
+        (visitor(self.get()->*flds),...);
+    }
+};
+
+template<typename T>
+static constexpr auto field_pack_visit = _field_visit<T>::visit;
+template<typename T, auto... fld>
+static constexpr auto field_visit = field_pack_visit<field_pack<T,fld...>>;
+template<typename T>
+static constexpr auto tp_field_pack_traverse = tp_traverse<field_pack_visit<T>>;
+template<typename T, auto... fld>
+static constexpr auto tp_field_traverse = tp_field_pack_traverse<field_pack<T,fld...>>;
+
+template<typename Flds> struct _field_clear {};
+template<typename T, auto ...flds> struct _field_clear<_field_pack<T,flds...>> {
+    static inline void clear(py::ptr<T> self)
+    {
+        (CLEAR(self.get()->*flds),...);
+    }
+};
+
+template<typename T>
+static constexpr auto field_pack_clear = _field_clear<T>::clear;
+template<typename T, auto... fld>
+static constexpr auto field_clear = field_pack_clear<field_pack<T,fld...>>;
+template<typename T>
+static constexpr auto tp_field_pack_clear = iunifunc<field_pack_clear<T>>;
+template<typename T, auto... fld>
+static constexpr auto tp_field_clear = tp_field_pack_clear<field_pack<T,fld...>>;
 
 }
 

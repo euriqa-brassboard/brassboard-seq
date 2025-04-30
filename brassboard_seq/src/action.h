@@ -103,11 +103,12 @@ protected:
     template<typename T>
     static constexpr auto traverse =
         py::tp_traverse<[] (py::ptr<T> self, auto &visitor) {
-            data(self.get())->traverse(visitor); }>;
+            py::field_pack_visit<typename T::fields>(data(self.get()), visitor); }>;
 
     template<typename T>
     static constexpr auto clear =
-        py::iunifunc<[] (py::ptr<T> self) { data(self.get())->clear(); }>;
+        py::iunifunc<[] (py::ptr<T> self) {
+            py::field_pack_clear<typename T::fields>(data(self.get())); }>;
 };
 
 static inline bool isramp(py::ptr<> obj)
@@ -136,9 +137,6 @@ struct SeqCubicSpline : RampFunctionBase {
         py::ref<> spline_segments(double length, double oldval) override;
         void set_runtime_params(unsigned age) override;
         rtval::TagVal runtime_eval(double t) noexcept override;
-
-        void traverse(auto &visitor);
-        void clear();
     };
     ~SeqCubicSpline();
 
@@ -148,6 +146,7 @@ struct SeqCubicSpline : RampFunctionBase {
         return {d->f_order0, d->f_order1, d->f_order2, d->f_order3};
     }
 
+    using fields = field_pack<Data,&Data::order0,&Data::order1,&Data::order2,&Data::order3>;
     static PyTypeObject Type;
 };
 

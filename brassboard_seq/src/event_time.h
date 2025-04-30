@@ -131,6 +131,10 @@ public:
             return assume(_rt_offset);
         return rtval::rtval_ptr();
     }
+    operator PyObject*() const
+    {
+        return (PyObject*)get_rt_offset();
+    }
     template<typename T>
     inline void set_rt_offset(T &&rv)
     {
@@ -149,6 +153,12 @@ public:
         }
     }
 };
+
+template<bool nulling=true>
+static inline void CLEAR(EventTimeData &r)
+{
+    r.clear_rt_offset();
+}
 
 static_assert(sizeof(EventTimeData) == 16);
 

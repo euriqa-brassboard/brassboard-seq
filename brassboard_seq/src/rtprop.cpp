@@ -40,14 +40,10 @@ PyTypeObject composite_rtprop_data::Type = {
     .tp_basicsize = sizeof(composite_rtprop_data),
     .tp_dealloc = py::tp_cxx_dealloc<true,composite_rtprop_data>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = py::tp_traverse<[] (py::ptr<composite_rtprop_data> self, auto &visitor) {
-        visitor(self->ovr);
-        visitor(self->cache);
-    }>,
-    .tp_clear = py::iunifunc<[] (py::ptr<composite_rtprop_data> self) {
-        self->ovr.CLEAR();
-        self->cache.CLEAR();
-    }>,
+    .tp_traverse = py::tp_field_traverse<composite_rtprop_data,&composite_rtprop_data::ovr,
+    &composite_rtprop_data::cache>,
+    .tp_clear = py::tp_field_clear<composite_rtprop_data,&composite_rtprop_data::ovr,
+    &composite_rtprop_data::cache>,
 };
 
 static inline py::ref<> apply_composite_ovr(py::ptr<> val, py::ptr<> ovr);
@@ -156,13 +152,8 @@ PyTypeObject CompositeRTProp::Type = {
     .tp_basicsize = sizeof(CompositeRTProp),
     .tp_dealloc = py::tp_cxx_dealloc<true,CompositeRTProp>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = py::tp_traverse<[] (py::ptr<CompositeRTProp> self, auto &visitor) {
-        visitor(self->cb);
-    }>,
-    .tp_clear = py::iunifunc<[] (py::ptr<CompositeRTProp> self) {
-        self->fieldname.CLEAR();
-        self->cb.CLEAR();
-    }>,
+    .tp_traverse = py::tp_field_traverse<CompositeRTProp,&CompositeRTProp::cb>,
+    .tp_clear = py::tp_field_clear<CompositeRTProp,&CompositeRTProp::cb,&CompositeRTProp::fieldname>,
     .tp_methods = (py::meth_table<
                    py::meth_o<"get_state",get_state>,
                    py::meth_fast<"set_state",set_state>,
@@ -228,13 +219,8 @@ PyTypeObject rtprop_callback::Type = {
                                                      PY_SSIZE_T_MAX)), self->obj);
     }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = py::tp_traverse<[] (py::ptr<rtprop_callback> self, auto &visitor) {
-        visitor(self->obj);
-    }>,
-    .tp_clear = py::iunifunc<[] (py::ptr<rtprop_callback> self) {
-        self->obj.CLEAR();
-        self->fieldname.CLEAR();
-    }>,
+    .tp_traverse = py::tp_field_traverse<rtprop_callback,&rtprop_callback::obj>,
+    .tp_clear = py::tp_field_clear<rtprop_callback,&rtprop_callback::obj,&rtprop_callback::fieldname>,
     .tp_base = &ExternCallback::Type,
 };
 

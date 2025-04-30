@@ -50,13 +50,9 @@ static inline auto add_step_name()
 template<typename T> static constexpr auto seq_dealloc = py::tp_cxx_dealloc<true,T>;
 
 template<typename T>
-static constexpr auto seq_clear = py::iunifunc<[] (py::ptr<T> self) {
-    self->template clear<true>();
-}>;
+static constexpr auto seq_clear = py::tp_field_pack_clear<typename T::fields>;
 template<typename T>
-static constexpr auto seq_traverse = py::tp_traverse<[] (py::ptr<T> self, auto &visitor) {
-    self->traverse(visitor);
-}>;
+static constexpr auto seq_traverse = py::tp_field_pack_traverse<typename T::fields>;
 
 struct CondCombiner {
     PyObject *cond;
@@ -288,21 +284,11 @@ PyTypeObject SeqInfo::Type = {
     .tp_basicsize = sizeof(SeqInfo),
     .tp_dealloc = py::tp_cxx_dealloc<true,SeqInfo>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = py::tp_traverse<[] (py::ptr<SeqInfo> self, auto &visitor) {
-        visitor(self->time_mgr);
-        visitor(self->assertions);
-        visitor(self->config);
-        visitor(self->C);
-    }>,
-    .tp_clear = py::iunifunc<[] (py::ptr<SeqInfo> self) {
-        self->time_mgr.CLEAR();
-        self->assertions.CLEAR();
-        self->config.CLEAR();
-        self->channel_name_map.CLEAR();
-        self->channel_path_map.CLEAR();
-        self->channel_paths.CLEAR();
-        self->C.CLEAR();
-    }>,
+    .tp_traverse = py::tp_field_traverse<SeqInfo,&SeqInfo::time_mgr,&SeqInfo::assertions,
+    &SeqInfo::config,&SeqInfo::C>,
+    .tp_clear = py::tp_field_clear<SeqInfo,&SeqInfo::time_mgr,&SeqInfo::assertions,
+    &SeqInfo::config,&SeqInfo::channel_name_map,&SeqInfo::channel_path_map,
+    &SeqInfo::channel_paths,&SeqInfo::C>,
 };
 
 inline void TimeSeq::show_cond_suffix(py::stringio &io) const
@@ -312,23 +298,6 @@ inline void TimeSeq::show_cond_suffix(py::stringio &io) const
         io.write_str(cond);
     }
     io.write_ascii("\n");
-}
-
-inline void TimeSeq::traverse(auto &visitor)
-{
-    visitor(seqinfo);
-    visitor(start_time);
-    visitor(end_time);
-    visitor(cond);
-}
-
-template<bool nulling>
-inline void TimeSeq::clear()
-{
-    seqinfo.CLEAR<nulling>();
-    start_time.CLEAR<nulling>();
-    end_time.CLEAR<nulling>();
-    cond.CLEAR<nulling>();
 }
 
 static auto get_channel_id(py::ptr<TimeSeq> self, PyObject *name)
@@ -393,19 +362,6 @@ PyTypeObject TimeSeq::Type = {
                   py::getset_def<"C",[] (py::ptr<TimeSeq> self) {
                       return py::newref(self->seqinfo->C); }>>),
 };
-
-inline void TimeStep::traverse(auto &visitor)
-{
-    visitor(length);
-    TimeSeq::traverse(visitor);
-}
-
-template<bool nulling>
-inline void TimeStep::clear()
-{
-    TimeSeq::clear<nulling>();
-    length.CLEAR<nulling>();
-}
 
 template<bool is_pulse>
 inline void TimeStep::set(py::ptr<> chn, py::ptr<> value, py::ptr<> cond,
@@ -476,21 +432,6 @@ PyTypeObject TimeStep::Type = {
                    py::meth_fastkw<"pulse",condseq_set<TimeStep,true>>>),
     .tp_base = &TimeSeq::Type,
 };
-
-inline void SubSeq::traverse(auto &visitor)
-{
-    visitor(sub_seqs);
-    visitor(dummy_step);
-    TimeSeq::traverse(visitor);
-}
-
-template<bool nulling>
-inline void SubSeq::clear()
-{
-    TimeSeq::clear<nulling>();
-    sub_seqs.CLEAR<nulling>();
-    dummy_step.CLEAR<nulling>();
-}
 
 inline void SubSeq::show_subseqs(py::stringio &io, int indent) const
 {
@@ -633,14 +574,10 @@ PyTypeObject ConditionalWrapper::Type = {
     .tp_call = PyVectorcall_Call,
     .tp_str = seq_str<ConditionalWrapper>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = py::tp_traverse<[] (py::ptr<ConditionalWrapper> self, auto &visitor) {
-        visitor(self->seq);
-        visitor(self->cond);
-    }>,
-    .tp_clear = py::iunifunc<[] (py::ptr<ConditionalWrapper> self) {
-        self->seq.CLEAR();
-        self->cond.CLEAR();
-    }>,
+    .tp_traverse = py::tp_field_traverse<ConditionalWrapper,&ConditionalWrapper::seq,
+    &ConditionalWrapper::cond>,
+    .tp_clear = py::tp_field_clear<ConditionalWrapper,&ConditionalWrapper::seq,
+    &ConditionalWrapper::cond>,
     .tp_methods = (
         py::meth_table<
         py::meth_fastkw<"wait",condseq_wait<ConditionalWrapper>>,

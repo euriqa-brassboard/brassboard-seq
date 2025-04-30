@@ -76,9 +76,8 @@ struct TimeSeq : PyObject {
 
     static PyTypeObject Type;
     constexpr static str_literal ClsName = "TimeSeq";
-    void traverse(auto &visitor);
-    template<bool nulling=true>
-    void clear();
+    using fields = field_pack<TimeSeq,&TimeSeq::seqinfo,&TimeSeq::start_time,
+                              &TimeSeq::end_time,&TimeSeq::cond>;
 };
 
 struct TimeStep : TimeSeq {
@@ -98,9 +97,7 @@ struct TimeStep : TimeSeq {
 
     static PyTypeObject Type;
     constexpr static str_literal ClsName = "TimeStep";
-    void traverse(auto &visitor);
-    template<bool nulling=true>
-    void clear();
+    using fields = field_pack<TimeSeq::fields,&TimeStep::length>;
 };
 
 struct SubSeq : TimeSeq {
@@ -124,9 +121,7 @@ struct SubSeq : TimeSeq {
 
     static PyTypeObject Type;
     constexpr static str_literal ClsName = "SubSeq";
-    void traverse(auto &visitor);
-    template<bool nulling=true>
-    void clear();
+    using fields = field_pack<TimeSeq::fields,&SubSeq::sub_seqs,&SubSeq::dummy_step>;
 };
 
 struct ConditionalWrapper : PyObject {

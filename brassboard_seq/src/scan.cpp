@@ -182,12 +182,8 @@ PyTypeObject Scan1D::Type = {
     .tp_basicsize = sizeof(Scan1D),
     .tp_dealloc = py::tp_cxx_dealloc<true,Scan1D>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = py::tp_traverse<[] (py::ptr<Scan1D> self, auto &visitor) {
-        visitor(self->params);
-    }>,
-    .tp_clear = py::iunifunc<[] (py::ptr<Scan1D> self) {
-        self->params.CLEAR();
-    }>,
+    .tp_traverse = py::tp_field_traverse<Scan1D,&Scan1D::params>,
+    .tp_clear = py::tp_field_clear<Scan1D,&Scan1D::params>,
 };
 
 struct ScanND : PyObject {
@@ -364,14 +360,8 @@ PyTypeObject ScanND::Type = {
     .tp_basicsize = sizeof(ScanND),
     .tp_dealloc = py::tp_cxx_dealloc<true,ScanND>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = py::tp_traverse<[] (py::ptr<ScanND> self, auto &visitor) {
-        visitor(self->fixed);
-        visitor(self->vars);
-    }>,
-    .tp_clear = py::iunifunc<[] (py::ptr<ScanND> self) {
-        self->fixed.CLEAR();
-        self->vars.CLEAR();
-    }>,
+    .tp_traverse = py::tp_field_traverse<ScanND,&ScanND::fixed,&ScanND::vars>,
+    .tp_clear = py::tp_field_clear<ScanND,&ScanND::fixed,&ScanND::vars>,
 };
 
 // Check if the assigning `obj` with subfield reference `path`
@@ -718,15 +708,8 @@ PyTypeObject ScanWrapper::Type = {
         self->sg->set_fixed_param(self->scan, self->path.append(name), self->idx, value);
     }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = py::tp_traverse<[] (py::ptr<ScanWrapper> self, auto &visitor) {
-        visitor(self->sg);
-        visitor(self->scan);
-    }>,
-    .tp_clear = py::iunifunc<[] (py::ptr<ScanWrapper> self) {
-        self->sg.CLEAR();
-        self->scan.CLEAR();
-        self->path.CLEAR();
-    }>,
+    .tp_traverse = py::tp_field_traverse<ScanWrapper,&ScanWrapper::sg,&ScanWrapper::scan>,
+    .tp_clear = py::tp_field_clear<ScanWrapper,&ScanWrapper::sg,&ScanWrapper::scan,&ScanWrapper::path>,
 };
 
 inline void ScanGroup::add_cat_scan(py::ptr<> scan)
@@ -1000,16 +983,10 @@ For sequence running/saving/loading:
     Return `0` for out-of-bound dimension. Error for out-of-bound scan
     index.
 )__pydoc__",
-    .tp_traverse = py::tp_traverse<[] (py::ptr<ScanGroup> self, auto &visitor) {
-        visitor(self->base);
-        visitor(self->scans);
-        visitor(self->scanscache);
-    }>,
-    .tp_clear = py::iunifunc<[] (py::ptr<ScanGroup> self) {
-        self->base.CLEAR();
-        self->scans.CLEAR();
-        self->scanscache.CLEAR();
-    }>,
+    .tp_traverse = py::tp_field_traverse<ScanGroup,&ScanGroup::base,&ScanGroup::scans,
+    &ScanGroup::scanscache>,
+    .tp_clear = py::tp_field_clear<ScanGroup,&ScanGroup::base,&ScanGroup::scans,
+    &ScanGroup::scanscache>,
     .tp_methods = (
         py::meth_table<
         py::meth_noargs<"new_empty",[] (py::ptr<ScanGroup> self) {

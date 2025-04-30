@@ -291,10 +291,8 @@ PyTypeObject TimeManager::Type = {
     .tp_basicsize = sizeof(TimeManager),
     .tp_dealloc = py::tp_cxx_dealloc<true,TimeManager>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = py::tp_traverse<[] (py::ptr<TimeManager> self, auto &visitor) {
-        visitor(self->event_times);
-    }>,
-    .tp_clear = py::iunifunc<[] (py::ptr<TimeManager> self) { self->event_times.CLEAR(); }>,
+    .tp_traverse = py::tp_field_traverse<TimeManager,&TimeManager::event_times>,
+    .tp_clear = py::tp_field_clear<TimeManager,&TimeManager::event_times>,
 };
 
 namespace {
@@ -378,14 +376,8 @@ PyTypeObject EventTimeDiff::Type = {
         return PyUnicode_FromFormat("(T[%u] - T[%u])", self->t1->data.id, self->t2->data.id);
     }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = py::tp_traverse<[] (py::ptr<EventTimeDiff> self, auto &visitor) {
-        visitor(self->t1);
-        visitor(self->t2);
-    }>,
-    .tp_clear = py::iunifunc<[] (py::ptr<EventTimeDiff> self) {
-        self->t1.CLEAR();
-        self->t2.CLEAR();
-    }>,
+    .tp_traverse = py::tp_field_traverse<EventTimeDiff,&EventTimeDiff::t1,&EventTimeDiff::t2>,
+    .tp_clear = py::tp_field_clear<EventTimeDiff,&EventTimeDiff::t1,&EventTimeDiff::t2>,
 };
 
 }
@@ -493,18 +485,10 @@ PyTypeObject EventTime::Type = {
     .tp_as_number = &EventTime_as_number,
     .tp_str = eventtime_str,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = py::tp_traverse<[] (time_ptr t, auto &visitor) {
-        visitor(t->prev);
-        visitor(t->wait_for);
-        visitor(t->cond);
-        visitor(t->data.get_rt_offset());
-    }>,
-    .tp_clear = py::iunifunc<[] (time_ptr t) {
-        t->data.clear_rt_offset();
-        t->prev.CLEAR();
-        t->wait_for.CLEAR();
-        t->cond.CLEAR();
-    }>,
+    .tp_traverse = py::tp_field_traverse<EventTime,&EventTime::prev,&EventTime::wait_for,
+    &EventTime::cond,&EventTime::data>,
+    .tp_clear = py::tp_field_clear<EventTime,&EventTime::prev,&EventTime::wait_for,
+    &EventTime::cond,&EventTime::data>,
 };
 
 __attribute__((visibility("hidden")))

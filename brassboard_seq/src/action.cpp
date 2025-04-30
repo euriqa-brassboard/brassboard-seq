@@ -77,22 +77,6 @@ rtval::TagVal SeqCubicSpline::Data::runtime_eval(double t) noexcept
     return rtval::TagVal(f_order0 + (f_order1 + (f_order2 + f_order3 * t) * t) * t);
 }
 
-inline void SeqCubicSpline::Data::traverse(auto &visitor)
-{
-    visitor(order0);
-    visitor(order1);
-    visitor(order2);
-    visitor(order3);
-}
-
-inline void SeqCubicSpline::Data::clear()
-{
-    order0.CLEAR();
-    order1.CLEAR();
-    order2.CLEAR();
-    order3.CLEAR();
-}
-
 inline SeqCubicSpline::~SeqCubicSpline()
 {
     call_destructor(data(this));
@@ -213,25 +197,13 @@ struct RampFunction : RampFunctionBase {
             interp_func->data[0].f64_val = t;
             return interp_func->call();
         }
-
-        void traverse(auto &visitor)
-        {
-            visitor(eval);
-            visitor(_spline_segments);
-            visitor(fvalue);
-        }
-        void clear()
-        {
-            eval.CLEAR();
-            _spline_segments.CLEAR();
-            fvalue.CLEAR();
-        }
     };
     ~RampFunction()
     {
         call_destructor(data(this));
     }
 
+    using fields = field_pack<Data,&Data::eval,&Data::_spline_segments,&Data::fvalue>;
     static PyTypeObject Type;
 };
 
@@ -296,23 +268,13 @@ struct Blackman : RampFunctionBase {
             auto val = f_amp * (0.34 - cost * (0.5 - 0.16 * cost));
             return rtval::TagVal(val + f_offset);
         }
-
-        void traverse(auto &visitor)
-        {
-            visitor(amp);
-            visitor(offset);
-        }
-        void clear()
-        {
-            amp.CLEAR();
-            offset.CLEAR();
-        }
     };
     ~Blackman()
     {
         call_destructor(data(this));
     }
 
+    using fields = field_pack<Data,&Data::amp,&Data::offset>;
     static PyTypeObject Type;
 };
 
@@ -377,23 +339,13 @@ struct BlackmanSquare : RampFunctionBase {
             val = f_amp * val * val;
             return rtval::TagVal(val + f_offset);
         }
-
-        void traverse(auto &visitor)
-        {
-            visitor(amp);
-            visitor(offset);
-        }
-        void clear()
-        {
-            amp.CLEAR();
-            offset.CLEAR();
-        }
     };
     ~BlackmanSquare()
     {
         call_destructor(data(this));
     }
 
+    using fields = field_pack<Data,&Data::amp,&Data::offset>;
     static PyTypeObject Type;
 };
 
@@ -456,23 +408,13 @@ struct LinearRamp : RampFunctionBase {
             t = t * f_inv_length;
             return rtval::TagVal(f_start * (1 - t) + f_end * t);
         }
-
-        void traverse(auto &visitor)
-        {
-            visitor(start);
-            visitor(end);
-        }
-        void clear()
-        {
-            start.CLEAR();
-            end.CLEAR();
-        }
     };
     ~LinearRamp()
     {
         call_destructor(data(this));
     }
 
+    using fields = field_pack<Data,&Data::start,&Data::end>;
     static PyTypeObject Type;
 };
 
