@@ -143,10 +143,15 @@ cdef extern from "test_utils.cpp" namespace "brassboard_seq":
     object rampfunc_spline_segments(object, double length, double oldval) except +
     void rampfunc_set_runtime_params(object, unsigned age) except +
     double rampfunc_runtime_eval(object, double t) except +
-    event_time.TimeManager seq_get_time_mgr(seq.Seq)
+    event_time.TimeManager seq_get_time_mgr(seq.Seq, int)
     list _seq_get_channel_paths(seq.Seq)
-    vector[action.Action*] *compiledseq_get_all_actions(backend.CompiledSeq &cseq)
-    int64_t compiledseq_get_total_time(backend.CompiledSeq &cseq)
+    int compiledseq_get_nbasicseq(backend.CompiledSeq &cseq)
+    vector[action.Action*] &compiledseq_get_channel_actions(backend.CompiledSeq &cseq, int i, int chn)
+    object compiledseq_get_channel_start_value(backend.CompiledSeq &cseq, int i, int chn)
+    bint compiledseq_check_action_reuse(backend.CompiledSeq &cseq, int i1, int i2, int chn)
+    int64_t compiledseq_get_total_time(backend.CompiledSeq &cseq, int i)
+    int compiledseq_get_bseq_id(backend.CompiledSeq &cseq, int i)
+    vector[int] compiledseq_get_next_cbseq(backend.CompiledSeq &cseq, int i)
     void py_check_num_arg "brassboard_seq::py::check_num_arg" (
         const char *func_name, ssize_t nfound, ssize_t nmin, ssize_t nmax) except +
     void _timemanager_finalize(event_time.TimeManager) except +
@@ -353,29 +358,49 @@ def seq_get_channel_paths(seq.Seq s):
     return _seq_get_channel_paths(s)
 
 def seq_get_event_time(seq.Seq s, int tid):
-    return timemanager_get_event_times(seq_get_time_mgr(s))[tid]
+    return timemanager_get_event_times(seq_get_time_mgr(s, 0))[tid]
 
 def seq_get_cond(s):
     return condseq_get_cond(s)
 
-def compiler_get_all_actions(backend.SeqCompiler comp):
+def compiler_num_basic_seq(backend.SeqCompiler comp):
+    return compiledseq_get_nbasicseq(comp.cseq)
+
+def compiler_get_all_start_values(backend.SeqCompiler comp, cbseq_id):
     s = comp.seq
     cdef int nchn = len(_seq_get_channel_paths(s))
-    all_actions = compiledseq_get_all_actions(comp.cseq)
     res = []
     for cid in range(nchn):
-        actions = all_actions[cid]
+        res.append(compiledseq_get_channel_start_value(comp.cseq, cbseq_id, cid))
+    return res
+
+def compiler_get_all_actions(backend.SeqCompiler comp, cbseq_id):
+    s = comp.seq
+    cdef int nchn = len(_seq_get_channel_paths(s))
+    res = []
+    for cid in range(nchn):
+        actions = compiledseq_get_channel_actions(comp.cseq, cbseq_id, cid)
         res.append([_ref_action(action, s) for action in actions])
     return res
 
-def compiler_get_all_times(backend.SeqCompiler comp):
+def compiler_check_action_reuse(backend.SeqCompiler comp, cbseq_id1, cbseq_id2, chn):
+    return compiledseq_check_action_reuse(comp.cseq, cbseq_id1, cbseq_id2, chn)
+
+def compiler_get_bseq_id(backend.SeqCompiler comp, cbseq_id):
+    return compiledseq_get_bseq_id(comp.cseq, cbseq_id)
+
+def compiler_get_all_times(backend.SeqCompiler comp, cbseq_id):
     s = comp.seq
-    time_mgr = seq_get_time_mgr(s)
+    bseq_id = compiledseq_get_bseq_id(comp.cseq, cbseq_id)
+    time_mgr = seq_get_time_mgr(s, bseq_id)
     ntimes = time_mgr.time_values.size()
     values = []
     for i in range(ntimes):
         values.append(time_mgr.time_values[i])
-    return compiledseq_get_total_time(comp.cseq), values
+    return compiledseq_get_total_time(comp.cseq, cbseq_id), values
+
+def compiler_get_next_cbseq(backend.SeqCompiler comp, cbseq_id):
+    return compiledseq_get_next_cbseq(comp.cseq, cbseq_id)
 
 def get_suffix_array(ary):
     return _get_suffix_array(ary)

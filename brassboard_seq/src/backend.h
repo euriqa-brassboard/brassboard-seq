@@ -21,15 +21,51 @@
 
 #include "utils.h"
 #include "action.h"
+#include "seq.h"
 
+#include <list>
 #include <memory>
 #include <vector>
 
 namespace brassboard_seq::backend {
 
-struct CompiledSeq {
-    std::unique_ptr<std::vector<action::Action*>[]> all_actions;
+struct ChannelAction {
+    std::vector<action::Action*> actions;
+    py::ref<> start_value;
+};
+
+struct CompiledBasicSeq {
+    int bseq_id;
+    bool may_term;
+    std::unique_ptr<ChannelAction*[]> chn_actions;
     int64_t total_time;
+    std::vector<int> next_bseq;
+};
+
+struct CompiledSeq {
+    int nchn;
+    int nbseq;
+    std::vector<CompiledBasicSeq*> basic_cseqs;
+    PermAllocator<CompiledBasicSeq,16> basic_seq_alloc;
+    PermAllocator<ChannelAction,16> chn_action_alloc;
+    std::vector<std::vector<ChannelAction*>> all_chn_actions;
+    void initialize(py::ptr<seq::Seq>);
+    void populate_values(py::ptr<seq::Seq>);
+    // Use std::vector<uint8_t> to pass in the status rather than std::vector<bool>
+    // to avoid dealing with the special std::vector<bool> (i.e. bit array) interface.
+    void populate_bseq_values(py::ptr<seq::Seq>, CompiledBasicSeq *cbseq,
+                              std::vector<uint8_t> &chn_status);
+    void eval_chn_actions(py::ptr<seq::Seq>, unsigned age);
+    std::vector<ChannelAction*> &get_action_list(int chn, int bseq_id)
+    {
+        return all_chn_actions[chn + bseq_id * nchn];
+    }
+    ChannelAction *new_chn_action(int chn, int bseq_id)
+    {
+        auto res = chn_action_alloc.alloc();
+        get_action_list(chn, bseq_id).push_back(res);
+        return res;
+    }
 };
 
 }

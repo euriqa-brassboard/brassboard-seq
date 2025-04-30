@@ -284,6 +284,8 @@ void artiq_add_start_trigger(auto *ab, py::ptr<> name, py::ptr<> time,
 static __attribute__((always_inline)) inline
 void artiq_finalize(auto *ab, backend::CompiledSeq &cseq)
 {
+    if (cseq.basic_cseqs.size() != 1)
+        py_throw_format(PyExc_ValueError, "Branch not yet supported in artiq backend");
     py::ptr seq = pyx_fld(ab, seq);
     ab->channels.collect_channels(pyx_fld(ab, prefix), ab->sys, seq, ab->device_delay);
     std::vector<ArtiqAction> &artiq_actions = ab->all_actions;
@@ -403,7 +405,7 @@ void artiq_finalize(auto *ab, backend::CompiledSeq &cseq)
     for (auto [chn, ttl_idx]: ab->channels.ttl_chn_map) {
         auto ttl_chn_info = ab->channels.ttlchns[ttl_idx];
         auto type = ttl_chn_info.iscounter ? CounterEnable : TTLOut;
-        for (auto action: cseq.all_actions[chn]) {
+        for (auto action: cseq.basic_cseqs[0]->chn_actions[chn]->actions) {
             if (action->kws)
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "Invalid output keyword argument %S", action->kws);
@@ -418,7 +420,7 @@ void artiq_finalize(auto *ab, backend::CompiledSeq &cseq)
 
     for (auto [chn, value]: ab->channels.dds_param_chn_map) {
         auto [dds_idx, type] = value;
-        for (auto action: cseq.all_actions[chn]) {
+        for (auto action: cseq.basic_cseqs[0]->chn_actions[chn]->actions) {
             if (action->kws)
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "Invalid output keyword argument %S", action->kws);
@@ -684,7 +686,7 @@ void artiq_runtime_finalize(auto *ab, backend::CompiledSeq &cseq, unsigned age)
         return a1.time_mu < a2.time_mu;
     });
 
-    auto total_time_mu = seq_time_to_mu(cseq.total_time + max_delay);
+    auto total_time_mu = seq_time_to_mu(cseq.basic_cseqs[0]->total_time + max_delay);
     if (ab->use_dma) {
         auto rtio_array = ab->rtio_array;
         auto nactions = rtio_actions.size();
