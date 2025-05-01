@@ -1,14 +1,32 @@
 #
 
 from brassboard_seq.action import RampFunction
-from brassboard_seq import rtval
+from brassboard_seq import rtval, utils
 
 from brassboard_seq_test_utils import *
 
 import pytest
 import numpy as np
 
-with_seq_params = pytest.mark.parametrize("max_bt", [0, 5, 500])
+def with_seq_params(f):
+    import inspect
+    old_sig = inspect.signature(f)
+    params = [inspect.Parameter('log_level', inspect.Parameter.POSITIONAL_OR_KEYWORD)]
+    params.extend(old_sig.parameters.values())
+    new_sig = inspect.Signature(params)
+    def cb(log_level, *args, **kws):
+        print(log_level)
+        try:
+            utils.set_log_level(log_level)
+            return f(*args, **kws)
+        finally:
+            utils.set_log_level("")
+    cb.__name__ = f.__name__
+    if hasattr(f, 'pytestmark'):
+        cb.pytestmark = f.pytestmark
+    cb.__signature__ = new_sig
+    cb = pytest.mark.parametrize("max_bt", [0, 5, 500])(cb)
+    return pytest.mark.parametrize("log_level", ["info", "debug", ""])(cb)
 
 def check_bt(exc, max_bt, *names):
     fnames = [tb.name for tb in exc.traceback]
