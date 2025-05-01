@@ -860,6 +860,26 @@ public:
         assume(res <= 1);
         return res;
     }
+    int compare(auto &&other) const requires std::same_as<T,_str>
+    {
+        auto res = PyUnicode_Compare((PyObject*)_ptr(), (PyObject*)other);
+        throw_if(res < 0 && PyErr_Occurred());
+        return res;
+    }
+    int compare_ascii(const char *other) const requires std::same_as<T,_str>
+    {
+        return PyUnicode_CompareWithASCIIString((PyObject*)_ptr(), other);
+    }
+    const char *utf8() const requires std::same_as<T,_str>
+    {
+        return PyUnicode_AsUTF8((PyObject*)_ptr());
+    }
+    auto utf8_view() const requires std::same_as<T,_str>
+    {
+        Py_ssize_t size;
+        auto data = PyUnicode_AsUTF8AndSize((PyObject*)_ptr(), &size);
+        return std::string_view(data, size);
+    }
     auto concat(auto &&s2) const requires std::same_as<T,_str>
     {
         return str_ref(throw_if_not(PyUnicode_Concat((PyObject*)_ptr(), (PyObject*)s2)));

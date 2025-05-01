@@ -22,7 +22,9 @@
 
 #include <bit>
 #include <bitset>
+#include <cctype>
 #include <sstream>
+#include <string_view>
 #include <utility>
 
 #include <assert.h>
@@ -1142,10 +1144,65 @@ static inline bool parse_action_kws(py::dict kws, int aid)
     return sync;
 }
 
+static int parse_pos_int(const std::string_view &s, py::tuple path, int max)
+{
+    if (!std::ranges::all_of(s, [] (auto c) { return std::isdigit(c); }))
+        config::raise_invalid_channel(path);
+    int n;
+    if (std::from_chars(s.data(), s.data() + s.size(), n).ec != std::errc{} || n > max)
+        config::raise_invalid_channel(path);
+    return n;
+}
+
+static inline void collect_channel(auto *rb, seq::Seq *seq)
+{
+    // Channel name format: <prefix>/dds<chn>/<tone>/<param>
+    std::map<int,int> chn_idx_map;
+    for (auto [idx, path]: py::list_iter<py::tuple>(seq->seqinfo->channel_paths)) {
+        if (path.get<py::str>(0).compare(pyx_fld(rb, prefix)) != 0)
+            continue;
+        if (path.size() != 4)
+            config::raise_invalid_channel(path);
+        auto ddspath = path.get<py::str>(1).utf8_view();
+        if (!ddspath.starts_with("dds"))
+            config::raise_invalid_channel(path);
+        ddspath.remove_prefix(3);
+        auto chn = ((parse_pos_int(ddspath, path, 31) << 1) |
+                    parse_pos_int(path.get<py::str>(2).utf8_view(), path, 1));
+        int chn_idx;
+        if (auto it = chn_idx_map.find(chn); it == chn_idx_map.end()) {
+            chn_idx = rb->channels.add_tone_channel(chn);
+            chn_idx_map[chn] = chn_idx;
+        }
+        else {
+            chn_idx = it->second;
+        }
+        auto param = path.get<py::str>(3);
+        ToneParam param_enum;
+        if (param.compare_ascii("freq") == 0) {
+            param_enum = ToneFreq;
+        }
+        else if (param.compare_ascii("phase") == 0) {
+            param_enum = TonePhase;
+        }
+        else if (param.compare_ascii("amp") == 0) {
+            param_enum = ToneAmp;
+        }
+        else if (param.compare_ascii("ff") == 0) {
+            param_enum = ToneFF;
+        }
+        else {
+            config::raise_invalid_channel(path);
+        }
+        rb->channels.add_seq_channel(idx, chn_idx, param_enum);
+    }
+}
+
 static __attribute__((always_inline)) inline
-void collect_actions(auto *rb, backend::CompiledSeq &cseq)
+void rfsoc_finalize(auto *rb, backend::CompiledSeq &cseq)
 {
     auto seq = pyx_fld(rb, seq);
+    collect_channel(rb, seq);
 
     ValueIndexer<int> bool_values;
     ValueIndexer<double> float_values;
