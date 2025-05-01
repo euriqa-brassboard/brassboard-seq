@@ -27,14 +27,12 @@ static PyModuleDef scan_module = {
     .m_size = -1,
 };
 
-PY_MODINIT(scan)
+PY_MODINIT(scan, scan_module)
 {
-    auto m = py::new_module(&scan_module);
     m.add_objref("ParamPack", &scan::ParamPack::Type);
     m.add_objref("get_visited", py::new_cfunc(&scan::parampack_get_visited_method,
                                               nullptr, "brassboard_seq.scan"_py));
     m.add_objref("get_param", py::new_cfunc(&scan::parampack_get_param_method,
                                             nullptr, "brassboard_seq.scan"_py));
     m.add_objref("ScanGroup", &scan::ScanGroup_Type);
-    return m;
 }

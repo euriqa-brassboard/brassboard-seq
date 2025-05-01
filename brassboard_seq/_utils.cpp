@@ -32,9 +32,8 @@ static PyModuleDef _utils_module = {
     .m_size = -1,
 };
 
-PY_MODINIT(_utils)
+PY_MODINIT(_utils, _utils_module)
 {
-    auto m = py::new_module(&_utils_module);
     // event_time
     m.add_objref("TimeManager", &event_time::TimeManager::Type);
     m.add_objref("EventTime", &event_time::EventTime::Type);
@@ -70,5 +69,4 @@ PY_MODINIT(_utils)
 
     // seq
     m.add_objref("Seq", &seq::Seq::Type);
-    return m;
 }

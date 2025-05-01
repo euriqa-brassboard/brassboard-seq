@@ -27,13 +27,11 @@ static PyModuleDef action_module = {
     .m_size = -1,
 };
 
-PY_MODINIT(action)
+PY_MODINIT(action, action_module)
 {
-    auto m = py::new_module(&action_module);
     m.add_objref("RampFunction", &action::RampFunction_Type);
     m.add_objref("SeqCubicSpline", &action::SeqCubicSpline::Type);
     m.add_objref("Blackman", &action::Blackman_Type);
     m.add_objref("BlackmanSquare", &action::BlackmanSquare_Type);
     m.add_objref("LinearRamp", &action::LinearRamp_Type);
-    return m;
 }

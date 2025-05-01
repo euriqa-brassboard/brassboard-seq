@@ -1420,11 +1420,15 @@ static inline mod_ref new_module(PyModuleDef *def)
     return mod_ref(throw_if_not(PyModule_Create(def)));
 }
 
-#define PY_MODINIT(name)                                        \
-    static inline py::mod_ref __PyInit_##name(void);            \
-    PyMODINIT_FUNC PyInit_##name(void) { return cxx_catch([] {  \
-        brassboard_seq::init(); return __PyInit_##name(); }); } \
-    static inline py::mod_ref __PyInit_##name(void)
+#define PY_MODINIT(name, moddef)                                        \
+    static inline void __PyInit_##name(brassboard_seq::py::mod);        \
+    PyMODINIT_FUNC PyInit_##name(void) { return cxx_catch([] {          \
+        brassboard_seq::init();                                         \
+        auto m = brassboard_seq::py::new_module(&moddef);               \
+        __PyInit_##name(m);                                             \
+        return m;                                                       \
+    }); }                                                               \
+    static inline void __PyInit_##name(brassboard_seq::py::mod m)
 
 template<typename T1=PyObject*,typename T2=PyObject*>
 static inline auto new_cfunc(PyMethodDef *ml, T1 &&self=nullptr, T2 &&mod=nullptr)

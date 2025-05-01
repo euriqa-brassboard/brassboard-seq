@@ -27,9 +27,7 @@ static PyModuleDef config_module = {
     .m_size = -1,
 };
 
-PY_MODINIT(config)
+PY_MODINIT(config, config_module)
 {
-    auto m = py::new_module(&config_module);
     m.add_objref("Config", &config::Config::Type);
-    return m;
 }

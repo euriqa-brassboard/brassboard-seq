@@ -16,10 +16,6 @@
  *   see <http://www.gnu.org/licenses/>.                                 *
  *************************************************************************/
 
-#define PY_SSIZE_T_CLEAN
-
-#include <Python.h>
-
 #include "src/utils.h"
 
 using namespace brassboard_seq;
@@ -30,10 +26,8 @@ static PyModuleDef utils_module = {
     .m_size = -1,
 };
 
-PY_MODINIT(utils)
+PY_MODINIT(utils, utils_module)
 {
-    auto m = py::new_module(&utils_module);
     m.add_objref("set_log_level", py::new_cfunc(&set_log_level_method, nullptr,
                                                 "brassboard_seq.utils"_py));
-    return m;
 }
