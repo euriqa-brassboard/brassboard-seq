@@ -34,6 +34,10 @@ function(bb_cxx_mod name)
     DESTINATION "${_PYTHON_SITE_INSTALL_DIR}/brassboard_seq")
 endfunction()
 bb_cxx_mod(_utils)
+bb_cxx_mod(action)
+bb_cxx_mod(config)
+bb_cxx_mod(scan)
+bb_cxx_mod(yaml)
 
 install(FILES
   src/action.h
@@ -53,14 +57,12 @@ cython_link_libraries(brassboard_seq_utils -fopenmp)
 
 python_install_module("${CMAKE_CURRENT_SOURCE_DIR}/.." brassboard_seq
   __init__.py
-  action.pyx
+  action.pxd
   artiq_backend.pyx
   backend.pyx
-  config.pyx
+  config.pxd
   event_time.pyx
   rfsoc_backend.pyx
   rtval.pyx
-  scan.pyx
   seq.pyx
-  utils.pxd
-  yaml.pyx)
+  utils.pxd)

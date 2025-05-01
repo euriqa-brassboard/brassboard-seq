@@ -22,22 +22,17 @@
 
 #include "src/utils.h"
 
-#include "src/action.h"
-#include "src/config.h"
 #include "src/event_time.h"
 #include "src/rfsoc.h"
 #include "src/rtprop.h"
 #include "src/rtval.h"
-#include "src/scan.h"
 #include "src/seq.h"
-#include "src/yaml.h"
 
 using namespace brassboard_seq;
 
 static PyModuleDef _utils_module = {
     .m_base = PyModuleDef_HEAD_INIT,
     .m_name = "brassboard_seq._utils",
-    .m_doc = "Backing module for brassboard_seq",
     .m_size = -1,
 };
 
@@ -45,16 +40,6 @@ PY_MODINIT(_utils)
 {
     init();
     auto m = py::new_module(&_utils_module);
-    // action
-    m.add_objref("RampFunction", &action::RampFunction_Type);
-    m.add_objref("SeqCubicSpline", &action::SeqCubicSpline::Type);
-    m.add_objref("Blackman", &action::Blackman_Type);
-    m.add_objref("BlackmanSquare", &action::BlackmanSquare_Type);
-    m.add_objref("LinearRamp", &action::LinearRamp_Type);
-
-    // config
-    m.add_objref("Config", &config::Config::Type);
-
     // event_time
     m.add_objref("TimeManager", &event_time::TimeManager::Type);
     m.add_objref("EventTime", &event_time::EventTime::Type);
@@ -62,7 +47,7 @@ PY_MODINIT(_utils)
                  py::new_cfunc(&event_time::time_scale_method,
                                nullptr, "brassboard_seq.event_time"_py));
 
-    // rtfsoc
+    // rfsoc
     m.add_objref("JaqalInst_v1", &rfsoc::JaqalInst_v1_Type);
     m.add_objref("Jaqal_v1", &rfsoc::Jaqal_v1_Type);
     m.add_objref("JaqalChannelGen_v1", &rfsoc::JaqalChannelGen_v1_Type);
@@ -88,21 +73,7 @@ PY_MODINIT(_utils)
     m.add_objref("rtval_same_value", py::new_cfunc(&rtval::same_value_method,
                                                    nullptr, "brassboard_seq.rtval"_py));
 
-    // scan
-    m.add_objref("ParamPack", &scan::ParamPack::Type);
-    m.add_objref("parampack_get_visited",
-                 py::new_cfunc(&scan::parampack_get_visited_method,
-                               nullptr, "brassboard_seq.scan"_py));
-    m.add_objref("parampack_get_param",
-                 py::new_cfunc(&scan::parampack_get_param_method,
-                               nullptr, "brassboard_seq.scan"_py));
-    m.add_objref("ScanGroup", &scan::ScanGroup_Type);
-
     // seq
     m.add_objref("Seq", &seq::Seq::Type);
-
-    // yaml
-    m.add_objref("yaml_sprint", py::new_cfunc(&yaml::sprint_method, nullptr,
-                                              "brassboard_seq.yaml"_py));
     return m;
 }
