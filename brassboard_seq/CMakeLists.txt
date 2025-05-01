@@ -37,6 +37,7 @@ bb_cxx_mod(_utils)
 bb_cxx_mod(action)
 bb_cxx_mod(config)
 bb_cxx_mod(scan)
+bb_cxx_mod(utils)
 bb_cxx_mod(yaml)
 
 install(FILES

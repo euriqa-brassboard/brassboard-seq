@@ -1,5 +1,6 @@
 #
 
+from brassboard_seq import utils
 import py_test_utils as test_utils
 
 import pytest
@@ -12,6 +13,13 @@ def test_to_chars():
         test_utils.int_to_chars(123330)
     with pytest.raises(RuntimeError):
         test_utils.int_to_chars(-12333)
+
+def test_log_level():
+    utils.set_log_level("info")
+    utils.set_log_level("debug")
+    utils.set_log_level("")
+    with pytest.raises(ValueError):
+        utils.set_log_level("warn")
 
 def test_cpp_throw():
     assert test_utils.int_throw_if(0) == 0

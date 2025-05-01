@@ -40,6 +40,21 @@ BBLogLevel bb_logging_level = [] {
 }();
 
 __attribute__((visibility("protected")))
+PyMethodDef set_log_level_method =
+    py::meth_o<"set_log_level",[] (auto, py::ptr<> _level) {
+        auto level = py::arg_cast<py::str>(_level, "level");
+        if (level.compare_ascii("debug") == 0) {
+            bb_logging_level = BB_LOG_DEBUG;
+        }
+        else if (level.compare_ascii("info") == 0 || level.compare_ascii("") == 0) {
+            bb_logging_level = BB_LOG_INFO;
+        }
+        else {
+            py_throw_format(PyExc_ValueError, "Invalid log level %U", level);
+        }
+    }>;
+
+__attribute__((visibility("protected")))
 void format_double(std::ostream &io, double v)
 {
     // Unlike `operator<<`, which uses a fixed precision (6 by default),

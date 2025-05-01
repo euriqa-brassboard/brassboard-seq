@@ -2765,6 +2765,7 @@ static void foreach_max_range(std::span<int> value, auto &&cb)
 }
 
 void init();
+extern PyMethodDef set_log_level_method;
 
 }
 
