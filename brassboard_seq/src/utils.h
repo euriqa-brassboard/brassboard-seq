@@ -1420,9 +1420,10 @@ static inline mod_ref new_module(PyModuleDef *def)
     return mod_ref(throw_if_not(PyModule_Create(def)));
 }
 
-#define PY_MODINIT(name)                                                \
-    static inline py::mod_ref __PyInit_##name(void);                    \
-    PyMODINIT_FUNC PyInit_##name(void) { return cxx_catch(__PyInit_##name); } \
+#define PY_MODINIT(name)                                        \
+    static inline py::mod_ref __PyInit_##name(void);            \
+    PyMODINIT_FUNC PyInit_##name(void) { return cxx_catch([] {  \
+        brassboard_seq::init(); return __PyInit_##name(); }); } \
     static inline py::mod_ref __PyInit_##name(void)
 
 template<typename T1=PyObject*,typename T2=PyObject*>

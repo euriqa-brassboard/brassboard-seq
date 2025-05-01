@@ -33,7 +33,6 @@ static PyModuleDef action_module = {
 
 PY_MODINIT(action)
 {
-    init();
     auto m = py::new_module(&action_module);
     m.add_objref("RampFunction", &action::RampFunction_Type);
     m.add_objref("SeqCubicSpline", &action::SeqCubicSpline::Type);

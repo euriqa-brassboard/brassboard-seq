@@ -33,7 +33,6 @@ static PyModuleDef scan_module = {
 
 PY_MODINIT(scan)
 {
-    init();
     auto m = py::new_module(&scan_module);
     m.add_objref("ParamPack", &scan::ParamPack::Type);
     m.add_objref("get_visited", py::new_cfunc(&scan::parampack_get_visited_method,

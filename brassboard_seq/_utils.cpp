@@ -38,7 +38,6 @@ static PyModuleDef _utils_module = {
 
 PY_MODINIT(_utils)
 {
-    init();
     auto m = py::new_module(&_utils_module);
     // event_time
     m.add_objref("TimeManager", &event_time::TimeManager::Type);
