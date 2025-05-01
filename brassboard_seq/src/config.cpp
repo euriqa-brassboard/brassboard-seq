@@ -37,23 +37,7 @@ static inline auto split_string_tuple(PyObject *s)
     return tuple;
 }
 
-static inline void add_supported_prefix(py::ptr<Config> self, py::ptr<> prefix)
-{
-    self->supported_prefix.add(py::arg_cast<py::str>(prefix, "prefix"));
-}
-
-static inline void add_channel_alias(py::ptr<Config> self, PyObject *const *args,
-                                     Py_ssize_t nargs)
-{
-    py::check_num_arg("Config.add_channel_alias", nargs, 2, 2);
-    auto name = py::arg_cast<py::str>(args[0], "name");
-    auto target = py::arg_cast<py::str>(args[1], "target");
-    if (py::str(name).contains("/"_py))
-        py_throw_format(PyExc_ValueError, "Channel alias name may not contain \"/\"");
-    self->alias_cache.clear();
-    self->channel_alias.set(name, split_string_tuple(target));
-}
-
+__attribute__((visibility("internal")))
 inline py::tuple_ref Config::_translate_channel(py::tuple path)
 {
     if (auto resolved = alias_cache.try_get(path))
@@ -89,11 +73,6 @@ PyObject *Config::translate_channel(PyObject *name)
     return _translate_channel(split_string_tuple(name)).rel();
 }
 
-static inline PyObject *py_translate_channel(py::ptr<Config> self, py::ptr<> name)
-{
-    return self->translate_channel(py::arg_cast<py::str>(name, "name"));
-}
-
 __attribute__((visibility("protected")))
 PyTypeObject Config::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
@@ -103,10 +82,24 @@ PyTypeObject Config::Type = {
     // All fields are containers of immutable types.
     // No reference loop possible.
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,
-    .tp_methods = (py::meth_table<
-                   py::meth_o<"add_supported_prefix",add_supported_prefix>,
-                   py::meth_fast<"add_channel_alias",add_channel_alias>,
-                   py::meth_o<"translate_channel",py_translate_channel>>),
+    .tp_methods = (
+        py::meth_table<
+        py::meth_o<"add_supported_prefix",[] (py::ptr<Config> self, py::ptr<> prefix) {
+            self->supported_prefix.add(py::arg_cast<py::str>(prefix, "prefix"));
+        }>,
+        py::meth_fast<"add_channel_alias",[] (py::ptr<Config> self, PyObject *const *args,
+                                              Py_ssize_t nargs) {
+            py::check_num_arg("Config.add_channel_alias", nargs, 2, 2);
+            auto name = py::arg_cast<py::str>(args[0], "name");
+            auto target = py::arg_cast<py::str>(args[1], "target");
+            if (py::str(name).contains("/"_py))
+                py_throw_format(PyExc_ValueError, "Channel alias name may not contain \"/\"");
+            self->alias_cache.clear();
+            self->channel_alias.set(name, split_string_tuple(target));
+        }>,
+        py::meth_o<"translate_channel",[] (py::ptr<Config> self, py::ptr<> name) {
+            return self->translate_channel(py::arg_cast<py::str>(name, "name"));
+        }>>),
     .tp_new = py::tp_new<[] (PyTypeObject *t, auto...) {
         auto self = py::generic_alloc<Config>(t);
         call_constructor(&self->channel_alias, py::new_dict());

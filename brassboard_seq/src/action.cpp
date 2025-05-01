@@ -20,6 +20,7 @@
 
 namespace brassboard_seq::action {
 
+__attribute__((visibility("protected")))
 py::str_ref Action::py_str()
 {
     py::stringio io;
@@ -52,17 +53,20 @@ PyTypeObject RampFunctionBase::Type = {
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,
 };
 
+__attribute__((visibility("internal")))
 py::ref<> SeqCubicSpline::Data::eval_end(py::ptr<>, py::ptr<>)
 {
     return order0 + order1 + order2 + order3;
 }
 
+__attribute__((visibility("internal")))
 py::ref<> SeqCubicSpline::Data::spline_segments(double length, double oldval)
 {
     f_inv_length = 1 / length;
     return py::new_tuple();
 }
 
+__attribute__((visibility("internal")))
 void SeqCubicSpline::Data::set_runtime_params(unsigned age)
 {
     f_order0 = rtval::get_value_f64(order0, age);
@@ -71,12 +75,14 @@ void SeqCubicSpline::Data::set_runtime_params(unsigned age)
     f_order3 = rtval::get_value_f64(order3, age);
 }
 
+__attribute__((visibility("internal")))
 rtval::TagVal SeqCubicSpline::Data::runtime_eval(double t) noexcept
 {
     t = t * f_inv_length;
     return rtval::TagVal(f_order0 + (f_order1 + (f_order2 + f_order3 * t) * t) * t);
 }
 
+__attribute__((visibility("internal")))
 inline SeqCubicSpline::~SeqCubicSpline()
 {
     call_destructor(data(this));

@@ -131,6 +131,7 @@ static inline void _copy_pystr_buffer(void *tgt, int tgt_kind,
     }
 }
 
+__attribute__((visibility("internal")))
 inline void stringio::check_size(size_t sz, int kind)
 {
     if (kind > m_kind) [[unlikely]] {
@@ -147,6 +148,7 @@ inline void stringio::check_size(size_t sz, int kind)
     m_buff.reset((char*)realloc(m_buff.release(), m_size * m_kind));
 }
 
+__attribute__((visibility("internal")))
 inline void stringio::write_kind(const void *data, int kind, ssize_t len)
 {
     static_assert(PyUnicode_1BYTE_KIND == 1 &&
@@ -495,6 +497,7 @@ auto buff_streambuf::seekpos(pos_type pos, std::ios_base::openmode which) -> pos
     return _seekpos(pos);
 }
 
+__attribute__((visibility("internal")))
 inline auto buff_streambuf::_seekpos(pos_type pos) -> pos_type
 {
     if (pos < 0)
@@ -539,12 +542,14 @@ auto buff_streambuf::seekoff(off_type off, std::ios_base::seekdir dir,
     return _seekpos(pos);
 }
 
+__attribute__((visibility("internal")))
 inline int buff_streambuf::sync()
 {
     update_size();
     return 0;
 }
 
+__attribute__((visibility("internal")))
 inline void buff_streambuf::update_size()
 {
     auto sz = pptr() - pbase();
@@ -1051,6 +1056,7 @@ static void _get_suffix_array(std::span<int> SA, std::span<int> S,
     sort_suffix(S, SA, ws, lms_cnt);
 }
 
+__attribute__((visibility("protected")))
 void get_height_array(std::span<int> height, std::span<int> S,
                       std::span<int> SA, std::span<int> RK)
 {

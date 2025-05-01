@@ -106,6 +106,7 @@ static py::str_ref str_time(int64_t t)
     return py::new_str(str.data());
 }
 
+__attribute__((visibility("internal")))
 inline void TimeManager::visit_time(EventTime *t, auto &visited)
 {
     auto id = t->data.id;
@@ -388,6 +389,7 @@ PyTypeObject EventTimeDiff::Type = {
 // This is so that if the base time is not statically known,
 // we can compute the diff without computing the base time,
 // while if the base time is known, we can use the static values in the computation
+__attribute__((visibility("internal")))
 inline int64_t EventTime::get_value(int base_id, unsigned age, std::vector<int64_t> &cache)
 {
     auto tid = data.id;
@@ -450,6 +452,7 @@ inline int64_t EventTime::get_value(int base_id, unsigned age, std::vector<int64
     return value;
 }
 
+__attribute__((visibility("internal")))
 inline void EventTime::update_chain_pos(EventTime *prev, int nchains)
 {
     auto cid = data.chain_id;

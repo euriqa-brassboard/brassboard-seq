@@ -45,6 +45,7 @@ struct ArtiqConsts {
 
 static ArtiqConsts artiq_consts;
 
+__attribute__((visibility("internal")))
 inline int ChannelsInfo::add_bus_channel(int bus_channel, uint32_t io_update_target,
                                          uint8_t ref_period_mu)
 {
@@ -64,6 +65,7 @@ inline int ChannelsInfo::add_bus_channel(int bus_channel, uint32_t io_update_tar
     return bus_id;
 }
 
+__attribute__((visibility("internal")))
 inline void ChannelsInfo::add_ttl_channel(int seqchn, uint32_t target, bool iscounter,
                                           int64_t delay, PyObject *rt_delay)
 {
@@ -73,6 +75,7 @@ inline void ChannelsInfo::add_ttl_channel(int seqchn, uint32_t target, bool isco
     ttl_chn_map[seqchn] = ttl_id;
 }
 
+__attribute__((visibility("internal")))
 inline int ChannelsInfo::get_dds_channel_id(uint32_t bus_id, double ftw_per_hz,
                                             uint8_t chip_select, int64_t delay,
                                             PyObject *rt_delay)
@@ -88,6 +91,7 @@ inline int ChannelsInfo::get_dds_channel_id(uint32_t bus_id, double ftw_per_hz,
     return dds_id;
 }
 
+__attribute__((visibility("internal")))
 inline void ChannelsInfo::add_dds_param_channel(int seqchn, uint32_t bus_id,
                                                 double ftw_per_hz, uint8_t chip_select,
                                                 ChannelType param, int64_t delay,
@@ -598,6 +602,7 @@ void generate_rtios(auto *ab, backend::CompiledSeq &cseq, unsigned age)
     return;
 }
 
+__attribute__((visibility("internal")))
 void UrukulBus::add_dds_action(auto &add_action, DDSAction &action)
 {
     auto div = artiq_consts.URUKUL_SPIT_DDS_WR;
@@ -633,6 +638,7 @@ void UrukulBus::add_dds_action(auto &add_action, DDSAction &action)
     last_bus_mu = t3;
 }
 
+__attribute__((visibility("internal")))
 void UrukulBus::add_io_update(auto &add_action, int64_t time_mu,
                               int aid, bool exact_time)
 {
@@ -648,6 +654,7 @@ void UrukulBus::add_io_update(auto &add_action, int64_t time_mu,
     last_io_update_mu = t2;
 }
 
+__attribute__((visibility("internal")))
 inline void UrukulBus::flush_output(auto &add_action, int64_t time_mu, bool force)
 {
     if (!dds_actions.empty())
@@ -678,6 +685,7 @@ inline void UrukulBus::flush_output(auto &add_action, int64_t time_mu, bool forc
     }
 }
 
+__attribute__((visibility("internal")))
 inline void UrukulBus::add_output(auto &add_action, const ArtiqAction &action,
                                   DDSChannel &ddschn)
 {
@@ -758,6 +766,7 @@ inline void UrukulBus::add_output(auto &add_action, const ArtiqAction &action,
             action.aid, &ddschn});
 }
 
+__attribute__((visibility("internal")))
 inline void TTLChannel::flush_output(auto &add_action, int64_t cur_time_mu,
                                      bool exact_time_only, bool force)
 {
@@ -776,6 +785,7 @@ inline void TTLChannel::flush_output(auto &add_action, int64_t cur_time_mu,
                               last_time_mu, exact_time) + coarse_time_mu;
 }
 
+__attribute__((visibility("internal")))
 inline void TTLChannel::add_output(auto &add_action, const ArtiqAction &action)
 {
     uint8_t val;
@@ -839,12 +849,14 @@ inline void TTLChannel::add_output(auto &add_action, const ArtiqAction &action)
     new_val = val;
 }
 
+__attribute__((visibility("internal")))
 inline void TimeChecker::clear()
 {
     counts.clear();
     max_key = 0;
 }
 
+__attribute__((visibility("internal")))
 inline bool TimeChecker::check_and_add_time(int64_t t_mu)
 {
     auto t_course = t_mu / coarse_time_mu;
@@ -860,6 +872,7 @@ inline bool TimeChecker::check_and_add_time(int64_t t_mu)
     return true;
 }
 
+__attribute__((visibility("internal")))
 inline int64_t TimeChecker::find_time(int64_t lb_mu, int64_t t_mu, int64_t ub_mu)
 {
     if (check_and_add_time(t_mu))

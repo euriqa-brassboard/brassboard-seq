@@ -98,8 +98,6 @@ struct IsFirst {
     }
 };
 
-}
-
 static void set_dds_delay(auto *rb, int dds, double delay)
 {
     if (delay < 0)
@@ -1090,6 +1088,9 @@ Generator *new_jaqalv1_3_stream_generator()
     return new Jaqalv1_3StreamGen;
 }
 
+} // (anonymous)
+
+__attribute__((visibility("internal")))
 inline int ChannelInfo::add_tone_channel(int chn)
 {
     int chn_idx = (int)channels.size();
@@ -1097,12 +1098,14 @@ inline int ChannelInfo::add_tone_channel(int chn)
     return chn_idx;
 }
 
+__attribute__((visibility("internal")))
 inline void ChannelInfo::add_seq_channel(int seq_chn, int chn_idx, ToneParam param)
 {
     assert(chn_map.count(seq_chn) == 0);
     chn_map.insert({seq_chn, {chn_idx, param}});
 }
 
+__attribute__((visibility("internal")))
 inline void ChannelInfo::ensure_unused_tones(bool all)
 {
     // For now, do not generate RFSoC data if there's no output.
@@ -1126,6 +1129,8 @@ inline void ChannelInfo::ensure_unused_tones(bool all)
         }
     }
 }
+
+namespace {
 
 static inline bool parse_action_kws(py::dict kws, int aid)
 {
@@ -1374,6 +1379,8 @@ void generate_splines(auto &eval_cb, auto &add_sample, double len, double thresh
     _generate_splines(eval_cb, add_sample, buff, threshold);
 }
 
+} // (anonymous)
+
 inline void
 SyncTimeMgr::add_action(std::vector<DDSParamAction> &actions, int64_t start_cycle,
                         int64_t end_cycle, cubic_spline_t sp,
@@ -1499,6 +1506,8 @@ SyncTimeMgr::add_action(std::vector<DDSParamAction> &actions, int64_t start_cycl
                  sync_freq, sync_freq_seq_time, sync_freq_match_tid);
     }
 }
+
+namespace {
 
 static __attribute__((always_inline)) inline
 void rfsoc_runtime_finalize(auto *rb, backend::CompiledSeq &cseq, unsigned age)
@@ -1809,5 +1818,7 @@ void rfsoc_runtime_finalize(auto *rb, backend::CompiledSeq &cseq, unsigned age)
     gen->end();
     bb_debug("rfsoc_runtime_finalize: finish\n");
 }
+
+} // (anonymous)
 
 }

@@ -22,6 +22,8 @@
 
 namespace brassboard_seq::seq {
 
+namespace {
+
 enum class AddStepType {
     Step,
     Background,
@@ -251,6 +253,9 @@ static py::ref<TimeSeq> add_step_real(py::ptr<CondSeq> self, PyObject *const *ar
     return res;
 }
 
+}
+
+__attribute__((visibility("internal")))
 inline int SeqInfo::get_channel_id(py::str name)
 {
     if (auto chn = channel_name_map.try_get(name)) [[likely]]
@@ -282,6 +287,7 @@ PyTypeObject SeqInfo::Type = {
     &SeqInfo::channel_paths,&SeqInfo::C>,
 };
 
+__attribute__((visibility("internal")))
 inline void TimeSeq::show_cond_suffix(py::stringio &io) const
 {
     if (cond != Py_True) {
@@ -355,6 +361,7 @@ PyTypeObject TimeSeq::Type = {
 };
 
 template<bool is_pulse>
+__attribute__((visibility("internal")))
 inline void TimeStep::set(py::ptr<> chn, py::ptr<> value, py::ptr<> cond,
                           bool exact_time, py::dict_ref &&kws)
 {
@@ -385,6 +392,7 @@ inline void TimeStep::set(py::ptr<> chn, py::ptr<> value, py::ptr<> cond,
     actions[cid] = action;
 }
 
+__attribute__((visibility("internal")))
 inline void TimeStep::show(py::stringio &io, int indent) const
 {
     io.write_rep_ascii(indent, " ");
@@ -424,6 +432,7 @@ PyTypeObject TimeStep::Type = {
     .tp_base = &TimeSeq::Type,
 };
 
+__attribute__((visibility("internal")))
 inline void SubSeq::show_subseqs(py::stringio &io, int indent) const
 {
     for (auto [i, seq]: py::list_iter(sub_seqs)) {
@@ -436,6 +445,7 @@ inline void SubSeq::show_subseqs(py::stringio &io, int indent) const
     }
 }
 
+__attribute__((visibility("internal")))
 inline void SubSeq::show(py::stringio &io, int indent) const
 {
     io.write_rep_ascii(indent, " ");
@@ -449,6 +459,7 @@ inline void SubSeq::show(py::stringio &io, int indent) const
 }
 
 template<bool is_pulse>
+__attribute__((visibility("internal")))
 inline void SubSeq::set(py::ptr<> chn, py::ptr<> value, py::ptr<> cond,
                         bool exact_time, py::dict_ref &&kws)
 {
@@ -463,6 +474,7 @@ inline void SubSeq::set(py::ptr<> chn, py::ptr<> value, py::ptr<> cond,
     dummy_step->set<false>(chn, value, cond, exact_time, std::move(kws));
 }
 
+__attribute__((visibility("internal")))
 inline void SubSeq::wait_cond(py::ptr<> length, py::ptr<> cond)
 {
     auto new_time = seqinfo->time_mgr->new_round(end_time, length, cond, Py_None);
@@ -470,6 +482,7 @@ inline void SubSeq::wait_cond(py::ptr<> length, py::ptr<> cond)
     end_time.assign(std::move(new_time));
 }
 
+__attribute__((visibility("internal")))
 inline void SubSeq::wait_for_cond(py::ptr<> _tp0, py::ptr<> offset, py::ptr<> cond)
 {
     py::ptr tp0 = py::cast<EventTime>(_tp0);
@@ -480,7 +493,7 @@ inline void SubSeq::wait_for_cond(py::ptr<> _tp0, py::ptr<> offset, py::ptr<> co
     end_time.assign(std::move(new_time));
 }
 
-inline py::ref<SubSeq>
+__attribute__((visibility("internal"))) inline py::ref<SubSeq>
 SubSeq::add_custom_step(py::ptr<> cond, py::ptr<EventTime> start_time, py::ptr<> cb,
                         size_t nargs, PyObject *const *args, py::tuple kwnames)
 {
@@ -501,7 +514,7 @@ SubSeq::add_custom_step(py::ptr<> cond, py::ptr<EventTime> start_time, py::ptr<>
     return subseq;
 }
 
-inline py::ref<TimeStep>
+__attribute__((visibility("internal"))) inline py::ref<TimeStep>
 SubSeq::add_time_step(py::ptr<> cond, py::ptr<EventTime> start_time, py::ptr<> length)
 {
     auto end_time = seqinfo->time_mgr->new_round(start_time, length, cond, Py_None);
@@ -543,6 +556,7 @@ PyTypeObject SubSeq::Type = {
     .tp_base = &TimeSeq::Type,
 };
 
+__attribute__((visibility("internal")))
 inline void ConditionalWrapper::show(py::stringio &io, int indent) const
 {
     io.write_rep_ascii(indent, " ");
@@ -584,6 +598,7 @@ PyTypeObject ConditionalWrapper::Type = {
                       return py::newref(self->seq->seqinfo->C); }>>),
 };
 
+__attribute__((visibility("internal")))
 inline void Seq::show(py::stringio &io, int indent) const
 {
     io.write_rep_ascii(indent, " ");
