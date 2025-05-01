@@ -888,6 +888,17 @@ public:
     {
         return str_ref(throw_if_not(PyUnicode_Join((PyObject*)_ptr(), (PyObject*)items)));
     }
+    template<typename T2>
+    void add_objref(const char *name, T2 &&value) const requires std::same_as<T,_mod>
+    {
+#if PY_VERSION_HEX >= 0x030a0000
+        throw_if(PyModule_AddObjectRef((PyObject*)_ptr(), name, (PyObject*)value) < 0);
+#else
+        py::ref v(py::newref(std::forward<T2>(value)));
+        throw_if(PyModule_AddObject((PyObject*)m, name, v.get()) < 0);
+        v.rel();
+#endif
+    }
 
 private:
     auto *_ptr() const
@@ -1408,6 +1419,11 @@ static inline mod_ref new_module(PyModuleDef *def)
 {
     return mod_ref(throw_if_not(PyModule_Create(def)));
 }
+
+#define PY_MODINIT(name)                                                \
+    static inline py::mod_ref __PyInit_##name(void);                    \
+    PyMODINIT_FUNC PyInit_##name(void) { return cxx_catch(__PyInit_##name); } \
+    static inline py::mod_ref __PyInit_##name(void)
 
 template<typename T1=PyObject*,typename T2=PyObject*>
 static inline auto new_cfunc(PyMethodDef *ml, T1 &&self=nullptr, T2 &&mod=nullptr)

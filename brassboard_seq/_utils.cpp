@@ -41,90 +41,68 @@ static PyModuleDef _utils_module = {
     .m_size = -1,
 };
 
-#if PY_VERSION_HEX >= 0x030a0000
-static void pymodule_addobjectref(py::mod m, const char *name, py::ptr<> value)
+PY_MODINIT(_utils)
 {
-    throw_if(PyModule_AddObjectRef((PyObject*)m, name, value) < 0);
-}
-#else
-static void pymodule_addobjectref(py::mod m, const char *name, py::ptr<> value)
-{
-    py::ref v(py::newref(value));
-    throw_if(PyModule_AddObject((PyObject*)m, name, v.get()) < 0);
-    v.rel();
-}
-#endif
+    init();
+    auto m = py::new_module(&_utils_module);
+    // action
+    m.add_objref("RampFunction", &action::RampFunction_Type);
+    m.add_objref("SeqCubicSpline", &action::SeqCubicSpline::Type);
+    m.add_objref("Blackman", &action::Blackman_Type);
+    m.add_objref("BlackmanSquare", &action::BlackmanSquare_Type);
+    m.add_objref("LinearRamp", &action::LinearRamp_Type);
 
-PyMODINIT_FUNC
-PyInit__utils(void)
-{
-    return cxx_catch([&] {
-        init();
-        auto m = py::new_module(&_utils_module);
-        // action
-        pymodule_addobjectref(m, "RampFunction", &action::RampFunction_Type);
-        pymodule_addobjectref(m, "SeqCubicSpline", &action::SeqCubicSpline::Type);
-        pymodule_addobjectref(m, "Blackman", &action::Blackman_Type);
-        pymodule_addobjectref(m, "BlackmanSquare", &action::BlackmanSquare_Type);
-        pymodule_addobjectref(m, "LinearRamp", &action::LinearRamp_Type);
+    // config
+    m.add_objref("Config", &config::Config::Type);
 
-        // config
-        pymodule_addobjectref(m, "Config", &config::Config::Type);
+    // event_time
+    m.add_objref("TimeManager", &event_time::TimeManager::Type);
+    m.add_objref("EventTime", &event_time::EventTime::Type);
+    m.add_objref("event_time_time_scale",
+                 py::new_cfunc(&event_time::time_scale_method,
+                               nullptr, "brassboard_seq.event_time"_py));
 
-        // event_time
-        pymodule_addobjectref(m, "TimeManager", &event_time::TimeManager::Type);
-        pymodule_addobjectref(m, "EventTime", &event_time::EventTime::Type);
-        pymodule_addobjectref(m, "event_time_time_scale",
-                              py::new_cfunc(&event_time::time_scale_method,
-                                            nullptr, "brassboard_seq.event_time"_py));
+    // rtfsoc
+    m.add_objref("JaqalInst_v1", &rfsoc::JaqalInst_v1_Type);
+    m.add_objref("Jaqal_v1", &rfsoc::Jaqal_v1_Type);
+    m.add_objref("JaqalChannelGen_v1", &rfsoc::JaqalChannelGen_v1_Type);
+    m.add_objref("JaqalInst_v1_3", &rfsoc::JaqalInst_v1_3_Type);
+    m.add_objref("Jaqal_v1_3", &rfsoc::Jaqal_v1_3_Type);
 
-        // rtfsoc
-        pymodule_addobjectref(m, "JaqalInst_v1", &rfsoc::JaqalInst_v1_Type);
-        pymodule_addobjectref(m, "Jaqal_v1", &rfsoc::Jaqal_v1_Type);
-        pymodule_addobjectref(m, "JaqalChannelGen_v1", &rfsoc::JaqalChannelGen_v1_Type);
-        pymodule_addobjectref(m, "JaqalInst_v1_3", &rfsoc::JaqalInst_v1_3_Type);
-        pymodule_addobjectref(m, "Jaqal_v1_3", &rfsoc::Jaqal_v1_3_Type);
+    // rtprop
+    m.add_objref("CompositeRTProp", &rtprop::CompositeRTProp_Type);
+    m.add_objref("RTProp", &rtprop::RTProp_Type);
 
-        // rtprop
-        pymodule_addobjectref(m, "CompositeRTProp", &rtprop::CompositeRTProp_Type);
-        pymodule_addobjectref(m, "RTProp", &rtprop::RTProp_Type);
-
-        // rtval
-        pymodule_addobjectref(m, "RuntimeValue", &rtval::RuntimeValue::Type);
-        pymodule_addobjectref(m, "ExternCallback", &rtval::ExternCallback::Type);
-        pymodule_addobjectref(m, "rtval_get_value",
-                              py::new_cfunc(&rtval::get_value_method,
+    // rtval
+    m.add_objref("RuntimeValue", &rtval::RuntimeValue::Type);
+    m.add_objref("ExternCallback", &rtval::ExternCallback::Type);
+    m.add_objref("rtval_get_value", py::new_cfunc(&rtval::get_value_method,
+                                                  nullptr, "brassboard_seq.rtval"_py));
+    m.add_objref("rtval_inv", py::new_cfunc(&rtval::inv_method,
                                             nullptr, "brassboard_seq.rtval"_py));
-        pymodule_addobjectref(m, "rtval_inv",
-                              py::new_cfunc(&rtval::inv_method,
-                                            nullptr, "brassboard_seq.rtval"_py));
-        pymodule_addobjectref(m, "rtval_convert_bool",
-                              py::new_cfunc(&rtval::convert_bool_method,
-                                            nullptr, "brassboard_seq.rtval"_py));
-        pymodule_addobjectref(m, "rtval_ifelse",
-                              py::new_cfunc(&rtval::ifelse_method,
-                                            nullptr, "brassboard_seq.rtval"_py));
-        pymodule_addobjectref(m, "rtval_same_value",
-                              py::new_cfunc(&rtval::same_value_method,
-                                            nullptr, "brassboard_seq.rtval"_py));
+    m.add_objref("rtval_convert_bool",
+                 py::new_cfunc(&rtval::convert_bool_method,
+                               nullptr, "brassboard_seq.rtval"_py));
+    m.add_objref("rtval_ifelse", py::new_cfunc(&rtval::ifelse_method,
+                                               nullptr, "brassboard_seq.rtval"_py));
+    m.add_objref("rtval_same_value", py::new_cfunc(&rtval::same_value_method,
+                                                   nullptr, "brassboard_seq.rtval"_py));
 
-        // scan
-        pymodule_addobjectref(m, "ParamPack", &scan::ParamPack::Type);
-        pymodule_addobjectref(m, "parampack_get_visited",
-                              py::new_cfunc(&scan::parampack_get_visited_method,
-                                            nullptr, "brassboard_seq.scan"_py));
-        pymodule_addobjectref(m, "parampack_get_param",
-                              py::new_cfunc(&scan::parampack_get_param_method,
-                                            nullptr, "brassboard_seq.scan"_py));
-        pymodule_addobjectref(m, "ScanGroup", &scan::ScanGroup_Type);
+    // scan
+    m.add_objref("ParamPack", &scan::ParamPack::Type);
+    m.add_objref("parampack_get_visited",
+                 py::new_cfunc(&scan::parampack_get_visited_method,
+                               nullptr, "brassboard_seq.scan"_py));
+    m.add_objref("parampack_get_param",
+                 py::new_cfunc(&scan::parampack_get_param_method,
+                               nullptr, "brassboard_seq.scan"_py));
+    m.add_objref("ScanGroup", &scan::ScanGroup_Type);
 
-        // seq
-        pymodule_addobjectref(m, "Seq", &seq::Seq::Type);
+    // seq
+    m.add_objref("Seq", &seq::Seq::Type);
 
-        // yaml
-        pymodule_addobjectref(m, "yaml_sprint",
-                              py::new_cfunc(&yaml::sprint_method, nullptr,
-                                            "brassboard_seq.yaml"_py));
-        return m;
-    });
+    // yaml
+    m.add_objref("yaml_sprint", py::new_cfunc(&yaml::sprint_method, nullptr,
+                                              "brassboard_seq.yaml"_py));
+    return m;
 }

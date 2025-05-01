@@ -21,17 +21,19 @@ add_library(brassboard_seq_utils SHARED
 target_include_directories(brassboard_seq_utils PRIVATE ${Python_INCLUDE_DIRS})
 install(TARGETS brassboard_seq_utils DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 
-add_library(brassboard_seq__utils_mod MODULE
-  _utils.cpp)
-target_include_directories(brassboard_seq__utils_mod PRIVATE ${Python_INCLUDE_DIRS})
-target_link_libraries(brassboard_seq__utils_mod brassboard_seq_utils -fopenmp)
-set_target_properties(brassboard_seq__utils_mod
+function(bb_cxx_mod name)
+  add_library("brassboard_seq_${name}_mod" MODULE "${name}.cpp")
+  target_include_directories("brassboard_seq_${name}_mod" PRIVATE ${Python_INCLUDE_DIRS})
+  target_link_libraries("brassboard_seq_${name}_mod" brassboard_seq_utils -fopenmp)
+  set_target_properties("brassboard_seq_${name}_mod"
     PROPERTIES POSITION_INDEPENDENT_CODE ON
-    LIBRARY_OUTPUT_NAME "_utils"
+    LIBRARY_OUTPUT_NAME "${name}"
     PREFIX ""
     SUFFIX "${PYTHON_EXTENSION_SUFFIX}")
-install(TARGETS brassboard_seq__utils_mod
-  DESTINATION "${_PYTHON_SITE_INSTALL_DIR}/brassboard_seq")
+  install(TARGETS "brassboard_seq_${name}_mod"
+    DESTINATION "${_PYTHON_SITE_INSTALL_DIR}/brassboard_seq")
+endfunction()
+bb_cxx_mod(_utils)
 
 install(FILES
   src/action.h
