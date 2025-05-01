@@ -30,6 +30,6 @@ static PyModuleDef scan_module = {
 
 PY_MODINIT(scan, scan_module)
 {
-    m.add_objref("ParamPack", &scan::ParamPack::Type);
-    m.add_objref("ScanGroup", &scan::ScanGroup_Type);
+    m.add_type(&scan::ParamPack::Type);
+    m.add_type(&scan::ScanGroup_Type);
 }

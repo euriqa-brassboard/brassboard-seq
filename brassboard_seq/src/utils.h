@@ -899,6 +899,11 @@ public:
         v.rel();
 #endif
     }
+    template<typename T2>
+    void add_type(T2 &&value) const requires std::same_as<T,_mod>
+    {
+        throw_if(PyModule_AddType((PyObject*)_ptr(), (PyTypeObject*)value) < 0);
+    }
 
 private:
     auto *_ptr() const

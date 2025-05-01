@@ -35,26 +35,26 @@ static PyModuleDef _utils_module = {
 PY_MODINIT(_utils, _utils_module)
 {
     // event_time
-    m.add_objref("TimeManager", &event_time::TimeManager::Type);
-    m.add_objref("EventTime", &event_time::EventTime::Type);
+    m.add_type(&event_time::TimeManager::Type);
+    m.add_type(&event_time::EventTime::Type);
     m.add_objref("event_time_time_scale",
                  py::new_cfunc(&event_time::time_scale_method,
                                nullptr, "brassboard_seq.event_time"_py));
 
     // rfsoc
-    m.add_objref("JaqalInst_v1", &rfsoc::JaqalInst_v1_Type);
-    m.add_objref("Jaqal_v1", &rfsoc::Jaqal_v1_Type);
-    m.add_objref("JaqalChannelGen_v1", &rfsoc::JaqalChannelGen_v1_Type);
-    m.add_objref("JaqalInst_v1_3", &rfsoc::JaqalInst_v1_3_Type);
-    m.add_objref("Jaqal_v1_3", &rfsoc::Jaqal_v1_3_Type);
+    m.add_type(&rfsoc::JaqalInst_v1_Type);
+    m.add_type(&rfsoc::Jaqal_v1_Type);
+    m.add_type(&rfsoc::JaqalChannelGen_v1_Type);
+    m.add_type(&rfsoc::JaqalInst_v1_3_Type);
+    m.add_type(&rfsoc::Jaqal_v1_3_Type);
 
     // rtprop
-    m.add_objref("CompositeRTProp", &rtprop::CompositeRTProp_Type);
-    m.add_objref("RTProp", &rtprop::RTProp_Type);
+    m.add_type(&rtprop::CompositeRTProp_Type);
+    m.add_type(&rtprop::RTProp_Type);
 
     // rtval
-    m.add_objref("RuntimeValue", &rtval::RuntimeValue::Type);
-    m.add_objref("ExternCallback", &rtval::ExternCallback::Type);
+    m.add_type(&rtval::RuntimeValue::Type);
+    m.add_type(&rtval::ExternCallback::Type);
     m.add_objref("rtval_get_value", py::new_cfunc(&rtval::get_value_method,
                                                   nullptr, "brassboard_seq.rtval"_py));
     m.add_objref("rtval_inv", py::new_cfunc(&rtval::inv_method,
@@ -68,5 +68,5 @@ PY_MODINIT(_utils, _utils_module)
                                                    nullptr, "brassboard_seq.rtval"_py));
 
     // seq
-    m.add_objref("Seq", &seq::Seq::Type);
+    m.add_type(&seq::Seq::Type);
 }

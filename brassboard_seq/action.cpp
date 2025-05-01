@@ -29,9 +29,9 @@ static PyModuleDef action_module = {
 
 PY_MODINIT(action, action_module)
 {
-    m.add_objref("RampFunction", &action::RampFunction_Type);
-    m.add_objref("SeqCubicSpline", &action::SeqCubicSpline::Type);
-    m.add_objref("Blackman", &action::Blackman_Type);
-    m.add_objref("BlackmanSquare", &action::BlackmanSquare_Type);
-    m.add_objref("LinearRamp", &action::LinearRamp_Type);
+    m.add_type(&action::RampFunction_Type);
+    m.add_type(&action::SeqCubicSpline::Type);
+    m.add_type(&action::Blackman_Type);
+    m.add_type(&action::BlackmanSquare_Type);
+    m.add_type(&action::LinearRamp_Type);
 }
