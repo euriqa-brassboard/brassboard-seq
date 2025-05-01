@@ -40,7 +40,7 @@ BBLogLevel bb_logging_level = [] {
 }();
 
 __attribute__((visibility("protected")))
-PyMethodDef set_log_level_method =
+PyMethodDef utils_methods[] = {
     py::meth_o<"set_log_level",[] (auto, py::ptr<> _level) {
         auto level = py::arg_cast<py::str>(_level, "level");
         if (level.compare_ascii("debug") == 0) {
@@ -52,7 +52,7 @@ PyMethodDef set_log_level_method =
         else {
             py_throw_format(PyExc_ValueError, "Invalid log level %U", level);
         }
-    }>;
+    }>, {}};
 
 __attribute__((visibility("protected")))
 void format_double(std::ostream &io, double v)

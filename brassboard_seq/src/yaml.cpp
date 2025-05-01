@@ -346,7 +346,7 @@ py::str_ref sprint(py::ptr<> obj, int indent)
     return io.getvalue();
 }
 
-PyMethodDef sprint_method =
+PyMethodDef methods[] = {
     py::meth_fast<"sprint",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
         py::check_num_arg("sprint", nargs, 1, 2);
         int indent = 0;
@@ -357,7 +357,7 @@ PyMethodDef sprint_method =
             }
         }
         return sprint(args[0], indent);
-    }>;
+    }>, {}};
 
 __attribute__((visibility("hidden")))
 void init()

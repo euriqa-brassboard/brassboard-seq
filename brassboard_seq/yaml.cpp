@@ -25,10 +25,8 @@ static PyModuleDef yaml_module = {
     .m_base = PyModuleDef_HEAD_INIT,
     .m_name = "brassboard_seq.yaml",
     .m_size = -1,
+    .m_methods = yaml::methods,
 };
 
 PY_MODINIT(yaml, yaml_module)
-{
-    m.add_objref("sprint", py::new_cfunc(&yaml::sprint_method, nullptr,
-                                         "brassboard_seq.yaml"_py));
-}
+{}

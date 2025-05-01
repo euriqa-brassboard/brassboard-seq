@@ -35,8 +35,7 @@ struct ParamPack : PyObject {
     static PyTypeObject Type;
 };
 
-extern PyMethodDef parampack_get_visited_method;
-extern PyMethodDef parampack_get_param_method;
+extern PyMethodDef methods[];
 extern PyTypeObject &ScanGroup_Type;
 
 void init();

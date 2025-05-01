@@ -27,7 +27,7 @@ namespace brassboard_seq::yaml {
 void print(py::stringio &io, py::ptr<> obj, int indent=0);
 py::str_ref sprint(py::ptr<> obj, int indent=0);
 
-extern PyMethodDef sprint_method;
+extern PyMethodDef methods[];
 
 void init();
 

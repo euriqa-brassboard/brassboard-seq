@@ -266,25 +266,23 @@ PyTypeObject ParamPack::Type = {
     .tp_vectorcall = py::vectorfunc<parampack_new>,
 };
 
-PyMethodDef parampack_get_visited_method =
+PyMethodDef methods[] = {
     py::meth_o<"get_visited", [] (auto, py::ptr<> param_pack) -> py::ref<> {
-    auto self = py::arg_cast<ParamPack,true>(param_pack, "param_pack");
-    py::ptr fieldname = self->fieldname;
-    if (auto res = self->visited.try_get(fieldname))
-        return res.ref();
-    if (auto value = self->values.try_get(fieldname);
-        value && value.typeis<py::dict>())
-        return set_new_dict(self->visited, fieldname);
-    return py::new_false();
-}>;
-
-// Helper function for functions that takes an optional parameter pack
-PyMethodDef parampack_get_param_method =
+        auto self = py::arg_cast<ParamPack,true>(param_pack, "param_pack");
+        py::ptr fieldname = self->fieldname;
+        if (auto res = self->visited.try_get(fieldname))
+            return res.ref();
+        if (auto value = self->values.try_get(fieldname);
+            value && value.typeis<py::dict>())
+            return set_new_dict(self->visited, fieldname);
+        return py::new_false();
+    }>,
     py::meth_o<"get_param",[] (auto, py::ptr<> param) -> py::ref<> {
-    if (param.is_none())
-        return ParamPack::new_empty();
-    return param.ref();
-}>;
+        // Helper function for functions that takes an optional parameter pack
+        if (param.is_none())
+            return ParamPack::new_empty();
+        return param.ref();
+    }>, {}};
 
 __attribute__((visibility("hidden")))
 void init_parampack()

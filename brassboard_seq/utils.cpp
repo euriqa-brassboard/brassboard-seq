@@ -24,10 +24,8 @@ static PyModuleDef utils_module = {
     .m_base = PyModuleDef_HEAD_INIT,
     .m_name = "brassboard_seq.utils",
     .m_size = -1,
+    .m_methods = utils_methods,
 };
 
 PY_MODINIT(utils, utils_module)
-{
-    m.add_objref("set_log_level", py::new_cfunc(&set_log_level_method, nullptr,
-                                                "brassboard_seq.utils"_py));
-}
+{}
