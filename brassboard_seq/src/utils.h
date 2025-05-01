@@ -2130,7 +2130,7 @@ static constexpr auto tp_field_clear = tp_field_pack_clear<field_pack<T,fld...>>
 }
 
 template<str_literal lit>
-static const py::str _py_string_cache = py::str(py::new_str(lit.value).rel());
+static const py::str _py_string_cache(throw_if_not(PyUnicode_InternFromString(lit.value)));
 template<str_literal lit>
 static inline auto operator ""_py()
 {
