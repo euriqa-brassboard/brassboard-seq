@@ -11,6 +11,7 @@ add_library(brassboard_seq_utils SHARED
   src/event_time.cpp
   src/init.cpp
   src/parampack.cpp
+  src/rfsoc.cpp
   src/rtprop.cpp
   src/rtval.cpp
   src/scan.cpp
@@ -41,6 +42,7 @@ install(FILES
   src/rtval.h
   src/scan.h
   src/seq.h
+  src/rfsoc.h
   src/rfsoc_backend.h
   src/utils.h
   DESTINATION "${_PYTHON_SITE_INSTALL_DIR}/brassboard_seq/src")

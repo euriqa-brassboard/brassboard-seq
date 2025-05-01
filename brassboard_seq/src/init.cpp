@@ -19,6 +19,7 @@
 #include "action.h"
 #include "config.h"
 #include "event_time.h"
+#include "rfsoc.h"
 #include "rtprop.h"
 #include "rtval.h"
 #include "scan.h"
@@ -38,6 +39,7 @@ void init()
         action::init();
         config::init();
         event_time::init();
+        rfsoc::init();
         rtprop::init();
         scan::init();
         seq::init();

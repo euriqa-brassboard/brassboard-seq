@@ -25,6 +25,7 @@
 #include "src/action.h"
 #include "src/config.h"
 #include "src/event_time.h"
+#include "src/rfsoc.h"
 #include "src/rtprop.h"
 #include "src/rtval.h"
 #include "src/scan.h"
@@ -76,6 +77,13 @@ PyInit__utils(void)
         pymodule_addobjectref(m, "event_time_time_scale",
                               py::new_cfunc(&event_time::time_scale_method,
                                             nullptr, "brassboard_seq.event_time"_py));
+
+        // rtfsoc
+        pymodule_addobjectref(m, "JaqalInst_v1", &rfsoc::JaqalInst_v1_Type);
+        pymodule_addobjectref(m, "Jaqal_v1", &rfsoc::Jaqal_v1_Type);
+        pymodule_addobjectref(m, "JaqalChannelGen_v1", &rfsoc::JaqalChannelGen_v1_Type);
+        pymodule_addobjectref(m, "JaqalInst_v1_3", &rfsoc::JaqalInst_v1_3_Type);
+        pymodule_addobjectref(m, "Jaqal_v1_3", &rfsoc::Jaqal_v1_3_Type);
 
         // rtprop
         pymodule_addobjectref(m, "CompositeRTProp", &rtprop::CompositeRTProp_Type);

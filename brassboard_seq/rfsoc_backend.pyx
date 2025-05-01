@@ -30,6 +30,9 @@ from cython.operator cimport dereference as deref
 cdef re # hide import
 import re
 
+from brassboard_seq._utils import (JaqalInst_v1, Jaqal_v1, JaqalChannelGen_v1,
+                                   JaqalInst_v1_3, Jaqal_v1_3)
+
 cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backend":
     void collect_actions(RFSOCBackend ab, CompiledSeq&) except+
     void gen_rfsoc_data(RFSOCBackend ab, CompiledSeq&) except +
@@ -47,10 +50,6 @@ cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backen
     cppclass Jaqalv1_3StreamGen(Generator):
         object get_prefix(int n) except +
         object get_sequence(int n) except +
-
-    void init(dict) except +
-
-init(globals())
 
 cdef class RFSOCGenerator:
     pass
