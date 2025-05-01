@@ -264,12 +264,12 @@ PulseCompilerGen::Info::Info()
     ToneData.set_attr("__post_init__", orig_post_init);
     auto td_dict = py::dict_ref::checked(PyObject_GenericGetDict(dummy_tonedata.get(),
                                                                  nullptr));
-    for (auto [key, value]: py::dict_iter(td_dict)) {
+    for (auto [key, value]: py::dict_iter<PyObject,py::str>(td_dict)) {
         for (auto name: {"channel", "tone", "duration_cycles", "frequency_hz",
                 "amplitude", "phase_rad", "frame_rotation_rad", "wait_trigger",
                 "sync", "output_enable", "feedback_enable",
                 "bypass_lookup_tables"}) {
-            if (PyUnicode_CompareWithASCIIString(key, name) == 0) {
+            if (key.compare_ascii(name) == 0) {
                 goto skip_key;
             }
         }
@@ -1133,8 +1133,8 @@ static inline bool parse_action_kws(py::dict kws, int aid)
     if (!kws)
         return false;
     bool sync = false;
-    for (auto [key, value]: py::dict_iter(kws)) {
-        if (PyUnicode_CompareWithASCIIString(key, "sync") == 0) {
+    for (auto [key, value]: py::dict_iter<PyObject,py::str>(kws)) {
+        if (key.compare_ascii("sync") == 0) {
             sync = value.as_bool(action_key(aid));
             continue;
         }

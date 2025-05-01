@@ -111,12 +111,12 @@ static auto condseq_set(py::ptr<CondSeq> self, PyObject *const *args,
     py::dict_ref kws;
     if (kwnames) {
         auto kwvalues = args + nargs;
-        for (auto [i, name]: py::tuple_iter(kwnames)) {
+        for (auto [i, name]: py::tuple_iter<py::str>(kwnames)) {
             auto kwvalue = py::ptr(kwvalues[i]);
-            if (PyUnicode_CompareWithASCIIString(name, "cond") == 0) {
+            if (name.compare_ascii("cond") == 0) {
                 arg_cond = kwvalue;
             }
-            else if (PyUnicode_CompareWithASCIIString(name, "exact_time") == 0) {
+            else if (name.compare_ascii("exact_time") == 0) {
                 exact_time = kwvalue.as_bool();
             }
             else {
@@ -138,19 +138,10 @@ static void condseq_wait(py::ptr<CondSeq> self, PyObject *const *args,
 {
     py::check_num_arg(CondSeq::ClsName + ".wait", nargs, 1, 1);
     py::ptr<> length = args[0];
-    py::ptr<> cond{Py_True};
-    if (kwnames) {
-        auto kwvalues = args + nargs;
-        for (auto [i, name]: py::tuple_iter(kwnames)) {
-            auto value = kwvalues[i];
-            if (PyUnicode_CompareWithASCIIString(name, "cond") == 0) {
-                cond = value;
-            }
-            else {
-                unexpected_kwarg_error("wait", name);
-            }
-        }
-    }
+    auto [cond] = py::parse_pos_or_kw_args<"cond">(CondSeq::ClsName + ".wait",
+                                                   args + 1, 0, kwnames);
+    if (!cond)
+        cond = Py_True;
     CondCombiner cc(self->cond, cond);
     self->get_seq()->wait_cond(length, cc.cond);
 }

@@ -615,7 +615,7 @@ struct ScanWrapper : PyObject {
         py::check_num_arg("ScanWrapper", nargs, 1, 2);
         py::tuple path = self->path;
         int pathlen = path.size();
-        if (pathlen < 2 || PyUnicode_CompareWithASCIIString(path.get(pathlen - 1), "scan"))
+        if (pathlen < 2 || path.get<py::str>(pathlen - 1).compare_ascii("scan") != 0)
             py_throw_format(PyExc_SyntaxError, "Invalid scan syntax");
         int idx;
         py::ptr<> v;
@@ -672,8 +672,7 @@ static auto ScanWrapper_as_sequence = PySequenceMethods{
                             "Scan dimension must not be negative: %d.", idx);
         py::tuple path = self->path;
         int pathlen = path.size();
-        if (pathlen < 2 || PyUnicode_CompareWithASCIIString(path.get(pathlen - 1),
-                                                            "scan"))
+        if (pathlen < 2 || path.get<py::str>(pathlen - 1).compare_ascii("scan") != 0)
             py_throw_format(PyExc_SyntaxError, "Invalid scan syntax");
         self->sg->set_scan_param(self->scan, py::new_ntuple(pathlen - 1, [&] (int i) {
             return path.get(i);

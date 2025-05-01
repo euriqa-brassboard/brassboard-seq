@@ -1675,7 +1675,7 @@ static inline auto parse_pos_or_kw_args(const char *fname, PyObject *const *args
         for (auto [i, kwname]: tuple_iter<str>(kwnames)) {
             bool found = false;
             for (size_t j = 0; j < sizeof...(argnames); j++) {
-                if (PyUnicode_CompareWithASCIIString(kwname, argnames_ary[j]) == 0) {
+                if (kwname.compare_ascii(argnames_ary[j]) == 0) {
                     if (res[j])
                         py_throw_format(PyExc_TypeError,
                                         "%s got multiple values for argument '%s'",

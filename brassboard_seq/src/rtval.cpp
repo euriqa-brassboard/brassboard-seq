@@ -522,8 +522,7 @@ static py::ref<> rtvalue_array_ufunc(rtval_ptr self, PyObject *const *args,
 {
     py::check_num_arg("RuntimeValue.__array_ufunc__", nargs, 2);
     auto ufunc = args[0];
-    auto methods = args[1];
-    if (PyUnicode_CompareWithASCIIString(methods, "__call__"))
+    if (py::str(args[1]).compare_ascii("__call__") != 0)
         return py::new_not_implemented();
     // numpy type support would dispatch arithmetic operations to this function
     // so we need to implement the corresponding ufuncs to support these.
