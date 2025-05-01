@@ -19,8 +19,7 @@
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.backend cimport CompiledSeq
 from brassboard_seq.config cimport raise_invalid_channel
-from brassboard_seq.event_time cimport round_time_f64
-from brassboard_seq.rtval cimport is_rtval, rtval_cache, rt_eval_throw, RuntimeValue
+from brassboard_seq.rtval cimport is_rtval
 from brassboard_seq.seq cimport seq_get_channel_paths
 from brassboard_seq.utils cimport PyErr_Format, PyExc_ValueError
 
@@ -34,8 +33,9 @@ from brassboard_seq._utils import (JaqalInst_v1, Jaqal_v1, JaqalChannelGen_v1,
                                    JaqalInst_v1_3, Jaqal_v1_3)
 
 cdef extern from "src/rfsoc_backend.cpp" namespace "brassboard_seq::rfsoc_backend":
+    void set_dds_delay(RFSOCBackend self, int dds, double delay) except +
     void collect_actions(RFSOCBackend ab, CompiledSeq&) except+
-    void gen_rfsoc_data(RFSOCBackend ab, CompiledSeq&) except +
+    void rfsoc_runtime_finalize(RFSOCBackend ab, CompiledSeq&, unsigned age) except +
 
     Generator *new_pulse_compiler_generator() except +
     cppclass PulseCompilerGen(Generator):
@@ -89,17 +89,6 @@ cdef class Jaqalv1_3Generator(RFSOCGenerator):
         return (<Jaqalv1_3StreamGen*>self.gen.get()).get_sequence(n)
 
 cdef match_rfsoc_dds = re.compile('^dds(\\d+)$').match
-
-cdef inline int set_dds_delay(RFSOCBackend self, int dds, double delay) except -1:
-    if delay < 0:
-        py_delay = <object>delay
-        PyErr_Format(PyExc_ValueError, "DDS time offset %S cannot be negative.",
-                     <PyObject*>py_delay)
-    if delay > 0.1:
-        py_delay = <object>delay
-        PyErr_Format(PyExc_ValueError, "DDS time offset %S cannot be more than 100ms.",
-                     <PyObject*>py_delay)
-    self.channels.set_dds_delay(dds, round_time_f64(delay))
 
 @cython.auto_pickle(False)
 @cython.final
@@ -167,7 +156,4 @@ cdef class RFSOCBackend:
         collect_actions(self, cseq)
 
     cdef int runtime_finalize(self, CompiledSeq &cseq, unsigned age) except -1:
-        for dds, delay in self.rt_dds_delay.items():
-            rt_eval_throw(<RuntimeValue>delay, age)
-            set_dds_delay(self, dds, rtval_cache(<RuntimeValue>delay).get[double]())
-        gen_rfsoc_data(self, cseq)
+        rfsoc_runtime_finalize(self, cseq, age)

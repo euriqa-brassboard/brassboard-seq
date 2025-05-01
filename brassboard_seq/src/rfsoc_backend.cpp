@@ -98,6 +98,17 @@ struct IsFirst {
 
 }
 
+static void set_dds_delay(auto *rb, int dds, double delay)
+{
+    if (delay < 0)
+        py_throw_format(PyExc_ValueError, "DDS time offset %S cannot be negative.",
+                        py::new_float(delay));
+    if (delay > 0.1)
+        py_throw_format(PyExc_ValueError, "DDS time offset %S cannot be more than 100ms.",
+                        py::new_float(delay));
+    rb->channels.set_dds_delay(dds, event_time::round_time_f64(delay));
+}
+
 struct SyncChannelGen: Generator {
     virtual void add_tone_data(int chn, int64_t duration_cycles, cubic_spline_t freq,
                                cubic_spline_t amp, cubic_spline_t phase,
@@ -1433,9 +1444,14 @@ SyncTimeMgr::add_action(std::vector<DDSParamAction> &actions, int64_t start_cycl
 }
 
 static __attribute__((always_inline)) inline
-void gen_rfsoc_data(auto *rb, backend::CompiledSeq &cseq)
+void rfsoc_runtime_finalize(auto *rb, backend::CompiledSeq &cseq, unsigned age)
 {
-    bb_debug("gen_rfsoc_data: start\n");
+    bb_debug("rfsoc_runtime_finalize: start\n");
+    for (auto [dds, delay]: py::dict_iter<RuntimeValue>(rb->rt_dds_delay)) {
+        rt_eval_throw(delay, age);
+        set_dds_delay(rb, dds.as_int(), rtval_cache(delay).template get<double>());
+    }
+
     auto seq = pyx_fld(rb, seq);
     for (size_t i = 0, nreloc = rb->bool_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = rb->bool_values[i];
@@ -1734,7 +1750,7 @@ void gen_rfsoc_data(auto *rb, backend::CompiledSeq &cseq)
         gen->process_channel(rb->tone_buffer, channel.chn, total_cycle);
     }
     gen->end();
-    bb_debug("gen_rfsoc_data: finish\n");
+    bb_debug("rfsoc_runtime_finalize: finish\n");
 }
 
 }
