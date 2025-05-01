@@ -397,8 +397,11 @@ struct PyJaqalBase {
     static cubic_spline_t to_spline(py::ptr<> spline)
     {
         auto tu = py::arg_cast<py::tuple>(spline, "spline");
-        return {tu.get(0).as_float(), tu.get(1).as_float(),
-            tu.get(2).as_float(), tu.get(3).as_float()};
+        auto l = tu.size();
+        if (l > 4)
+            py_throw_format(PyExc_ValueError, "Invalid spline %S", tu);
+        auto get = [&] (int i) { return i >= l ? 0.0 : tu.get(i).as_float(); };
+        return {get(0), get(1), get(2), get(3)};
     }
     static int to_chn(py::ptr<> _chn)
     {

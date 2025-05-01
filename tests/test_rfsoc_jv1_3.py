@@ -506,20 +506,64 @@ def test_pulse_inst():
 
     with pytest.raises(TypeError, match=f"Unexpected type '{int}' for spline"):
         Jaqal_v1_3.freq_pulse(0, 100, False, False, False)
+    with pytest.raises(ValueError, match="Invalid spline \\(0, 0, 0, 0, 0\\)"):
+        Jaqal_v1_3.freq_pulse((0, 0, 0, 0, 0), 100, False, False, False)
     with pytest.raises(ValueError, match="Invalid cycle count '1099511627776'"):
         Jaqal_v1_3.freq_pulse((0, 0, 0, 0), 2**40, False, False, False)
     with pytest.raises(TypeError, match=f"Unexpected type '{int}' for spline"):
         Jaqal_v1_3.amp_pulse(0, 100, False, False, False)
+    with pytest.raises(ValueError, match="Invalid spline \\(0, 0, 0, 0, 0\\)"):
+        Jaqal_v1_3.amp_pulse((0, 0, 0, 0, 0), 100, False, False, False)
     with pytest.raises(ValueError, match="Invalid cycle count '1099511627776'"):
         Jaqal_v1_3.amp_pulse((0, 0, 0, 0), 2**40, False, False, False)
     with pytest.raises(TypeError, match=f"Unexpected type '{int}' for spline"):
         Jaqal_v1_3.phase_pulse(0, 100, False, False, False)
+    with pytest.raises(ValueError, match="Invalid spline \\(0, 0, 0, 0, 0\\)"):
+        Jaqal_v1_3.phase_pulse((0, 0, 0, 0, 0), 100, False, False, False)
     with pytest.raises(ValueError, match="Invalid cycle count '1099511627776'"):
         Jaqal_v1_3.phase_pulse((0, 0, 0, 0), 2**40, False, False, False)
     with pytest.raises(TypeError, match=f"Unexpected type '{int}' for spline"):
         Jaqal_v1_3.frame_pulse(0, 100, False, False, False, 0, 0)
+    with pytest.raises(ValueError, match="Invalid spline \\(0, 0, 0, 0, 0\\)"):
+        Jaqal_v1_3.frame_pulse((0, 0, 0, 0, 0), 100, False, False, False, 0, 0)
     with pytest.raises(ValueError, match="Invalid cycle count '1099511627776'"):
         Jaqal_v1_3.frame_pulse((0, 0, 0, 0), 2**40, False, False, False, 0, 0)
+
+    assert (Jaqal_v1_3.freq_pulse((), 100, False, False, False) ==
+            Jaqal_v1_3.freq_pulse((0, 0, 0, 0), 100, False, False, False))
+    assert (Jaqal_v1_3.freq_pulse((20,), 100, False, False, False) ==
+            Jaqal_v1_3.freq_pulse((20, 0, 0, 0), 100, False, False, False))
+    assert (Jaqal_v1_3.freq_pulse((20, 30), 100, False, False, False) ==
+            Jaqal_v1_3.freq_pulse((20, 30, 0, 0), 100, False, False, False))
+    assert (Jaqal_v1_3.freq_pulse((20, 30, 40), 100, False, False, False) ==
+            Jaqal_v1_3.freq_pulse((20, 30, 40, 0), 100, False, False, False))
+
+    assert (Jaqal_v1_3.amp_pulse((), 100, False, False, False) ==
+            Jaqal_v1_3.amp_pulse((0, 0, 0, 0), 100, False, False, False))
+    assert (Jaqal_v1_3.amp_pulse((0.2,), 100, False, False, False) ==
+            Jaqal_v1_3.amp_pulse((0.2, 0, 0, 0), 100, False, False, False))
+    assert (Jaqal_v1_3.amp_pulse((0.2, 0.3), 100, False, False, False) ==
+            Jaqal_v1_3.amp_pulse((0.2, 0.3, 0, 0), 100, False, False, False))
+    assert (Jaqal_v1_3.amp_pulse((0.2, 0.3, 0.4), 100, False, False, False) ==
+            Jaqal_v1_3.amp_pulse((0.2, 0.3, 0.4, 0), 100, False, False, False))
+
+    assert (Jaqal_v1_3.phase_pulse((), 100, False, False, False) ==
+            Jaqal_v1_3.phase_pulse((0, 0, 0, 0), 100, False, False, False))
+    assert (Jaqal_v1_3.phase_pulse((0.2,), 100, False, False, False) ==
+            Jaqal_v1_3.phase_pulse((0.2, 0, 0, 0), 100, False, False, False))
+    assert (Jaqal_v1_3.phase_pulse((0.2, 0.3), 100, False, False, False) ==
+            Jaqal_v1_3.phase_pulse((0.2, 0.3, 0, 0), 100, False, False, False))
+    assert (Jaqal_v1_3.phase_pulse((0.2, 0.3, 0.4), 100, False, False, False) ==
+            Jaqal_v1_3.phase_pulse((0.2, 0.3, 0.4, 0), 100, False, False, False))
+
+    assert (Jaqal_v1_3.frame_pulse((), 100, False, False, False, 0, 0) ==
+            Jaqal_v1_3.frame_pulse((0, 0, 0, 0), 100, False, False, False, 0, 0))
+    assert (Jaqal_v1_3.frame_pulse((0.2,), 100, False, False, False, 0, 0) ==
+            Jaqal_v1_3.frame_pulse((0.2, 0, 0, 0), 100, False, False, False, 0, 0))
+    assert (Jaqal_v1_3.frame_pulse((0.2, 0.3), 100, False, False, False, 0, 0) ==
+            Jaqal_v1_3.frame_pulse((0.2, 0.3, 0, 0), 100, False, False, False, 0, 0))
+    assert (Jaqal_v1_3.frame_pulse((0.2, 0.3, 0.4), 100, False, False, False, 0, 0) ==
+            Jaqal_v1_3.frame_pulse((0.2, 0.3, 0.4, 0), 100, False, False, False, 0, 0))
 
     metadatas = itertools.product(('freq', 'amp', 'phase', ('freq', 'amp'),
                                   ('freq', 'phase'), ('amp', 'phase')),
