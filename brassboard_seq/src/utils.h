@@ -225,6 +225,8 @@ static inline char *to_chars(std::span<char> buf, T &&t)
     return ptr;
 }
 
+void format_double(std::ostream &io, double v);
+
 template<typename T, auto... fld> struct _field_pack {};
 template<typename T, auto... fld>
 struct __field_pack { using type = _field_pack<T,fld...>; };

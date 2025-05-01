@@ -40,20 +40,6 @@ struct output_flags_t {
 
 namespace {
 
-static void format_double(std::ostream &io, double v)
-{
-    // Unlike `operator<<`, which uses a fixed precision (6 by default),
-    // `std::to_chars` of floating point number (no precision specified)
-    // is guaranteed to use the shortest accurate representation
-    // of the number.
-    // With C++23, we could use `std::print(io, "{}", order)` instead.
-    // (Not using std::format since GCC 11.1 for artiq-7 nix environment
-    //  doesn't have it)
-    char buff[64];
-    auto ptr = to_chars(buff, v);
-    io.write(buff, ptr - buff);
-}
-
 // Find the longest ranges that are at least min_val.
 static void foreach_max_range_min_val(std::span<int> value, int min_val, auto &&cb)
 {
