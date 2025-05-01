@@ -335,6 +335,7 @@ def test_insts():
 
     assert rfsoc_backend.JaqalInst_v1() != JaqalInst_v1_3()
 
+    assert JaqalInst_v1_3() == JaqalInst_v1_3(None)
     assert str(JaqalInst_v1_3()) == 'pulse_data{} {} <0> {0}'
     assert JaqalInst_v1_3().to_dict() == {'type': 'pulse_data', 'modtype': [],
                                           'channels': [], 'cycles': 0,

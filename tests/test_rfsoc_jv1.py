@@ -282,6 +282,7 @@ def test_insts():
     with pytest.raises(ValueError, match="Instruction stream length not a multiple of instruction size"):
         Jaqal_v1.dump_insts(b'x')
 
+    assert JaqalInst_v1() == JaqalInst_v1(None)
     assert str(JaqalInst_v1()) == 'pulse_data.0 freq0 <0> {0}'
     assert JaqalInst_v1().to_dict() == {'type': 'pulse_data', 'param': 'freq',
                                         'channel': 0, 'tone': 0, 'cycles': 0,
