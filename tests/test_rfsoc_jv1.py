@@ -541,10 +541,12 @@ def test_pulse_inst():
         assert str(plut_inst) == f'plut.{chn} [{addr}]={param}{tone} <{cycles}> {{0}}{flags}'
         assert repr(plut_inst) == f'plut.{chn} [{addr}]={param}{tone} <{cycles}> {{0}}{flags}'
         assert Jaqal_v1.dump_insts(plut_inst.to_bytes()) == str(plut_inst)
+        assert Jaqal_v1.dump_insts(plut_inst.to_bytes(), False) == repr(plut_inst)
 
         assert str(stm_inst) == f'stream.{chn} {param}{tone} <{cycles}> {{0}}{flags}'
         assert repr(stm_inst) == f'stream.{chn} {param}{tone} <{cycles}> {{0}}{flags}'
         assert Jaqal_v1.dump_insts(stm_inst.to_bytes()) == str(stm_inst)
+        assert Jaqal_v1.dump_insts(stm_inst.to_bytes(), print_float=False) == repr(stm_inst)
         assert Jaqal_v1.dump_insts(inst.to_bytes() + stm_inst.to_bytes() + plut_inst.to_bytes()) == f'invalid(reserved): {vi:0>64x}' + '\n' + str(stm_inst) + '\n' + str(plut_inst)
 
         plut_vi = int(plut_inst)
@@ -602,10 +604,14 @@ def test_pulse_inst():
         assert str(plut_inst) == f'plut.{chn} [{addr}]=frame_rot{tone} <{cycles}> {{0}}{flags}'
         assert repr(plut_inst) == f'plut.{chn} [{addr}]=frame_rot{tone} <{cycles}> {{0}}{flags}'
         assert Jaqal_v1.dump_insts(plut_inst.to_bytes()) == str(plut_inst)
+        assert Jaqal_v1.dump_insts(plut_inst.to_bytes(), True) == str(plut_inst)
+        assert Jaqal_v1.dump_insts(plut_inst.to_bytes(), False) == repr(plut_inst)
 
         assert str(stm_inst) == f'stream.{chn} frame_rot{tone} <{cycles}> {{0}}{flags}'
         assert repr(stm_inst) == f'stream.{chn} frame_rot{tone} <{cycles}> {{0}}{flags}'
         assert Jaqal_v1.dump_insts(stm_inst.to_bytes()) == str(stm_inst)
+        assert Jaqal_v1.dump_insts(stm_inst.to_bytes(), print_float=True) == str(stm_inst)
+        assert Jaqal_v1.dump_insts(stm_inst.to_bytes(), print_float=False) == repr(stm_inst)
         assert Jaqal_v1.dump_insts(inst.to_bytes() + stm_inst.to_bytes() + plut_inst.to_bytes()) == f'invalid(reserved): {vi:0>64x}' + '\n' + str(stm_inst) + '\n' + str(plut_inst)
 
         plut_vi = int(plut_inst)

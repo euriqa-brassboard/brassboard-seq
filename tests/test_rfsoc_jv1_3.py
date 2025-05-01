@@ -619,8 +619,11 @@ def test_pulse_inst():
                                           ispl=(0, 0, 0, 0), shift=0, **frm_fspls)
         assert Jaqal_v1_3.dump_insts(inst.to_bytes()) == f'invalid(reserved): {vi:0>64x}'
         assert Jaqal_v1_3.dump_insts(plut_inst.to_bytes()) == str(plut_inst)
+        assert Jaqal_v1_3.dump_insts(plut_inst.to_bytes(), False) == repr(plut_inst)
         assert Jaqal_v1_3.dump_insts(stm_inst.to_bytes()) == str(stm_inst)
+        assert Jaqal_v1_3.dump_insts(stm_inst.to_bytes(), print_float=False) == repr(stm_inst)
         assert Jaqal_v1_3.dump_insts(stm_frm_inst.to_bytes()) == str(stm_frm_inst)
+        assert Jaqal_v1_3.dump_insts(stm_frm_inst.to_bytes(), True) == str(stm_frm_inst)
         assert Jaqal_v1_3.dump_insts(inst.to_bytes() + stm_inst.to_bytes() + plut_inst.to_bytes()) == f'invalid(reserved): {vi:0>64x}' + '\n' + str(stm_inst) + '\n' + str(plut_inst)
 
         plut_vi = int(plut_inst)
@@ -669,7 +672,9 @@ def test_pulse_inst():
                                       ispl=(0, 0, 0, 0), shift=0, spl_phase=(0, 0, 0, 0))
         assert Jaqal_v1_3.dump_insts(inst.to_bytes()) == f'invalid(reserved): {vi:0>64x}'
         assert Jaqal_v1_3.dump_insts(plut_inst.to_bytes()) == str(plut_inst)
+        assert Jaqal_v1_3.dump_insts(plut_inst.to_bytes(), False) == repr(plut_inst)
         assert Jaqal_v1_3.dump_insts(stm_inst.to_bytes()) == str(stm_inst)
+        assert Jaqal_v1_3.dump_insts(stm_inst.to_bytes(), print_float=False) == repr(stm_inst)
         assert Jaqal_v1_3.dump_insts(inst.to_bytes() + stm_inst.to_bytes() + plut_inst.to_bytes()) == f'invalid(reserved): {vi:0>64x}' + '\n' + str(stm_inst) + '\n' + str(plut_inst)
 
         plut_vi = int(plut_inst)
