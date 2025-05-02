@@ -405,6 +405,13 @@ public:
     {
         return __ptr(Py_TYPE((PyObject*)_ptr()));
     }
+    bool isinstance(auto &&type) const
+    {
+        auto res = PyObject_IsInstance((PyObject*)_ptr(), (PyObject*)type);
+        throw_if(res < 0);
+        assume(res <= 1);
+        return res;
+    }
     template<bool exact=false>
     bool isa(auto &&type) const
     {
@@ -1418,6 +1425,14 @@ private:
 static inline mod_ref import_module(const char *str)
 {
     return mod_ref(throw_if_not(PyImport_ImportModule(str)));
+}
+
+static inline mod_ref try_import_module(const char *str)
+{
+    auto mod = PyImport_ImportModule(str);
+    if (!mod)
+        PyErr_Clear();
+    return mod_ref(mod);
 }
 
 static inline mod_ref new_module(PyModuleDef *def)

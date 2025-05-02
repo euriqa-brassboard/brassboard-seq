@@ -84,15 +84,6 @@ cdef extern from "src/artiq_backend.h" namespace "brassboard_seq::artiq_backend"
         cppmap[pair[int,int],int] dds_chn_map
         cppmap[int,pair[int,ChannelType]] dds_param_chn_map
 
-        int find_bus_id(int bus_channel);
-        int add_bus_channel(int bus_channel, uint32_t io_update_target,
-                            uint8_t ref_period_mu)
-        void add_ttl_channel(int seqchn, uint32_t target, bint iscounter,
-                             int64_t delay, PyObject *rt_delay)
-        void add_dds_param_channel(int seqchn, uint32_t bus_id, double ftw_per_hz,
-                                   uint8_t chip_select, ChannelType param,
-                                   int64_t delay, PyObject *rt_delay)
-
     cppclass Relocation:
         int cond_idx
         int time_idx
@@ -103,8 +94,6 @@ cdef extern from "src/artiq_backend.h" namespace "brassboard_seq::artiq_backend"
 
     cppclass TimeChecker:
         pass
-
-    int64_t seq_time_to_mu(int64_t time)
 
 
 cdef class ArtiqBackend(Backend):

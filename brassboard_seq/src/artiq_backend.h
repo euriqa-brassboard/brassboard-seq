@@ -177,6 +177,10 @@ struct ChannelsInfo {
             return -1;
         return it->second;
     }
+    void collect_channels(py::str prefix, py::ptr<> sys, py::ptr<seq::Seq> seq,
+                          py::dict device_delay);
+    void add_channel(py::ptr<> dev, int64_t delay, py::ptr<> rt_delay,
+                     int idx, py::tuple path);
     int add_bus_channel(int bus_channel, uint32_t io_update_target,
                         uint8_t ref_period_mu);
     void add_ttl_channel(int seqchn, uint32_t target, bool iscounter, int64_t delay,

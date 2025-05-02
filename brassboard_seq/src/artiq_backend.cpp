@@ -31,19 +31,143 @@ namespace brassboard_seq::artiq_backend {
 using rtval::RuntimeValue;
 using event_time::EventTime;
 
-struct ArtiqConsts {
+namespace {
+
+struct ArtiqInfo {
+    py::ptr<> HasEnvironment;
+    py::ptr<> env_get_device;
+    py::ptr<> AD9910;
+    py::ptr<> EdgeCounter;
+    py::ptr<> TTLOut;
+
     int COUNTER_ENABLE;
     int COUNTER_DISABLE;
     int _AD9910_REG_PROFILE0;
     int URUKUL_CONFIG;
     int URUKUL_CONFIG_END;
     int URUKUL_SPIT_DDS_WR;
-    int URUKUL_DEFAULT_PROFILE;
+    int URUKUL_DEFAULT_PROFILE{0};
     int SPI_CONFIG_ADDR;
     int SPI_DATA_ADDR;
+
+    ArtiqInfo()
+    {
+        auto env = py::import_module("artiq.language.environment");
+        auto coredev = py::import_module("artiq.coredevice");
+        auto simdev = py::try_import_module("dax.sim.coredevice");
+        HasEnvironment = env.attr("HasEnvironment").rel();
+        env_get_device = HasEnvironment.attr("get_device").rel();
+        auto find_dev = [&] (const char *mod, const char *name) {
+            auto dev = coredev.attr(mod).attr(name);
+            if (simdev)
+                dev = py::new_tuple(std::move(dev), simdev.attr(mod).attr(name));
+            return dev;
+        };
+        AD9910 = find_dev("ad9910", "AD9910").rel();
+        EdgeCounter = find_dev("edge_counter", "EdgeCounter").rel();
+        TTLOut = find_dev("ttl", "TTLOut").rel();
+        auto edge_counter = coredev.attr("edge_counter");
+        auto ad9910 = coredev.attr("ad9910");
+        auto urukul = coredev.attr("urukul");
+        auto spi2 = coredev.attr("spi2");
+        COUNTER_ENABLE = (edge_counter.attr("CONFIG_COUNT_RISING").as_int() |
+                          edge_counter.attr("CONFIG_RESET_TO_ZERO").as_int());
+        COUNTER_DISABLE = (edge_counter.attr("CONFIG_SEND_COUNT_EVENT").as_int());
+        _AD9910_REG_PROFILE0 = ad9910.attr("_AD9910_REG_PROFILE0").as_int();
+        URUKUL_CONFIG = urukul.attr("SPI_CONFIG").as_int();
+        URUKUL_CONFIG_END = URUKUL_CONFIG | spi2.attr("SPI_END").as_int();
+        URUKUL_SPIT_DDS_WR = urukul.attr("SPIT_DDS_WR").as_int();
+        if (auto profile = urukul.try_attr("DEFAULT_PROFILE"))
+            URUKUL_DEFAULT_PROFILE = profile.as_int();
+        SPI_DATA_ADDR = spi2.attr("SPI_DATA_ADDR").as_int();
+        SPI_CONFIG_ADDR = spi2.attr("SPI_CONFIG_ADDR").as_int();
+    }
+
+    auto get_device(py::ptr<> sys, py::ptr<> name) const
+    {
+        py::ref<> unique;
+        if (auto registry = sys.try_attr("registry")) {
+            // DAX support
+            unique = registry.attr("get_unique_device_key")(name);
+        }
+        else {
+            unique.assign(name);
+        }
+        // Do not call the get_device function from DAX since
+        // it assumes that the calling object will take ownership of the deivce.
+        return env_get_device(sys, unique);
+    }
 };
 
-static ArtiqConsts artiq_consts;
+static inline const ArtiqInfo &info()
+{
+    static const ArtiqInfo info;
+    return info;
+}
+
+}
+
+__attribute__((visibility("internal")))
+inline void ChannelsInfo::add_channel(py::ptr<> dev, int64_t delay, py::ptr<> rt_delay,
+                                      int idx, py::tuple path)
+{
+    if (dev.isinstance(info().AD9910)) {
+        if (path.size() > 3)
+            config::raise_invalid_channel(path);
+        auto path2 = path.get<py::str>(2);
+        ChannelType dds_param_type;
+        if (path2.compare_ascii("sw") == 0) {
+            // Note that we currently do not treat this switch ttl channel
+            // differently from any other ttl channels.
+            // We may consider maintaining a relation between this ttl channel
+            // and the urukul channel to make sure we don't reorder
+            // any operations between the two.
+            add_ttl_channel(idx, dev.attr("sw").attr("target_o").as_int(),
+                            false, delay, rt_delay);
+            return;
+        }
+        else if (path2.compare_ascii("freq") == 0) {
+            dds_param_type = DDSFreq;
+        }
+        else if (path2.compare_ascii("amp") == 0) {
+            dds_param_type = DDSAmp;
+        }
+        else if (path2.compare_ascii("phase") == 0) {
+            dds_param_type = DDSPhase;
+        }
+        else {
+            config::raise_invalid_channel(path);
+        }
+        auto bus = dev.attr("bus");
+        auto bus_channel = bus.attr("channel").as_int();
+        auto bus_id = find_bus_id(bus_channel);
+        if (bus_id == -1) {
+            // Here we assume that the CPLD (and it's io_update channel)
+            // and the SPI bus has a one-to-one mapping.
+            // This means that each DDS with the same bus shares
+            // the same io_update channel and can only be programmed one at a time.
+            auto io_tgt = dev.attr("cpld").attr("io_update").attr("target_o").as_int();
+            bus_id = add_bus_channel(bus_channel, io_tgt,
+                                     bus.attr("ref_period_mu").as_int());
+        }
+        add_dds_param_channel(idx, bus_id, dev.attr("ftw_per_hz").as_float(),
+                              dev.attr("chip_select").as_int(), dds_param_type,
+                              delay, rt_delay);
+    }
+    else if (dev.isinstance(info().TTLOut)) {
+        if (path.size() > 2)
+            config::raise_invalid_channel(path);
+        add_ttl_channel(idx, dev.attr("target_o").as_int(), false, delay, rt_delay);
+    }
+    else if (dev.isinstance(info().EdgeCounter)) {
+        if (path.size() > 2)
+            config::raise_invalid_channel(path);
+        add_ttl_channel(idx, dev.attr("channel").as_int() << 8, true, delay, rt_delay);
+    }
+    else {
+        py_throw_format(PyExc_ValueError, "Unsupported device: %S", dev);
+    }
+}
 
 __attribute__((visibility("internal")))
 inline int ChannelsInfo::add_bus_channel(int bus_channel, uint32_t io_update_target,
@@ -52,8 +176,8 @@ inline int ChannelsInfo::add_bus_channel(int bus_channel, uint32_t io_update_tar
     auto bus_id = (int)urukul_busses.size();
     urukul_busses.push_back({
             uint32_t(bus_channel),
-            uint32_t((bus_channel << 8) | artiq_consts.SPI_CONFIG_ADDR),
-            uint32_t((bus_channel << 8) | artiq_consts.SPI_DATA_ADDR),
+            uint32_t((bus_channel << 8) | info().SPI_CONFIG_ADDR),
+            uint32_t((bus_channel << 8) | info().SPI_DATA_ADDR),
             // Here we assume that the CPLD (and it's io_update channel)
             // and the SPI bus has a one-to-one mapping.
             // This means that each DDS with the same bus shares
@@ -102,10 +226,60 @@ inline void ChannelsInfo::add_dds_param_channel(int seqchn, uint32_t bus_id,
                                                     delay, rt_delay), param};
 }
 
-static __attribute__((always_inline)) inline
-void collect_actions(auto *ab, backend::CompiledSeq &cseq)
+__attribute__((visibility("internal")))
+inline void ChannelsInfo::collect_channels(py::str prefix, py::ptr<> sys,
+                                           py::ptr<seq::Seq> seq, py::dict device_delay)
 {
-    auto seq = pyx_fld(ab, seq);
+    for (auto [idx, path]: py::list_iter<py::tuple>(seq->seqinfo->channel_paths)) {
+        if (path.get<py::str>(0).compare(prefix) != 0)
+            continue;
+        if (path.size() < 2)
+            config::raise_invalid_channel(path);
+        auto devname = path.get<py::str>(1);
+        int64_t delay = 0;
+        rtval::rtval_ptr rt_delay;
+        if (auto py_delay = device_delay.try_get(devname)) {
+            rt_delay = py::cast<RuntimeValue>(py_delay);
+            if (!rt_delay) {
+                delay = py_delay.as_int<int64_t>();
+            }
+        }
+        add_channel(info().get_device(sys, devname), delay, rt_delay, idx, path);
+    }
+    dds_chn_map.clear(); // Not needed after channel collection
+}
+
+static __attribute__((always_inline)) inline
+void artiq_add_start_trigger_ttl(auto *ab, uint32_t tgt, int64_t time,
+                                 int min_time, bool raising_edge)
+{
+    StartTrigger start_trigger{
+        .target = tgt,
+        .min_time_mu = (uint16_t)std::max((int)seq_time_to_mu(min_time), 8),
+        .raising_edge = raising_edge,
+        .time_mu = seq_time_to_mu(time),
+    };
+    ab->start_triggers.push_back(start_trigger);
+}
+
+static __attribute__((always_inline)) inline
+void artiq_add_start_trigger(auto *ab, py::ptr<> name, py::ptr<> time,
+                             py::ptr<> min_time, py::ptr<> raising_edge)
+{
+    auto dev = info().get_device(ab->sys, name);
+    if (!dev.isinstance(info().TTLOut))
+        py_throw_format(PyExc_ValueError, "Invalid start trigger device: %S", name);
+    artiq_add_start_trigger_ttl(ab, dev.attr("target_o").as_int(),
+                                event_time::round_time_int(time),
+                                event_time::round_time_int(min_time),
+                                raising_edge.as_bool());
+}
+
+static __attribute__((always_inline)) inline
+void artiq_finalize(auto *ab, backend::CompiledSeq &cseq)
+{
+    py::ptr seq = pyx_fld(ab, seq);
+    ab->channels.collect_channels(pyx_fld(ab, prefix), ab->sys, seq, ab->device_delay);
     std::vector<ArtiqAction> &artiq_actions = ab->all_actions;
 
     ValueIndexer<int> bool_values;
@@ -256,9 +430,9 @@ void collect_actions(auto *ab, backend::CompiledSeq &cseq)
 }
 
 static __attribute__((always_inline)) inline
-void generate_rtios(auto *ab, backend::CompiledSeq &cseq, unsigned age)
+void artiq_runtime_finalize(auto *ab, backend::CompiledSeq &cseq, unsigned age)
 {
-    bb_debug("generate_rtios: start\n");
+    bb_debug("artiq_runtime_finalize: start\n");
     auto seq = pyx_fld(ab, seq);
     for (size_t i = 0, nreloc = ab->bool_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = ab->bool_values[i];
@@ -598,14 +772,14 @@ void generate_rtios(auto *ab, backend::CompiledSeq &cseq, unsigned age)
     }
     ab->total_time_mu = total_time_mu - start_mu;
 
-    bb_debug("generate_rtios: finish\n");
+    bb_debug("artiq_runtime_finalize: finish\n");
     return;
 }
 
 __attribute__((visibility("internal")))
 void UrukulBus::add_dds_action(auto &add_action, DDSAction &action)
 {
-    auto div = artiq_consts.URUKUL_SPIT_DDS_WR;
+    auto div = info().URUKUL_SPIT_DDS_WR;
     auto ddschn = action.ddschn;
     bb_debug("add_dds_action: aid=%d, bus@%" PRId64 ", io_upd@%" PRId64 ", "
              "data1=%x, data2=%x, chn=%d, cs=%d\n",
@@ -622,15 +796,15 @@ void UrukulBus::add_dds_action(auto &add_action, DDSAction &action)
         auto t2 = add_action(data_target, data, action.aid, lb_mu2, lb_mu2, false);
         return t2 + data_time_mu;
     };
-    auto profile_reg = (artiq_consts._AD9910_REG_PROFILE0 +
-                        artiq_consts.URUKUL_DEFAULT_PROFILE);
+    auto profile_reg = (info()._AD9910_REG_PROFILE0 +
+                        info().URUKUL_DEFAULT_PROFILE);
     // We can't start the write safely before the previous io_update finishes
     // since it may abort the write. However, we can configure the SPI controller
     // before the io_update finishes since no signal should be sent to the DDS.
-    auto t1 = config_and_write(artiq_consts.URUKUL_CONFIG, 8, profile_reg << 24,
+    auto t1 = config_and_write(info().URUKUL_CONFIG, 8, profile_reg << 24,
                                last_bus_mu, std::max(last_bus_mu, last_io_update_mu));
-    auto t2 = config_and_write(artiq_consts.URUKUL_CONFIG, 32, action.data1, t1, t1);
-    auto t3 = config_and_write(artiq_consts.URUKUL_CONFIG_END, 32, action.data2,
+    auto t2 = config_and_write(info().URUKUL_CONFIG, 32, action.data1, t1, t1);
+    auto t3 = config_and_write(info().URUKUL_CONFIG_END, 32, action.data2,
                                t2, t2);
     ddschn->data1 = action.data1;
     ddschn->data2 = action.data2;
@@ -793,10 +967,10 @@ inline void TTLChannel::add_output(auto &add_action, const ArtiqAction &action)
         val = action.value;
     }
     else if (action.value) {
-        val = artiq_consts.COUNTER_ENABLE;
+        val = info().COUNTER_ENABLE;
     }
     else {
-        val = artiq_consts.COUNTER_DISABLE;
+        val = info().COUNTER_DISABLE;
     }
 
     bb_debug("add_ttl: time=%" PRId64 ", exact_time=%d, tgt=%d, "

@@ -136,6 +136,7 @@ cdef extern from "test_utils.cpp" namespace "brassboard_seq":
     void rampfunc_set_runtime_params(object, unsigned age) except +
     rtval.TagVal rampfunc_runtime_eval(object, double t) except +
     event_time.TimeManager seq_get_time_mgr(seq.Seq)
+    list _seq_get_channel_paths(seq.Seq)
     vector[action.Action*] *compiledseq_get_all_actions(backend.CompiledSeq &cseq)
     int64_t compiledseq_get_total_time(backend.CompiledSeq &cseq)
     void py_check_num_arg "brassboard_seq::py::check_num_arg" (
@@ -345,7 +346,7 @@ def event_time_is_ordered(event_time.EventTime t1, event_time.EventTime t2):
     assert False
 
 def seq_get_channel_paths(seq.Seq s):
-    return seq.seq_get_channel_paths(s)
+    return _seq_get_channel_paths(s)
 
 def seq_get_event_time(seq.Seq s, int tid):
     return timemanager_get_event_times(seq_get_time_mgr(s))[tid]
@@ -355,7 +356,7 @@ def seq_get_cond(s):
 
 def compiler_get_all_actions(backend.SeqCompiler comp):
     s = comp.seq
-    cdef int nchn = len(seq.seq_get_channel_paths(s))
+    cdef int nchn = len(_seq_get_channel_paths(s))
     all_actions = compiledseq_get_all_actions(comp.cseq)
     res = []
     for cid in range(nchn):

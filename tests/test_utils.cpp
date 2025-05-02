@@ -296,6 +296,12 @@ static inline event_time::TimeManager *seq_get_time_mgr(py::ptr<seq::Seq> seq)
     return py::newref(seq->seqinfo->time_mgr);
 }
 
+__attribute__((returns_nonnull))
+static inline PyObject *_seq_get_channel_paths(py::ptr<seq::Seq> seq)
+{
+    return py::newref(seq->seqinfo->channel_paths);
+}
+
 auto *compiledseq_get_all_actions(backend::CompiledSeq &cseq)
 {
     return cseq.all_actions.get();

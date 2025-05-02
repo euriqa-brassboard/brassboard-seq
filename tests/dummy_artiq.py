@@ -68,6 +68,7 @@ urukul.SPIT_ATT_WR = 6
 urukul.SPIT_ATT_RD = 16
 urukul.SPIT_DDS_WR = 2
 urukul.SPIT_DDS_RD = 16
+urukul.DEFAULT_PROFILE = 0 # TODO update to artiq 7 number
 
 dax = new_module(None, 'dax')
 sim = new_module(dax, 'sim')

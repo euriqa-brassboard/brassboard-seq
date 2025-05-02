@@ -18,10 +18,8 @@
 
 # Do not use relative import since it messes up cython file name tracking
 from brassboard_seq.backend cimport CompiledSeq
-from brassboard_seq.config cimport raise_invalid_channel
 from brassboard_seq.event_time cimport round_time_int
 from brassboard_seq.rtval cimport ExternCallback, TagVal, is_rtval, new_extern
-from brassboard_seq.seq cimport Seq, seq_get_channel_paths
 from brassboard_seq.utils cimport PyErr_Format, \
   PyExc_RuntimeError, PyExc_TypeError, PyExc_ValueError
 
@@ -33,147 +31,18 @@ cnpy._import_array()
 
 # Declare these as cdef so that they are hidden from python
 # and can be accessed more efficiently from this module.
-cdef artiq, ad9910, edge_counter, spi2, ttl, urukul
-
+cdef artiq
 import artiq.language.environment
-from artiq.coredevice import ad9910, edge_counter, spi2, ttl, urukul
-
 cdef HasEnvironment = artiq.language.environment.HasEnvironment
 cdef NoDefault = artiq.language.environment.NoDefault
-cdef DevAD9910 = ad9910.AD9910
-cdef DevEdgeCounter = edge_counter.EdgeCounter
-cdef DevTTLOut = ttl.TTLOut
-
-cdef sim_ad9910, sim_edge_counter, sim_ttl
-try:
-    from dax.sim.coredevice import (ad9910 as sim_ad9910,
-                                    edge_counter as sim_edge_counter,
-                                    ttl as sim_ttl)
-    DevAD9910 = (DevAD9910, sim_ad9910.AD9910)
-    DevEdgeCounter = (DevEdgeCounter, sim_edge_counter.EdgeCounter)
-    DevTTLOut = (DevTTLOut, sim_ttl.TTLOut)
-except:
-    pass
 
 cdef extern from "src/artiq_backend.cpp" namespace "brassboard_seq::artiq_backend":
-    struct ArtiqConsts:
-        int COUNTER_ENABLE
-        int COUNTER_DISABLE
-        int _AD9910_REG_PROFILE0
-        int URUKUL_CONFIG
-        int URUKUL_CONFIG_END
-        int URUKUL_SPIT_DDS_WR
-        int URUKUL_DEFAULT_PROFILE
-        int SPI_CONFIG_ADDR
-        int SPI_DATA_ADDR
-
-    ArtiqConsts artiq_consts
-
-    void collect_actions(ArtiqBackend ab, CompiledSeq&) except +
-
-    void generate_rtios(ArtiqBackend ab, CompiledSeq&, unsigned age) except +
+    void artiq_add_start_trigger_ttl(ArtiqBackend ab, uint32_t tgt, int64_t time,
+                                     int min_time, bint raising_edge) except +
+    void artiq_add_start_trigger(ArtiqBackend ab, name, time, min_time, raising_edge) except +
+    void artiq_finalize(ArtiqBackend ab, CompiledSeq&) except +
+    void artiq_runtime_finalize(ArtiqBackend ab, CompiledSeq&, unsigned age) except +
     TagVal evalonce_callback(object) except +
-
-artiq_consts.COUNTER_ENABLE = <int?>edge_counter.CONFIG_COUNT_RISING | <int?>edge_counter.CONFIG_RESET_TO_ZERO
-artiq_consts.COUNTER_DISABLE = <int?>edge_counter.CONFIG_SEND_COUNT_EVENT
-artiq_consts._AD9910_REG_PROFILE0 = <int?>ad9910._AD9910_REG_PROFILE0
-artiq_consts.URUKUL_CONFIG = <int?>urukul.SPI_CONFIG
-artiq_consts.URUKUL_CONFIG_END = <int?>urukul.SPI_CONFIG | <int?>spi2.SPI_END
-artiq_consts.URUKUL_SPIT_DDS_WR = <int?>urukul.SPIT_DDS_WR
-artiq_consts.URUKUL_DEFAULT_PROFILE = urukul.DEFAULT_PROFILE if hasattr(urukul, 'DEFAULT_PROFILE') else 0
-artiq_consts.SPI_DATA_ADDR = <int?>spi2.SPI_DATA_ADDR
-artiq_consts.SPI_CONFIG_ADDR = <int?>spi2.SPI_CONFIG_ADDR
-
-cdef get_artiq_device(sys, str name):
-    if hasattr(sys, 'registry'):
-        # DAX support
-        unique = <str?>sys.registry.get_unique_device_key(name)
-    else:
-        unique = name
-    # Do not call the get_device function from DAX since
-    # it assumes that the calling object will take ownership of the deivce.
-    return HasEnvironment.get_device(sys, unique)
-
-cdef int add_channel_artiq(ChannelsInfo *self, dev, int64_t delay, PyObject *rt_delay,
-                           int idx, tuple path) except -1:
-    cdef ChannelType dds_param_type
-    if isinstance(dev, DevAD9910):
-        if len(path) != 3:
-            raise_invalid_channel(path)
-        path2 = <str>path[2]
-        if path2 == 'sw':
-            # Note that we currently do not treat this switch ttl channel
-            # differently from any other ttl channels.
-            # We may consider maintaining a relation between this ttl channel
-            # and the urukul channel to make sure we don't reorder
-            # any operations between the two.
-            self.add_ttl_channel(idx, <int?>dev.sw.target_o, False, delay, rt_delay)
-            return 0
-        elif path2 == 'freq':
-            dds_param_type = DDSFreq
-        elif path2 == 'amp':
-            dds_param_type = DDSAmp
-        elif path2 == 'phase':
-            dds_param_type = DDSPhase
-        else:
-            # Make the C compiler happy since it doesn't know
-            # that `raise_invalid_channel` doesn't return
-            dds_param_type = DDSPhase
-            raise_invalid_channel(path)
-        bus = dev.bus
-        bus_channel = <int?>bus.channel
-        bus_id = self.find_bus_id(bus_channel)
-        if bus_id == -1:
-            # Here we assume that the CPLD (and it's io_update channel)
-            # and the SPI bus has a one-to-one mapping.
-            # This means that each DDS with the same bus shares
-            # the same io_update channel and can only be programmed one at a time.
-            io_update_target = <int?>dev.cpld.io_update.target_o
-            bus_id = self.add_bus_channel(bus_channel, io_update_target,
-                                          <int?>bus.ref_period_mu)
-        self.add_dds_param_channel(idx, bus_id, <double?>dev.ftw_per_hz,
-                                   <int?>dev.chip_select, dds_param_type,
-                                   delay, rt_delay)
-    elif isinstance(dev, DevTTLOut):
-        if len(path) > 2:
-            raise_invalid_channel(path)
-        self.add_ttl_channel(idx, <int?>dev.target_o, False, delay, rt_delay)
-    elif isinstance(dev, DevEdgeCounter):
-        if len(path) > 2:
-            raise_invalid_channel(path)
-        self.add_ttl_channel(idx, (<int?>dev.channel) << 8, True, delay, rt_delay)
-    else:
-        devstr = str(dev)
-        PyErr_Format(PyExc_ValueError, 'Unsupported device: %U', <PyObject*>devstr)
-    return 0
-
-cdef int collect_channels(ChannelsInfo *self, str prefix, sys, Seq seq,
-                          dict device_delay) except -1:
-    cdef int idx = -1
-    cdef int64_t delay
-    cdef PyObject *rt_delay
-    for _path in seq_get_channel_paths(seq):
-        idx += 1
-        path = <tuple>_path
-        if <str>path[0] != prefix:
-            continue
-        if len(path) < 2:
-            raise_invalid_channel(path)
-        devname = <str>path[1]
-        py_delay = device_delay.get(devname)
-        if py_delay is None:
-            delay = 0
-            rt_delay = NULL
-        elif is_rtval(py_delay):
-            delay = 0
-            rt_delay = <PyObject*>py_delay
-        else:
-            delay = py_delay
-            rt_delay = NULL
-        add_channel_artiq(self, get_artiq_device(sys, devname), delay, rt_delay,
-                          idx, path)
-    self.dds_chn_map.clear() # Not needed after channel collection
-    return 0
 
 @cython.auto_pickle(False)
 @cython.final
@@ -200,22 +69,10 @@ cdef class ArtiqBackend:
 
     cdef int add_start_trigger_ttl(self, uint32_t tgt, int64_t time,
                                    int min_time, bint raising_edge) except -1:
-        cdef StartTrigger start_trigger
-        start_trigger.target = tgt
-        start_trigger.min_time_mu = <uint16_t>max(seq_time_to_mu(min_time), 8)
-        start_trigger.time_mu = seq_time_to_mu(time)
-        start_trigger.raising_edge = raising_edge
-        self.start_triggers.push_back(start_trigger)
-        return 0
+        artiq_add_start_trigger_ttl(self, tgt, time, min_time, raising_edge)
 
-    def add_start_trigger(self, str name, time, min_time,
-                          bint raising_edge, /):
-        dev = get_artiq_device(self.sys, name)
-        if not isinstance(dev, DevTTLOut):
-            PyErr_Format(PyExc_ValueError, 'Invalid start trigger device: %U',
-                         <PyObject*>name)
-        self.add_start_trigger_ttl(dev.target_o, round_time_int(time),
-                                   round_time_int(min_time), raising_edge)
+    def add_start_trigger(self, str name, time, min_time, raising_edge, /):
+        artiq_add_start_trigger(self, name, time, min_time, raising_edge)
 
     def set_device_delay(self, str name, delay, /):
         if is_rtval(delay):
@@ -230,12 +87,10 @@ cdef class ArtiqBackend:
         self.device_delay[name] = round_time_int(delay)
 
     cdef int finalize(self, CompiledSeq &cseq) except -1:
-        collect_channels(&self.channels, self.prefix, self.sys, self.seq,
-                         self.device_delay)
-        collect_actions(self, cseq)
+        artiq_finalize(self, cseq)
 
     cdef int runtime_finalize(self, CompiledSeq &cseq, unsigned age) except -1:
-        generate_rtios(self, cseq, age)
+        artiq_runtime_finalize(self, cseq, age)
 
 @cython.internal
 @cython.auto_pickle(False)

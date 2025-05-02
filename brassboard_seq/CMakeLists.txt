@@ -61,7 +61,6 @@ python_install_module("${CMAKE_CURRENT_SOURCE_DIR}/.." brassboard_seq
   action.pxd
   artiq_backend.pyx
   backend.pyx
-  config.pxd
   event_time.pyx
   rfsoc_backend.pyx
   rtval.pyx

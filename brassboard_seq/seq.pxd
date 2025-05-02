@@ -23,14 +23,6 @@ cdef extern from "src/seq.h" namespace "brassboard_seq::seq":
     # for the imported extension class
     """
     using _brassboard_seq_seq_Seq = brassboard_seq::seq::Seq;
-    namespace brassboard_seq::seq {
-    __attribute__((returns_nonnull))
-    static inline PyObject *seq_get_channel_paths(py::ptr<Seq> seq)
-    {
-        return py::newref(seq->seqinfo->channel_paths);
-    }
-    }
     """
     ctypedef class brassboard_seq._utils.Seq [object _brassboard_seq_seq_Seq]:
         pass
-    list seq_get_channel_paths(Seq)
