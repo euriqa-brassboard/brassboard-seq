@@ -99,7 +99,6 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
 
     enum class EvalError(uint8_t):
         pass
-    void throw_py_error(EvalError) except +
 
     cppclass TagVal:
         DataType type
@@ -107,25 +106,11 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
         GenVal val
         TagVal()
         TagVal(double)
-        T get[T]()
-        @staticmethod
-        TagVal from_py(object obj) except +
-        object to_py() except +
-        bint is_zero()
-
-    TagVal rtval_cache(RuntimeValue)
 
     bint is_rtval(object)
 
-    cppclass rtval_ref:
-        RuntimeValue rel "rel<brassboard_seq::rtval::RuntimeValue>" ()
-
-    RuntimeValue new_arg(object idx, object ty) except +
     RuntimeValue new_extern(ExternCallback cb, ty) except +
     RuntimeValue new_extern_age(ExternCallback cb, ty) except +
-
-    void rt_eval_throw(RuntimeValue self, unsigned age) except +
-    double get_value_f64(object, unsigned age) except +
 
     ctypedef class brassboard_seq.rtval.RuntimeValue [object _brassboard_seq_rtval_RuntimeValue, check_size ignore]:
         cdef ValueType type_

@@ -19,6 +19,16 @@ cdef extern from "src/yaml.h" namespace "brassboard_seq":
 cdef extern from "src/action.h" namespace "brassboard_seq::action":
     bint action_isramp "brassboard_seq::action::isramp" (object)
 
+cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
+    cppclass rtval_ref:
+        rtval.RuntimeValue rel "rel<brassboard_seq::rtval::RuntimeValue>" ()
+    rtval.RuntimeValue _new_arg "brassboard_seq::rtval::new_arg" (object idx, object ty) except +
+    double get_value_f64(object, unsigned age) except +
+    void throw_py_error(rtval.EvalError) except +
+
+cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
+    rtval_ref round_time_rt(rtval.RuntimeValue) except +
+
 cdef extern from "test_utils.cpp" namespace "brassboard_seq":
     cppclass _IntCollector:
         void add_int(int)
@@ -120,7 +130,6 @@ cdef extern from "test_utils.cpp" namespace "brassboard_seq":
 
     event_time.EventTime timemanager_new_time_int(event_time.TimeManager self, event_time.EventTime prev, int64_t offset, bint floating, object cond, event_time.EventTime wait_for) except +
     list timemanager_get_event_times(event_time.TimeManager) except +
-    rtval.rtval_ref round_time_rt "brassboard_seq::event_time::round_time_rt" (rtval.RuntimeValue) except +
 
     object condseq_get_cond(object) except +
 
@@ -187,7 +196,7 @@ def new_const(c):
     return _new_const(c)
 
 def new_arg(idx):
-    return rtval.new_arg(idx, float)
+    return _new_arg(idx, float)
 
 def new_extern_age(cb, ty=float):
     return rtval.new_extern_age(new_test_callback(cb, True), ty)
@@ -248,7 +257,7 @@ def action_get_cond_val(Action action):
     return action.action.cond_val
 
 cdef double tagval_to_float(rtval.TagVal tv):
-    rtval.throw_py_error(tv.err)
+    throw_py_error(tv.err)
     return tv.val.f64_val
 
 cdef class RampTest:
@@ -266,8 +275,8 @@ cdef class RampTest:
 
     def eval_runtime(self, unsigned age, ts):
         rampfunc_set_runtime_params(self.func, age)
-        rampfunc_spline_segments(self.func, rtval.get_value_f64(self.length, age),
-                                 rtval.get_value_f64(self.oldval, age))
+        rampfunc_spline_segments(self.func, get_value_f64(self.length, age),
+                                 get_value_f64(self.oldval, age))
         return [tagval_to_float(rampfunc_runtime_eval(self.func, t)) for t in ts]
 
 def ramp_get_spline_segments(self, length, oldval):
