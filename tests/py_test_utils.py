@@ -15,7 +15,6 @@ def with_seq_params(f):
     params.extend(old_sig.parameters.values())
     new_sig = inspect.Signature(params)
     def cb(log_level, *args, **kws):
-        print(log_level)
         try:
             utils.set_log_level(log_level)
             return f(*args, **kws)
