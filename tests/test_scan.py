@@ -1008,3 +1008,21 @@ def test_scan():
     sg[:].a.b = 1
     sg[0].a.b.c.d = 2
     assert sg.getseq(0) == dict(a=dict(b=dict(c=dict(d=2))))
+
+    sg = scan.ScanGroup()
+    sg[:].a.b = 1
+    sg[0].a.b.c.d.scan([1, 2, 3, 4, 5])
+    assert sg.getseq(0) == dict(a=dict(b=dict(c=dict(d=1))))
+    assert sg.getseq(1) == dict(a=dict(b=dict(c=dict(d=2))))
+    assert sg.getseq(2) == dict(a=dict(b=dict(c=dict(d=3))))
+    assert sg.getseq(3) == dict(a=dict(b=dict(c=dict(d=4))))
+    assert sg.getseq(4) == dict(a=dict(b=dict(c=dict(d=5))))
+
+    sg = scan.ScanGroup()
+    sg[:].a.b.scan([2, 3])
+    sg[0].a.b.c.d.scan([1, 2, 3, 4, 5])
+    assert sg.getseq(0) == dict(a=dict(b=dict(c=dict(d=1))))
+    assert sg.getseq(1) == dict(a=dict(b=dict(c=dict(d=2))))
+    assert sg.getseq(2) == dict(a=dict(b=dict(c=dict(d=3))))
+    assert sg.getseq(3) == dict(a=dict(b=dict(c=dict(d=4))))
+    assert sg.getseq(4) == dict(a=dict(b=dict(c=dict(d=5))))

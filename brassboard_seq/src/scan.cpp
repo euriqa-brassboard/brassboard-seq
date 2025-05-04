@@ -199,8 +199,8 @@ struct ScanND : PyObject {
     {
         if (check_field(fixed, path))
             return true;
-        for (auto [i, var]: py::list_iter(vars)) {
-            if (check_field(var, path)) {
+        for (auto [i, var]: py::list_iter<Scan1D>(vars)) {
+            if (check_field(var->params, path)) {
                 return true;
             }
         }
