@@ -24,5 +24,5 @@ cdef extern from "src/seq.h" namespace "brassboard_seq::seq":
     """
     using _brassboard_seq_seq_Seq = brassboard_seq::seq::Seq;
     """
-    ctypedef class brassboard_seq._utils.Seq [object _brassboard_seq_seq_Seq]:
+    ctypedef class brassboard_seq.seq.Seq [object _brassboard_seq_seq_Seq]:
         pass

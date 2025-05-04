@@ -127,10 +127,10 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
     void rt_eval_throw(RuntimeValue self, unsigned age) except +
     double get_value_f64(object, unsigned age) except +
 
-    ctypedef class brassboard_seq._utils.RuntimeValue [object _brassboard_seq_rtval_RuntimeValue, check_size ignore]:
+    ctypedef class brassboard_seq.rtval.RuntimeValue [object _brassboard_seq_rtval_RuntimeValue, check_size ignore]:
         cdef ValueType type_
         cdef DataType datatype
         cdef GenVal cache_val
 
-    ctypedef class brassboard_seq._utils.ExternCallback [object _brassboard_seq_rtval_ExternCallback, check_size ignore]:
+    ctypedef class brassboard_seq.rtval.ExternCallback [object _brassboard_seq_rtval_ExternCallback, check_size ignore]:
         cdef void *fptr

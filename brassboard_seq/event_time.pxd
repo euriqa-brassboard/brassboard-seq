@@ -50,7 +50,7 @@ cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
     ctypedef class brassboard_seq._utils.TimeManager [object _brassboard_seq_event_time_TimeManager]:
         cdef vector[int64_t] time_values
 
-    ctypedef class brassboard_seq._utils.EventTime [object _brassboard_seq_event_time_EventTime]:
+    ctypedef class brassboard_seq.event_time.EventTime [object _brassboard_seq_event_time_EventTime]:
         cdef EventTimeData data
 
         cdef vector[int] chain_pos

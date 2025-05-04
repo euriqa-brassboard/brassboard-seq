@@ -20,8 +20,6 @@
 
 #include "src/event_time.h"
 #include "src/rfsoc.h"
-#include "src/rtval.h"
-#include "src/seq.h"
 
 using namespace brassboard_seq;
 
@@ -35,7 +33,6 @@ PY_MODINIT(_utils, _utils_module)
 {
     // event_time
     m.add_type(&event_time::TimeManager::Type);
-    m.add_type(&event_time::EventTime::Type);
 
     // rfsoc
     m.add_type(&rfsoc::JaqalInst_v1_Type);
@@ -43,11 +40,4 @@ PY_MODINIT(_utils, _utils_module)
     m.add_type(&rfsoc::JaqalChannelGen_v1_Type);
     m.add_type(&rfsoc::JaqalInst_v1_3_Type);
     m.add_type(&rfsoc::Jaqal_v1_3_Type);
-
-    // rtval
-    m.add_type(&rtval::RuntimeValue::Type);
-    m.add_type(&rtval::ExternCallback::Type);
-
-    // seq
-    m.add_type(&seq::Seq::Type);
 }
