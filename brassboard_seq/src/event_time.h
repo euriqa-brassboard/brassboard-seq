@@ -288,7 +288,7 @@ static inline TimeOrder is_ordered(EventTime *t1, EventTime *t2)
     return NoOrder;
 }
 
-extern PyMethodDef time_scale_method;
+extern PyMethodDef methods[];
 
 void init();
 

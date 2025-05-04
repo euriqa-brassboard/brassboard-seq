@@ -919,7 +919,7 @@ PyTypeObject ExternCallback::Type = {
         return PyType_GenericAlloc(t, 0); }>,
 };
 
-PyMethodDef get_value_method =
+PyMethodDef methods[] = {
     py::meth_fast<"get_value",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
         py::check_num_arg("get_value", nargs, 2, 2);
         auto pyage = py::arg_cast<py::int_>(args[1], "age");
@@ -928,43 +928,39 @@ PyMethodDef get_value_method =
             return rtval_cache(args[0]).to_py();
         }
         return py::newref(args[0]);
-    }>;
-PyMethodDef inv_method =
+    }>,
     py::meth_o<"inv",[] (auto, py::ptr<> v) -> py::ref<> {
-    if (v == Py_True)
-        return py::new_false();
-    if (v == Py_False)
-        return py::new_true();
-    if (auto rv = py::cast<RuntimeValue>(v)) {
-        if (rv->type_ == Not)
-            return rt_convert_bool(rv->arg0);
-        return new_expr1(Not, rv);
-    }
-    return py::new_bool(!v.as_bool());
-}>;
-PyMethodDef convert_bool_method =
+        if (v == Py_True)
+            return py::new_false();
+        if (v == Py_False)
+            return py::new_true();
+        if (auto rv = py::cast<RuntimeValue>(v)) {
+            if (rv->type_ == Not)
+                return rt_convert_bool(rv->arg0);
+            return new_expr1(Not, rv);
+        }
+        return py::new_bool(!v.as_bool());
+    }>,
     py::meth_o<"convert_bool",[] (auto, py::ptr<> v) -> py::ref<> {
-    if (auto rv = py::cast<RuntimeValue>(v))
-        return rt_convert_bool(rv);
-    return py::new_bool(v.as_bool());
-}>;
-PyMethodDef ifelse_method =
+        if (auto rv = py::cast<RuntimeValue>(v))
+            return rt_convert_bool(rv);
+        return py::new_bool(v.as_bool());
+    }>,
     py::meth_fast<"ifelse",[] (auto, PyObject *const *args, Py_ssize_t nargs) -> py::ref<> {
-    py::check_num_arg("ifelse", nargs, 3, 3);
-    auto b = py::ptr(args[0]);
-    auto v1 = py::ptr(args[1]);
-    auto v2 = py::ptr(args[2]);
-    if (same_value(v1, v2))
-        return v1.ref();
-    if (auto rb = py::cast<RuntimeValue>(b))
-        return new_select(rb, v1, v2);
-    return (b.as_bool() ? v1 : v2).ref();
-}>;
-PyMethodDef same_value_method =
+        py::check_num_arg("ifelse", nargs, 3, 3);
+        auto b = py::ptr(args[0]);
+        auto v1 = py::ptr(args[1]);
+        auto v2 = py::ptr(args[2]);
+        if (same_value(v1, v2))
+            return v1.ref();
+        if (auto rb = py::cast<RuntimeValue>(b))
+            return new_select(rb, v1, v2);
+        return (b.as_bool() ? v1 : v2).ref();
+    }>,
     py::meth_fast<"same_value",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
         py::check_num_arg("same_value", nargs, 2, 2);
         return py::new_bool(same_value(args[0], args[1]));
-    }>;
+    }>, {}};
 
 static __attribute__((flatten, noinline))
 std::pair<EvalError,GenVal> interpret_func(const int *code, GenVal *data,

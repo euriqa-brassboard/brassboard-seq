@@ -36,7 +36,10 @@ endfunction()
 bb_cxx_mod(_utils)
 bb_cxx_mod(action)
 bb_cxx_mod(config)
+bb_cxx_mod(event_time)
+bb_cxx_mod(rtval)
 bb_cxx_mod(scan)
+bb_cxx_mod(seq)
 bb_cxx_mod(utils)
 bb_cxx_mod(yaml)
 
@@ -61,8 +64,8 @@ python_install_module("${CMAKE_CURRENT_SOURCE_DIR}/.." brassboard_seq
   action.pxd
   artiq_backend.pyx
   backend.pyx
-  event_time.pyx
+  event_time.pxd
   rfsoc_backend.pyx
-  rtval.pyx
-  seq.pyx
+  rtval.pxd
+  seq.pxd
   utils.pxd)

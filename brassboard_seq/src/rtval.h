@@ -965,11 +965,7 @@ struct ExternCallback : PyObject {
     static PyTypeObject Type;
 };
 
-extern PyMethodDef get_value_method;
-extern PyMethodDef inv_method;
-extern PyMethodDef convert_bool_method;
-extern PyMethodDef ifelse_method;
-extern PyMethodDef same_value_method;
+extern PyMethodDef methods[];
 
 static inline bool is_rtval(auto &&v)
 {

@@ -17,37 +17,25 @@
  *************************************************************************/
 
 #include "src/utils.h"
-
-#include "src/event_time.h"
-#include "src/rfsoc.h"
 #include "src/rtval.h"
-#include "src/seq.h"
+#include "src/rtprop.h"
 
 using namespace brassboard_seq;
 
-static PyModuleDef _utils_module = {
+static PyModuleDef rtval_module = {
     .m_base = PyModuleDef_HEAD_INIT,
-    .m_name = "brassboard_seq._utils",
+    .m_name = "brassboard_seq.rtval",
     .m_size = -1,
+    .m_methods = rtval::methods,
 };
 
-PY_MODINIT(_utils, _utils_module)
+PY_MODINIT(rtval, rtval_module)
 {
-    // event_time
-    m.add_type(&event_time::TimeManager::Type);
-    m.add_type(&event_time::EventTime::Type);
-
-    // rfsoc
-    m.add_type(&rfsoc::JaqalInst_v1_Type);
-    m.add_type(&rfsoc::Jaqal_v1_Type);
-    m.add_type(&rfsoc::JaqalChannelGen_v1_Type);
-    m.add_type(&rfsoc::JaqalInst_v1_3_Type);
-    m.add_type(&rfsoc::Jaqal_v1_3_Type);
+    // rtprop
+    m.add_type(&rtprop::CompositeRTProp_Type);
+    m.add_type(&rtprop::RTProp_Type);
 
     // rtval
     m.add_type(&rtval::RuntimeValue::Type);
     m.add_type(&rtval::ExternCallback::Type);
-
-    // seq
-    m.add_type(&seq::Seq::Type);
 }
