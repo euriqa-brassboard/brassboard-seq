@@ -18,9 +18,6 @@
 
 # Do not use relative import since it messes up cython file name tracking
 
-from libc.stdint cimport *
-from libcpp.vector cimport vector
-
 cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
     # Cython doesn't seem to allow namespace in the object property
     # for the imported extension class
@@ -28,84 +25,8 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
     using _brassboard_seq_rtval_RuntimeValue = brassboard_seq::rtval::RuntimeValue;
     using _brassboard_seq_rtval_ExternCallback = brassboard_seq::rtval::ExternCallback;
     """
-    enum ValueType:
-        Arg
-        ExternAge
-        Const
-        Extern
-
-        Add
-        Sub
-        Mul
-        Div
-        CmpLT
-        CmpGT
-        CmpLE
-        CmpGE
-        CmpNE
-        CmpEQ
-        And
-        Or
-        Xor
-        Not
-        Abs
-        Ceil
-        Exp
-        Expm1
-        Floor
-        Log
-        Log1p
-        Log2
-        Log10
-        Pow
-        Sqrt
-        Asin
-        Acos
-        Atan
-        Atan2
-        Asinh
-        Acosh
-        Atanh
-        Sin
-        Cos
-        Tan
-        Sinh
-        Cosh
-        Tanh
-        Hypot
-        # Erf
-        # Erfc
-        # Gamma
-        # Lgamma
-        Rint
-        Max
-        Min
-        Mod
-        # Interp
-        Select
-        # Identity
-        Int64
-        Bool
-
-    enum class DataType(uint8_t):
-        Bool
-        Int64
-        Float64
-
-    union GenVal:
-        bint b_val
-        int64_t i64_val
-        double f64_val
-
-    enum class EvalError(uint8_t):
-        pass
-
     cppclass TagVal:
-        DataType type
-        EvalError err
-        GenVal val
-        TagVal()
-        TagVal(double)
+        pass
 
     bint is_rtval(object)
 
@@ -113,9 +34,7 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
     RuntimeValue new_extern_age(ExternCallback cb, ty) except +
 
     ctypedef class brassboard_seq.rtval.RuntimeValue [object _brassboard_seq_rtval_RuntimeValue, check_size ignore]:
-        cdef ValueType type_
-        cdef DataType datatype
-        cdef GenVal cache_val
+        pass
 
     ctypedef class brassboard_seq.rtval.ExternCallback [object _brassboard_seq_rtval_ExternCallback, check_size ignore]:
         cdef void *fptr

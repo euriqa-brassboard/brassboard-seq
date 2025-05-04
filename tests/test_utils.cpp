@@ -285,9 +285,11 @@ void rampfunc_set_runtime_params(py::ptr<> func, unsigned age)
 {
     py::arg_cast<action::RampFunctionBase>(func, "func")->set_runtime_params(age);
 }
-rtval::TagVal rampfunc_runtime_eval(py::ptr<> func, double t)
+double rampfunc_runtime_eval(py::ptr<> func, double t)
 {
-    return py::arg_cast<action::RampFunctionBase>(func, "func")->runtime_eval(t);
+    auto tv = py::arg_cast<action::RampFunctionBase>(func, "func")->runtime_eval(t);
+    throw_py_error(tv.err);
+    return tv.val.f64_val;
 }
 
 __attribute__((returns_nonnull))

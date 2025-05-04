@@ -24,7 +24,6 @@ cdef extern from "src/rtval.h" namespace "brassboard_seq::rtval":
         rtval.RuntimeValue rel "rel<brassboard_seq::rtval::RuntimeValue>" ()
     rtval.RuntimeValue _new_arg "brassboard_seq::rtval::new_arg" (object idx, object ty) except +
     double get_value_f64(object, unsigned age) except +
-    void throw_py_error(rtval.EvalError) except +
 
 cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
     rtval_ref round_time_rt(rtval.RuntimeValue) except +
@@ -143,7 +142,7 @@ cdef extern from "test_utils.cpp" namespace "brassboard_seq":
     object rampfunc_eval_end(object, object, object) except +
     object rampfunc_spline_segments(object, double length, double oldval) except +
     void rampfunc_set_runtime_params(object, unsigned age) except +
-    rtval.TagVal rampfunc_runtime_eval(object, double t) except +
+    double rampfunc_runtime_eval(object, double t) except +
     event_time.TimeManager seq_get_time_mgr(seq.Seq)
     list _seq_get_channel_paths(seq.Seq)
     vector[action.Action*] *compiledseq_get_all_actions(backend.CompiledSeq &cseq)
@@ -256,10 +255,6 @@ def action_get_compile_info(Action action):
 def action_get_cond_val(Action action):
     return action.action.cond_val
 
-cdef double tagval_to_float(rtval.TagVal tv):
-    throw_py_error(tv.err)
-    return tv.val.f64_val
-
 cdef class RampTest:
     cdef object func
     cdef object length
@@ -277,13 +272,13 @@ cdef class RampTest:
         rampfunc_set_runtime_params(self.func, age)
         rampfunc_spline_segments(self.func, get_value_f64(self.length, age),
                                  get_value_f64(self.oldval, age))
-        return [tagval_to_float(rampfunc_runtime_eval(self.func, t)) for t in ts]
+        return [rampfunc_runtime_eval(self.func, t) for t in ts]
 
 def ramp_get_spline_segments(self, length, oldval):
     return rampfunc_spline_segments(self, length, oldval)
 
 def ramp_runtime_eval(self, t):
-    return tagval_to_float(rampfunc_runtime_eval(self, t))
+    return rampfunc_runtime_eval(self, t)
 
 def round_time(v):
     if rtval.is_rtval(v):

@@ -31,12 +31,8 @@ cdef extern from "src/event_time.h" namespace "brassboard_seq::event_time":
     """
     cppclass EventTimeData:
         int id
-        bint floating
-        int chain_id
-        bint is_static()
         int64_t get_static()
 
-    int64_t round_time_f64(double v)
     int64_t round_time_int(v) except +
 
     enum TimeOrder:
