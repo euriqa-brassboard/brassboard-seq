@@ -21,6 +21,9 @@
 
 #include "rfsoc.h"
 
+#include "backend.h"
+#include "seq.h"
+
 #include <algorithm>
 #include <array>
 #include <map>
@@ -181,6 +184,12 @@ struct ToneBuffer {
     }
 };
 
+struct output_flags_t {
+    bool wait_trigger;
+    bool sync;
+    bool feedback_enable;
+};
+
 struct Generator {
     virtual void start() = 0;
     virtual void process_channel(ToneBuffer &tone_buffer, int chn,
@@ -188,6 +197,105 @@ struct Generator {
     virtual void end() = 0;
     virtual ~Generator() = default;
 };
+
+struct SyncChannelGen: Generator {
+    virtual void add_tone_data(int chn, int64_t duration_cycles, cubic_spline_t freq,
+                               cubic_spline_t amp, cubic_spline_t phase,
+                               output_flags_t flags, int64_t cur_cycle) = 0;
+    void process_channel(ToneBuffer &tone_buffer, int chn,
+                         int64_t total_cycle) override;
+};
+
+struct PulseCompilerGen: SyncChannelGen {
+    struct Info;
+    static inline Info *get_info();
+
+    void add_tone_data(int chn, int64_t duration_cycles, cubic_spline_t freq,
+                       cubic_spline_t amp, cubic_spline_t phase,
+                       output_flags_t flags, int64_t) override;
+    PulseCompilerGen()
+        : output(py::new_dict())
+    {}
+    void start() override;
+    void end() override;
+    PyObject *get_output()
+    {
+        return py::newref(output);
+    }
+
+    py::dict_ref output;
+    int last_chn;
+    py::list last_tonedatas;
+};
+Generator *new_pulse_compiler_generator();
+
+struct JaqalPulseCompilerGen: SyncChannelGen {
+    struct BoardGen {
+        Jaqal_v1::ChannelGen channels[8];
+        void clear();
+        PyObject *get_prefix() const;
+        PyObject *get_sequence() const;
+        void end();
+    };
+    BoardGen boards[4]; // 4 * 8 physical channels
+
+    void start() override;
+    void add_tone_data(int chn, int64_t duration_cycles, cubic_spline_t freq,
+                       cubic_spline_t amp, cubic_spline_t phase,
+                       output_flags_t flags, int64_t cur_cycle) override;
+    void end() override;
+    __attribute__((returns_nonnull)) PyObject *get_prefix(int n) const;
+    __attribute__((returns_nonnull)) PyObject *get_sequence(int n) const;
+};
+
+Generator *new_jaqal_pulse_compiler_generator();
+
+struct Jaqalv1_3Generator: Generator {
+    virtual void add_inst(const JaqalInst &inst, int board, int board_chn,
+                          Jaqal_v1_3::ModType mod, int64_t cycle) = 0;
+private:
+    struct ChnInfo {
+        uint16_t board;
+        uint8_t board_chn;
+        uint8_t tone;
+        ChnInfo(int chn)
+            : board(chn / 16),
+              board_chn((chn / 2) % 8),
+              tone(chn % 2)
+        {
+        }
+    };
+    static inline int64_t limit_cycles(int64_t cur, int64_t end)
+    {
+        int64_t max_cycles = (int64_t(1) << 40) - 1;
+        int64_t len = end - cur;
+        if (len <= max_cycles)
+            return end;
+        if (len > max_cycles * 2)
+            return cur + max_cycles;
+        return cur + len / 2;
+    }
+    void process_freq(std::span<DDSParamAction> freq, std::span<DDSFFAction> ff,
+                      ChnInfo chn, int64_t total_cycle);
+    template<typename P>
+    void process_param(std::span<DDSParamAction> param, ChnInfo chn,
+                       int64_t total_cycle, Jaqal_v1_3::ModType modtype, P &&pulsef);
+    void process_frame(ChnInfo chn, int64_t total_cycle, Jaqal_v1_3::ModType modtype);
+    void process_channel(ToneBuffer &tone_buffer, int chn, int64_t total_cycle) override;
+};
+
+struct Jaqalv1_3StreamGen: Jaqalv1_3Generator {
+    __attribute__((returns_nonnull)) PyObject *get_prefix(int n) const;
+    __attribute__((returns_nonnull)) PyObject *get_sequence(int n) const;
+private:
+    std::vector<TimedInst> board_insts[4];
+    void add_inst(const JaqalInst &inst, int board, int board_chn,
+                  Jaqal_v1_3::ModType mod, int64_t cycle) override;
+    void start() override;
+    void end() override;
+};
+
+Generator *new_jaqalv1_3_stream_generator();
 
 }
 

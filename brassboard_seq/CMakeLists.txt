@@ -12,6 +12,7 @@ add_library(brassboard_seq_utils SHARED
   src/init.cpp
   src/parampack.cpp
   src/rfsoc.cpp
+  src/rfsoc_backend.cpp
   src/rtprop.cpp
   src/rtval.cpp
   src/scan.cpp

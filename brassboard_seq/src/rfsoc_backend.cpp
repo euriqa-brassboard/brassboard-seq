@@ -34,33 +34,7 @@ namespace brassboard_seq::rfsoc_backend {
 using rtval::RuntimeValue;
 using event_time::EventTime;
 
-struct output_flags_t {
-    bool wait_trigger;
-    bool sync;
-    bool feedback_enable;
-};
-
 namespace {
-
-static inline int64_t seq_time_to_cycle(int64_t time)
-{
-    // Each cycle is 1 / 1ps / 409.6MHz sequence time unit
-    // or 78125/32 sequence unit.
-    constexpr auto numerator = 78125;
-    constexpr auto denominator = 32;
-    auto cycle_whole = time / numerator * denominator;
-    auto cycle_frac = ((time % numerator) * denominator + numerator / 2) / numerator;
-    return cycle_whole + cycle_frac;
-}
-
-static inline int64_t cycle_to_seq_time(int64_t cycle)
-{
-    constexpr auto numerator = 32;
-    constexpr auto denominator = 78125;
-    auto time_whole = cycle / numerator * denominator;
-    auto time_frac = ((cycle % numerator) * denominator + numerator / 2) / numerator;
-    return time_whole + time_frac;
-}
 
 static inline cubic_spline_t approximate_spline(double v[5])
 {
@@ -98,395 +72,11 @@ struct IsFirst {
     }
 };
 
-static void set_dds_delay(auto *rb, int dds, double delay)
-{
-    if (delay < 0)
-        py_throw_format(PyExc_ValueError, "DDS time offset %S cannot be negative.",
-                        py::new_float(delay));
-    if (delay > 0.1)
-        py_throw_format(PyExc_ValueError, "DDS time offset %S cannot be more than 100ms.",
-                        py::new_float(delay));
-    rb->channels.set_dds_delay(dds, event_time::round_time_f64(delay));
-}
+} // (anonymous)
 
-struct SyncChannelGen: Generator {
-    virtual void add_tone_data(int chn, int64_t duration_cycles, cubic_spline_t freq,
-                               cubic_spline_t amp, cubic_spline_t phase,
-                               output_flags_t flags, int64_t cur_cycle) = 0;
-    void process_channel(ToneBuffer &tone_buffer, int chn,
-                         int64_t total_cycle) override;
-};
-
-struct PulseCompilerGen: SyncChannelGen {
-    struct Info {
-        PyObject *channel_list[64];
-        py::ptr<> CubicSpline;
-        py::ptr<> ToneData;
-        py::ptr<> cubic_0;
-        std::vector<std::pair<PyObject*,PyObject*>> tonedata_fields;
-
-        py::ref<> _new_cubic_spline(cubic_spline_t sp)
-        {
-            auto newobj = py::generic_alloc<py::tuple>(CubicSpline, 4);
-            newobj.SET(0, py::new_float(sp.order0));
-            newobj.SET(1, py::new_float(sp.order1));
-            newobj.SET(2, py::new_float(sp.order2));
-            newobj.SET(3, py::new_float(sp.order3));
-            return newobj;
-        }
-
-        py::ref<> new_cubic_spline(cubic_spline_t sp)
-        {
-            if (sp == cubic_spline_t{0, 0, 0, 0})
-                return cubic_0.ref();
-            return _new_cubic_spline(sp);
-        }
-
-        py::ref<> new_tone_data(int channel, int tone, int64_t duration_cycles,
-                                cubic_spline_t freq, cubic_spline_t amp,
-                                cubic_spline_t phase, output_flags_t flags)
-        {
-            auto td = py::generic_alloc(ToneData);
-            auto td_dict = py::dict_ref(throw_if_not(PyObject_GenericGetDict(td.get(), nullptr)));
-            for (auto [key, value]: tonedata_fields)
-                td_dict.set(key, value);
-            py::assert_int_cache<32>();
-            td_dict.set("channel"_py, py::int_cached(channel));
-            td_dict.set("tone"_py, py::int_cached(tone));
-            td_dict.set("duration_cycles"_py, py::new_int(duration_cycles));
-            td_dict.set("frequency_hz"_py, new_cubic_spline(freq));
-            td_dict.set("amplitude"_py, new_cubic_spline(amp));
-            // tone data wants rad as phase unit.
-            td_dict.set("phase_rad"_py, new_cubic_spline({
-                        phase.order0 * (2 * M_PI), phase.order1 * (2 * M_PI),
-                        phase.order2 * (2 * M_PI), phase.order3 * (2 * M_PI) }));
-            td_dict.set("frame_rotation_rad"_py, cubic_0);
-            td_dict.set("wait_trigger"_py, flags.wait_trigger ? Py_True : Py_False);
-            td_dict.set("sync"_py, flags.sync ? Py_True : Py_False);
-            td_dict.set("output_enable"_py, Py_False);
-            td_dict.set("feedback_enable"_py, flags.feedback_enable ? Py_True : Py_False);
-            td_dict.set("bypass_lookup_tables"_py, Py_False);
-            return td;
-        }
-
-        Info();
-    };
-    static inline Info *get_info()
-    {
-        static Info info;
-        return &info;
-    }
-
-    void add_tone_data(int chn, int64_t duration_cycles, cubic_spline_t freq,
-                       cubic_spline_t amp, cubic_spline_t phase,
-                       output_flags_t flags, int64_t) override
-    {
-        bb_debug("outputting tone data: chn=%d, cycles=%" PRId64 ", sync=%d, ff=%d\n",
-                 chn, duration_cycles, flags.sync, flags.feedback_enable);
-        auto info = get_info();
-        auto tonedata = info->new_tone_data(chn >> 1, chn & 1, duration_cycles, freq,
-                                            amp, phase, flags);
-        auto key = info->channel_list[chn];
-        py::list tonedatas;
-        if (last_chn == chn) [[likely]] {
-            tonedatas = assume(last_tonedatas);
-        }
-        else {
-            tonedatas = output.try_get(key);
-        }
-        if (!tonedatas) {
-            auto tonedatas = py::new_list(std::move(tonedata));
-            output.set(key, tonedatas);
-            last_tonedatas = tonedatas;
-        }
-        else {
-            py::list(tonedatas).append(std::move(tonedata));
-            last_tonedatas = tonedatas;
-        }
-        last_chn = chn;
-    }
-
-    PulseCompilerGen()
-        : output(py::new_dict())
-    {
-    }
-    void start() override
-    {
-        output.clear();
-        last_chn = -1;
-    }
-    void end() override
-    {}
-
-    PyObject *get_output()
-    {
-        return py::newref(output);
-    }
-
-    py::dict_ref output;
-    int last_chn;
-    py::list last_tonedatas;
-};
-
-Generator *new_pulse_compiler_generator()
-{
-    return new PulseCompilerGen;
-}
-
-PulseCompilerGen::Info::Info()
-{
-    auto tonedata_mod = py::import_module("pulsecompiler.rfsoc.tones.tonedata");
-    ToneData = tonedata_mod.attr("ToneData").rel();
-    auto splines_mod = py::import_module("pulsecompiler.rfsoc.structures.splines");
-    CubicSpline = splines_mod.attr("CubicSpline").rel();
-    cubic_0 = _new_cubic_spline({0, 0, 0, 0}).rel();
-    auto pulse_mod = py::import_module("qiskit.pulse");
-    auto ControlChannel = pulse_mod.attr("ControlChannel");
-    auto DriveChannel = pulse_mod.attr("DriveChannel");
-
-    py::assert_int_cache<64>();
-    PyObject *py_nums[64];
-    for (int i = 0; i < 64; i++)
-        py_nums[i] = py::int_cached(i);
-
-    channel_list[0] = ControlChannel(py_nums[0]).rel();
-    channel_list[1] = ControlChannel(py_nums[1]).rel();
-    for (int i = 0; i < 62; i++)
-        channel_list[i + 2] = DriveChannel(py_nums[i]).rel();
-
-    auto orig_post_init = ToneData.attr("__post_init__");
-    static PyMethodDef dummy_post_init_method = py::meth_fast<"__post_init__",[] (auto...) {}>;
-    ToneData.set_attr("__post_init__", py::new_cfunc(&dummy_post_init_method));
-    auto dummy_tonedata = ToneData(py_nums[0], py_nums[0], py_nums[0],
-                                   py_nums[0], py_nums[0], py_nums[0]);
-    ToneData.set_attr("__post_init__", orig_post_init);
-    auto td_dict = py::dict_ref::checked(PyObject_GenericGetDict(dummy_tonedata.get(),
-                                                                 nullptr));
-    for (auto [key, value]: py::dict_iter<PyObject,py::str>(td_dict)) {
-        for (auto name: {"channel", "tone", "duration_cycles", "frequency_hz",
-                "amplitude", "phase_rad", "frame_rotation_rad", "wait_trigger",
-                "sync", "output_enable", "feedback_enable",
-                "bypass_lookup_tables"}) {
-            if (key.compare_ascii(name) == 0) {
-                goto skip_key;
-            }
-        }
-        tonedata_fields.push_back({ py::newref(key), py::newref(value) });
-    skip_key:
-        ;
-    }
-}
-
-struct JaqalPulseCompilerGen: SyncChannelGen {
-    struct BoardGen {
-        Jaqal_v1::ChannelGen channels[8];
-        void clear()
-        {
-            for (auto &channel: channels) {
-                channel.clear();
-            }
-        }
-        PyObject *get_prefix() const;
-        PyObject *get_sequence() const;
-        void end();
-    };
-    BoardGen boards[4]; // 4 * 8 physical channels
-
-    void start() override
-    {
-        for (auto &board: boards) {
-            board.clear();
-        }
-    }
-    void add_tone_data(int chn, int64_t duration_cycles, cubic_spline_t freq,
-                       cubic_spline_t amp, cubic_spline_t phase,
-                       output_flags_t flags, int64_t cur_cycle) override;
-    void end() override
-    {
-#pragma omp parallel
-#pragma omp single
-#pragma omp taskloop
-        for (auto &board: boards) {
-            board.end();
-        }
-    }
-
-    __attribute__((returns_nonnull)) PyObject *get_prefix(int n) const
-    {
-        if (n < 0 || n >= 4)
-            throw std::out_of_range("Board index should be in [0, 3]");
-        return boards[n].get_prefix();
-    }
-
-    __attribute__((returns_nonnull)) PyObject *get_sequence(int n) const
-    {
-        if (n < 0 || n >= 4)
-            throw std::out_of_range("Board index should be in [0, 3]");
-        return boards[n].get_sequence();
-    }
-};
-
-Generator *new_jaqal_pulse_compiler_generator()
-{
-    return new JaqalPulseCompilerGen;
-}
-
-__attribute__((flatten))
-static inline void chn_add_tone_data(auto &channel_gen, int channel, int tone,
-                                     int64_t duration_cycles,
-                                     cubic_spline_t freq, cubic_spline_t amp,
-                                     cubic_spline_t phase, output_flags_t flags,
-                                     int64_t cur_cycle)
-{
-    assume(tone == 0 || tone == 1);
-    channel_gen.add_pulse(Jaqal_v1::freq_pulse(channel, tone, freq, duration_cycles,
-                                               flags.wait_trigger, flags.sync,
-                                               flags.feedback_enable), cur_cycle);
-    channel_gen.add_pulse(Jaqal_v1::amp_pulse(channel, tone, amp, duration_cycles,
-                                              flags.wait_trigger), cur_cycle);
-    channel_gen.add_pulse(Jaqal_v1::phase_pulse(channel, tone, phase, duration_cycles,
-                                                flags.wait_trigger), cur_cycle);
-    channel_gen.add_pulse(Jaqal_v1::frame_pulse(channel, tone, {0, 0, 0, 0},
-                                                duration_cycles, flags.wait_trigger,
-                                                false, false, 0, 0), cur_cycle);
-}
-
-void JaqalPulseCompilerGen::add_tone_data(int chn, int64_t duration_cycles,
-                                          cubic_spline_t freq, cubic_spline_t amp,
-                                          cubic_spline_t phase, output_flags_t flags,
-                                          int64_t cur_cycle)
-{
-    auto board_id = chn >> 4;
-    assert(board_id < 4);
-    auto &board_gen = boards[board_id];
-    auto channel = (chn >> 1) & 7;
-    auto tone = chn & 1;
-    auto &channel_gen = board_gen.channels[channel];
-    int64_t max_cycles = (int64_t(1) << 40) - 1;
-    auto clear_edge_flags = [] (auto &flags) {
-        flags.wait_trigger = false;
-        flags.sync = false;
-    };
-    if (duration_cycles > max_cycles) [[unlikely]] {
-        int64_t tstart = 0;
-        auto resample = [&] (auto spline, int64_t tstart, int64_t tend) {
-            return spline_resample_cycle(spline, 0, duration_cycles, tstart, tend);
-        };
-        while ((duration_cycles - tstart) > max_cycles * 2) {
-            int64_t tend = tstart + max_cycles;
-            chn_add_tone_data(channel_gen, channel, tone, max_cycles,
-                              resample(freq, tstart, tend),
-                              resample(amp, tstart, tend),
-                              resample(phase, tstart, tend),
-                              flags, cur_cycle + tstart);
-            clear_edge_flags(flags);
-            tstart = tend;
-        }
-        int64_t tmid = (duration_cycles - tstart) / 2 + tstart;
-        chn_add_tone_data(channel_gen, channel, tone, tmid - tstart,
-                          resample(freq, tstart, tmid),
-                          resample(amp, tstart, tmid),
-                          resample(phase, tstart, tmid),
-                          flags, cur_cycle + tstart);
-        clear_edge_flags(flags);
-        chn_add_tone_data(channel_gen, channel, tone, duration_cycles - tmid,
-                          resample(freq, tmid, duration_cycles),
-                          resample(amp, tmid, duration_cycles),
-                          resample(phase, tmid, duration_cycles),
-                          flags, cur_cycle + tmid);
-        return;
-    }
-    chn_add_tone_data(channel_gen, channel, tone, duration_cycles,
-                      freq, amp, phase, flags, cur_cycle);
-}
-
-PyObject *JaqalPulseCompilerGen::BoardGen::get_prefix() const
-{
-    pybytes_ostream io;
-    for (int chn = 0; chn < 8; chn++) {
-        auto &channel_gen = channels[chn];
-        for (auto &[pulse, addr]: channel_gen.pulses.pulses) {
-            auto inst = Jaqal_v1::program_PLUT(pulse, addr);
-            io.write((char*)&inst, sizeof(inst));
-        }
-        uint16_t idxbuff[std::max(Jaqal_v1::SLUT_MAXCNT, Jaqal_v1::GLUT_MAXCNT)];
-        for (int i = 0; i < sizeof(idxbuff) / sizeof(uint16_t); i++)
-            idxbuff[i] = i;
-        auto nslut = (int)channel_gen.slut.size();
-        for (int i = 0; i < nslut; i += Jaqal_v1::SLUT_MAXCNT) {
-            auto blksize = std::min(Jaqal_v1::SLUT_MAXCNT, nslut - i);
-            for (int j = 0; j < blksize; j++)
-                idxbuff[j] = i + j;
-            auto inst = Jaqal_v1::program_SLUT(chn, idxbuff,
-                                               (const uint16_t*)&channel_gen.slut[i],
-                                               blksize);
-            io.write((char*)&inst, sizeof(inst));
-        }
-        auto nglut = (int)channel_gen.glut.size();
-        uint16_t starts[Jaqal_v1::GLUT_MAXCNT];
-        uint16_t ends[Jaqal_v1::GLUT_MAXCNT];
-        for (int i = 0; i < nglut; i += Jaqal_v1::GLUT_MAXCNT) {
-            auto blksize = std::min(Jaqal_v1::GLUT_MAXCNT, nglut - i);
-            for (int j = 0; j < blksize; j++) {
-                auto [start, end] = channel_gen.glut[i + j];
-                starts[j] = start;
-                ends[j] = end;
-                idxbuff[j] = i + j;
-            }
-            auto inst = Jaqal_v1::program_GLUT(chn, idxbuff, starts, ends, blksize);
-            io.write((char*)&inst, sizeof(inst));
-        }
-    }
-    return io.get_buf();
-}
-
-PyObject *JaqalPulseCompilerGen::BoardGen::get_sequence() const
-{
-    pybytes_ostream io;
-    std::span<const TimedID> chn_gate_ids[8];
-    for (int chn = 0; chn < 8; chn++)
-        chn_gate_ids[chn] = std::span(channels[chn].gate_ids);
-    auto output_channel = [&] (int chn) {
-        uint16_t gaddrs[Jaqal_v1::GSEQ_MAXCNT];
-        auto &gate_ids = chn_gate_ids[chn];
-        assert(gate_ids.size() != 0);
-        int blksize = std::min(Jaqal_v1::GSEQ_MAXCNT, (int)gate_ids.size());
-        for (int i = 0; i < blksize; i++)
-            gaddrs[i] = gate_ids[i].id;
-        auto inst = Jaqal_v1::sequence(chn, Jaqal_v1::SeqMode::GATE, gaddrs, blksize);
-        io.write((char*)&inst, sizeof(inst));
-        gate_ids = gate_ids.subspan(blksize);
-    };
-    while (true) {
-        int out_chn = -1;
-        int64_t out_time = INT64_MAX;
-        for (int chn = 0; chn < 8; chn++) {
-            auto &gate_ids = chn_gate_ids[chn];
-            if (gate_ids.size() == 0)
-                continue;
-            auto first_time = gate_ids[0].time;
-            if (first_time < out_time) {
-                out_chn = chn;
-                out_time = first_time;
-            }
-        }
-        if (out_chn < 0)
-            break;
-        output_channel(out_chn);
-    }
-    return io.get_buf();
-}
-
-void JaqalPulseCompilerGen::BoardGen::end()
-{
-#pragma omp taskloop
-    for (auto &channel_gen: channels) {
-        channel_gen.end();
-    }
-}
-
-void SyncChannelGen::process_channel(ToneBuffer &tone_buffer, int chn,
-                                     int64_t total_cycle)
+__attribute__((visibility("internal")))
+inline void SyncChannelGen::process_channel(ToneBuffer &tone_buffer, int chn,
+                                            int64_t total_cycle)
 {
     IsFirst trig;
     assert(!tone_buffer.params[0].empty());
@@ -693,39 +283,367 @@ void SyncChannelGen::process_channel(ToneBuffer &tone_buffer, int chn,
     }
 }
 
-struct Jaqalv1_3Generator: Generator {
-    virtual void add_inst(const JaqalInst &inst, int board, int board_chn,
-                          Jaqal_v1_3::ModType mod, int64_t cycle) = 0;
-private:
-    struct ChnInfo {
-        uint16_t board;
-        uint8_t board_chn;
-        uint8_t tone;
-        ChnInfo(int chn)
-            : board(chn / 16),
-              board_chn((chn / 2) % 8),
-              tone(chn % 2)
-        {
-        }
-    };
-    static inline int64_t limit_cycles(int64_t cur, int64_t end)
+struct PulseCompilerGen::Info {
+    PyObject *channel_list[64];
+    py::ptr<> CubicSpline;
+    py::ptr<> ToneData;
+    py::ptr<> cubic_0;
+    std::vector<std::pair<PyObject*,PyObject*>> tonedata_fields;
+
+    py::ref<> _new_cubic_spline(cubic_spline_t sp)
     {
-        int64_t max_cycles = (int64_t(1) << 40) - 1;
-        int64_t len = end - cur;
-        if (len <= max_cycles)
-            return end;
-        if (len > max_cycles * 2)
-            return cur + max_cycles;
-        return cur + len / 2;
+        auto newobj = py::generic_alloc<py::tuple>(CubicSpline, 4);
+        newobj.SET(0, py::new_float(sp.order0));
+        newobj.SET(1, py::new_float(sp.order1));
+        newobj.SET(2, py::new_float(sp.order2));
+        newobj.SET(3, py::new_float(sp.order3));
+        return newobj;
     }
-    void process_freq(std::span<DDSParamAction> freq, std::span<DDSFFAction> ff,
-                      ChnInfo chn, int64_t total_cycle);
-    template<typename P>
-    void process_param(std::span<DDSParamAction> param, ChnInfo chn,
-                       int64_t total_cycle, Jaqal_v1_3::ModType modtype, P &&pulsef);
-    void process_frame(ChnInfo chn, int64_t total_cycle, Jaqal_v1_3::ModType modtype);
-    void process_channel(ToneBuffer &tone_buffer, int chn, int64_t total_cycle) override;
+
+    py::ref<> new_cubic_spline(cubic_spline_t sp)
+    {
+        if (sp == cubic_spline_t{0, 0, 0, 0})
+            return cubic_0.ref();
+        return _new_cubic_spline(sp);
+    }
+
+    py::ref<> new_tone_data(int channel, int tone, int64_t duration_cycles,
+                            cubic_spline_t freq, cubic_spline_t amp,
+                            cubic_spline_t phase, output_flags_t flags)
+    {
+        auto td = py::generic_alloc(ToneData);
+        auto td_dict = py::dict_ref(throw_if_not(PyObject_GenericGetDict(td.get(), nullptr)));
+        for (auto [key, value]: tonedata_fields)
+            td_dict.set(key, value);
+        py::assert_int_cache<32>();
+        td_dict.set("channel"_py, py::int_cached(channel));
+        td_dict.set("tone"_py, py::int_cached(tone));
+        td_dict.set("duration_cycles"_py, py::new_int(duration_cycles));
+        td_dict.set("frequency_hz"_py, new_cubic_spline(freq));
+        td_dict.set("amplitude"_py, new_cubic_spline(amp));
+        // tone data wants rad as phase unit.
+        td_dict.set("phase_rad"_py, new_cubic_spline({
+                    phase.order0 * (2 * M_PI), phase.order1 * (2 * M_PI),
+                    phase.order2 * (2 * M_PI), phase.order3 * (2 * M_PI) }));
+        td_dict.set("frame_rotation_rad"_py, cubic_0);
+        td_dict.set("wait_trigger"_py, flags.wait_trigger ? Py_True : Py_False);
+        td_dict.set("sync"_py, flags.sync ? Py_True : Py_False);
+        td_dict.set("output_enable"_py, Py_False);
+        td_dict.set("feedback_enable"_py, flags.feedback_enable ? Py_True : Py_False);
+        td_dict.set("bypass_lookup_tables"_py, Py_False);
+        return td;
+    }
+
+    Info();
 };
+
+__attribute__((visibility("internal")))
+inline auto PulseCompilerGen::get_info() -> Info*
+{
+    static Info info;
+    return &info;
+}
+
+__attribute__((visibility("internal")))
+inline void PulseCompilerGen::add_tone_data(int chn, int64_t duration_cycles,
+                                            cubic_spline_t freq, cubic_spline_t amp,
+                                            cubic_spline_t phase,
+                                            output_flags_t flags, int64_t)
+{
+    bb_debug("outputting tone data: chn=%d, cycles=%" PRId64 ", sync=%d, ff=%d\n",
+             chn, duration_cycles, flags.sync, flags.feedback_enable);
+    auto info = get_info();
+    auto tonedata = info->new_tone_data(chn >> 1, chn & 1, duration_cycles, freq,
+                                        amp, phase, flags);
+    auto key = info->channel_list[chn];
+    py::list tonedatas;
+    if (last_chn == chn) [[likely]] {
+        tonedatas = assume(last_tonedatas);
+    }
+    else {
+        tonedatas = output.try_get(key);
+    }
+    if (!tonedatas) {
+        auto tonedatas = py::new_list(std::move(tonedata));
+        output.set(key, tonedatas);
+        last_tonedatas = tonedatas;
+    }
+    else {
+        py::list(tonedatas).append(std::move(tonedata));
+        last_tonedatas = tonedatas;
+    }
+    last_chn = chn;
+}
+
+__attribute__((visibility("internal")))
+inline void PulseCompilerGen::start()
+{
+    output.clear();
+    last_chn = -1;
+}
+
+__attribute__((visibility("internal")))
+inline void PulseCompilerGen::end()
+{
+}
+
+__attribute__((visibility("protected")))
+Generator *new_pulse_compiler_generator()
+{
+    return new PulseCompilerGen;
+}
+
+__attribute__((visibility("internal")))
+inline PulseCompilerGen::Info::Info()
+{
+    auto tonedata_mod = py::import_module("pulsecompiler.rfsoc.tones.tonedata");
+    ToneData = tonedata_mod.attr("ToneData").rel();
+    auto splines_mod = py::import_module("pulsecompiler.rfsoc.structures.splines");
+    CubicSpline = splines_mod.attr("CubicSpline").rel();
+    cubic_0 = _new_cubic_spline({0, 0, 0, 0}).rel();
+    auto pulse_mod = py::import_module("qiskit.pulse");
+    auto ControlChannel = pulse_mod.attr("ControlChannel");
+    auto DriveChannel = pulse_mod.attr("DriveChannel");
+
+    py::assert_int_cache<64>();
+    PyObject *py_nums[64];
+    for (int i = 0; i < 64; i++)
+        py_nums[i] = py::int_cached(i);
+
+    channel_list[0] = ControlChannel(py_nums[0]).rel();
+    channel_list[1] = ControlChannel(py_nums[1]).rel();
+    for (int i = 0; i < 62; i++)
+        channel_list[i + 2] = DriveChannel(py_nums[i]).rel();
+
+    auto orig_post_init = ToneData.attr("__post_init__");
+    static PyMethodDef dummy_post_init_method = py::meth_fast<"__post_init__",[] (auto...) {}>;
+    ToneData.set_attr("__post_init__", py::new_cfunc(&dummy_post_init_method));
+    auto dummy_tonedata = ToneData(py_nums[0], py_nums[0], py_nums[0],
+                                   py_nums[0], py_nums[0], py_nums[0]);
+    ToneData.set_attr("__post_init__", orig_post_init);
+    auto td_dict = py::dict_ref::checked(PyObject_GenericGetDict(dummy_tonedata.get(),
+                                                                 nullptr));
+    for (auto [key, value]: py::dict_iter<PyObject,py::str>(td_dict)) {
+        for (auto name: {"channel", "tone", "duration_cycles", "frequency_hz",
+                "amplitude", "phase_rad", "frame_rotation_rad", "wait_trigger",
+                "sync", "output_enable", "feedback_enable",
+                "bypass_lookup_tables"}) {
+            if (key.compare_ascii(name) == 0) {
+                goto skip_key;
+            }
+        }
+        tonedata_fields.push_back({ py::newref(key), py::newref(value) });
+    skip_key:
+        ;
+    }
+}
+
+__attribute__((visibility("internal")))
+inline void JaqalPulseCompilerGen::BoardGen::clear()
+{
+    for (auto &channel: channels) {
+        channel.clear();
+    }
+}
+
+__attribute__((visibility("internal")))
+inline void JaqalPulseCompilerGen::start()
+{
+    for (auto &board: boards) {
+        board.clear();
+    }
+}
+
+__attribute__((visibility("internal")))
+inline void JaqalPulseCompilerGen::end()
+{
+#pragma omp parallel
+#pragma omp single
+#pragma omp taskloop
+    for (auto &board: boards) {
+        board.end();
+    }
+}
+
+__attribute__((visibility("protected")))
+PyObject *JaqalPulseCompilerGen::get_prefix(int n) const
+{
+    if (n < 0 || n >= 4)
+        throw std::out_of_range("Board index should be in [0, 3]");
+    return boards[n].get_prefix();
+}
+
+__attribute__((visibility("protected")))
+PyObject *JaqalPulseCompilerGen::get_sequence(int n) const
+{
+    if (n < 0 || n >= 4)
+        throw std::out_of_range("Board index should be in [0, 3]");
+    return boards[n].get_sequence();
+}
+
+__attribute__((visibility("protected")))
+Generator *new_jaqal_pulse_compiler_generator()
+{
+    return new JaqalPulseCompilerGen;
+}
+
+__attribute__((flatten))
+static inline void chn_add_tone_data(auto &channel_gen, int channel, int tone,
+                                     int64_t duration_cycles,
+                                     cubic_spline_t freq, cubic_spline_t amp,
+                                     cubic_spline_t phase, output_flags_t flags,
+                                     int64_t cur_cycle)
+{
+    assume(tone == 0 || tone == 1);
+    channel_gen.add_pulse(Jaqal_v1::freq_pulse(channel, tone, freq, duration_cycles,
+                                               flags.wait_trigger, flags.sync,
+                                               flags.feedback_enable), cur_cycle);
+    channel_gen.add_pulse(Jaqal_v1::amp_pulse(channel, tone, amp, duration_cycles,
+                                              flags.wait_trigger), cur_cycle);
+    channel_gen.add_pulse(Jaqal_v1::phase_pulse(channel, tone, phase, duration_cycles,
+                                                flags.wait_trigger), cur_cycle);
+    channel_gen.add_pulse(Jaqal_v1::frame_pulse(channel, tone, {0, 0, 0, 0},
+                                                duration_cycles, flags.wait_trigger,
+                                                false, false, 0, 0), cur_cycle);
+}
+
+__attribute__((visibility("internal")))
+inline void JaqalPulseCompilerGen::add_tone_data(int chn, int64_t duration_cycles,
+                                                 cubic_spline_t freq, cubic_spline_t amp,
+                                                 cubic_spline_t phase,
+                                                 output_flags_t flags, int64_t cur_cycle)
+{
+    auto board_id = chn >> 4;
+    assert(board_id < 4);
+    auto &board_gen = boards[board_id];
+    auto channel = (chn >> 1) & 7;
+    auto tone = chn & 1;
+    auto &channel_gen = board_gen.channels[channel];
+    int64_t max_cycles = (int64_t(1) << 40) - 1;
+    auto clear_edge_flags = [] (auto &flags) {
+        flags.wait_trigger = false;
+        flags.sync = false;
+    };
+    if (duration_cycles > max_cycles) [[unlikely]] {
+        int64_t tstart = 0;
+        auto resample = [&] (auto spline, int64_t tstart, int64_t tend) {
+            return spline_resample_cycle(spline, 0, duration_cycles, tstart, tend);
+        };
+        while ((duration_cycles - tstart) > max_cycles * 2) {
+            int64_t tend = tstart + max_cycles;
+            chn_add_tone_data(channel_gen, channel, tone, max_cycles,
+                              resample(freq, tstart, tend),
+                              resample(amp, tstart, tend),
+                              resample(phase, tstart, tend),
+                              flags, cur_cycle + tstart);
+            clear_edge_flags(flags);
+            tstart = tend;
+        }
+        int64_t tmid = (duration_cycles - tstart) / 2 + tstart;
+        chn_add_tone_data(channel_gen, channel, tone, tmid - tstart,
+                          resample(freq, tstart, tmid),
+                          resample(amp, tstart, tmid),
+                          resample(phase, tstart, tmid),
+                          flags, cur_cycle + tstart);
+        clear_edge_flags(flags);
+        chn_add_tone_data(channel_gen, channel, tone, duration_cycles - tmid,
+                          resample(freq, tmid, duration_cycles),
+                          resample(amp, tmid, duration_cycles),
+                          resample(phase, tmid, duration_cycles),
+                          flags, cur_cycle + tmid);
+        return;
+    }
+    chn_add_tone_data(channel_gen, channel, tone, duration_cycles,
+                      freq, amp, phase, flags, cur_cycle);
+}
+
+__attribute__((visibility("internal")))
+inline PyObject *JaqalPulseCompilerGen::BoardGen::get_prefix() const
+{
+    pybytes_ostream io;
+    for (int chn = 0; chn < 8; chn++) {
+        auto &channel_gen = channels[chn];
+        for (auto &[pulse, addr]: channel_gen.pulses.pulses) {
+            auto inst = Jaqal_v1::program_PLUT(pulse, addr);
+            io.write((char*)&inst, sizeof(inst));
+        }
+        uint16_t idxbuff[std::max(Jaqal_v1::SLUT_MAXCNT, Jaqal_v1::GLUT_MAXCNT)];
+        for (int i = 0; i < sizeof(idxbuff) / sizeof(uint16_t); i++)
+            idxbuff[i] = i;
+        auto nslut = (int)channel_gen.slut.size();
+        for (int i = 0; i < nslut; i += Jaqal_v1::SLUT_MAXCNT) {
+            auto blksize = std::min(Jaqal_v1::SLUT_MAXCNT, nslut - i);
+            for (int j = 0; j < blksize; j++)
+                idxbuff[j] = i + j;
+            auto inst = Jaqal_v1::program_SLUT(chn, idxbuff,
+                                               (const uint16_t*)&channel_gen.slut[i],
+                                               blksize);
+            io.write((char*)&inst, sizeof(inst));
+        }
+        auto nglut = (int)channel_gen.glut.size();
+        uint16_t starts[Jaqal_v1::GLUT_MAXCNT];
+        uint16_t ends[Jaqal_v1::GLUT_MAXCNT];
+        for (int i = 0; i < nglut; i += Jaqal_v1::GLUT_MAXCNT) {
+            auto blksize = std::min(Jaqal_v1::GLUT_MAXCNT, nglut - i);
+            for (int j = 0; j < blksize; j++) {
+                auto [start, end] = channel_gen.glut[i + j];
+                starts[j] = start;
+                ends[j] = end;
+                idxbuff[j] = i + j;
+            }
+            auto inst = Jaqal_v1::program_GLUT(chn, idxbuff, starts, ends, blksize);
+            io.write((char*)&inst, sizeof(inst));
+        }
+    }
+    return io.get_buf();
+}
+
+__attribute__((visibility("internal")))
+inline PyObject *JaqalPulseCompilerGen::BoardGen::get_sequence() const
+{
+    pybytes_ostream io;
+    std::span<const TimedID> chn_gate_ids[8];
+    for (int chn = 0; chn < 8; chn++)
+        chn_gate_ids[chn] = std::span(channels[chn].gate_ids);
+    auto output_channel = [&] (int chn) {
+        uint16_t gaddrs[Jaqal_v1::GSEQ_MAXCNT];
+        auto &gate_ids = chn_gate_ids[chn];
+        assert(gate_ids.size() != 0);
+        int blksize = std::min(Jaqal_v1::GSEQ_MAXCNT, (int)gate_ids.size());
+        for (int i = 0; i < blksize; i++)
+            gaddrs[i] = gate_ids[i].id;
+        auto inst = Jaqal_v1::sequence(chn, Jaqal_v1::SeqMode::GATE, gaddrs, blksize);
+        io.write((char*)&inst, sizeof(inst));
+        gate_ids = gate_ids.subspan(blksize);
+    };
+    while (true) {
+        int out_chn = -1;
+        int64_t out_time = INT64_MAX;
+        for (int chn = 0; chn < 8; chn++) {
+            auto &gate_ids = chn_gate_ids[chn];
+            if (gate_ids.size() == 0)
+                continue;
+            auto first_time = gate_ids[0].time;
+            if (first_time < out_time) {
+                out_chn = chn;
+                out_time = first_time;
+            }
+        }
+        if (out_chn < 0)
+            break;
+        output_channel(out_chn);
+    }
+    return io.get_buf();
+}
+
+__attribute__((visibility("internal")))
+inline void JaqalPulseCompilerGen::BoardGen::end()
+{
+#pragma omp taskloop
+    for (auto &channel_gen: channels) {
+        channel_gen.end();
+    }
+}
 
 inline __attribute__((always_inline))
 void Jaqalv1_3Generator::process_freq(std::span<DDSParamAction> freq_actions,
@@ -1010,8 +928,9 @@ void Jaqalv1_3Generator::process_frame(ChnInfo chn, int64_t total_cycle,
     }
 }
 
-void Jaqalv1_3Generator::process_channel(ToneBuffer &tone_buffer, int chn,
-                                         int64_t total_cycle)
+__attribute__((visibility("internal")))
+inline void Jaqalv1_3Generator::process_channel(ToneBuffer &tone_buffer, int chn,
+                                                int64_t total_cycle)
 {
     bb_debug("Start outputting jaqal v1.3 insts for channel %d\n", chn);
     assert(!tone_buffer.params[0].empty());
@@ -1031,64 +950,67 @@ void Jaqalv1_3Generator::process_channel(ToneBuffer &tone_buffer, int chn,
                   chninfo.tone == 0 ? Jaqal_v1_3::FRMROT0 : Jaqal_v1_3::FRMROT1);
 }
 
-struct Jaqalv1_3StreamGen: Jaqalv1_3Generator {
-    __attribute__((returns_nonnull)) PyObject *get_prefix(int n) const
-    {
-        if (n < 0 || n >= 4)
-            throw std::out_of_range("Board index should be in [0, 3]");
-        return py::empty_bytes.immref().rel();
-    }
+__attribute__((visibility("protected")))
+PyObject *Jaqalv1_3StreamGen::get_prefix(int n) const
+{
+    if (n < 0 || n >= 4)
+        throw std::out_of_range("Board index should be in [0, 3]");
+    return py::empty_bytes.immref().rel();
+}
 
-    __attribute__((returns_nonnull)) PyObject *get_sequence(int n) const
-    {
-        if (n < 0 || n >= 4)
-            throw std::out_of_range("Board index should be in [0, 3]");
-        auto &insts = board_insts[n];
-        auto ninsts = insts.size();
-        static constexpr auto instsz = sizeof(JaqalInst);
-        auto res = py::new_bytes(nullptr, ninsts * instsz);
-        auto ptr = res.data();
-        for (size_t i = 0; i < ninsts; i++)
-            memcpy(&ptr[i * instsz], &insts[i].inst, instsz);
-        return res.rel();
+__attribute__((visibility("protected")))
+PyObject *Jaqalv1_3StreamGen::get_sequence(int n) const
+{
+    if (n < 0 || n >= 4)
+        throw std::out_of_range("Board index should be in [0, 3]");
+    auto &insts = board_insts[n];
+    auto ninsts = insts.size();
+    static constexpr auto instsz = sizeof(JaqalInst);
+    auto res = py::new_bytes(nullptr, ninsts * instsz);
+    auto ptr = res.data();
+    for (size_t i = 0; i < ninsts; i++)
+        memcpy(&ptr[i * instsz], &insts[i].inst, instsz);
+    return res.rel();
+}
+
+__attribute__((visibility("internal")))
+inline void Jaqalv1_3StreamGen::add_inst(const JaqalInst &inst, int board, int board_chn,
+                                         Jaqal_v1_3::ModType mod, int64_t cycle)
+{
+    assert(board >= 0 && board < 4);
+    auto &insts = board_insts[board];
+    auto real_inst = Jaqal_v1_3::apply_channel_mask(inst, 1 << board_chn);
+    real_inst = Jaqal_v1_3::apply_modtype_mask(real_inst,
+                                               Jaqal_v1_3::ModTypeMask(1 << mod));
+    insts.push_back({ cycle, Jaqal_v1_3::stream(real_inst) });
+}
+
+__attribute__((visibility("internal")))
+inline void Jaqalv1_3StreamGen::start()
+{
+    for (auto &insts: board_insts) {
+        insts.clear();
     }
-private:
-    std::vector<TimedInst> board_insts[4];
-    void add_inst(const JaqalInst &inst, int board, int board_chn,
-                  Jaqal_v1_3::ModType mod, int64_t cycle) override
-    {
-        assert(board >= 0 && board < 4);
-        auto &insts = board_insts[board];
-        auto real_inst = Jaqal_v1_3::apply_channel_mask(inst, 1 << board_chn);
-        real_inst = Jaqal_v1_3::apply_modtype_mask(real_inst,
-                                                   Jaqal_v1_3::ModTypeMask(1 << mod));
-        insts.push_back({ cycle, Jaqal_v1_3::stream(real_inst) });
-    }
-    void start() override
-    {
-        for (auto &insts: board_insts) {
-            insts.clear();
-        }
-    }
-    void end() override
-    {
+}
+
+__attribute__((visibility("internal")))
+inline void Jaqalv1_3StreamGen::end()
+{
 #pragma omp parallel
 #pragma omp single
 #pragma omp taskloop
-        for (auto &insts: board_insts) {
-            std::ranges::stable_sort(insts, [] (auto &a, auto &b) {
-                return a.time < b.time;
-            });
-        }
+    for (auto &insts: board_insts) {
+        std::ranges::stable_sort(insts, [] (auto &a, auto &b) {
+            return a.time < b.time;
+        });
     }
-};
+}
 
+__attribute__((visibility("protected")))
 Generator *new_jaqalv1_3_stream_generator()
 {
     return new Jaqalv1_3StreamGen;
 }
-
-} // (anonymous)
 
 __attribute__((visibility("internal")))
 inline int ChannelInfo::add_tone_channel(int chn)
@@ -1105,8 +1027,8 @@ inline void ChannelInfo::add_seq_channel(int seq_chn, int chn_idx, ToneParam par
     chn_map.insert({seq_chn, {chn_idx, param}});
 }
 
-__attribute__((visibility("internal")))
-inline void ChannelInfo::ensure_unused_tones(bool all)
+__attribute__((visibility("protected")))
+void ChannelInfo::ensure_unused_tones(bool all)
 {
     // For now, do not generate RFSoC data if there's no output.
     // This may be a problem if some of the sequences in a scan contains RFSoC outputs
@@ -1140,8 +1062,8 @@ static int parse_pos_int(const std::string_view &s, py::tuple path, int max)
     return n;
 }
 
-__attribute__((visibility("internal")))
-inline void ChannelInfo::collect_channel(py::ptr<seq::Seq> seq, py::str prefix)
+__attribute__((visibility("protected")))
+void ChannelInfo::collect_channel(py::ptr<seq::Seq> seq, py::str prefix)
 {
     // Channel name format: <prefix>/dds<chn>/<tone>/<param>
     std::map<int,int> chn_idx_map;
@@ -1185,204 +1107,7 @@ inline void ChannelInfo::collect_channel(py::ptr<seq::Seq> seq, py::str prefix)
     }
 }
 
-namespace {
-
-static inline bool parse_action_kws(py::dict kws, int aid)
-{
-    assert(kws != Py_None);
-    if (!kws)
-        return false;
-    bool sync = false;
-    for (auto [key, value]: py::dict_iter<PyObject,py::str>(kws)) {
-        if (key.compare_ascii("sync") == 0) {
-            sync = value.as_bool(action_key(aid));
-            continue;
-        }
-        bb_throw_format(PyExc_ValueError, action_key(aid),
-                        "Invalid output keyword argument %S", kws);
-    }
-    return sync;
-}
-
-static __attribute__((always_inline)) inline
-void rfsoc_finalize(auto *rb, backend::CompiledSeq &cseq)
-{
-    auto seq = pyx_fld(rb, seq);
-    rb->channels.collect_channel(seq, pyx_fld(rb, prefix));
-
-    ValueIndexer<int> bool_values;
-    ValueIndexer<double> float_values;
-    std::vector<Relocation> &relocations = rb->relocations;
-    py::list event_times = seq->seqinfo->time_mgr->event_times;
-
-    rb->channels.ensure_unused_tones(rb->use_all_channels);
-
-    for (auto [seq_chn, value]: rb->channels.chn_map) {
-        auto [chn_idx, param] = value;
-        auto is_ff = param == ToneFF;
-        auto &channel = rb->channels.channels[chn_idx];
-        auto &rfsoc_actions = channel.actions[(int)param];
-        for (auto action: cseq.all_actions[seq_chn]) {
-            auto sync = parse_action_kws(action->kws, action->aid);
-            py::ptr value = action->value;
-            auto is_ramp = action::isramp(value);
-            if (is_ff && is_ramp)
-                bb_throw_format(PyExc_ValueError, action_key(action->aid),
-                                "Feed forward control cannot be ramped");
-            py::ptr cond = action->cond;
-            if (cond == Py_False)
-                continue;
-            bool cond_need_reloc = rtval::is_rtval(cond);
-            assert(cond_need_reloc || cond == Py_True);
-            int cond_idx = cond_need_reloc ? bool_values.get_id(cond) : -1;
-            auto add_action = [&] (py::ptr<> value, int tid, bool sync, bool is_ramp,
-                                   bool is_end) {
-                bool needs_reloc = cond_need_reloc;
-                Relocation reloc{cond_idx, -1, -1};
-
-                RFSOCAction rfsoc_action;
-                rfsoc_action.cond = !cond_need_reloc;
-                rfsoc_action.eval_status = false;
-                rfsoc_action.isramp = is_ramp;
-                rfsoc_action.sync = sync;
-                rfsoc_action.aid = action->aid;
-                rfsoc_action.tid = tid;
-                rfsoc_action.is_end = is_end;
-
-                auto event_time = event_times.get<EventTime>(tid);
-                if (event_time->data.is_static()) {
-                    rfsoc_action.seq_time = event_time->data._get_static();
-                }
-                else {
-                    needs_reloc = true;
-                    reloc.time_idx = tid;
-                }
-                if (is_ramp) {
-                    rfsoc_action.ramp = value;
-                    auto len = py::ptr(action->length);
-                    if (rtval::is_rtval(len)) {
-                        needs_reloc = true;
-                        reloc.val_idx = float_values.get_id(len);
-                    }
-                    else {
-                        rfsoc_action.float_value = len.as_float(action_key(action->aid));
-                    }
-                }
-                else if (rtval::is_rtval(value)) {
-                    needs_reloc = true;
-                    if (is_ff) {
-                        reloc.val_idx = bool_values.get_id(value);
-                    }
-                    else {
-                        reloc.val_idx = float_values.get_id(value);
-                    }
-                }
-                else if (is_ff) {
-                    rfsoc_action.bool_value = value.as_bool(action_key(action->aid));
-                }
-                else {
-                    rfsoc_action.float_value = value.as_float(action_key(action->aid));
-                }
-                if (needs_reloc) {
-                    rfsoc_action.reloc_id = (int)relocations.size();
-                    relocations.push_back(reloc);
-                }
-                else {
-                    rfsoc_action.reloc_id = -1;
-                }
-                rfsoc_actions.push_back(rfsoc_action);
-            };
-            add_action(action->value, action->tid, sync, is_ramp, false);
-            if (action->is_pulse || is_ramp) {
-                add_action(action->end_val, action->end_tid, false, false, true);
-            }
-        }
-    }
-
-    rb->bool_values = std::move(bool_values.values);
-    rb->float_values = std::move(float_values.values);
-}
-
-static constexpr double min_spline_time = 150e-9;
-
-struct SplineBuffer {
-    double t[7];
-    double v[7];
-
-    bool is_accurate_enough(double threshold) const
-    {
-        if (t[3] - t[0] <= min_spline_time)
-            return true;
-        auto sp = spline_from_values(v[0], v[2], v[4], v[6]);
-        if (abs(spline_eval(sp, 1.0 / 6) - v[1]) > threshold)
-            return false;
-        if (abs(spline_eval(sp, 1.0 / 2) - v[3]) > threshold)
-            return false;
-        if (abs(spline_eval(sp, 5.0 / 6) - v[5]) > threshold)
-            return false;
-        return true;
-    }
-};
-
-static __attribute__((flatten))
-void _generate_splines(auto &eval_cb, auto &add_sample, SplineBuffer &buff,
-                       double threshold)
-{
-    bb_debug("generate_splines: {%f, %f, %f, %f, %f, %f, %f} -> "
-             "{%f, %f, %f, %f, %f, %f, %f}\n",
-             buff.t[0], buff.t[1], buff.t[2], buff.t[3],
-             buff.t[4], buff.t[5], buff.t[6],
-             buff.v[0], buff.v[1], buff.v[2], buff.v[3],
-             buff.v[4], buff.v[5], buff.v[6]);
-    if (buff.is_accurate_enough(threshold)) {
-        bb_debug("accurate enough: t0=%f, t1=%f, t2=%f\n",
-                 buff.t[0], buff.t[3], buff.t[6]);
-        add_sample(buff.t[3], buff.v[0], buff.v[1], buff.v[2], buff.v[3]);
-        add_sample(buff.t[6], buff.v[3], buff.v[4], buff.v[5], buff.v[6]);
-        return;
-    }
-    {
-        SplineBuffer buff0;
-        {
-            double ts[6];
-            double vs[6];
-            for (int i = 0; i < 6; i++) {
-                double t = (buff.t[i] + buff.t[i + 1]) / 2;
-                ts[i] = t;
-                vs[i] = eval_cb(t);
-            }
-            bb_debug("evaluate on {%f, %f, %f, %f, %f, %f}\n",
-                     ts[0], ts[1], ts[2], ts[3], ts[4], ts[5]);
-            buff0 = {
-                { buff.t[0], ts[0], buff.t[1], ts[1], buff.t[2], ts[2], buff.t[3] },
-                { buff.v[0], vs[0], buff.v[1], vs[1], buff.v[2], vs[2], buff.v[3] },
-            };
-            buff = {
-                { buff.t[3], ts[3], buff.t[4], ts[4], buff.t[5], ts[5], buff.t[6] },
-                { buff.v[3], vs[3], buff.v[4], vs[4], buff.v[5], vs[5], buff.v[6] },
-            };
-        }
-        _generate_splines(eval_cb, add_sample, buff0, threshold);
-    }
-    _generate_splines(eval_cb, add_sample, buff, threshold);
-}
-
-static __attribute__((always_inline)) inline
-void generate_splines(auto &eval_cb, auto &add_sample, double len, double threshold)
-{
-    bb_debug("generate_splines: len=%f\n", len);
-    SplineBuffer buff;
-    for (int i = 0; i < 7; i++) {
-        auto t = len * i / 6;
-        buff.t[i] = t;
-        buff.v[i] = eval_cb(t);
-    }
-    _generate_splines(eval_cb, add_sample, buff, threshold);
-}
-
-} // (anonymous)
-
-inline void
+__attribute__((visibility("protected"))) void
 SyncTimeMgr::add_action(std::vector<DDSParamAction> &actions, int64_t start_cycle,
                         int64_t end_cycle, cubic_spline_t sp,
                         int64_t end_seq_time, int tid, ToneParam param)
@@ -1507,319 +1232,5 @@ SyncTimeMgr::add_action(std::vector<DDSParamAction> &actions, int64_t start_cycl
                  sync_freq, sync_freq_seq_time, sync_freq_match_tid);
     }
 }
-
-namespace {
-
-static __attribute__((always_inline)) inline
-void rfsoc_runtime_finalize(auto *rb, backend::CompiledSeq &cseq, unsigned age)
-{
-    bb_debug("rfsoc_runtime_finalize: start\n");
-    for (auto [dds, delay]: py::dict_iter<RuntimeValue>(rb->rt_dds_delay)) {
-        rt_eval_throw(delay, age);
-        set_dds_delay(rb, dds.as_int(), rtval_cache(delay).template get<double>());
-    }
-
-    auto seq = pyx_fld(rb, seq);
-    for (size_t i = 0, nreloc = rb->bool_values.size(); i < nreloc; i++) {
-        auto &[rtval, val] = rb->bool_values[i];
-        val = !rtval::rtval_cache(rtval).is_zero();
-    }
-    for (size_t i = 0, nreloc = rb->float_values.size(); i < nreloc; i++) {
-        auto &[rtval, val] = rb->float_values[i];
-        val = rtval::rtval_cache(rtval).template get<double>();
-    }
-    auto &time_values = seq->seqinfo->time_mgr->time_values;
-    auto reloc_action = [rb, &time_values] (const RFSOCAction &action,
-                                            ToneParam param) {
-        auto reloc = rb->relocations[action.reloc_id];
-        if (reloc.cond_idx != -1)
-            action.cond = rb->bool_values[reloc.cond_idx].second;
-        // No need to do anything else if we hit a disabled action.
-        if (!action.cond)
-            return;
-        if (reloc.time_idx != -1)
-            action.seq_time = time_values[reloc.time_idx];
-        if (reloc.val_idx != -1) {
-            if (param == ToneFF) {
-                action.bool_value = rb->bool_values[reloc.val_idx].second;
-            }
-            else {
-                action.float_value = rb->float_values[reloc.val_idx].second;
-            }
-        }
-    };
-
-    bool eval_status = !rb->eval_status;
-    rb->eval_status = eval_status;
-
-    constexpr double spline_threshold[3] = {
-        [ToneFreq] = 10,
-        [TonePhase] = 1e-3,
-        [ToneAmp] = 1e-3,
-    };
-
-    int64_t max_delay = 0;
-    for (auto [dds, delay]: rb->channels.dds_delay)
-        max_delay = std::max(max_delay, delay);
-
-    auto reloc_and_cmp_action = [&] (const auto &a1, const auto &a2, auto param) {
-        if (a1.reloc_id >= 0 && a1.eval_status != eval_status) {
-            a1.eval_status = eval_status;
-            reloc_action(a1, (ToneParam)param);
-        }
-        if (a2.reloc_id >= 0 && a2.eval_status != eval_status) {
-            a2.eval_status = eval_status;
-            reloc_action(a2, (ToneParam)param);
-        }
-        // Move disabled actions to the end
-        if (a1.cond != a2.cond)
-            return int(a1.cond) > int(a2.cond);
-        // Sort by time
-        if (a1.seq_time != a2.seq_time)
-            return a1.seq_time < a2.seq_time;
-        // Sometimes time points with different tid needs
-        // to be sorted by tid to get the output correct.
-        if (a1.tid != a2.tid)
-            return a1.tid < a2.tid;
-        // End action technically happens
-        // just before the time point and must be sorted
-        // to be before the start action.
-        return int(a1.is_end) > int(a2.is_end);
-        // The frontend/shared finalization code only allow
-        // a single action on the same channel at the same time
-        // so there shouldn't be any ambiguity.
-    };
-
-    auto reloc_sort_actions = [&] (auto &actions, auto param) {
-        if (actions.size() == 1) {
-            auto &a = actions[0];
-            if (a.reloc_id >= 0) {
-                a.eval_status = eval_status;
-                reloc_action(a, (ToneParam)param);
-            }
-        }
-        else {
-            std::ranges::sort(actions, [&] (const auto &a1, const auto &a2) {
-                return reloc_and_cmp_action(a1, a2, param);
-            });
-        }
-    };
-
-    auto gen = rb->generator->gen.get();
-    gen->start();
-
-    // Add extra cycles to be able to handle the requirement of minimum 4 cycles.
-    auto total_cycle = seq_time_to_cycle(cseq.total_time + max_delay) + 8;
-    for (auto &channel: rb->channels.channels) {
-        ScopeExit cleanup([&] {
-            rb->tone_buffer.clear();
-        });
-        int64_t dds_delay = 0;
-        if (auto it = rb->channels.dds_delay.find(channel.chn >> 1);
-            it != rb->channels.dds_delay.end())
-            dds_delay = it->second;
-        auto sync_mgr = rb->tone_buffer.syncs;
-        {
-            auto &actions = channel.actions[ToneFF];
-            bb_debug("processing tone channel: %d, ff, nactions=%zd\n",
-                     channel.chn, actions.size());
-            reloc_sort_actions(actions, ToneFF);
-            int64_t cur_cycle = 0;
-            bool ff = false;
-            auto &ff_action = rb->tone_buffer.ff;
-            assert(ff_action.empty());
-            for (auto &action: actions) {
-                if (!action.cond) {
-                    bb_debug("found disabled ff action, finishing\n");
-                    break;
-                }
-                auto action_seq_time = action.seq_time + dds_delay;
-                auto new_cycle = seq_time_to_cycle(action_seq_time);
-                if (action.sync)
-                    sync_mgr.add(action_seq_time, new_cycle, action.tid, ToneFF);
-                // Nothing changed.
-                if (ff == action.bool_value) {
-                    bb_debug("skipping ff action: @%" PRId64 ", ff=%d\n",
-                             new_cycle, ff);
-                    continue;
-                }
-                if (new_cycle != cur_cycle) {
-                    bb_debug("adding ff action: [%" PRId64 ", %" PRId64 "], "
-                             "cycle_len=%" PRId64 ", ff=%d\n",
-                             cur_cycle, new_cycle, new_cycle - cur_cycle, ff);
-                    assert(new_cycle > cur_cycle);
-                    ff_action.push_back({ new_cycle - cur_cycle, ff });
-                    cur_cycle = new_cycle;
-                }
-                ff = action.bool_value;
-                bb_debug("ff status: @%" PRId64 ", ff=%d\n", cur_cycle, ff);
-            }
-            bb_debug("adding last ff action: [%" PRId64 ", %" PRId64 "], "
-                     "cycle_len=%" PRId64 ", ff=%d\n", cur_cycle,
-                     total_cycle, total_cycle - cur_cycle, ff);
-            assert(total_cycle > cur_cycle);
-            ff_action.push_back({ total_cycle - cur_cycle, ff });
-        }
-        for (auto param: { ToneAmp, TonePhase, ToneFreq }) {
-            auto &actions = channel.actions[param];
-            sync_mgr.init_output(param);
-            bb_debug("processing tone channel: %d, %s, nactions=%zd\n",
-                     channel.chn, param_name(param), actions.size());
-            reloc_sort_actions(actions, param);
-            int64_t cur_cycle = 0;
-            auto &param_action = rb->tone_buffer.params[param];
-            assert(param_action.empty());
-            double val = 0;
-            int prev_tid = -1;
-            for (auto &action: actions) {
-                if (!action.cond) {
-                    bb_debug("found disabled %s action, finishing\n",
-                             param_name(param));
-                    break;
-                }
-                auto action_seq_time = action.seq_time + dds_delay;
-                auto new_cycle = seq_time_to_cycle(action_seq_time);
-                if (action.sync)
-                    sync_mgr.add(action_seq_time, new_cycle, action.tid, param);
-                if (!action.isramp && val == action.float_value) {
-                    bb_debug("skipping %s action: @%" PRId64 ", val=%f\n",
-                             param_name(param), new_cycle, val);
-                    continue;
-                }
-                sync_mgr.add_action(param_action, cur_cycle, new_cycle,
-                                    spline_from_static(val), action_seq_time,
-                                    prev_tid, param);
-                cur_cycle = new_cycle;
-                prev_tid = action.tid;
-                if (!action.isramp) {
-                    val = action.float_value;
-                    bb_debug("%s status: @%" PRId64 ", val=%f\n",
-                             param_name(param), cur_cycle, val);
-                    continue;
-                }
-                auto len = action.float_value;
-                auto ramp_func = (action::RampFunctionBase*)action.ramp;
-                bb_debug("processing ramp on %s: @%" PRId64 ", len=%f, func=%p\n",
-                         param_name(param), cur_cycle, len, ramp_func);
-                double sp_time;
-                int64_t sp_seq_time;
-                int64_t sp_cycle;
-                auto update_sp_time = [&] (double t) {
-                    static constexpr double time_scale = event_time::time_scale;
-                    sp_time = t;
-                    sp_seq_time = action_seq_time + int64_t(t * time_scale + 0.5);
-                    sp_cycle = seq_time_to_cycle(sp_seq_time);
-                };
-                update_sp_time(0);
-                auto add_spline = [&] (double t2, cubic_spline_t sp) {
-                    assert(t2 >= sp_time);
-                    auto cycle1 = sp_cycle;
-                    update_sp_time(t2);
-                    auto cycle2 = sp_cycle;
-                    // The spline may not actually start on the cycle.
-                    // However, attempting to resample the spline results in
-                    // more unique splines being created which seems to be overflowing
-                    // the buffer on the hardware.
-                    sync_mgr.add_action(param_action, cycle1, cycle2,
-                                        sp, sp_seq_time, prev_tid, param);
-                };
-                if (auto py_spline =
-                    py::cast<action::SeqCubicSpline,true>(ramp_func)) {
-                    bb_debug("found SeqCubicSpline on %s spline: "
-                             "old cycle:%" PRId64 "\n", param_name(param), cur_cycle);
-                    auto _sp = py_spline->spline();
-                    cubic_spline_t sp{_sp[0], _sp[1], _sp[2], _sp[3]};
-                    val = sp.order0 + sp.order1 + sp.order2 + sp.order3;
-                    add_spline(len, sp);
-                    cur_cycle = sp_cycle;
-                    bb_debug("found SeqCubicSpline on %s spline: "
-                             "new cycle:%" PRId64 "\n", param_name(param), cur_cycle);
-                    continue;
-                }
-                auto add_sample = [&] (double t2, double v0, double v1,
-                                       double v2, double v3) {
-                    add_spline(t2, spline_from_values(v0, v1, v2, v3));
-                    val = v3;
-                };
-                auto eval_ramp = [&] (double t) {
-                    auto v = ramp_func->runtime_eval(t);
-                    throw_py_error(v.err);
-                    return v.val.f64_val;
-                };
-                py::ref<> pts;
-                try {
-                    pts = ramp_func->spline_segments(len, val);
-                }
-                catch (...) {
-                    bb_rethrow(action_key(action.aid));
-                }
-                if (pts == Py_None) {
-                    bb_debug("Use adaptive segments on %s spline: "
-                             "old cycle:%" PRId64 "\n", param_name(param), cur_cycle);
-                    generate_splines(eval_ramp, add_sample, len,
-                                     spline_threshold[param]);
-                    cur_cycle = sp_cycle;
-                    bb_debug("Use adaptive segments on %s spline: "
-                             "new cycle:%" PRId64 "\n", param_name(param), cur_cycle);
-                    continue;
-                }
-                double prev_t = 0;
-                double prev_v = eval_ramp(0);
-                bb_debug("Use ramp function provided segments on %s spline: "
-                         "old cycle:%" PRId64 "\n", param_name(param), cur_cycle);
-                for (auto item: pts.generic_iter(action_key(action.aid))) {
-                    double t = PyFloat_AsDouble(item.get());
-                    if (!(t > prev_t)) [[unlikely]] {
-                        if (!PyErr_Occurred()) {
-                            if (t < 0) {
-                                PyErr_Format(PyExc_ValueError,
-                                             "Segment time cannot be negative");
-                            }
-                            else {
-                                PyErr_Format(PyExc_ValueError,
-                                             "Segment time point must "
-                                             "monotonically increase");
-                            }
-                        }
-                        bb_rethrow(action_key(action.aid));
-                    }
-                    auto t1 = t * (1.0 / 3.0) + prev_t * (2.0 / 3.0);
-                    auto t2 = t * (2.0 / 3.0) + prev_t * (1.0 / 3.0);
-                    auto t3 = t;
-                    auto v0 = prev_v;
-                    auto v1 = eval_ramp(t1);
-                    auto v2 = eval_ramp(t2);
-                    auto v3 = eval_ramp(t3);
-                    add_sample(t3, v0, v1, v2, v3);
-                    prev_t = t3;
-                    prev_v = v3;
-                }
-                if (!(prev_t < len)) [[unlikely]]
-                    bb_throw_format(PyExc_ValueError, action_key(action.aid),
-                                    "Segment time point must not "
-                                    "exceed action length.");
-                auto t1 = len * (1.0 / 3.0) + prev_t * (2.0 / 3.0);
-                auto t2 = len * (2.0 / 3.0) + prev_t * (1.0 / 3.0);
-                auto t3 = len;
-                auto v0 = prev_v;
-                auto v1 = eval_ramp(t1);
-                auto v2 = eval_ramp(t2);
-                auto v3 = eval_ramp(t3);
-                add_sample(t3, v0, v1, v2, v3);
-                cur_cycle = sp_cycle;
-                bb_debug("Use ramp function provided segments on %s spline: "
-                         "new cycle:%" PRId64 "\n", param_name(param), cur_cycle);
-            }
-            sync_mgr.add_action(param_action, cur_cycle, total_cycle,
-                                spline_from_static(val), cycle_to_seq_time(total_cycle),
-                                prev_tid, param);
-        }
-        gen->process_channel(rb->tone_buffer, channel.chn, total_cycle);
-    }
-    gen->end();
-    bb_debug("rfsoc_runtime_finalize: finish\n");
-}
-
-} // (anonymous)
 
 }
