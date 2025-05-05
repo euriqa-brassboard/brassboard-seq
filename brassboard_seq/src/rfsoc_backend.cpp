@@ -1130,25 +1130,6 @@ inline void ChannelInfo::ensure_unused_tones(bool all)
     }
 }
 
-namespace {
-
-static inline bool parse_action_kws(py::dict kws, int aid)
-{
-    assert(kws != Py_None);
-    if (!kws)
-        return false;
-    bool sync = false;
-    for (auto [key, value]: py::dict_iter<PyObject,py::str>(kws)) {
-        if (key.compare_ascii("sync") == 0) {
-            sync = value.as_bool(action_key(aid));
-            continue;
-        }
-        bb_throw_format(PyExc_ValueError, action_key(aid),
-                        "Invalid output keyword argument %S", kws);
-    }
-    return sync;
-}
-
 static int parse_pos_int(const std::string_view &s, py::tuple path, int max)
 {
     if (!std::ranges::all_of(s, [] (auto c) { return std::isdigit(c); }))
@@ -1159,12 +1140,13 @@ static int parse_pos_int(const std::string_view &s, py::tuple path, int max)
     return n;
 }
 
-static inline void collect_channel(auto *rb, seq::Seq *seq)
+__attribute__((visibility("internal")))
+inline void ChannelInfo::collect_channel(py::ptr<seq::Seq> seq, py::str prefix)
 {
     // Channel name format: <prefix>/dds<chn>/<tone>/<param>
     std::map<int,int> chn_idx_map;
     for (auto [idx, path]: py::list_iter<py::tuple>(seq->seqinfo->channel_paths)) {
-        if (path.get<py::str>(0).compare(pyx_fld(rb, prefix)) != 0)
+        if (path.get<py::str>(0).compare(prefix) != 0)
             continue;
         if (path.size() != 4)
             config::raise_invalid_channel(path);
@@ -1176,7 +1158,7 @@ static inline void collect_channel(auto *rb, seq::Seq *seq)
                     parse_pos_int(path.get<py::str>(2).utf8_view(), path, 1));
         int chn_idx;
         if (auto it = chn_idx_map.find(chn); it == chn_idx_map.end()) {
-            chn_idx = rb->channels.add_tone_channel(chn);
+            chn_idx = add_tone_channel(chn);
             chn_idx_map[chn] = chn_idx;
         }
         else {
@@ -1199,15 +1181,34 @@ static inline void collect_channel(auto *rb, seq::Seq *seq)
         else {
             config::raise_invalid_channel(path);
         }
-        rb->channels.add_seq_channel(idx, chn_idx, param_enum);
+        add_seq_channel(idx, chn_idx, param_enum);
     }
+}
+
+namespace {
+
+static inline bool parse_action_kws(py::dict kws, int aid)
+{
+    assert(kws != Py_None);
+    if (!kws)
+        return false;
+    bool sync = false;
+    for (auto [key, value]: py::dict_iter<PyObject,py::str>(kws)) {
+        if (key.compare_ascii("sync") == 0) {
+            sync = value.as_bool(action_key(aid));
+            continue;
+        }
+        bb_throw_format(PyExc_ValueError, action_key(aid),
+                        "Invalid output keyword argument %S", kws);
+    }
+    return sync;
 }
 
 static __attribute__((always_inline)) inline
 void rfsoc_finalize(auto *rb, backend::CompiledSeq &cseq)
 {
     auto seq = pyx_fld(rb, seq);
-    collect_channel(rb, seq);
+    rb->channels.collect_channel(seq, pyx_fld(rb, prefix));
 
     ValueIndexer<int> bool_values;
     ValueIndexer<double> float_values;

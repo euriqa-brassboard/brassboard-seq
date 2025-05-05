@@ -86,6 +86,7 @@ struct ChannelInfo {
 
     int add_tone_channel(int chn);
     void add_seq_channel(int seq_chn, int chn_idx, ToneParam param);
+    void collect_channel(py::ptr<seq::Seq> seq, py::str prefix);
     void set_dds_delay(int dds, int64_t delay)
     {
         dds_delay[dds] = delay;
