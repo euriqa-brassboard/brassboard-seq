@@ -18,8 +18,6 @@
 
 #include "rfsoc_backend.h"
 
-#include "event_time.h"
-
 #include <bitset>
 #include <cctype>
 
