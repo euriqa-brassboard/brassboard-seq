@@ -902,7 +902,7 @@ public:
         throw_if(PyModule_AddObjectRef((PyObject*)_ptr(), name, (PyObject*)value) < 0);
 #else
         py::ref v(py::newref(std::forward<T2>(value)));
-        throw_if(PyModule_AddObject((PyObject*)m, name, v.get()) < 0);
+        throw_if(PyModule_AddObject((PyObject*)_ptr(), name, v.get()) < 0);
         v.rel();
 #endif
     }
