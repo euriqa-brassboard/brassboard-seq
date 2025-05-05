@@ -53,23 +53,28 @@ struct ArtiqInfo {
     ArtiqInfo()
     {
         auto env = py::import_module("artiq.language.environment");
-        auto coredev = py::import_module("artiq.coredevice");
-        auto simdev = py::try_import_module("dax.sim.coredevice");
+
+        auto ad9910 = py::import_module("artiq.coredevice.ad9910");
+        auto edge_counter = py::import_module("artiq.coredevice.edge_counter");
+        auto spi2 = py::import_module("artiq.coredevice.spi2");
+        auto ttl = py::import_module("artiq.coredevice.ttl");
+        auto urukul = py::import_module("artiq.coredevice.urukul");
+
+        auto sim_ad9910 = py::try_import_module("dax.sim.coredevice.ad9910");
+        auto sim_edge_counter = py::try_import_module("dax.sim.coredevice.edge_counter");
+        auto sim_ttl = py::try_import_module("dax.sim.coredevice.ttl");
+
         HasEnvironment = env.attr("HasEnvironment").rel();
         env_get_device = HasEnvironment.attr("get_device").rel();
-        auto find_dev = [&] (const char *mod, const char *name) {
-            auto dev = coredev.attr(mod).attr(name);
-            if (simdev)
-                dev = py::new_tuple(std::move(dev), simdev.attr(mod).attr(name));
+        auto find_dev = [&] (auto &&mod, auto &&sim_mod, const char *name) {
+            auto dev = mod.attr(name);
+            if (sim_mod)
+                dev = py::new_tuple(std::move(dev), sim_mod.attr(name));
             return dev;
         };
-        AD9910 = find_dev("ad9910", "AD9910").rel();
-        EdgeCounter = find_dev("edge_counter", "EdgeCounter").rel();
-        TTLOut = find_dev("ttl", "TTLOut").rel();
-        auto edge_counter = coredev.attr("edge_counter");
-        auto ad9910 = coredev.attr("ad9910");
-        auto urukul = coredev.attr("urukul");
-        auto spi2 = coredev.attr("spi2");
+        AD9910 = find_dev(ad9910, sim_ad9910, "AD9910").rel();
+        EdgeCounter = find_dev(edge_counter, sim_edge_counter, "EdgeCounter").rel();
+        TTLOut = find_dev(ttl, sim_ttl, "TTLOut").rel();
         COUNTER_ENABLE = (edge_counter.attr("CONFIG_COUNT_RISING").as_int() |
                           edge_counter.attr("CONFIG_RESET_TO_ZERO").as_int());
         COUNTER_DISABLE = (edge_counter.attr("CONFIG_SEND_COUNT_EVENT").as_int());
