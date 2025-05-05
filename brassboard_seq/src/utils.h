@@ -2223,6 +2223,14 @@ private:
 template<typename CB>
 ScopeExit(CB) -> ScopeExit<CB>;
 
+struct IsFirst {
+    bool first{true};
+    bool get()
+    {
+        return std::exchange(first, false);
+    }
+};
+
 template<typename T, size_t N>
 class PermAllocator {
 public:
