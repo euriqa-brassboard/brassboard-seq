@@ -621,7 +621,7 @@ public:
     double as_float(auto &&cb) const requires requires { cb(); }
     {
         auto obj = (PyObject*)_ptr();
-        if (std::same_as<T,_float> || isa<py::float_>())
+        if (std::same_as<T,_float> || isa<float_>())
             return PyFloat_AS_DOUBLE(obj);
         auto res = PyFloat_AsDouble(obj);
         if (res == -1 && PyErr_Occurred())

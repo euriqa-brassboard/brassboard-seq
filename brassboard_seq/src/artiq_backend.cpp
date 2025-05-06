@@ -91,9 +91,9 @@ struct ArtiqInfo {
     auto get_device(py::ptr<> sys, py::ptr<> name) const
     {
         py::ref<> unique;
-        if (auto registry = sys.try_attr("registry")) {
+        if (auto registry = sys.try_attr("registry"_py)) {
             // DAX support
-            unique = registry.attr("get_unique_device_key")(name);
+            unique = registry.attr("get_unique_device_key"_py)(name);
         }
         else {
             unique.assign(name);
@@ -127,7 +127,7 @@ inline void ChannelsInfo::add_channel(py::ptr<> dev, int64_t delay, py::ptr<> rt
             // We may consider maintaining a relation between this ttl channel
             // and the urukul channel to make sure we don't reorder
             // any operations between the two.
-            add_ttl_channel(idx, dev.attr("sw").attr("target_o").as_int(),
+            add_ttl_channel(idx, dev.attr("sw"_py).attr("target_o"_py).as_int(),
                             false, delay, rt_delay);
             return;
         }
@@ -143,31 +143,32 @@ inline void ChannelsInfo::add_channel(py::ptr<> dev, int64_t delay, py::ptr<> rt
         else {
             config::raise_invalid_channel(path);
         }
-        auto bus = dev.attr("bus");
-        auto bus_channel = bus.attr("channel").as_int();
+        auto bus = dev.attr("bus"_py);
+        auto bus_channel = bus.attr("channel"_py).as_int();
         auto bus_id = find_bus_id(bus_channel);
         if (bus_id == -1) {
             // Here we assume that the CPLD (and it's io_update channel)
             // and the SPI bus has a one-to-one mapping.
             // This means that each DDS with the same bus shares
             // the same io_update channel and can only be programmed one at a time.
-            auto io_tgt = dev.attr("cpld").attr("io_update").attr("target_o").as_int();
+            auto io_tgt = dev.attr("cpld"_py).attr("io_update"_py)
+                .attr("target_o"_py).as_int();
             bus_id = add_bus_channel(bus_channel, io_tgt,
-                                     bus.attr("ref_period_mu").as_int());
+                                     bus.attr("ref_period_mu"_py).as_int());
         }
-        add_dds_param_channel(idx, bus_id, dev.attr("ftw_per_hz").as_float(),
-                              dev.attr("chip_select").as_int(), dds_param_type,
+        add_dds_param_channel(idx, bus_id, dev.attr("ftw_per_hz"_py).as_float(),
+                              dev.attr("chip_select"_py).as_int(), dds_param_type,
                               delay, rt_delay);
     }
     else if (dev.isinstance(info().TTLOut)) {
         if (path.size() > 2)
             config::raise_invalid_channel(path);
-        add_ttl_channel(idx, dev.attr("target_o").as_int(), false, delay, rt_delay);
+        add_ttl_channel(idx, dev.attr("target_o"_py).as_int(), false, delay, rt_delay);
     }
     else if (dev.isinstance(info().EdgeCounter)) {
         if (path.size() > 2)
             config::raise_invalid_channel(path);
-        add_ttl_channel(idx, dev.attr("channel").as_int() << 8, true, delay, rt_delay);
+        add_ttl_channel(idx, dev.attr("channel"_py).as_int() << 8, true, delay, rt_delay);
     }
     else {
         py_throw_format(PyExc_ValueError, "Unsupported device: %S", dev);
@@ -274,7 +275,7 @@ void artiq_add_start_trigger(auto *ab, py::ptr<> name, py::ptr<> time,
     auto dev = info().get_device(ab->sys, name);
     if (!dev.isinstance(info().TTLOut))
         py_throw_format(PyExc_ValueError, "Invalid start trigger device: %S", name);
-    artiq_add_start_trigger_ttl(ab, dev.attr("target_o").as_int(),
+    artiq_add_start_trigger_ttl(ab, dev.attr("target_o"_py).as_int(),
                                 event_time::round_time_int(time),
                                 event_time::round_time_int(min_time),
                                 raising_edge.as_bool());
