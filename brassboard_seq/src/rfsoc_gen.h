@@ -225,9 +225,9 @@ private:
     }
     void process_freq(std::span<DDSParamAction> freq, std::span<DDSFFAction> ff,
                       ChnInfo chn, int64_t total_cycle);
-    template<typename P>
+    template<auto pulsef>
     void process_param(std::span<DDSParamAction> param, ChnInfo chn,
-                       int64_t total_cycle, Jaqal_v1_3::ModType modtype, P &&pulsef);
+                       int64_t total_cycle, Jaqal_v1_3::ModType modtype);
     void process_frame(ChnInfo chn, int64_t total_cycle, Jaqal_v1_3::ModType modtype);
     void process_channel(ToneBuffer &tone_buffer, int chn, int64_t total_cycle) override;
 };

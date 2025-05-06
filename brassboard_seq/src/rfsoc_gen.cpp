@@ -771,11 +771,10 @@ void Jaqalv1_3Generator::process_freq(std::span<DDSParamAction> freq_actions,
     }
 }
 
-template<typename P>
+template<auto pulsef>
 inline __attribute__((always_inline))
 void Jaqalv1_3Generator::process_param(std::span<DDSParamAction> actions, ChnInfo chn,
-                                       int64_t total_cycle, Jaqal_v1_3::ModType modtype,
-                                       P &&pulsef)
+                                       int64_t total_cycle, Jaqal_v1_3::ModType modtype)
 {
     IsFirst trig;
     int64_t cur_cycle = 0;
@@ -914,12 +913,12 @@ inline void Jaqalv1_3Generator::process_channel(ToneBuffer &tone_buffer, int chn
     ChnInfo chninfo{chn};
     process_freq(tone_buffer.params[(int)ToneFreq], tone_buffer.ff,
                  chninfo, total_cycle);
-    process_param(tone_buffer.params[(int)ToneAmp], chninfo, total_cycle,
-                  chninfo.tone == 0 ? Jaqal_v1_3::AMPMOD0 : Jaqal_v1_3::AMPMOD1,
-                  Jaqal_v1_3::amp_pulse);
-    process_param(tone_buffer.params[(int)TonePhase], chninfo, total_cycle,
-                  chninfo.tone == 0 ? Jaqal_v1_3::PHSMOD0 : Jaqal_v1_3::PHSMOD1,
-                  Jaqal_v1_3::phase_pulse);
+    process_param<Jaqal_v1_3::amp_pulse>(
+        tone_buffer.params[(int)ToneAmp], chninfo, total_cycle,
+        chninfo.tone == 0 ? Jaqal_v1_3::AMPMOD0 : Jaqal_v1_3::AMPMOD1);
+    process_param<Jaqal_v1_3::phase_pulse>(
+        tone_buffer.params[(int)TonePhase], chninfo, total_cycle,
+        chninfo.tone == 0 ? Jaqal_v1_3::PHSMOD0 : Jaqal_v1_3::PHSMOD1);
     process_frame(chninfo, total_cycle,
                   chninfo.tone == 0 ? Jaqal_v1_3::FRMROT0 : Jaqal_v1_3::FRMROT1);
 }
