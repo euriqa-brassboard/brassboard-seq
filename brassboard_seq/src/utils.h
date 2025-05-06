@@ -349,20 +349,18 @@ static inline void DECREF(auto *obj)
     Py_DECREF((PyObject*)obj);
 }
 
-template<bool nulling=true>
 static inline void CLEAR(auto *&ptr_ref)
 {
     auto obj = (PyObject*)ptr_ref;
     if (obj) {
-        if (nulling)
-            ptr_ref = nullptr;
+        ptr_ref = nullptr;
         DECREF(obj);
     }
 }
 
 static inline void XDECREF(auto *obj)
 {
-    CLEAR<false>(obj);
+    CLEAR(obj);
 }
 
 template<template<typename> class H, typename T>
@@ -1069,13 +1067,13 @@ private:
     T *m_ptr{nullptr};
     template<typename T2> friend struct ptr;
     template<typename T2> friend struct _ref;
-    template<bool nulling, typename T2> friend void CLEAR(ref<T2> &r);
+    template<typename T2> friend void CLEAR(ref<T2> &r);
 };
 
-template<bool nulling=true, typename T>
+template<typename T>
 static inline void CLEAR(ref<T> &r)
 {
-    py::CLEAR<nulling>(r.m_ptr);
+    CLEAR(r.m_ptr);
 }
 
 template<template<typename> class H, typename T>

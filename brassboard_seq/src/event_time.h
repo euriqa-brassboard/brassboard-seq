@@ -154,7 +154,6 @@ public:
     }
 };
 
-template<bool nulling=true>
 static inline void CLEAR(EventTimeData &r)
 {
     r.clear_rt_offset();
