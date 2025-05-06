@@ -117,7 +117,7 @@ static inline bool isramp(py::ptr<> obj)
 }
 
 struct SeqCubicSpline : RampFunctionBase {
-    struct Data : RampFunctionBase::Data {
+    struct Data final : RampFunctionBase::Data {
         double f_order0;
         double f_order1;
         double f_order2;

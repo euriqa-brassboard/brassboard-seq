@@ -155,7 +155,7 @@ struct SyncChannelGen: Generator {
                          int64_t total_cycle) override;
 };
 
-struct PulseCompilerGen: SyncChannelGen {
+struct PulseCompilerGen final: SyncChannelGen {
     struct Info;
     static inline Info *get_info();
 
@@ -178,7 +178,7 @@ struct PulseCompilerGen: SyncChannelGen {
 };
 Generator *new_pulse_compiler_generator();
 
-struct JaqalPulseCompilerGen: SyncChannelGen {
+struct JaqalPulseCompilerGen final: SyncChannelGen {
     struct BoardGen {
         Jaqal_v1::ChannelGen channels[8];
         void clear();
@@ -232,7 +232,7 @@ private:
     void process_channel(ToneBuffer &tone_buffer, int chn, int64_t total_cycle) override;
 };
 
-struct Jaqalv1_3StreamGen: Jaqalv1_3Generator {
+struct Jaqalv1_3StreamGen final: Jaqalv1_3Generator {
     __attribute__((returns_nonnull)) PyObject *get_prefix(int n) const;
     __attribute__((returns_nonnull)) PyObject *get_sequence(int n) const;
 private:

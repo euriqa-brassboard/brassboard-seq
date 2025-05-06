@@ -127,7 +127,7 @@ PyTypeObject SeqCubicSpline::Type = {
 namespace {
 
 struct RampFunction : RampFunctionBase {
-    struct Data : RampFunctionBase::Data {
+    struct Data final : RampFunctionBase::Data {
         py::ref<> eval;
         py::ref<> _spline_segments;
         py::ref<> fvalue;
@@ -241,7 +241,7 @@ PyTypeObject RampFunction::Type = {
 
 // These ramp functions can be implemented in python code but are provided here
 // to be slightly more efficient.
-struct Blackman : RampFunctionBase {
+struct Blackman final : RampFunctionBase {
     struct Data : RampFunctionBase::Data {
         double f_amp;
         double f_offset;
@@ -311,7 +311,7 @@ PyTypeObject Blackman::Type = {
     }>
 };
 
-struct BlackmanSquare : RampFunctionBase {
+struct BlackmanSquare final : RampFunctionBase {
     struct Data : RampFunctionBase::Data {
         double f_amp;
         double f_offset;
@@ -382,7 +382,7 @@ PyTypeObject BlackmanSquare::Type = {
     }>
 };
 
-struct LinearRamp : RampFunctionBase {
+struct LinearRamp final : RampFunctionBase {
     struct Data : RampFunctionBase::Data {
         double f_start;
         double f_end;
