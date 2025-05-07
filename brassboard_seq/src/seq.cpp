@@ -297,48 +297,6 @@ inline void TimeSeq::show_cond_suffix(py::stringio &io) const
     io.write_ascii("\n");
 }
 
-static auto get_channel_id(py::ptr<TimeSeq> self, PyObject *name)
-{
-    auto id = self->seqinfo->get_channel_id(name);
-    return py::new_int(id);
-}
-
-static void set_time(py::ptr<TimeSeq> self, PyObject *const *args,
-                     Py_ssize_t nargs, PyObject *kwnames)
-{
-    py::check_num_arg("TimeSeq.set_time", nargs, 1, 2);
-    auto [offset] =
-        py::parse_pos_or_kw_args<"offset">("set_time", args + 1, nargs - 1, kwnames);
-    auto time = (args[0] == Py_None ? py::ptr<EventTime>(Py_None) :
-                 py::arg_cast<EventTime,true>(args[0], "time"));
-    if (!offset)
-        offset = py::int_cached(0);
-    if (is_rtval(offset))
-        self->start_time->set_base_rt(time, event_time::round_time_rt(offset));
-    else
-        self->start_time->set_base_int(time, event_time::round_time_int(offset));
-    self->seqinfo->cinfo->bt_tracker.record(event_time_key(self->start_time));
-}
-
-static void rt_assert(py::ptr<TimeSeq> self, PyObject *const *args,
-                      Py_ssize_t nargs, PyObject *kwnames)
-{
-    py::check_num_arg("TimeSeq.rt_assert", nargs, 1, 2);
-    auto [msg] = py::parse_pos_or_kw_args<"msg">("rt_assert", args + 1,
-                                                 nargs - 1, kwnames);
-    auto c = py::ptr(args[0]);
-    if (!msg)
-        msg = "Assertion failed"_py;
-    if (is_rtval(c)) {
-        py::ptr seqinfo = self->seqinfo;
-        seqinfo->cinfo->bt_tracker.record(assert_key(seqinfo->assertions.size()));
-        seqinfo->assertions.append(py::new_tuple(c, msg));
-    }
-    else if (!c.as_bool()) {
-        py_throw_format(PyExc_AssertionError, "%U", msg);
-    }
-}
-
 __attribute__((visibility("protected")))
 PyTypeObject TimeSeq::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
@@ -348,10 +306,44 @@ PyTypeObject TimeSeq::Type = {
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = seq_traverse<TimeSeq>,
     .tp_clear = seq_clear<TimeSeq>,
-    .tp_methods = (py::meth_table<
-                   py::meth_o<"get_channel_id",get_channel_id>,
-                   py::meth_fastkw<"set_time",set_time>,
-                   py::meth_fastkw<"rt_assert",rt_assert>>),
+    .tp_methods = (
+        py::meth_table<
+        py::meth_o<"get_channel_id",[] (py::ptr<TimeSeq> self, py::ptr<> name) {
+            return py::new_int(self->seqinfo->get_channel_id(name));
+        }>,
+        py::meth_fastkw<"set_time",[] (py::ptr<TimeSeq> self, PyObject *const *args,
+                                       Py_ssize_t nargs, PyObject *kwnames) {
+            py::check_num_arg("TimeSeq.set_time", nargs, 1, 2);
+            auto [offset] =
+                py::parse_pos_or_kw_args<"offset">("set_time", args + 1,
+                                                   nargs - 1, kwnames);
+            auto time = (args[0] == Py_None ? py::ptr<EventTime>(Py_None) :
+                         py::arg_cast<EventTime,true>(args[0], "time"));
+            if (!offset)
+                offset = py::int_cached(0);
+            if (is_rtval(offset))
+                self->start_time->set_base_rt(time, event_time::round_time_rt(offset));
+            else
+                self->start_time->set_base_int(time, event_time::round_time_int(offset));
+            self->seqinfo->cinfo->bt_tracker.record(event_time_key(self->start_time));
+        }>,
+        py::meth_fastkw<"rt_assert",[] (py::ptr<TimeSeq> self, PyObject *const *args,
+                                        Py_ssize_t nargs, PyObject *kwnames) {
+            py::check_num_arg("TimeSeq.rt_assert", nargs, 1, 2);
+            auto [msg] = py::parse_pos_or_kw_args<"msg">("rt_assert", args + 1,
+                                                         nargs - 1, kwnames);
+            auto c = py::ptr(args[0]);
+            if (!msg)
+                msg = "Assertion failed"_py;
+            if (is_rtval(c)) {
+                py::ptr seqinfo = self->seqinfo;
+                seqinfo->cinfo->bt_tracker.record(assert_key(seqinfo->assertions.size()));
+                seqinfo->assertions.append(py::new_tuple(c, msg));
+            }
+            else if (!c.as_bool()) {
+                py_throw_format(PyExc_AssertionError, "%U", msg);
+            }
+        }>>),
     .tp_members = (py::mem_table<
                    py::mem_def<"start_time",T_OBJECT_EX,&TimeSeq::start_time,READONLY>,
                    py::mem_def<"end_time",T_OBJECT_EX,&TimeSeq::end_time,READONLY>>),
