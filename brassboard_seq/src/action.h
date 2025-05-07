@@ -55,7 +55,7 @@ struct Action {
 
 using ActionAllocator = PermAllocator<Action,146>;
 
-struct RampFunctionBase : PyObject {
+struct RampFunctionBase : py::VBase<RampFunctionBase> {
     struct Data {
         virtual py::ref<> eval_end(py::ptr<> length, py::ptr<> oldval) = 0;
         // Currently this function is also used to pass the runtime length and oldval
@@ -68,31 +68,35 @@ struct RampFunctionBase : PyObject {
         virtual void set_runtime_params(unsigned age) = 0;
         virtual rtval::TagVal runtime_eval(double t) noexcept = 0;
     };
+    template<typename T>
+    struct Base : py::VBase<RampFunctionBase>::Base<T> {
+    protected:
+        template<typename=void> static constexpr auto traverse =
+            py::tp_traverse<[] (py::ptr<T> self, auto &visitor) {
+                py::field_pack_visit<typename T::fields>(self->data(), visitor); }>;
+        template<typename=void> static constexpr auto clear =
+            py::iunifunc<[] (py::ptr<T> self) {
+                py::field_pack_clear<typename T::fields>(self->data()); }>;
+    };
 
     py::ref<> eval_end(py::ptr<> length, py::ptr<> oldval)
     {
-        return data(this)->eval_end(length, oldval);
+        return data()->eval_end(length, oldval);
     }
     py::ref<> spline_segments(double length, double oldval)
     {
-        return data(this)->spline_segments(length, oldval);
+        return data()->spline_segments(length, oldval);
     }
     void set_runtime_params(unsigned age)
     {
-        data(this)->set_runtime_params(age);
+        data()->set_runtime_params(age);
     }
     rtval::TagVal runtime_eval(double t) noexcept
     {
-        return data(this)->runtime_eval(t);
+        return data()->runtime_eval(t);
     }
 
     static PyTypeObject Type;
-protected:
-    template<typename T>
-    static typename T::Data *data(T *p)
-    {
-        return (typename T::Data*)(((char*)p) + sizeof(RampFunctionBase));
-    }
 };
 
 static inline bool isramp(py::ptr<> obj)
@@ -100,33 +104,7 @@ static inline bool isramp(py::ptr<> obj)
     return py::isinstance_nontrivial(obj, &RampFunctionBase::Type);
 }
 
-template<typename T>
-struct _RampBase : RampFunctionBase {
-    auto *data()
-    {
-        return RampFunctionBase::data(static_cast<T*>(this));
-    }
-    ~_RampBase()
-    {
-        call_destructor(data());
-    }
-protected:
-    template<typename... Args>
-    static py::ref<T> alloc(Args&&... args)
-    {
-        auto self = py::generic_alloc<T>();
-        call_constructor(self->data(), std::forward<Args>(args)...);
-        return self;
-    }
-    template<typename=void> static constexpr auto traverse =
-        py::tp_traverse<[] (py::ptr<T> self, auto &visitor) {
-            py::field_pack_visit<typename T::fields>(self->data(), visitor); }>;
-    template<typename=void> static constexpr auto clear =
-        py::iunifunc<[] (py::ptr<T> self) {
-            py::field_pack_clear<typename T::fields>(self->data()); }>;
-};
-
-struct SeqCubicSpline : _RampBase<SeqCubicSpline> {
+struct SeqCubicSpline : RampFunctionBase::Base<SeqCubicSpline> {
     struct Data final : RampFunctionBase::Data {
         cubic_spline sp;
         double f_inv_length;

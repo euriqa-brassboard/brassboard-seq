@@ -236,6 +236,17 @@ struct __field_pack<_field_pack<T,fld...>,fld1,fld2...> {
 };
 template<typename T, auto... fld> using field_pack = typename __field_pack<T,fld...>::type;
 
+template<typename T, typename ...Args>
+static inline void call_constructor(T *x, Args&&... args)
+{
+    new (x) T(std::forward<Args>(args)...);
+}
+template<typename T>
+static inline void call_destructor(T *x)
+{
+    x->~T();
+}
+
 namespace py {
 
 struct _common {};
@@ -1666,6 +1677,39 @@ static inline bool isinstance_nontrivial(ptr<> obj, ptr<> ty)
     return false;
 }
 
+template<typename PyBase>
+struct VBase : PyObject {
+    template<typename T>
+    struct Base : PyBase {
+        const auto *data() const { return _data((const T*)this); }
+        auto *data() { return _data((T*)this); }
+        ~Base()
+        {
+            call_destructor(data());
+        }
+        template<typename... Args>
+        static ref<T> alloc(Args&&... args)
+        {
+            auto self = generic_alloc<T>();
+            call_constructor(self->data(), std::forward<Args>(args)...);
+            return self;
+        }
+    };
+    const auto *data() const { return _data((const PyBase*)this); }
+    auto *data() { return _data((PyBase*)this); }
+private:
+    template<typename T>
+    static auto *_data(T *p)
+    {
+        if constexpr (std::is_const_v<std::remove_reference_t<T>>) {
+            return (const typename T::Data*)(((const char*)p) + sizeof(PyBase));
+        }
+        else {
+            return (typename T::Data*)(((char*)p) + sizeof(PyBase));
+        }
+    }
+};
+
 [[noreturn]] void num_arg_error(const char *func_name, ssize_t nfound,
                                 ssize_t nmin, ssize_t nmax);
 [[noreturn]] void unexpected_kwarg_error(const char *func_name, str name);
@@ -1824,17 +1868,6 @@ set_global_tracker(BacktraceTracker *tracker)
 {
     return BacktraceTracker::GlobalRestorer(
         std::exchange(BacktraceTracker::global_tracker, tracker));
-}
-
-template<typename T, typename ...Args>
-static inline void call_constructor(T *x, Args&&... args)
-{
-    new (x) T(std::forward<Args>(args)...);
-}
-template<typename T>
-static inline void call_destructor(T *x)
-{
-    x->~T();
 }
 
 static inline __attribute__((always_inline,pure))
