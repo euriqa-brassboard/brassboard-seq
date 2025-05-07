@@ -2107,18 +2107,13 @@ struct tp_visitor {
     tp_visitor(const tp_visitor&) = delete;
     void operator()(auto &&obj)
     {
-        if (res) [[unlikely]]
+        if (res || !obj) [[unlikely]]
             return;
-        res = real_visit((PyObject*)obj);
+        res = visit((PyObject*)obj, arg);
     }
 
     int res{0};
 private:
-    int real_visit(PyObject *obj) const
-    {
-        Py_VISIT(obj);
-        return 0;
-    }
     const visitproc visit;
     void *const arg;
 };
