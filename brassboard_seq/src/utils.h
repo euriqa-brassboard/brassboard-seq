@@ -2114,7 +2114,7 @@ struct tp_visitor {
 
     int res{0};
 private:
-    int real_visit(PyObject *obj)
+    int real_visit(PyObject *obj) const
     {
         Py_VISIT(obj);
         return 0;
@@ -2127,8 +2127,7 @@ template<auto F>
 static inline int tp_traverse(PyObject *self, visitproc visit, void *arg)
 {
     tp_visitor visitor(visit, arg);
-    if (auto res = cxx_catch<int>([&] { F(self, visitor); })) [[unlikely]]
-        return res;
+    cxx_catch<int>([&] { F(self, visitor); });
     return visitor.res;
 }
 
