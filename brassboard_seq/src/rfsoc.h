@@ -41,6 +41,24 @@ struct cubic_spline_t {
     {
         return { order0, order1, order2, order3 };
     }
+    __attribute__((optimize("-ffast-math"),always_inline))
+    double eval(double t) const
+    {
+        return order0 + (order1 + (order2 + order3 * t) * t) * t;
+    }
+    __attribute__((optimize("-ffast-math"),always_inline))
+    cubic_spline_t resample(double t1, double t2) const
+    {
+        double dt = t2 - t1;
+        double dt2 = dt * dt;
+        double dt3 = dt2 * dt;
+        double o3_3 = 3 * order3;
+        return {
+            order0 + (order1 + (order2 + order3 * t1) * t1) * t1,
+            dt * (order1 + (2 * order2 + o3_3 * t1) * t1),
+            dt2 * (order2 + o3_3 * t1), dt3 * order3,
+        };
+    }
 };
 
 static __attribute__((always_inline)) inline
@@ -69,29 +87,6 @@ cubic_spline_t spline_from_values(double v0, double v1, double v2, double v3)
         -5.5 * v0 + 9 * v1 - 4.5 * v2 + v3,
         9 * v0 - 22.5 * v1 + 18 * v2 - 4.5 * v3,
         -4.5 * v0 + 13.5 * v1 - 13.5 * v2 + 4.5 * v3,
-    };
-}
-
-static __attribute__((optimize("-ffast-math"),always_inline)) inline
-double spline_eval(cubic_spline_t spline, double t)
-{
-    return spline.order0 + (spline.order1 +
-                            (spline.order2 + spline.order3 * t) * t) * t;
-}
-
-static __attribute__((optimize("-ffast-math"),always_inline)) inline
-cubic_spline_t spline_resample(cubic_spline_t spline, double t1, double t2)
-{
-    double dt = t2 - t1;
-    double dt2 = dt * dt;
-    double dt3 = dt2 * dt;
-    double o3_3 = 3 * spline.order3;
-    return {
-        spline.order0 + (spline.order1 +
-                         (spline.order2 + spline.order3 * t1) * t1) * t1,
-        dt * (spline.order1 + (2 * spline.order2 + o3_3 * t1) * t1),
-        dt2 * (spline.order2 + o3_3 * t1),
-        dt3 * spline.order3,
     };
 }
 

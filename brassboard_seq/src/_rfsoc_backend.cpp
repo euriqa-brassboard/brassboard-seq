@@ -185,11 +185,11 @@ struct SplineBuffer {
         if (t[3] - t[0] <= min_spline_time)
             return true;
         auto sp = spline_from_values(v[0], v[2], v[4], v[6]);
-        if (abs(spline_eval(sp, 1.0 / 6) - v[1]) > threshold)
+        if (abs(sp.eval(1.0 / 6) - v[1]) > threshold)
             return false;
-        if (abs(spline_eval(sp, 1.0 / 2) - v[3]) > threshold)
+        if (abs(sp.eval(1.0 / 2) - v[3]) > threshold)
             return false;
-        if (abs(spline_eval(sp, 5.0 / 6) - v[5]) > threshold)
+        if (abs(sp.eval(5.0 / 6) - v[5]) > threshold)
             return false;
         return true;
     }

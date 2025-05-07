@@ -50,6 +50,14 @@ struct DDSParamAction {
     int64_t cycle_len: 63;
     bool sync: 1;
     cubic_spline_t spline;
+    double eval(int64_t dt)
+    {
+        if (cycle_len == 0) {
+            assert(dt == 0);
+            return spline.order0;
+        }
+        return spline.eval(double(dt) / cycle_len);
+    }
 };
 struct DDSFFAction {
     int64_t cycle_len: 63;

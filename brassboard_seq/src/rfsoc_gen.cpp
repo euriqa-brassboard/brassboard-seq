@@ -44,8 +44,8 @@ spline_resample_cycle(cubic_spline_t sp, int64_t start, int64_t end,
 {
     if (cycle1 == start && cycle2 == end)
         return sp;
-    return spline_resample(sp, double(cycle1 - start) / double(end - start),
-                           double(cycle2 - start) / double(end - start));
+    return sp.resample(double(cycle1 - start) / double(end - start),
+                       double(cycle2 - start) / double(end - start));
 }
 
 __attribute__((visibility("internal")))
@@ -124,7 +124,7 @@ inline void SyncChannelGen::process_channel(ToneBuffer &tone_buffer, int chn,
             auto resample_action_spline = [&] (auto action, int64_t action_cycle) {
                 auto t1 = double(cur_cycle - action_cycle) / action.cycle_len;
                 auto t2 = double(action_end_cycle - action_cycle) / action.cycle_len;
-                return spline_resample(action.spline, t1, t2);
+                return action.spline.resample(t1, t2);
             };
 
             bb_debug("continuous range long enough for normal output (channel %d)\n",
@@ -144,16 +144,6 @@ inline void SyncChannelGen::process_channel(ToneBuffer &tone_buffer, int chn,
             assert(cur_cycle + 4 <= total_cycle);
             bb_debug("continuous range too short (channel %d)\n", chn);
 
-            auto eval_param = [&] (auto &param, int64_t cycle, int64_t cycle_start) {
-                auto dt = cycle - cycle_start;
-                auto len = param.cycle_len;
-                if (len == 0) {
-                    assert(dt == 0);
-                    return param.spline.order0;
-                }
-                return spline_eval(param.spline, double(dt) / len);
-            };
-
             // Now we don't have enough time to do a tone data
             // based on the segmentation given to us. We'll manually iterate over
             // the next 4 cycles and compute a 4 cycle tone data that approximate
@@ -169,8 +159,7 @@ inline void SyncChannelGen::process_channel(ToneBuffer &tone_buffer, int chn,
                 auto min_cycle = (int)std::max(freq_cycle - cur_cycle, int64_t(0));
                 auto max_cycle = (int)std::min(freq_end_cycle - cur_cycle, int64_t(4));
                 for (int cycle = min_cycle; cycle <= max_cycle; cycle++)
-                    freqs[cycle] = eval_param(freq_action, cur_cycle + cycle,
-                                              freq_cycle);
+                    freqs[cycle] = freq_action.eval(cur_cycle + cycle - freq_cycle);
                 if (freq_end_cycle >= cur_cycle + 4)
                     break;
                 forward_freq();
@@ -185,8 +174,7 @@ inline void SyncChannelGen::process_channel(ToneBuffer &tone_buffer, int chn,
                 auto min_cycle = (int)std::max(phase_cycle - cur_cycle, int64_t(0));
                 auto max_cycle = (int)std::min(phase_end_cycle - cur_cycle, int64_t(4));
                 for (int cycle = min_cycle; cycle <= max_cycle; cycle++)
-                    phases[cycle] = eval_param(phase_action, cur_cycle + cycle,
-                                               phase_cycle);
+                    phases[cycle] = phase_action.eval(cur_cycle + cycle - phase_cycle);
                 if (phase_end_cycle >= cur_cycle + 4)
                     break;
                 forward_phase();
@@ -197,8 +185,7 @@ inline void SyncChannelGen::process_channel(ToneBuffer &tone_buffer, int chn,
                 auto min_cycle = (int)std::max(amp_cycle - cur_cycle, int64_t(0));
                 auto max_cycle = (int)std::min(amp_end_cycle - cur_cycle, int64_t(4));
                 for (int cycle = min_cycle; cycle <= max_cycle; cycle++)
-                    amps[cycle] = eval_param(amp_action, cur_cycle + cycle,
-                                             amp_cycle);
+                    amps[cycle] = amp_action.eval(cur_cycle + cycle - amp_cycle);
                 if (amp_end_cycle >= cur_cycle + 4)
                     break;
                 forward_amp();
@@ -671,7 +658,7 @@ void Jaqalv1_3Generator::process_freq(std::span<DDSParamAction> freq_actions,
             auto resample_action_spline = [&] (auto action, int64_t action_cycle) {
                 auto t1 = double(cur_cycle - action_cycle) / action.cycle_len;
                 auto t2 = double(action_end_cycle - action_cycle) / action.cycle_len;
-                return spline_resample(action.spline, t1, t2);
+                return action.spline.resample(t1, t2);
             };
 
             bb_debug("continuous range long enough for normal freq output\n");
@@ -690,16 +677,6 @@ void Jaqalv1_3Generator::process_freq(std::span<DDSParamAction> freq_actions,
             assert(cur_cycle + 4 <= total_cycle);
             bb_debug("continuous range too short for freq\n");
 
-            auto eval_param = [&] (auto &param, int64_t cycle, int64_t cycle_start) {
-                auto dt = cycle - cycle_start;
-                auto len = param.cycle_len;
-                if (len == 0) {
-                    assert(dt == 0);
-                    return param.spline.order0;
-                }
-                return spline_eval(param.spline, double(dt) / len);
-            };
-
             // Now we don't have enough time to do a tone data
             // based on the segmentation given to us. We'll manually iterate over
             // the next 4 cycles and compute a 4 cycle tone data that approximate
@@ -715,8 +692,7 @@ void Jaqalv1_3Generator::process_freq(std::span<DDSParamAction> freq_actions,
                 auto min_cycle = (int)std::max(freq_cycle - cur_cycle, int64_t(0));
                 auto max_cycle = (int)std::min(freq_end_cycle - cur_cycle, int64_t(4));
                 for (int cycle = min_cycle; cycle <= max_cycle; cycle++)
-                    freqs[cycle] = eval_param(freq_action, cur_cycle + cycle,
-                                              freq_cycle);
+                    freqs[cycle] = freq_action.eval(cur_cycle + cycle - freq_cycle);
                 if (freq_end_cycle >= cur_cycle + 4)
                     break;
                 forward_freq();
@@ -807,7 +783,7 @@ void Jaqalv1_3Generator::process_param(std::span<DDSParamAction> actions, ChnInf
             auto resample_action_spline = [&] (auto action, int64_t action_cycle) {
                 auto t1 = double(cur_cycle - action_cycle) / action.cycle_len;
                 auto t2 = double(block_end_cycle - action_cycle) / action.cycle_len;
-                return spline_resample(action.spline, t1, t2);
+                return action.spline.resample(t1, t2);
             };
 
             bb_debug("continuous range long enough for normal output\n");
@@ -824,16 +800,6 @@ void Jaqalv1_3Generator::process_param(std::span<DDSParamAction> actions, ChnInf
             assert(cur_cycle + 4 <= total_cycle);
             bb_debug("continuous range too short\n");
 
-            auto eval_param = [&] (auto &param, int64_t cycle, int64_t cycle_start) {
-                auto dt = cycle - cycle_start;
-                auto len = param.cycle_len;
-                if (len == 0) {
-                    assert(dt == 0);
-                    return param.spline.order0;
-                }
-                return spline_eval(param.spline, double(dt) / len);
-            };
-
             // Now we don't have enough time to do a tone data
             // based on the segmentation given to us. We'll manually iterate over
             // the next 4 cycles and compute a 4 cycle tone data that approximate
@@ -844,7 +810,7 @@ void Jaqalv1_3Generator::process_param(std::span<DDSParamAction> actions, ChnInf
                 auto min_cycle = (int)std::max(action_cycle - cur_cycle, int64_t(0));
                 auto max_cycle = (int)std::min(action_end_cycle - cur_cycle, int64_t(4));
                 for (int cycle = min_cycle; cycle <= max_cycle; cycle++)
-                    params[cycle] = eval_param(action, cur_cycle + cycle, action_cycle);
+                    params[cycle] = action.eval(cur_cycle + cycle - action_cycle);
                 if (action_end_cycle >= cur_cycle + 4)
                     break;
                 forward();
@@ -1031,7 +997,7 @@ SyncTimeMgr::add_action(std::vector<DDSParamAction> &actions, int64_t start_cycl
         }
         else {
             auto t = double(sync_cycle - start_cycle) / double(end_cycle - start_cycle);
-            sync_freq = spline_eval(sp, t);
+            sync_freq = sp.eval(t);
         }
         bb_debug("  updated sync frequency: %f @%" PRId64 ", sync_freq_match_tid: %d\n",
                  sync_freq, sync_freq_seq_time, sync_freq_match_tid);
@@ -1104,7 +1070,7 @@ SyncTimeMgr::add_action(std::vector<DDSParamAction> &actions, int64_t start_cycl
         }
         else {
             auto t = double(sync_cycle - start_cycle) / double(end_cycle - start_cycle);
-            sync_freq = spline_eval(sp, t);
+            sync_freq = sp.eval(t);
         }
         bb_debug("  updated sync frequency: %f @%" PRId64 ", sync_freq_match_tid: %d\n",
                  sync_freq, sync_freq_seq_time, sync_freq_match_tid);
