@@ -201,6 +201,10 @@ def test_rtval():
     assert str(rtval.ifelse(v1, 3, v2)) == f'ifelse({s1}, 3, {s2})'
     assert rtval.ifelse(v1, 3, 3) == 3
     assert rtval.ifelse(v1, v2, v2) is v2
+    assert rtval.get_value(rtval.ifelse(bv1, v2, round(np.sqrt(-v1))), 0) == rtval.get_value(v2, 0)
+    # Test datatype conversion on error and error propagation of ifelse
+    with pytest.raises(ValueError, match="sqrt of negative number"):
+        rtval.get_value(rtval.ifelse(rtval.inv(bv1), v2, round(np.sqrt(-v1))), 0)
 
     assert str(np.exp(v1)) == f'exp({s1})'
     assert str(np.expm1(v1)) == f'expm1({s1})'
