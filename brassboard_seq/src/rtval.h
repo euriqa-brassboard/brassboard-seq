@@ -244,14 +244,13 @@ struct TagVal {
     template<typename T> T get(void) const
     {
         switch (type) {
+        default:
         case DataType::Bool:
             return T(val.get<bool>());
         case DataType::Int64:
             return T(val.get<int64_t>());
         case DataType::Float64:
             return T(val.get<double>());
-        default:
-            return T(false);
         }
     }
     TagVal convert(DataType new_type) const
@@ -262,14 +261,13 @@ struct TagVal {
             return { new_type, err };
 
         switch (new_type) {
+        default:
         case DataType::Bool:
             return get<bool>();
         case DataType::Int64:
             return get<int64_t>();
         case DataType::Float64:
             return get<double>();
-        default:
-            return { new_type };
         }
     }
     static TagVal from_py(py::ptr<> obj);
@@ -304,27 +302,29 @@ struct bin_op {
     static inline __attribute__((flatten,always_inline)) TagVal
     generic_eval(TagVal tv1, TagVal tv2)
     {
+        switch (int(tv1.type) * 3 + int(tv2.type)) {
+        default:
 #define HANDLE_BINARY(t1, t2)                                           \
-        if (tv1.type == DataType::t1 && tv2.type == DataType::t2) {     \
-            constexpr auto out_dt = T::return_type(DataType::t1, DataType::t2); \
-            using T1 = data_type_t<DataType::t1>;                       \
-            using T2 = data_type_t<DataType::t2>;                       \
-            using Tout = data_type_t<out_dt>;                           \
-            auto v1 = tv1.val.get<T1>();                                \
-            auto v2 = tv2.val.get<T2>();                                \
-            return T::template eval_err<Tout,T1,T2>(v1, v2);            \
-        }
-        HANDLE_BINARY(Bool, Bool);
-        HANDLE_BINARY(Bool, Int64);
-        HANDLE_BINARY(Bool, Float64);
-        HANDLE_BINARY(Int64, Bool);
-        HANDLE_BINARY(Int64, Int64);
-        HANDLE_BINARY(Int64, Float64);
-        HANDLE_BINARY(Float64, Bool);
-        HANDLE_BINARY(Float64, Int64);
-        HANDLE_BINARY(Float64, Float64);
+            case int(DataType::t1) * 3 + int(DataType::t2): {           \
+                constexpr auto out_dt = T::return_type(DataType::t1, DataType::t2); \
+                using T1 = data_type_t<DataType::t1>;                   \
+                using T2 = data_type_t<DataType::t2>;                   \
+                using Tout = data_type_t<out_dt>;                       \
+                auto v1 = tv1.val.get<T1>();                            \
+                auto v2 = tv2.val.get<T2>();                            \
+                return T::template eval_err<Tout,T1,T2>(v1, v2);        \
+            }
+            HANDLE_BINARY(Bool, Bool);
+            HANDLE_BINARY(Bool, Int64);
+            HANDLE_BINARY(Bool, Float64);
+            HANDLE_BINARY(Int64, Bool);
+            HANDLE_BINARY(Int64, Int64);
+            HANDLE_BINARY(Int64, Float64);
+            HANDLE_BINARY(Float64, Bool);
+            HANDLE_BINARY(Float64, Int64);
+            HANDLE_BINARY(Float64, Float64);
 #undef HANDLE_BINARY
-        return {};
+        }
     }
 };
 
@@ -582,19 +582,21 @@ struct uni_op {
     static inline __attribute__((flatten,always_inline)) TagVal
     generic_eval(TagVal tv)
     {
+        switch (tv.type) {
+        default:
 #define HANDLE_UNARY(t)                                                 \
-        if (tv.type == DataType::t) {                                   \
-            constexpr auto out_dt = T::return_type(DataType::t);        \
-            using T1 = data_type_t<DataType::t>;                        \
-            using Tout = data_type_t<out_dt>;                           \
-            auto v = tv.val.get<T1>();                                  \
-            return T::template eval_err<Tout,T1>(v);                    \
-        }
-        HANDLE_UNARY(Bool);
-        HANDLE_UNARY(Int64);
-        HANDLE_UNARY(Float64);
+            case DataType::t: {                                         \
+                constexpr auto out_dt = T::return_type(DataType::t);    \
+                using T1 = data_type_t<DataType::t>;                    \
+                using Tout = data_type_t<out_dt>;                       \
+                auto v = tv.val.get<T1>();                              \
+                return T::template eval_err<Tout,T1>(v);                \
+            }
+            HANDLE_UNARY(Bool);
+            HANDLE_UNARY(Int64);
+            HANDLE_UNARY(Float64);
 #undef HANDLE_UNARY
-        return {};
+        }
     }
 };
 
@@ -867,6 +869,7 @@ struct Tanh_op : float_uni_op<Tanh_op>, no_error_op<Tanh_op> {
 static inline DataType unary_return_type(ValueType type, DataType t1)
 {
     switch (type) {
+    default:
 #define HANDLE_UNARY(op) case op: return op##_op::return_type(t1)
         HANDLE_UNARY(Not);
         HANDLE_UNARY(Bool);
@@ -895,14 +898,13 @@ static inline DataType unary_return_type(ValueType type, DataType t1)
         HANDLE_UNARY(Rint);
         HANDLE_UNARY(Int64);
 #undef HANDLE_UNARY
-    default:
-        return DataType::Float64;
     }
 }
 
 static inline DataType binary_return_type(ValueType type, DataType t1, DataType t2)
 {
     switch (type) {
+    default:
 #define HANDLE_BINARY(op) case op: return op##_op::return_type(t1, t2)
         HANDLE_BINARY(Add);
         HANDLE_BINARY(Sub);
@@ -924,8 +926,6 @@ static inline DataType binary_return_type(ValueType type, DataType t1, DataType 
         HANDLE_BINARY(Max);
         HANDLE_BINARY(Min);
 #undef HANDLE_BINARY
-    default:
-        return DataType::Float64;
     }
 }
 
