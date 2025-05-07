@@ -468,7 +468,7 @@ void rfsoc_runtime_finalize(auto *rb, backend::CompiledSeq &cseq, unsigned age)
                     py::cast<action::SeqCubicSpline,true>(ramp_func)) {
                     bb_debug("found SeqCubicSpline on %s spline: "
                              "old cycle:%" PRId64 "\n", param_name(param), cur_cycle);
-                    cubic_spline sp{py_spline->spline()};
+                    cubic_spline sp{py_spline->data()->sp};
                     val = sp.order0 + sp.order1 + sp.order2 + sp.order3;
                     add_spline(len, sp);
                     cur_cycle = sp_cycle;

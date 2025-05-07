@@ -93,22 +93,6 @@ protected:
     {
         return (typename T::Data*)(((char*)p) + sizeof(RampFunctionBase));
     }
-    template<typename T, typename... Args>
-    static py::ref<T> alloc(Args&&... args)
-    {
-        auto self = py::generic_alloc<T>();
-        call_constructor(data(self.get()), std::forward<Args>(args)...);
-        return self;
-    }
-    template<typename T>
-    static constexpr auto traverse =
-        py::tp_traverse<[] (py::ptr<T> self, auto &visitor) {
-            py::field_pack_visit<typename T::fields>(data(self.get()), visitor); }>;
-
-    template<typename T>
-    static constexpr auto clear =
-        py::iunifunc<[] (py::ptr<T> self) {
-            py::field_pack_clear<typename T::fields>(data(self.get())); }>;
 };
 
 static inline bool isramp(py::ptr<> obj)
@@ -116,7 +100,33 @@ static inline bool isramp(py::ptr<> obj)
     return py::isinstance_nontrivial(obj, &RampFunctionBase::Type);
 }
 
-struct SeqCubicSpline : RampFunctionBase {
+template<typename T>
+struct _RampBase : RampFunctionBase {
+    auto *data()
+    {
+        return RampFunctionBase::data(static_cast<T*>(this));
+    }
+    ~_RampBase()
+    {
+        call_destructor(data());
+    }
+protected:
+    template<typename... Args>
+    static py::ref<T> alloc(Args&&... args)
+    {
+        auto self = py::generic_alloc<T>();
+        call_constructor(self->data(), std::forward<Args>(args)...);
+        return self;
+    }
+    template<typename=void> static constexpr auto traverse =
+        py::tp_traverse<[] (py::ptr<T> self, auto &visitor) {
+            py::field_pack_visit<typename T::fields>(self->data(), visitor); }>;
+    template<typename=void> static constexpr auto clear =
+        py::iunifunc<[] (py::ptr<T> self) {
+            py::field_pack_clear<typename T::fields>(self->data()); }>;
+};
+
+struct SeqCubicSpline : _RampBase<SeqCubicSpline> {
     struct Data final : RampFunctionBase::Data {
         cubic_spline sp;
         double f_inv_length;
@@ -135,12 +145,6 @@ struct SeqCubicSpline : RampFunctionBase {
         void set_runtime_params(unsigned age) override;
         rtval::TagVal runtime_eval(double t) noexcept override;
     };
-    ~SeqCubicSpline();
-
-    cubic_spline spline()
-    {
-        return data(this)->sp;
-    }
 
     using fields = field_pack<Data,&Data::order0,&Data::order1,&Data::order2,&Data::order3>;
     static PyTypeObject Type;

@@ -82,12 +82,6 @@ rtval::TagVal SeqCubicSpline::Data::runtime_eval(double t) noexcept
     return rtval::TagVal(sp.order0 + (sp.order1 + (sp.order2 + sp.order3 * t) * t) * t);
 }
 
-__attribute__((visibility("internal")))
-inline SeqCubicSpline::~SeqCubicSpline()
-{
-    call_destructor(data(this));
-}
-
 __attribute__((visibility("protected")))
 PyTypeObject SeqCubicSpline::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
@@ -95,17 +89,17 @@ PyTypeObject SeqCubicSpline::Type = {
     .tp_basicsize = sizeof(RampFunctionBase) + sizeof(SeqCubicSpline::Data),
     .tp_dealloc = py::tp_cxx_dealloc<true,SeqCubicSpline>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = traverse<SeqCubicSpline>,
-    .tp_clear = clear<SeqCubicSpline>,
+    .tp_traverse = traverse<>,
+    .tp_clear = clear<>,
     .tp_getset = (py::getset_table<
                   py::getset_def<"order0",[] (py::ptr<SeqCubicSpline> self) {
-                      return py::newref(data(self.get())->order0); }>,
+                      return py::newref(self->data()->order0); }>,
                   py::getset_def<"order1",[] (py::ptr<SeqCubicSpline> self) {
-                      return py::newref(data(self.get())->order1); }>,
+                      return py::newref(self->data()->order1); }>,
                   py::getset_def<"order2",[] (py::ptr<SeqCubicSpline> self) {
-                      return py::newref(data(self.get())->order2); }>,
+                      return py::newref(self->data()->order2); }>,
                   py::getset_def<"order3",[] (py::ptr<SeqCubicSpline> self) {
-                      return py::newref(data(self.get())->order3); }>>),
+                      return py::newref(self->data()->order3); }>>),
     .tp_base = &RampFunctionBase::Type,
     .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
@@ -120,13 +114,13 @@ PyTypeObject SeqCubicSpline::Type = {
             order2 = py::int_cached(0);
         if (!order3)
             order3 = py::int_cached(0);
-        return alloc<SeqCubicSpline>(order0, order1, order2, order3);
+        return alloc(order0, order1, order2, order3);
     }>
 };
 
 namespace {
 
-struct RampFunction : RampFunctionBase {
+struct RampFunction : _RampBase<RampFunction> {
     struct Data final : RampFunctionBase::Data {
         py::ref<> eval;
         py::ref<> _spline_segments;
@@ -204,10 +198,6 @@ struct RampFunction : RampFunctionBase {
             return interp_func->call();
         }
     };
-    ~RampFunction()
-    {
-        call_destructor(data(this));
-    }
 
     using fields = field_pack<Data,&Data::eval,&Data::_spline_segments,&Data::fvalue>;
     static PyTypeObject Type;
@@ -219,8 +209,8 @@ PyTypeObject RampFunction::Type = {
     .tp_basicsize = sizeof(RampFunctionBase) + sizeof(RampFunction::Data),
     .tp_dealloc = py::tp_cxx_dealloc<true,RampFunction>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = traverse<RampFunction>,
-    .tp_clear = clear<RampFunction>,
+    .tp_traverse = traverse<>,
+    .tp_clear = clear<>,
     .tp_base = &RampFunctionBase::Type,
     .tp_init = py::itrifunc<[] (py::ptr<RampFunction> self, py::tuple args, py::dict kws) {
         if (args)
@@ -230,18 +220,18 @@ PyTypeObject RampFunction::Type = {
                 self.set_attr(name, value);
             }
         }
-        data(self.get())->compile();
+        self->data()->compile();
     }>,
     .tp_new = py::tp_new<[] (PyTypeObject *t, auto...) {
         auto self = py::generic_alloc<RampFunction>(t);
-        call_constructor(data(self.get()), t);
+        call_constructor(self->data(), t);
         return self;
     }>,
 };
 
 // These ramp functions can be implemented in python code but are provided here
 // to be slightly more efficient.
-struct Blackman final : RampFunctionBase {
+struct Blackman final : _RampBase<Blackman> {
     struct Data : RampFunctionBase::Data {
         double f_amp;
         double f_offset;
@@ -275,10 +265,6 @@ struct Blackman final : RampFunctionBase {
             return rtval::TagVal(val + f_offset);
         }
     };
-    ~Blackman()
-    {
-        call_destructor(data(this));
-    }
 
     using fields = field_pack<Data,&Data::amp,&Data::offset>;
     static PyTypeObject Type;
@@ -290,13 +276,13 @@ PyTypeObject Blackman::Type = {
     .tp_basicsize = sizeof(RampFunctionBase) + sizeof(Blackman::Data),
     .tp_dealloc = py::tp_cxx_dealloc<true,Blackman>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = traverse<Blackman>,
-    .tp_clear = clear<Blackman>,
+    .tp_traverse = traverse<>,
+    .tp_clear = clear<>,
     .tp_getset = (py::getset_table<
                   py::getset_def<"amp",[] (py::ptr<Blackman> self) {
-                      return py::newref(data(self.get())->amp); }>,
+                      return py::newref(self->data()->amp); }>,
                   py::getset_def<"offset",[] (py::ptr<Blackman> self) {
-                      return py::newref(data(self.get())->offset); }>>),
+                      return py::newref(self->data()->offset); }>>),
     .tp_base = &RampFunctionBase::Type,
     .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
@@ -307,11 +293,11 @@ PyTypeObject Blackman::Type = {
         py::check_required_pos_arg(amp, "Blackman.__init__", "amp");
         if (!offset)
             offset = py::int_cached(0);
-        return alloc<Blackman>(amp, offset);
+        return alloc(amp, offset);
     }>
 };
 
-struct BlackmanSquare final : RampFunctionBase {
+struct BlackmanSquare final : _RampBase<BlackmanSquare> {
     struct Data : RampFunctionBase::Data {
         double f_amp;
         double f_offset;
@@ -346,10 +332,6 @@ struct BlackmanSquare final : RampFunctionBase {
             return rtval::TagVal(val + f_offset);
         }
     };
-    ~BlackmanSquare()
-    {
-        call_destructor(data(this));
-    }
 
     using fields = field_pack<Data,&Data::amp,&Data::offset>;
     static PyTypeObject Type;
@@ -361,13 +343,13 @@ PyTypeObject BlackmanSquare::Type = {
     .tp_basicsize = sizeof(RampFunctionBase) + sizeof(BlackmanSquare::Data),
     .tp_dealloc = py::tp_cxx_dealloc<true,BlackmanSquare>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = traverse<BlackmanSquare>,
-    .tp_clear = clear<BlackmanSquare>,
+    .tp_traverse = traverse<>,
+    .tp_clear = clear<>,
     .tp_getset = (py::getset_table<
                   py::getset_def<"amp",[] (py::ptr<BlackmanSquare> self) {
-                      return py::newref(data(self.get())->amp); }>,
+                      return py::newref(self->data()->amp); }>,
                   py::getset_def<"offset",[] (py::ptr<BlackmanSquare> self) {
-                      return py::newref(data(self.get())->offset); }>>),
+                      return py::newref(self->data()->offset); }>>),
     .tp_base = &RampFunctionBase::Type,
     .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
@@ -378,11 +360,11 @@ PyTypeObject BlackmanSquare::Type = {
         py::check_required_pos_arg(amp, "BlackmanSquare.__init__", "amp");
         if (!offset)
             offset = py::int_cached(0);
-        return alloc<BlackmanSquare>(amp, offset);
+        return alloc(amp, offset);
     }>
 };
 
-struct LinearRamp final : RampFunctionBase {
+struct LinearRamp final : _RampBase<LinearRamp> {
     struct Data : RampFunctionBase::Data {
         double f_start;
         double f_end;
@@ -415,10 +397,6 @@ struct LinearRamp final : RampFunctionBase {
             return rtval::TagVal(f_start * (1 - t) + f_end * t);
         }
     };
-    ~LinearRamp()
-    {
-        call_destructor(data(this));
-    }
 
     using fields = field_pack<Data,&Data::start,&Data::end>;
     static PyTypeObject Type;
@@ -430,13 +408,13 @@ PyTypeObject LinearRamp::Type = {
     .tp_basicsize = sizeof(RampFunctionBase) + sizeof(LinearRamp::Data),
     .tp_dealloc = py::tp_cxx_dealloc<true,LinearRamp>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = traverse<LinearRamp>,
-    .tp_clear = clear<LinearRamp>,
+    .tp_traverse = traverse<>,
+    .tp_clear = clear<>,
     .tp_getset = (py::getset_table<
                   py::getset_def<"start",[] (py::ptr<LinearRamp> self) {
-                      return py::newref(data(self.get())->start); }>,
+                      return py::newref(self->data()->start); }>,
                   py::getset_def<"end",[] (py::ptr<LinearRamp> self) {
-                      return py::newref(data(self.get())->end); }>>),
+                      return py::newref(self->data()->end); }>>),
     .tp_base = &RampFunctionBase::Type,
     .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
@@ -446,7 +424,7 @@ PyTypeObject LinearRamp::Type = {
                 "LinearRamp.__init__", args, nargs, kwnames);
         py::check_required_pos_arg(start, "LinearRamp.__init__", "start");
         py::check_required_pos_arg(end, "LinearRamp.__init__", "end");
-        return alloc<LinearRamp>(start, end);
+        return alloc(start, end);
     }>
 };
 
