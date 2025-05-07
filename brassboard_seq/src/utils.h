@@ -2085,19 +2085,15 @@ static inline int sq_ass_item(PyObject *o, Py_ssize_t i, PyObject *v)
     return cxx_catch<int>([&] { return F(o, i, v); });
 }
 
-template<bool gc, auto F>
-static inline void tp_dealloc(PyObject *obj)
+template<bool gc, typename T>
+static inline void tp_cxx_dealloc(PyObject *obj)
 {
     if constexpr (gc)
         PyObject_GC_UnTrack(obj);
     auto t = Py_TYPE(obj);
-    cxx_catch<int>([&] { F(obj); });
+    cxx_catch<int>([&] { call_destructor((T*)obj); });
     t->tp_free(obj);
 }
-
-template<bool gc, typename T>
-static constexpr auto tp_cxx_dealloc =
-    tp_dealloc<gc,[] (PyObject *self) { call_destructor((T*)self); }>;
 
 struct tp_visitor {
     tp_visitor(visitproc visit, void *arg)
@@ -2122,7 +2118,7 @@ template<auto F>
 static inline int tp_traverse(PyObject *self, visitproc visit, void *arg)
 {
     tp_visitor visitor(visit, arg);
-    cxx_catch<int>([&] { F(self, visitor); });
+    F(self, visitor);
     return visitor.res;
 }
 
