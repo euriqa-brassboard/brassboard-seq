@@ -995,6 +995,38 @@ std::pair<EvalError,GenVal> interpret_func(const int *code, GenVal *data,
         code += 1;
         return (void*)(base_addr + res);
     };
+    auto eval_uni = [&] <typename op,DataType t1> {
+        auto [eo, out] = pop_operand();
+        auto [e1, in1] = pop_operand();
+        using T1 = data_type_t<t1>;
+        using Tout = data_type_t<op::return_type(t1)>;
+        auto res = op::template eval_err<Tout,T1>(in1->get<T1>());
+        *eo = combine_error(*e1, res.err);
+        *out = res.val;
+    };
+    auto eval_bin = [&] <typename op,DataType t1,DataType t2> {
+        auto [eo, out] = pop_operand();
+        auto [e1, in1] = pop_operand();
+        auto [e2, in2] = pop_operand();
+        using T1 = data_type_t<t1>;
+        using T2 = data_type_t<t2>;
+        using Tout = data_type_t<op::return_type(t1, t2)>;
+        auto res = op::template eval_err<Tout,T1,T2>(in1->get<T1>(), in2->get<T2>());
+        *eo = combine_error(*e1, *e2, res.err);
+        *out = res.val;
+    };
+    auto eval_select = [&] <DataType t1,DataType t2> {
+        auto [eo, out] = pop_operand();
+        auto [e0, in0] = pop_operand();
+        auto [e1, in1] = pop_operand();
+        auto [e2, in2] = pop_operand();
+        bool b = bool(in0->i64_val);
+        using T1 = data_type_t<t1>;
+        using T2 = data_type_t<t2>;
+        using Tout = data_type_t<promote_type(t1, t2)>;
+        out->get<Tout>() = b ? Tout(in1->get<T1>()) : Tout(in2->get<T2>());
+        *eo = combine_error(*e0, b ? *e1 : *e2);
+    };
 
     goto *pop_label();
 
@@ -1003,51 +1035,14 @@ return_label: {
         return {*eo, *out};
     }
 
-#define GEN_UNI_OP(f, t1)                                               \
-    f##_op_##t1##_label: {                                              \
-        auto [eo, out] = pop_operand();                                 \
-        auto [e1, in1] = pop_operand();                                 \
-        constexpr auto out_dt = f##_op::return_type(DataType::t1);      \
-        using T1 = data_type_t<DataType::t1>;                           \
-        using Tout = data_type_t<out_dt>;                               \
-        auto v = in1->get<T1>();                                        \
-        auto res = f##_op::template eval_err<Tout,T1>(v);               \
-        *eo = combine_error(*e1, res.err);                              \
-        *out = res.val;                                                 \
-    }                                                                   \
+#define GEN_UNI_OP(f, t1) f##_op_##t1##_label:                  \
+    eval_uni.template operator()<f##_op,DataType::t1>();        \
     goto *pop_label();
-#define GEN_BIN_OP(f, t1, t2)                                           \
-    f##_op_##t1##_##t2##_label: {                                       \
-        auto [eo, out] = pop_operand();                                 \
-        auto [e1, in1] = pop_operand();                                 \
-        auto [e2, in2] = pop_operand();                                 \
-        constexpr auto out_dt = f##_op::return_type(DataType::t1, DataType::t2); \
-        using T1 = data_type_t<DataType::t1>;                           \
-        using T2 = data_type_t<DataType::t2>;                           \
-        using Tout = data_type_t<out_dt>;                               \
-        auto v1 = in1->get<T1>();                                       \
-        auto v2 = in2->get<T2>();                                       \
-        auto res = f##_op::template eval_err<Tout,T1,T2>(v1, v2);       \
-        *eo = combine_error(*e1, *e2, res.err);                         \
-        *out = res.val;                                                 \
-    }                                                                   \
+#define GEN_BIN_OP(f, t1, t2) f##_op_##t1##_##t2##_label:               \
+    eval_bin.template operator()<f##_op,DataType::t1,DataType::t2>();   \
     goto *pop_label();
-#define GEN_SELECT_OP(t1, t2)                                           \
-    Select_op_##t1##_##t2##_label: {                                    \
-        auto [eo, out] = pop_operand();                                 \
-        auto [e0, in0] = pop_operand();                                 \
-        auto [e1, in1] = pop_operand();                                 \
-        auto [e2, in2] = pop_operand();                                 \
-        bool b = bool(in0->i64_val);                                    \
-        constexpr auto out_dt = promote_type(DataType::t1, DataType::t2); \
-        using T1 = data_type_t<DataType::t1>;                           \
-        using T2 = data_type_t<DataType::t2>;                           \
-        using Tout = data_type_t<out_dt>;                               \
-        auto v1 = Tout(in1->get<T1>());                                 \
-        auto v2 = Tout(in2->get<T2>());                                 \
-        out->get<Tout>() = b ? v1 : v2;                                 \
-        *eo = combine_error(*e0, b ? *e1 : *e2);                        \
-    }                                                                   \
+#define GEN_SELECT_OP(t1, t2) Select_op_##t1##_##t2##_label:            \
+    eval_select.template operator()<DataType::t1,DataType::t2>();       \
     goto *pop_label();
 #include "rtval_interp.h"
 #undef GEN_UNI_OP
@@ -1087,15 +1082,11 @@ static const auto interp_label_offsets = [] {
         asm(".L_ZN14brassboard_seq5rtval13label_offsetsE");
     std::array<int,get_size()> res{};
     uint16_t idx = 0;
-#define GEN_UNI_OP(f, t1)                                       \
-    res[get_label_id(f, DataType::t1)] = label_offsets[idx];    \
-    idx++;
+#define GEN_UNI_OP(f, t1) res[get_label_id(f, DataType::t1)] = label_offsets[idx++];
 #define GEN_BIN_OP(f, t1, t2)                                           \
-    res[get_label_id(f, DataType::t1, DataType::t2)] = label_offsets[idx]; \
-    idx++;
+    res[get_label_id(f, DataType::t1, DataType::t2)] = label_offsets[idx++];
 #define GEN_SELECT_OP(t2, t3)                                           \
-    res[get_label_id(Select, DataType::t2, DataType::t3)] = label_offsets[idx]; \
-    idx++;
+    res[get_label_id(Select, DataType::t2, DataType::t3)] = label_offsets[idx++];
 #include "rtval_interp.h"
 #undef GEN_UNI_OP
 #undef GEN_BIN_OP
@@ -1187,10 +1178,10 @@ InterpFunction::visit_value(RuntimeValue *value, Builder &builder)
         }
         return info;
     };
-#define HANDLE_UNARY(op)                                                \
-    case op: return handle_unary(op##_op::return_type(arg0_info.val.type))
 
     switch (type) {
+#define HANDLE_UNARY(op)                                                \
+        case op: return handle_unary(op##_op::return_type(arg0_info.val.type))
         HANDLE_UNARY(Not);
         HANDLE_UNARY(Bool);
         HANDLE_UNARY(Abs);
@@ -1261,11 +1252,11 @@ InterpFunction::visit_value(RuntimeValue *value, Builder &builder)
         }
         return info;
     };
-#define HANDLE_BINARY(op)                                               \
-    case op: return handle_binary(op##_op::return_type(arg0_info.val.type, \
-                                                       arg1_info.val.type))
 
     switch (type) {
+#define HANDLE_BINARY(op)                                               \
+        case op: return handle_binary(op##_op::return_type(arg0_info.val.type, \
+                                                           arg1_info.val.type))
         HANDLE_BINARY(Add);
         HANDLE_BINARY(Sub);
         HANDLE_BINARY(Mul);
@@ -1285,6 +1276,7 @@ InterpFunction::visit_value(RuntimeValue *value, Builder &builder)
         HANDLE_BINARY(Atan2);
         HANDLE_BINARY(Max);
         HANDLE_BINARY(Min);
+#undef HANDL_BINARY
     default:
         py_throw_format(PyExc_ValueError, "Unknown value type");
     }

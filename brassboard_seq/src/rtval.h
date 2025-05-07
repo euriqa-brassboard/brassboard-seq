@@ -304,16 +304,8 @@ struct bin_op {
     {
         switch (int(tv1.type) * 3 + int(tv2.type)) {
         default:
-#define HANDLE_BINARY(t1, t2)                                           \
-            case int(DataType::t1) * 3 + int(DataType::t2): {           \
-                constexpr auto out_dt = T::return_type(DataType::t1, DataType::t2); \
-                using T1 = data_type_t<DataType::t1>;                   \
-                using T2 = data_type_t<DataType::t2>;                   \
-                using Tout = data_type_t<out_dt>;                       \
-                auto v1 = tv1.val.get<T1>();                            \
-                auto v2 = tv2.val.get<T2>();                            \
-                return T::template eval_err<Tout,T1,T2>(v1, v2);        \
-            }
+#define HANDLE_BINARY(t1, t2) case int(DataType::t1) * 3 + int(DataType::t2): \
+            return type_eval<DataType::t1,DataType::t2>(tv1, tv2)
             HANDLE_BINARY(Bool, Bool);
             HANDLE_BINARY(Bool, Int64);
             HANDLE_BINARY(Bool, Float64);
@@ -325,6 +317,15 @@ struct bin_op {
             HANDLE_BINARY(Float64, Float64);
 #undef HANDLE_BINARY
         }
+    }
+private:
+    template<DataType t1, DataType t2> static inline TagVal
+    type_eval(TagVal tv1, TagVal tv2)
+    {
+        using T1 = data_type_t<t1>;
+        using T2 = data_type_t<t2>;
+        using Tout = data_type_t<T::return_type(t1, t2)>;
+        return T::template eval_err<Tout,T1,T2>(tv1.val.get<T1>(), tv2.val.get<T2>());
     }
 };
 
@@ -584,19 +585,17 @@ struct uni_op {
     {
         switch (tv.type) {
         default:
-#define HANDLE_UNARY(t)                                                 \
-            case DataType::t: {                                         \
-                constexpr auto out_dt = T::return_type(DataType::t);    \
-                using T1 = data_type_t<DataType::t>;                    \
-                using Tout = data_type_t<out_dt>;                       \
-                auto v = tv.val.get<T1>();                              \
-                return T::template eval_err<Tout,T1>(v);                \
-            }
-            HANDLE_UNARY(Bool);
-            HANDLE_UNARY(Int64);
-            HANDLE_UNARY(Float64);
-#undef HANDLE_UNARY
+        case DataType::Bool: return type_eval<DataType::Bool>(tv);
+        case DataType::Int64: return type_eval<DataType::Int64>(tv);
+        case DataType::Float64: return type_eval<DataType::Float64>(tv);
         }
+    }
+private:
+    template<DataType t> static inline TagVal type_eval(TagVal tv)
+    {
+        using T1 = data_type_t<t>;
+        using Tout = data_type_t<T::return_type(t)>;
+        return T::template eval_err<Tout,T1>(tv.val.get<T1>());
     }
 };
 
