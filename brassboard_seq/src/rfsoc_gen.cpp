@@ -20,7 +20,7 @@
 
 namespace brassboard_seq::rfsoc_gen {
 
-static inline cubic_spline_t approximate_spline(double v[5])
+static inline cubic_spline approximate_spline(double v[5])
 {
     double v0 = v[0];
     double v1 = v[1] * (2.0 / 3) + v[2] * (1.0 / 3);
@@ -35,17 +35,7 @@ static inline cubic_spline_t approximate_spline(double v[5])
         v1 = std::clamp(v1, v3, v0);
         v2 = std::clamp(v2, v3, v0);
     }
-    return spline_from_values(v0, v1, v2, v3);
-}
-
-static inline cubic_spline_t
-spline_resample_cycle(cubic_spline_t sp, int64_t start, int64_t end,
-                      int64_t cycle1, int64_t cycle2)
-{
-    if (cycle1 == start && cycle2 == end)
-        return sp;
-    return sp.resample(double(cycle1 - start) / double(end - start),
-                       double(cycle2 - start) / double(end - start));
+    return cubic_spline::from_values(v0, v1, v2, v3);
 }
 
 __attribute__((visibility("internal")))
@@ -251,7 +241,7 @@ struct PulseCompilerGen::Info {
     py::ptr<> cubic_0;
     std::vector<std::pair<PyObject*,PyObject*>> tonedata_fields;
 
-    py::ref<> _new_cubic_spline(cubic_spline_t sp)
+    py::ref<> _new_cubic_spline(cubic_spline sp)
     {
         auto newobj = py::generic_alloc<py::tuple>(CubicSpline, 4);
         newobj.SET(0, py::new_float(sp.order0));
@@ -261,16 +251,16 @@ struct PulseCompilerGen::Info {
         return newobj;
     }
 
-    py::ref<> new_cubic_spline(cubic_spline_t sp)
+    py::ref<> new_cubic_spline(cubic_spline sp)
     {
-        if (sp == cubic_spline_t{0, 0, 0, 0})
+        if (sp == cubic_spline{0, 0, 0, 0})
             return cubic_0.ref();
         return _new_cubic_spline(sp);
     }
 
     py::ref<> new_tone_data(int channel, int tone, int64_t duration_cycles,
-                            cubic_spline_t freq, cubic_spline_t amp,
-                            cubic_spline_t phase, output_flags_t flags)
+                            cubic_spline freq, cubic_spline amp,
+                            cubic_spline phase, output_flags_t flags)
     {
         auto td = py::generic_alloc(ToneData);
         auto td_dict = py::dict_ref(throw_if_not(PyObject_GenericGetDict(td.get(), nullptr)));
@@ -307,8 +297,8 @@ inline auto PulseCompilerGen::get_info() -> Info*
 
 __attribute__((visibility("internal")))
 inline void PulseCompilerGen::add_tone_data(int chn, int64_t duration_cycles,
-                                            cubic_spline_t freq, cubic_spline_t amp,
-                                            cubic_spline_t phase,
+                                            cubic_spline freq, cubic_spline amp,
+                                            cubic_spline phase,
                                             output_flags_t flags, int64_t)
 {
     bb_debug("outputting tone data: chn=%d, cycles=%" PRId64 ", sync=%d, ff=%d\n",
@@ -451,8 +441,8 @@ Generator *new_jaqal_pulse_compiler_generator()
 __attribute__((flatten))
 static inline void chn_add_tone_data(auto &channel_gen, int channel, int tone,
                                      int64_t duration_cycles,
-                                     cubic_spline_t freq, cubic_spline_t amp,
-                                     cubic_spline_t phase, output_flags_t flags,
+                                     cubic_spline freq, cubic_spline amp,
+                                     cubic_spline phase, output_flags_t flags,
                                      int64_t cur_cycle)
 {
     assume(tone == 0 || tone == 1);
@@ -470,8 +460,8 @@ static inline void chn_add_tone_data(auto &channel_gen, int channel, int tone,
 
 __attribute__((visibility("internal")))
 inline void JaqalPulseCompilerGen::add_tone_data(int chn, int64_t duration_cycles,
-                                                 cubic_spline_t freq, cubic_spline_t amp,
-                                                 cubic_spline_t phase,
+                                                 cubic_spline freq, cubic_spline amp,
+                                                 cubic_spline phase,
                                                  output_flags_t flags, int64_t cur_cycle)
 {
     auto board_id = chn >> 4;
@@ -488,7 +478,7 @@ inline void JaqalPulseCompilerGen::add_tone_data(int chn, int64_t duration_cycle
     if (duration_cycles > max_cycles) [[unlikely]] {
         int64_t tstart = 0;
         auto resample = [&] (auto spline, int64_t tstart, int64_t tend) {
-            return spline_resample_cycle(spline, 0, duration_cycles, tstart, tend);
+            return spline.resample_cycle(0, duration_cycles, tstart, tend);
         };
         while ((duration_cycles - tstart) > max_cycles * 2) {
             int64_t tend = tstart + max_cycles;
@@ -953,7 +943,7 @@ Generator *new_jaqalv1_3_stream_generator()
 
 __attribute__((visibility("protected"))) void
 SyncTimeMgr::add_action(std::vector<DDSParamAction> &actions, int64_t start_cycle,
-                        int64_t end_cycle, cubic_spline_t sp,
+                        int64_t end_cycle, cubic_spline sp,
                         int64_t end_seq_time, int tid, ToneParam param)
 {
     assert(start_cycle <= end_cycle);
@@ -1018,14 +1008,13 @@ SyncTimeMgr::add_action(std::vector<DDSParamAction> &actions, int64_t start_cycl
     if (sync_cycle > start_cycle) {
         bb_debug("  Output until @%" PRId64 "\n", sync_cycle);
         actions.push_back({ sync_cycle - start_cycle, false,
-                spline_resample_cycle(sp, start_cycle, end_cycle,
-                                      start_cycle, sync_cycle) });
+                sp.resample_cycle(start_cycle, end_cycle, start_cycle, sync_cycle) });
     } else if (sync_freq != sp.order0) {
         // We have a sync at frequency action boundary.
         // This is the only case we may need to sync at a different frequency
         // compared to the frequency of the output immediately follows this.
         bb_debug("  0-length sync @%" PRId64 "\n", start_cycle);
-        actions.push_back({ 0, true, spline_from_static(sync_freq) });
+        actions.push_back({ 0, true, cubic_spline::from_static(sync_freq) });
         need_sync = false;
     }
     while (true) {
@@ -1042,8 +1031,7 @@ SyncTimeMgr::add_action(std::vector<DDSParamAction> &actions, int64_t start_cycl
         if (!has_sync()) {
             bb_debug("  Reached end of spline: sync=%d\n", need_sync);
             actions.push_back({ end_cycle - sync_cycle, need_sync,
-                    spline_resample_cycle(sp, start_cycle, end_cycle,
-                                          sync_cycle, end_cycle) });
+                    sp.resample_cycle(start_cycle, end_cycle, sync_cycle, end_cycle) });
             return;
         }
         // If we have another sync to handle, do the output
@@ -1054,8 +1042,7 @@ SyncTimeMgr::add_action(std::vector<DDSParamAction> &actions, int64_t start_cycl
         assert(sync_cycle <= end_cycle);
         bb_debug("  Output until @%" PRId64 ", sync=%d\n", sync_cycle, need_sync);
         actions.push_back({ sync_cycle - prev_cycle, need_sync,
-                spline_resample_cycle(sp, start_cycle, end_cycle,
-                                      prev_cycle, sync_cycle) });
+                sp.resample_cycle(start_cycle, end_cycle, prev_cycle, sync_cycle) });
         need_sync = true;
         sync_info = next_it->second;
         sync_freq_seq_time = sync_info.seq_time;

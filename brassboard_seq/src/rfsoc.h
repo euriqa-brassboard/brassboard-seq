@@ -27,69 +27,6 @@
 
 namespace brassboard_seq::rfsoc {
 
-struct cubic_spline_t {
-    double order0;
-    double order1;
-    double order2;
-    double order3;
-    constexpr bool operator==(const cubic_spline_t &other) const
-    {
-        return (order0 == other.order0) && (order1 == other.order1) &&
-            (order2 == other.order2) && (order3 == other.order3);
-    }
-    constexpr std::array<double,4> to_array() const
-    {
-        return { order0, order1, order2, order3 };
-    }
-    __attribute__((optimize("-ffast-math"),always_inline))
-    double eval(double t) const
-    {
-        return order0 + (order1 + (order2 + order3 * t) * t) * t;
-    }
-    __attribute__((optimize("-ffast-math"),always_inline))
-    cubic_spline_t resample(double t1, double t2) const
-    {
-        double dt = t2 - t1;
-        double dt2 = dt * dt;
-        double dt3 = dt2 * dt;
-        double o3_3 = 3 * order3;
-        return {
-            order0 + (order1 + (order2 + order3 * t1) * t1) * t1,
-            dt * (order1 + (2 * order2 + o3_3 * t1) * t1),
-            dt2 * (order2 + o3_3 * t1), dt3 * order3,
-        };
-    }
-};
-
-static __attribute__((always_inline)) inline
-cubic_spline_t spline_from_static(double v0)
-{
-    return { v0, 0, 0, 0 };
-}
-
-static __attribute__((optimize("-ffast-math"),always_inline)) inline
-cubic_spline_t spline_from_values(double v0, double v1, double v2, double v3)
-{
-    // v = o0 + o1 * t + o2 * t^2 + o3 * t^3
-
-    // v0 = o0
-    // v1 = o0 + o1 / 3 + o2 / 9 + o3 / 27
-    // v2 = o0 + o1 * 2 / 3 + o2 * 4 / 9 + o3 * 8 / 27
-    // v3 = o0 + o1 + o2 + o3
-
-    // o0 = v0
-    // o1 = -5.5 * v0 + 9 * v1 - 4.5 * v2 + v3
-    // o2 = 9 * v0 - 22.5 * v1 + 18 * v2 - 4.5 * v3
-    // o3 = -4.5 * v0 + 13.5 * v1 - 13.5 * v2 + 4.5 * v3
-
-    return {
-        v0,
-        -5.5 * v0 + 9 * v1 - 4.5 * v2 + v3,
-        9 * v0 - 22.5 * v1 + 18 * v2 - 4.5 * v3,
-        -4.5 * v0 + 13.5 * v1 - 13.5 * v2 + 4.5 * v3,
-    };
-}
-
 // order of the coefficient is order0, order1, order2, order3
 template<int nbits> static constexpr inline std::pair<std::array<int64_t,4>,int>
 convert_pdq_spline(std::array<double,4> sp, int64_t cycles, double scale)
@@ -423,7 +360,7 @@ static constexpr inline uint64_t raw_param_metadata(
     return metadata;
 }
 static constexpr inline __attribute__((always_inline,flatten)) auto
-freq_pulse(int channel, int tone, cubic_spline_t sp, int64_t cycles, bool waittrig,
+freq_pulse(int channel, int tone, cubic_spline sp, int64_t cycles, bool waittrig,
            bool sync, bool fb_enable)
 {
     assert(cycles >= 4);
@@ -436,7 +373,7 @@ freq_pulse(int channel, int tone, cubic_spline_t sp, int64_t cycles, bool waittr
     return pulse(metadata, isp, cycles);
 }
 static constexpr inline __attribute__((always_inline,flatten)) auto
-amp_pulse(int channel, int tone, cubic_spline_t sp, int64_t cycles, bool waittrig,
+amp_pulse(int channel, int tone, cubic_spline sp, int64_t cycles, bool waittrig,
           bool sync=false, bool fb_enable=false)
 {
     assert(cycles >= 4);
@@ -449,7 +386,7 @@ amp_pulse(int channel, int tone, cubic_spline_t sp, int64_t cycles, bool waittri
     return pulse(metadata, isp, cycles);
 }
 static constexpr inline __attribute__((always_inline,flatten)) auto
-phase_pulse(int channel, int tone, cubic_spline_t sp, int64_t cycles, bool waittrig,
+phase_pulse(int channel, int tone, cubic_spline sp, int64_t cycles, bool waittrig,
             bool sync=false, bool fb_enable=false)
 {
     assert(cycles >= 4);
@@ -479,7 +416,7 @@ static constexpr inline uint64_t raw_frame_metadata(
     return metadata;
 }
 static constexpr inline __attribute__((always_inline,flatten)) auto
-frame_pulse(int channel, int tone, cubic_spline_t sp, int64_t cycles,
+frame_pulse(int channel, int tone, cubic_spline sp, int64_t cycles,
             bool waittrig, bool apply_at_end, bool rst_frame,
             int fwd_frame_mask, int inv_frame_mask)
 {
@@ -871,7 +808,7 @@ static constexpr inline uint64_t raw_param_metadata(
     return metadata;
 }
 static constexpr inline auto
-freq_pulse(cubic_spline_t sp, int64_t cycles, bool waittrig, bool sync, bool fb_enable)
+freq_pulse(cubic_spline sp, int64_t cycles, bool waittrig, bool sync, bool fb_enable)
 {
     assert(cycles >= 4);
     assert((cycles >> 40) == 0);
@@ -880,7 +817,7 @@ freq_pulse(cubic_spline_t sp, int64_t cycles, bool waittrig, bool sync, bool fb_
     return pulse(metadata, isp, cycles);
 }
 static constexpr inline auto
-amp_pulse(cubic_spline_t sp, int64_t cycles, bool waittrig,
+amp_pulse(cubic_spline sp, int64_t cycles, bool waittrig,
           bool sync=false, bool fb_enable=false)
 {
     assert(cycles >= 4);
@@ -890,7 +827,7 @@ amp_pulse(cubic_spline_t sp, int64_t cycles, bool waittrig,
     return pulse(metadata, isp, cycles);
 }
 static constexpr inline auto
-phase_pulse(cubic_spline_t sp, int64_t cycles, bool waittrig,
+phase_pulse(cubic_spline sp, int64_t cycles, bool waittrig,
             bool sync=false, bool fb_enable=false)
 {
     assert(cycles >= 4);
@@ -914,7 +851,7 @@ static constexpr inline uint64_t raw_frame_metadata(
     return metadata;
 }
 static constexpr inline auto
-frame_pulse(cubic_spline_t sp, int64_t cycles, bool waittrig, bool apply_at_end,
+frame_pulse(cubic_spline sp, int64_t cycles, bool waittrig, bool apply_at_end,
             bool rst_frame, int fwd_frame_mask, int inv_frame_mask)
 {
     assert(cycles >= 4);

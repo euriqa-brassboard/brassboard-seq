@@ -118,10 +118,7 @@ static inline bool isramp(py::ptr<> obj)
 
 struct SeqCubicSpline : RampFunctionBase {
     struct Data final : RampFunctionBase::Data {
-        double f_order0;
-        double f_order1;
-        double f_order2;
-        double f_order3;
+        cubic_spline sp;
         double f_inv_length;
 
         py::ref<> order0;
@@ -140,10 +137,9 @@ struct SeqCubicSpline : RampFunctionBase {
     };
     ~SeqCubicSpline();
 
-    std::array<double,4> spline()
+    cubic_spline spline()
     {
-        auto d = data(this);
-        return {d->f_order0, d->f_order1, d->f_order2, d->f_order3};
+        return data(this)->sp;
     }
 
     using fields = field_pack<Data,&Data::order0,&Data::order1,&Data::order2,&Data::order3>;

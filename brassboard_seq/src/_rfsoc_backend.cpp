@@ -184,7 +184,7 @@ struct SplineBuffer {
     {
         if (t[3] - t[0] <= min_spline_time)
             return true;
-        auto sp = spline_from_values(v[0], v[2], v[4], v[6]);
+        auto sp = cubic_spline::from_values(v[0], v[2], v[4], v[6]);
         if (abs(sp.eval(1.0 / 6) - v[1]) > threshold)
             return false;
         if (abs(sp.eval(1.0 / 2) - v[3]) > threshold)
@@ -428,7 +428,7 @@ void rfsoc_runtime_finalize(auto *rb, backend::CompiledSeq &cseq, unsigned age)
                     continue;
                 }
                 sync_mgr.add_action(param_action, cur_cycle, new_cycle,
-                                    spline_from_static(val), action_seq_time,
+                                    cubic_spline::from_static(val), action_seq_time,
                                     prev_tid, param);
                 cur_cycle = new_cycle;
                 prev_tid = action.tid;
@@ -452,7 +452,7 @@ void rfsoc_runtime_finalize(auto *rb, backend::CompiledSeq &cseq, unsigned age)
                     sp_cycle = seq_time_to_cycle(sp_seq_time);
                 };
                 update_sp_time(0);
-                auto add_spline = [&] (double t2, cubic_spline_t sp) {
+                auto add_spline = [&] (double t2, cubic_spline sp) {
                     assert(t2 >= sp_time);
                     auto cycle1 = sp_cycle;
                     update_sp_time(t2);
@@ -468,8 +468,7 @@ void rfsoc_runtime_finalize(auto *rb, backend::CompiledSeq &cseq, unsigned age)
                     py::cast<action::SeqCubicSpline,true>(ramp_func)) {
                     bb_debug("found SeqCubicSpline on %s spline: "
                              "old cycle:%" PRId64 "\n", param_name(param), cur_cycle);
-                    auto _sp = py_spline->spline();
-                    cubic_spline_t sp{_sp[0], _sp[1], _sp[2], _sp[3]};
+                    cubic_spline sp{py_spline->spline()};
                     val = sp.order0 + sp.order1 + sp.order2 + sp.order3;
                     add_spline(len, sp);
                     cur_cycle = sp_cycle;
@@ -479,7 +478,7 @@ void rfsoc_runtime_finalize(auto *rb, backend::CompiledSeq &cseq, unsigned age)
                 }
                 auto add_sample = [&] (double t2, double v0, double v1,
                                        double v2, double v3) {
-                    add_spline(t2, spline_from_values(v0, v1, v2, v3));
+                    add_spline(t2, cubic_spline::from_values(v0, v1, v2, v3));
                     val = v3;
                 };
                 auto eval_ramp = [&] (double t) {
@@ -552,7 +551,8 @@ void rfsoc_runtime_finalize(auto *rb, backend::CompiledSeq &cseq, unsigned age)
                          "new cycle:%" PRId64 "\n", param_name(param), cur_cycle);
             }
             sync_mgr.add_action(param_action, cur_cycle, total_cycle,
-                                spline_from_static(val), cycle_to_seq_time(total_cycle),
+                                cubic_spline::from_static(val),
+                                cycle_to_seq_time(total_cycle),
                                 prev_tid, param);
         }
         gen->process_channel(rb->tone_buffer, channel.chn, total_cycle);

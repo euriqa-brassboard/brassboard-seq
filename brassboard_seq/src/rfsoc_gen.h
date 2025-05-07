@@ -49,7 +49,7 @@ enum ToneParam {
 struct DDSParamAction {
     int64_t cycle_len: 63;
     bool sync: 1;
-    cubic_spline_t spline;
+    cubic_spline spline;
     double eval(int64_t dt)
     {
         if (cycle_len == 0) {
@@ -124,7 +124,7 @@ struct SyncTimeMgr {
     }
 
     void add_action(std::vector<DDSParamAction> &actions, int64_t start_cycle,
-                    int64_t end_cycle, cubic_spline_t sp,
+                    int64_t end_cycle, cubic_spline sp,
                     int64_t end_seq_time, int tid, ToneParam param);
 };
 
@@ -156,8 +156,8 @@ struct Generator {
 };
 
 struct SyncChannelGen: Generator {
-    virtual void add_tone_data(int chn, int64_t duration_cycles, cubic_spline_t freq,
-                               cubic_spline_t amp, cubic_spline_t phase,
+    virtual void add_tone_data(int chn, int64_t duration_cycles, cubic_spline freq,
+                               cubic_spline amp, cubic_spline phase,
                                output_flags_t flags, int64_t cur_cycle) = 0;
     void process_channel(ToneBuffer &tone_buffer, int chn,
                          int64_t total_cycle) override;
@@ -167,8 +167,8 @@ struct PulseCompilerGen final: SyncChannelGen {
     struct Info;
     static inline Info *get_info();
 
-    void add_tone_data(int chn, int64_t duration_cycles, cubic_spline_t freq,
-                       cubic_spline_t amp, cubic_spline_t phase,
+    void add_tone_data(int chn, int64_t duration_cycles, cubic_spline freq,
+                       cubic_spline amp, cubic_spline phase,
                        output_flags_t flags, int64_t) override;
     PulseCompilerGen()
         : output(py::new_dict())
@@ -197,8 +197,8 @@ struct JaqalPulseCompilerGen final: SyncChannelGen {
     BoardGen boards[4]; // 4 * 8 physical channels
 
     void start() override;
-    void add_tone_data(int chn, int64_t duration_cycles, cubic_spline_t freq,
-                       cubic_spline_t amp, cubic_spline_t phase,
+    void add_tone_data(int chn, int64_t duration_cycles, cubic_spline freq,
+                       cubic_spline amp, cubic_spline phase,
                        output_flags_t flags, int64_t cur_cycle) override;
     void end() override;
     __attribute__((returns_nonnull)) PyObject *get_prefix(int n) const;

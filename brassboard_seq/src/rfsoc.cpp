@@ -34,7 +34,7 @@ struct PDQSpline {
     std::array<int64_t,4> orders;
     int shift;
     double scale;
-    cubic_spline_t get_spline(uint64_t cycles) const
+    cubic_spline get_spline(uint64_t cycles) const
     {
         double order_scale = 1 / double(1ll << shift);
         double order_scale2 = order_scale * order_scale;
@@ -51,7 +51,7 @@ struct PDQSpline {
         forders[2] = (forders[2] - forders[3]) / 2 * fcycles2;
         forders[3] = forders[3] / 6 * fcycles2 * fcycles;
 
-        return cubic_spline_t{ forders[0], forders[1], forders[2], forders[3] };
+        return { forders[0], forders[1], forders[2], forders[3] };
     }
 };
 
@@ -129,7 +129,7 @@ PyTypeObject PyJaqalInstBase::Type = {
 };
 
 struct PyJaqalBase {
-    static cubic_spline_t to_spline(py::ptr<> spline)
+    static cubic_spline to_spline(py::ptr<> spline)
     {
         auto tu = py::arg_cast<py::tuple>(spline, "spline");
         auto l = tu.size();
@@ -1323,17 +1323,17 @@ struct Executor {
         int8_t fwd_frame_mask;
         int8_t inv_frame_mask;
     };
-    static cubic_spline_t freq_spline(PDQSpline spl, uint64_t cycles)
+    static cubic_spline freq_spline(PDQSpline spl, uint64_t cycles)
     {
         spl.scale = output_clock / double(1ll << 40);
         return spl.get_spline(cycles);
     }
-    static cubic_spline_t amp_spline(PDQSpline spl, uint64_t cycles)
+    static cubic_spline amp_spline(PDQSpline spl, uint64_t cycles)
     {
         spl.scale = 1 / double(((1ll << 16) - 1ll) << 23);
         return spl.get_spline(cycles);
     }
-    static cubic_spline_t phase_spline(PDQSpline spl, uint64_t cycles)
+    static cubic_spline phase_spline(PDQSpline spl, uint64_t cycles)
     {
         spl.scale = 1 / double(1ll << 40);
         return spl.get_spline(cycles);

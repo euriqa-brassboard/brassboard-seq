@@ -69,17 +69,17 @@ py::ref<> SeqCubicSpline::Data::spline_segments(double length, double oldval)
 __attribute__((visibility("internal")))
 void SeqCubicSpline::Data::set_runtime_params(unsigned age)
 {
-    f_order0 = rtval::get_value_f64(order0, age);
-    f_order1 = rtval::get_value_f64(order1, age);
-    f_order2 = rtval::get_value_f64(order2, age);
-    f_order3 = rtval::get_value_f64(order3, age);
+    sp.order0 = rtval::get_value_f64(order0, age);
+    sp.order1 = rtval::get_value_f64(order1, age);
+    sp.order2 = rtval::get_value_f64(order2, age);
+    sp.order3 = rtval::get_value_f64(order3, age);
 }
 
 __attribute__((visibility("internal")))
 rtval::TagVal SeqCubicSpline::Data::runtime_eval(double t) noexcept
 {
     t = t * f_inv_length;
-    return rtval::TagVal(f_order0 + (f_order1 + (f_order2 + f_order3 * t) * t) * t);
+    return rtval::TagVal(sp.order0 + (sp.order1 + (sp.order2 + sp.order3 * t) * t) * t);
 }
 
 __attribute__((visibility("internal")))
