@@ -26,17 +26,13 @@
 #include "seq.h"
 
 #include <algorithm>
-#include <array>
 #include <map>
 #include <vector>
 #include <utility>
 
-#include <stdint.h>
-
-#include <Python.h>
-
 namespace brassboard_seq::rfsoc_backend {
 
+using namespace backend;
 using namespace rfsoc;
 using namespace rfsoc_gen;
 
@@ -88,6 +84,35 @@ struct ChannelInfo {
     }
     void ensure_unused_tones(bool all);
 };
+
+struct RFSOCBackend : Backend::Base<RFSOCBackend> {
+    struct Data : Backend::Data {
+        py::ref<RFSOCGenerator> generator;
+        ChannelInfo channels;
+        std::vector<std::pair<void*,bool>> bool_values;
+        std::vector<std::pair<void*,double>> float_values;
+        std::vector<Relocation> relocations;
+        bool eval_status{false};
+        bool use_all_channels{false};
+        ToneBuffer tone_buffer;
+
+        py::dict_ref rt_dds_delay{py::new_dict()};
+
+        Data(py::ptr<RFSOCGenerator> generator)
+            : generator(generator.ref())
+        {
+        }
+
+        void finalize(CompiledSeq&) override;
+        void runtime_finalize(CompiledSeq&, unsigned) override;
+        void set_dds_delay(int dds, double delay);
+    };
+
+    using fields = field_pack<Backend::fields,&Data::generator,&Data::rt_dds_delay>;
+    static PyTypeObject Type;
+};
+
+void init();
 
 }
 

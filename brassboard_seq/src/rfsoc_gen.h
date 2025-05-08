@@ -21,18 +21,10 @@
 
 #include "rfsoc.h"
 
-#include "backend.h"
-#include "seq.h"
-
 #include <algorithm>
-#include <array>
 #include <map>
 #include <vector>
 #include <utility>
-
-#include <stdint.h>
-
-#include <Python.h>
 
 namespace brassboard_seq::rfsoc_gen {
 
@@ -184,7 +176,6 @@ struct PulseCompilerGen final: SyncChannelGen {
     int last_chn;
     py::list last_tonedatas;
 };
-Generator *new_pulse_compiler_generator();
 
 struct JaqalPulseCompilerGen final: SyncChannelGen {
     struct BoardGen {
@@ -204,7 +195,6 @@ struct JaqalPulseCompilerGen final: SyncChannelGen {
     __attribute__((returns_nonnull)) PyObject *get_prefix(int n) const;
     __attribute__((returns_nonnull)) PyObject *get_sequence(int n) const;
 };
-Generator *new_jaqal_pulse_compiler_generator();
 
 struct Jaqalv1_3Generator: Generator {
     virtual void add_inst(const JaqalInst &inst, int board, int board_chn,
@@ -250,7 +240,18 @@ private:
     void start() override;
     void end() override;
 };
-Generator *new_jaqalv1_3_stream_generator();
+
+struct RFSOCGenerator : PyObject {
+    std::unique_ptr<Generator> gen;
+
+    static PyTypeObject Type;
+};
+
+extern PyTypeObject &PulseCompilerGenerator_Type;
+extern PyTypeObject &Jaqalv1Generator_Type;
+extern PyTypeObject &Jaqalv1_3Generator_Type;
+
+void init();
 
 }
 

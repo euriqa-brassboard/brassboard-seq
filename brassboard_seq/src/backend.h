@@ -68,6 +68,53 @@ struct CompiledSeq {
     }
 };
 
+struct Backend : py::VBase<Backend> {
+private:
+    template<typename T> static constexpr auto _traverse =
+        py::tp_traverse<[] (py::ptr<T> self, auto &visitor) {
+            py::field_pack_visit<typename T::fields>(self->data(), visitor); }>;
+    template<typename T> static constexpr auto _clear =
+        py::iunifunc<[] (py::ptr<T> self) {
+            py::field_pack_clear<typename T::fields>(self->data()); }>;
+public:
+    struct Data {
+        py::ref<seq::Seq> seq;
+        py::str_ref prefix;
+        virtual void finalize(CompiledSeq&) {}
+        virtual void runtime_finalize(CompiledSeq&, unsigned) {}
+    };
+    template<typename T>
+    struct Base : py::VBase<Backend>::Base<T> {
+    protected:
+        template<typename=void> static constexpr auto traverse = _traverse<T>;
+        template<typename=void> static constexpr auto clear = _clear<T>;
+    };
+    void finalize(CompiledSeq &cseq)
+    {
+        data()->finalize(cseq);
+    }
+    void runtime_finalize(CompiledSeq &cseq, unsigned age)
+    {
+        data()->runtime_finalize(cseq, age);
+    }
+
+    using fields = field_pack<Data,&Data::seq>;
+    static PyTypeObject Type;
+};
+
+struct SeqCompiler : PyObject {
+    py::ref<seq::Seq> seq;
+    CompiledSeq cseq;
+    py::dict_ref backends;
+
+    void finalize();
+    void runtime_finalize(py::ptr<>);
+
+    static PyTypeObject Type;
+};
+
+void init();
+
 }
 
 #endif

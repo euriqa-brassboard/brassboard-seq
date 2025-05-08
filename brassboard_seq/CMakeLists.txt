@@ -7,6 +7,8 @@ add_definitions(-DNPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION -fopenmp
 
 add_library(brassboard_seq_utils SHARED
   src/action.cpp
+  src/artiq_backend.cpp
+  src/backend.cpp
   src/config.cpp
   src/event_time.cpp
   src/init.cpp
@@ -37,8 +39,11 @@ function(bb_cxx_mod name)
 endfunction()
 bb_cxx_mod(_utils)
 bb_cxx_mod(action)
+bb_cxx_mod(artiq_backend)
+bb_cxx_mod(backend)
 bb_cxx_mod(config)
 bb_cxx_mod(event_time)
+bb_cxx_mod(rfsoc_backend)
 bb_cxx_mod(rtval)
 bb_cxx_mod(scan)
 bb_cxx_mod(seq)
@@ -55,6 +60,7 @@ install(FILES
   src/scan.h
   src/seq.h
   src/rfsoc.h
+  src/rfsoc_gen.h
   src/rfsoc_backend.h
   src/utils.h
   DESTINATION "${_PYTHON_SITE_INSTALL_DIR}/brassboard_seq/src")
@@ -64,10 +70,10 @@ cython_link_libraries(brassboard_seq_utils -fopenmp)
 python_install_module("${CMAKE_CURRENT_SOURCE_DIR}/.." brassboard_seq
   __init__.py
   action.pxd
-  artiq_backend.pyx
-  backend.pyx
+  artiq_backend.pxd
+  backend.pxd
   event_time.pxd
-  rfsoc_backend.pyx
+  rfsoc_backend.pxd
   rtval.pxd
   seq.pxd
   utils.pxd)

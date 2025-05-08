@@ -1843,7 +1843,7 @@ def test_device_delay(max_bt, use_rt):
                        match="Device time offset -0.001 cannot be negative."):
         comp.ab.set_device_delay("ttl0", -0.001)
     with pytest.raises(ValueError,
-                       match="Device time offset 1 cannot be more than 100ms."):
+                       match="Device time offset 1.0 cannot be more than 100ms."):
         comp.ab.set_device_delay("urukul0_ch1", 1)
 
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())

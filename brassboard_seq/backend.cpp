@@ -17,19 +17,18 @@
  *************************************************************************/
 
 #include "src/utils.h"
-
-#include "src/event_time.h"
+#include "src/backend.h"
 
 using namespace brassboard_seq;
 
-static PyModuleDef _utils_module = {
+static PyModuleDef backend_module = {
     .m_base = PyModuleDef_HEAD_INIT,
-    .m_name = "brassboard_seq._utils",
+    .m_name = "brassboard_seq.backend",
     .m_size = -1,
 };
 
-PY_MODINIT(_utils, _utils_module)
+PY_MODINIT(backend, backend_module)
 {
-    // event_time
-    m.add_type(&event_time::TimeManager::Type);
+    m.add_type(&backend::Backend::Type);
+    m.add_type(&backend::SeqCompiler::Type);
 }

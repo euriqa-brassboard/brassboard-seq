@@ -338,12 +338,6 @@ inline void PulseCompilerGen::end()
 {
 }
 
-__attribute__((visibility("protected")))
-Generator *new_pulse_compiler_generator()
-{
-    return new PulseCompilerGen;
-}
-
 __attribute__((visibility("internal")))
 inline PulseCompilerGen::Info::Info()
 {
@@ -430,12 +424,6 @@ PyObject *JaqalPulseCompilerGen::get_sequence(int n) const
     if (n < 0 || n >= 4)
         throw std::out_of_range("Board index should be in [0, 3]");
     return boards[n].get_sequence();
-}
-
-__attribute__((visibility("protected")))
-Generator *new_jaqal_pulse_compiler_generator()
-{
-    return new JaqalPulseCompilerGen;
 }
 
 __attribute__((flatten))
@@ -935,12 +923,6 @@ inline void Jaqalv1_3StreamGen::end()
     }
 }
 
-__attribute__((visibility("protected")))
-Generator *new_jaqalv1_3_stream_generator()
-{
-    return new Jaqalv1_3StreamGen;
-}
-
 __attribute__((visibility("protected"))) void
 SyncTimeMgr::add_action(std::vector<DDSParamAction> &actions, int64_t start_cycle,
                         int64_t end_cycle, cubic_spline sp,
@@ -1062,6 +1044,119 @@ SyncTimeMgr::add_action(std::vector<DDSParamAction> &actions, int64_t start_cycl
         bb_debug("  updated sync frequency: %f @%" PRId64 ", sync_freq_match_tid: %d\n",
                  sync_freq, sync_freq_seq_time, sync_freq_match_tid);
     }
+}
+
+__attribute__((visibility("protected")))
+PyTypeObject RFSOCGenerator::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.rfsoc_backend.RFSOCGenerator",
+    .tp_basicsize = sizeof(RFSOCGenerator),
+    .tp_dealloc = py::tp_cxx_dealloc<false,RFSOCGenerator>,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+};
+
+namespace {
+
+struct PyPulseCompilerGenerator : RFSOCGenerator {
+    static PyTypeObject Type;
+};
+
+PyTypeObject PyPulseCompilerGenerator::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.rfsoc_backend.PulseCompilerGenerator",
+    .tp_basicsize = sizeof(PyPulseCompilerGenerator),
+    .tp_dealloc = py::tp_cxx_dealloc<false,PyPulseCompilerGenerator>,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_getset = (py::getset_table<
+                  py::getset_def<"output",[] (py::ptr<PyPulseCompilerGenerator> self) {
+                      return ((PulseCompilerGen*)self->gen.get())->get_output();
+                  }>>),
+    .tp_base = &RFSOCGenerator::Type,
+    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+                                        ssize_t nargs, py::tuple kwnames) {
+        py::check_num_arg("PulseCompilerGenerator.__init__", nargs, 0, 0);
+        py::check_no_kwnames("PulseCompilerGenerator.__init__", kwnames);
+        auto self = py::generic_alloc<PyPulseCompilerGenerator>();
+        self->gen.reset(new PulseCompilerGen);
+        return self;
+    }>
+};
+
+struct PyJaqalv1Generator : RFSOCGenerator {
+    static PyTypeObject Type;
+};
+
+PyTypeObject PyJaqalv1Generator::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.rfsoc_backend.Jaqalv1Generator",
+    .tp_basicsize = sizeof(PyJaqalv1Generator),
+    .tp_dealloc = py::tp_cxx_dealloc<false,PyJaqalv1Generator>,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_methods = (
+        py::meth_table<
+        py::meth_o<"get_prefix",[] (py::ptr<PyJaqalv1Generator> self, py::ptr<> _n) {
+            auto n = py::arg_cast<py::int_>(_n, "n").as_int();
+            return ((JaqalPulseCompilerGen*)self->gen.get())->get_prefix(n);
+        }>,
+        py::meth_o<"get_sequence",[] (py::ptr<PyJaqalv1Generator> self, py::ptr<> _n) {
+            auto n = py::arg_cast<py::int_>(_n, "n").as_int();
+            return ((JaqalPulseCompilerGen*)self->gen.get())->get_sequence(n);
+        }>>),
+    .tp_base = &RFSOCGenerator::Type,
+    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+                                        ssize_t nargs, py::tuple kwnames) {
+        py::check_num_arg("Jaqalv1Generator.__init__", nargs, 0, 0);
+        py::check_no_kwnames("Jaqalv1Generator.__init__", kwnames);
+        auto self = py::generic_alloc<PyJaqalv1Generator>();
+        self->gen.reset(new JaqalPulseCompilerGen);
+        return self;
+    }>
+};
+
+struct PyJaqalv1_3Generator : RFSOCGenerator {
+    static PyTypeObject Type;
+};
+
+PyTypeObject PyJaqalv1_3Generator::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.rfsoc_backend.Jaqalv1_3Generator",
+    .tp_basicsize = sizeof(PyJaqalv1_3Generator),
+    .tp_dealloc = py::tp_cxx_dealloc<false,PyJaqalv1_3Generator>,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_methods = (
+        py::meth_table<
+        py::meth_o<"get_prefix",[] (py::ptr<PyJaqalv1_3Generator> self, py::ptr<> _n) {
+            auto n = py::arg_cast<py::int_>(_n, "n").as_int();
+            return ((Jaqalv1_3StreamGen*)self->gen.get())->get_prefix(n);
+        }>,
+        py::meth_o<"get_sequence",[] (py::ptr<PyJaqalv1_3Generator> self, py::ptr<> _n) {
+            auto n = py::arg_cast<py::int_>(_n, "n").as_int();
+            return ((Jaqalv1_3StreamGen*)self->gen.get())->get_sequence(n);
+        }>>),
+    .tp_base = &RFSOCGenerator::Type,
+    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+                                        ssize_t nargs, py::tuple kwnames) {
+        py::check_num_arg("Jaqalv1_3Generator.__init__", nargs, 0, 0);
+        py::check_no_kwnames("Jaqalv1_3Generator.__init__", kwnames);
+        auto self = py::generic_alloc<PyJaqalv1_3Generator>();
+        self->gen.reset(new Jaqalv1_3StreamGen);
+        return self;
+    }>
+};
+
+} // (anonymous)
+
+PyTypeObject &PulseCompilerGenerator_Type = PyPulseCompilerGenerator::Type;
+PyTypeObject &Jaqalv1Generator_Type = PyJaqalv1Generator::Type;
+PyTypeObject &Jaqalv1_3Generator_Type = PyJaqalv1_3Generator::Type;
+
+__attribute__((visibility("hidden")))
+void init()
+{
+    throw_if(PyType_Ready(&RFSOCGenerator::Type) < 0);
+    throw_if(PyType_Ready(&PyPulseCompilerGenerator::Type) < 0);
+    throw_if(PyType_Ready(&PyJaqalv1Generator::Type) < 0);
+    throw_if(PyType_Ready(&PyJaqalv1_3Generator::Type) < 0);
 }
 
 }

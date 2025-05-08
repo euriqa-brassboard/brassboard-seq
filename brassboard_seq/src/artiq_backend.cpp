@@ -255,535 +255,6 @@ inline void ChannelsInfo::collect_channels(py::str prefix, py::ptr<> sys,
     dds_chn_map.clear(); // Not needed after channel collection
 }
 
-static __attribute__((always_inline)) inline
-void artiq_add_start_trigger_ttl(auto *ab, uint32_t tgt, int64_t time,
-                                 int min_time, bool raising_edge)
-{
-    StartTrigger start_trigger{
-        .target = tgt,
-        .min_time_mu = (uint16_t)std::max((int)seq_time_to_mu(min_time), 8),
-        .raising_edge = raising_edge,
-        .time_mu = seq_time_to_mu(time),
-    };
-    ab->start_triggers.push_back(start_trigger);
-}
-
-static __attribute__((always_inline)) inline
-void artiq_add_start_trigger(auto *ab, py::ptr<> name, py::ptr<> time,
-                             py::ptr<> min_time, py::ptr<> raising_edge)
-{
-    auto dev = info().get_device(ab->sys, name);
-    if (!dev.isinstance(info().TTLOut))
-        py_throw_format(PyExc_ValueError, "Invalid start trigger device: %S", name);
-    artiq_add_start_trigger_ttl(ab, dev.attr("target_o"_py).as_int(),
-                                event_time::round_time_int(time),
-                                event_time::round_time_int(min_time),
-                                raising_edge.as_bool());
-}
-
-static __attribute__((always_inline)) inline
-void artiq_finalize(auto *ab, backend::CompiledSeq &cseq)
-{
-    if (cseq.basic_cseqs.size() != 1)
-        py_throw_format(PyExc_ValueError, "Branch not yet supported in artiq backend");
-    py::ptr seq = pyx_fld(ab, seq);
-    ab->channels.collect_channels(pyx_fld(ab, prefix), ab->sys, seq, ab->device_delay);
-    std::vector<ArtiqAction> &artiq_actions = ab->all_actions;
-
-    ValueIndexer<int> bool_values;
-    ValueIndexer<double> float_values;
-    std::vector<Relocation> &relocations = ab->relocations;
-
-    py::list event_times = seq->seqinfo->time_mgr->event_times;
-
-    auto add_single_action = [&] (auto *action, ChannelType type, int chn_idx,
-                                  int tid, py::ptr<> value, int cond_reloc,
-                                  bool is_end) {
-        ArtiqAction artiq_action;
-        int aid = action->aid;
-        artiq_action.type = type;
-        artiq_action.cond = true;
-        artiq_action.exact_time = action->exact_time;
-        artiq_action.eval_status = false;
-        artiq_action.chn_idx = chn_idx;
-        artiq_action.tid = tid;
-        artiq_action.is_end = is_end;
-        artiq_action.aid = aid;
-
-        bool needs_reloc = cond_reloc != -1;
-        Relocation reloc{cond_reloc, -1, -1};
-
-        auto event_time = event_times.get<EventTime>(tid);
-        if (event_time->data.is_static()) {
-            PyObject *rt_delay;
-            int64_t delay;
-            if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
-                auto &ddschn = ab->channels.ddschns[chn_idx];
-                delay = ddschn.delay;
-                rt_delay = ddschn.rt_delay;
-            }
-            else {
-                auto &ttlchn = ab->channels.ttlchns[chn_idx];
-                delay = ttlchn.delay;
-                rt_delay = ttlchn.rt_delay;
-            }
-            if (rt_delay) {
-                // We need to fill in the time at runtime
-                // since we don't know the delay value...
-                needs_reloc = true;
-                reloc.time_idx = tid;
-            }
-            else {
-                artiq_action.time_mu =
-                    seq_time_to_mu(event_time->data._get_static() + delay);
-            }
-        }
-        else {
-            needs_reloc = true;
-            reloc.time_idx = tid;
-        }
-        if (rtval::is_rtval(value)) {
-            needs_reloc = true;
-            if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
-                reloc.val_idx = float_values.get_id(value);
-            }
-            else if (type == CounterEnable) {
-                // We aren't really relying on this in the backend
-                // but requiring this makes it easier to infer the number of
-                // results generated from a sequence.
-                bb_throw_format(PyExc_ValueError, action_key(aid),
-                                "Counter value must be static.");
-            }
-            else {
-                reloc.val_idx = bool_values.get_id(value);
-            }
-        }
-        else if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
-            double v = value.as_float(action_key(aid));
-            if (type == DDSFreq) {
-                auto &ddschn = ab->channels.ddschns[chn_idx];
-                artiq_action.value = dds_freq_to_mu(v, ddschn.ftw_per_hz);
-            }
-            else if (type == DDSAmp) {
-                artiq_action.value = dds_amp_to_mu(v);
-            }
-            else {
-                assert(type == DDSPhase);
-                artiq_action.value = dds_phase_to_mu(v);
-            }
-        }
-        else {
-            artiq_action.value = value.as_bool(action_key(aid));
-        }
-        if (needs_reloc) {
-            artiq_action.reloc_id = (int)relocations.size();
-            relocations.push_back(reloc);
-        }
-        else {
-            artiq_action.reloc_id = -1;
-        }
-        artiq_actions.push_back(artiq_action);
-    };
-    auto add_action = [&] (auto *action, ChannelType type, int chn_idx) {
-        py::ptr cond = action->cond;
-        int cond_reloc = -1;
-        if (rtval::is_rtval(cond)) {
-            cond_reloc = bool_values.get_id(cond);
-            assume(cond_reloc >= 0);
-        }
-        else {
-            assert(cond == Py_True);
-        }
-        add_single_action(action, type, chn_idx, action->tid, action->value,
-                          cond_reloc, false);
-        if (action->is_pulse) {
-            add_single_action(action, type, chn_idx, action->end_tid,
-                              action->end_val, cond_reloc, true);
-        }
-    };
-
-    for (auto [chn, ttl_idx]: ab->channels.ttl_chn_map) {
-        auto ttl_chn_info = ab->channels.ttlchns[ttl_idx];
-        auto type = ttl_chn_info.iscounter ? CounterEnable : TTLOut;
-        for (auto action: cseq.basic_cseqs[0]->chn_actions[chn]->actions) {
-            if (action->kws)
-                bb_throw_format(PyExc_ValueError, action_key(action->aid),
-                                "Invalid output keyword argument %S", action->kws);
-            if (action::isramp(action->value))
-                bb_throw_format(PyExc_ValueError, action_key(action->aid),
-                                "TTL Channel cannot be ramped");
-            if (action->cond == Py_False)
-                continue;
-            add_action(action, type, ttl_idx);
-        }
-    }
-
-    for (auto [chn, value]: ab->channels.dds_param_chn_map) {
-        auto [dds_idx, type] = value;
-        for (auto action: cseq.basic_cseqs[0]->chn_actions[chn]->actions) {
-            if (action->kws)
-                bb_throw_format(PyExc_ValueError, action_key(action->aid),
-                                "Invalid output keyword argument %S", action->kws);
-            if (action::isramp(action->value))
-                bb_throw_format(PyExc_ValueError, action_key(action->aid),
-                                "DDS Channel cannot be ramped");
-            if (action->cond == Py_False)
-                continue;
-            add_action(action, type, dds_idx);
-        }
-    }
-
-    ab->bool_values = std::move(bool_values.values);
-    ab->float_values = std::move(float_values.values);
-}
-
-static __attribute__((always_inline)) inline
-void artiq_runtime_finalize(auto *ab, backend::CompiledSeq &cseq, unsigned age)
-{
-    bb_debug("artiq_runtime_finalize: start\n");
-    auto seq = pyx_fld(ab, seq);
-    for (size_t i = 0, nreloc = ab->bool_values.size(); i < nreloc; i++) {
-        auto &[rtval, val] = ab->bool_values[i];
-        val = !rtval::rtval_cache(rtval).is_zero();
-    }
-    for (size_t i = 0, nreloc = ab->float_values.size(); i < nreloc; i++) {
-        auto &[rtval, val] = ab->float_values[i];
-        val = rtval::rtval_cache(rtval).template get<double>();
-    }
-    int64_t max_delay = 0;
-    auto relocate_delay = [&] (int64_t &delay, auto rt_delay) {
-        if (!rt_delay)
-            return;
-        rtval::rt_eval_throw(rt_delay, age);
-        auto fdelay = rtval::rtval_cache(rt_delay).template get<double>();
-        if (fdelay < 0) {
-            py_throw_format(PyExc_ValueError,
-                            "Device time offset %S cannot be negative.",
-                            py::new_float(fdelay));
-        }
-        else if (fdelay > 0.1) {
-            py_throw_format(PyExc_ValueError,
-                            "Device time offset %S cannot be more than 100ms.",
-                            py::new_float(fdelay));
-        }
-        delay = int64_t(fdelay * event_time::time_scale + 0.5);
-    };
-    for (auto &ttlchn: ab->channels.ttlchns) {
-        relocate_delay(ttlchn.delay, (RuntimeValue*)ttlchn.rt_delay);
-        max_delay = std::max(max_delay, ttlchn.delay);
-    }
-    for (auto &ddschn: ab->channels.ddschns) {
-        relocate_delay(ddschn.delay, (RuntimeValue*)ddschn.rt_delay);
-        max_delay = std::max(max_delay, ddschn.delay);
-    }
-    auto &time_values = seq->seqinfo->time_mgr->time_values;
-
-    auto reloc_action = [ab, &time_values] (const ArtiqAction &action) {
-        auto reloc = ab->relocations[action.reloc_id];
-        if (reloc.cond_idx != -1)
-            action.cond = ab->bool_values[reloc.cond_idx].second;
-        // No need to do anything else if we hit a disabled action.
-        if (!action.cond)
-            return;
-        auto type = action.type;
-        auto chn_idx = action.chn_idx;
-        if (reloc.time_idx != -1) {
-            int64_t delay;
-            if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
-                delay = ab->channels.ddschns[chn_idx].delay;
-            }
-            else {
-                delay = ab->channels.ttlchns[chn_idx].delay;
-            }
-            action.time_mu = seq_time_to_mu(time_values[reloc.time_idx] + delay);
-        }
-        if (reloc.val_idx != -1) {
-            if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
-                double v = ab->float_values[reloc.val_idx].second;
-                if (type == DDSFreq) {
-                    auto &ddschn = ab->channels.ddschns[chn_idx];
-                    action.value = dds_freq_to_mu(v, ddschn.ftw_per_hz);
-                }
-                else if (type == DDSAmp) {
-                    action.value = dds_amp_to_mu(v);
-                }
-                else {
-                    assert(type == DDSPhase);
-                    action.value = dds_phase_to_mu(v);
-                }
-            }
-            else {
-                action.value = ab->bool_values[reloc.val_idx].second;
-            }
-        }
-    };
-
-    bool eval_status = !ab->eval_status;
-    ab->eval_status = eval_status;
-
-    if (ab->all_actions.size() == 1) {
-        auto &a = ab->all_actions[0];
-        if (a.reloc_id >= 0) {
-            a.eval_status = eval_status;
-            reloc_action(a);
-        }
-    }
-    else {
-        std::ranges::sort(ab->all_actions, [&] (const auto &a1, const auto &a2) {
-            if (a1.reloc_id >= 0 && a1.eval_status != eval_status) {
-                a1.eval_status = eval_status;
-                reloc_action(a1);
-            }
-            if (a2.reloc_id >= 0 && a2.eval_status != eval_status) {
-                a2.eval_status = eval_status;
-                reloc_action(a2);
-            }
-            // Move disabled actions to the end
-            if (a1.cond != a2.cond)
-                return int(a1.cond) > int(a2.cond);
-            // Sort by time
-            if (a1.time_mu != a2.time_mu)
-                return a1.time_mu < a2.time_mu;
-            // Sometimes time points with different tid may actually happen
-            // at the same time (especially on the same artiq mu time point)
-            // in these cases we need to make sure we output them in order
-            // in order to generate the right output at the end.
-            if (a1.tid != a2.tid)
-                return a1.tid < a2.tid;
-            // End action technically happens just before the time point
-            // and must be sorted to be before the start action.
-            if (a1.is_end != a2.is_end)
-                return int(a1.is_end) > int(a2.is_end);
-            return a1.aid < a2.aid;
-        });
-    }
-
-    auto &rtio_actions = ab->rtio_actions;
-    ScopeExit cleanup([&] {
-        ab->time_checker.clear();
-        rtio_actions.clear();
-    });
-    assert(ab->time_checker.empty());
-    assert(rtio_actions.empty());
-
-    auto add_action = [&] (uint32_t target, uint32_t value, int aid,
-                           int64_t request_time_mu, int64_t lb_mu,
-                           bool exact_time) -> int64_t {
-        if (exact_time) {
-            if (request_time_mu < lb_mu) {
-                bb_throw_format(PyExc_ValueError, action_key(aid),
-                                "Exact time output cannot satisfy lower time bound");
-            }
-            else if (!ab->time_checker.check_and_add_time(request_time_mu)) {
-                bb_throw_format(PyExc_ValueError, action_key(aid),
-                                "Too many outputs at the same time");
-            }
-            rtio_actions.push_back({target, value, request_time_mu});
-            return request_time_mu;
-        }
-        // hard code a 10 us bound.
-        constexpr int64_t max_offset = 10000;
-        int64_t ub_mu = request_time_mu + max_offset;
-        if (ub_mu < lb_mu)
-            bb_throw_format(PyExc_ValueError, action_key(aid),
-                            "Cannot find appropriate output time within bound");
-        if (request_time_mu < lb_mu) {
-            request_time_mu = lb_mu;
-        }
-        else {
-            lb_mu = std::max(lb_mu, request_time_mu - max_offset);
-        }
-        auto time_mu = ab->time_checker.find_time(lb_mu, request_time_mu, ub_mu);
-        if (time_mu == INT64_MIN)
-            bb_throw_format(PyExc_ValueError, action_key(aid),
-                            "Too many outputs at the same time");
-        rtio_actions.push_back({target, value, time_mu});
-        return time_mu;
-    };
-
-    int64_t start_mu = 0;
-
-    // Add all the exact time events first
-    for (auto start_trigger: ab->start_triggers) {
-        auto time_mu = start_trigger.time_mu;
-        start_mu = std::min(time_mu, start_mu);
-        if (!ab->time_checker.check_and_add_time(time_mu))
-            py_throw_format(PyExc_ValueError,
-                            "Too many start triggers at the same time");
-        rtio_actions.push_back({start_trigger.target,
-                start_trigger.raising_edge, time_mu});
-    }
-    for (auto start_trigger: ab->start_triggers) {
-        auto time_mu = start_trigger.time_mu;
-        bb_debug("Adding start trigger: time=%" PRId64 ", raising=%d\n",
-                 time_mu, (int)start_trigger.raising_edge);
-        if (start_trigger.raising_edge) {
-            auto end_mu = time_mu + start_trigger.min_time_mu;
-            end_mu = ab->time_checker.find_time(end_mu, end_mu, end_mu + 1000);
-            if (end_mu == INT64_MIN)
-                py_throw_format(PyExc_ValueError,
-                                "Too many start triggers at the same time");
-            rtio_actions.push_back({start_trigger.target, 0, end_mu});
-        }
-        else {
-            auto raise_mu = time_mu - start_trigger.min_time_mu;
-            raise_mu = ab->time_checker.find_time(raise_mu - 1000, raise_mu, raise_mu);
-            if (raise_mu == INT64_MIN)
-                py_throw_format(PyExc_ValueError,
-                                "Too many start triggers at the same time");
-            rtio_actions.push_back({start_trigger.target, 1, raise_mu});
-            start_mu = std::min(raise_mu, start_mu);
-        }
-    }
-
-    // Add a 3 us buffer to queue outputs before the sequence officially starts
-    start_mu -= 3000;
-
-    for (auto &bus: ab->channels.urukul_busses)
-        bus.reset(start_mu);
-    for (auto &ttlchn: ab->channels.ttlchns)
-        ttlchn.reset(start_mu);
-    for (auto &ddschn: ab->channels.ddschns)
-        ddschn.reset();
-
-    for (auto &artiq_action: ab->all_actions) {
-        // All disabled actions should be at the end.
-        if (!artiq_action.cond)
-            break;
-        auto time_mu = artiq_action.time_mu;
-        for (auto &ttlchn: ab->channels.ttlchns)
-            ttlchn.flush_output(add_action, time_mu, true, false);
-        for (auto &ttlchn: ab->channels.ttlchns)
-            ttlchn.flush_output(add_action, time_mu, false, false);
-        for (auto &bus: ab->channels.urukul_busses)
-            bus.flush_output(add_action, time_mu, false);
-
-        switch (artiq_action.type) {
-        case DDSFreq:
-        case DDSAmp:
-        case DDSPhase: {
-            auto &ddschn = ab->channels.ddschns[artiq_action.chn_idx];
-            ab->channels.urukul_busses[ddschn.bus_id].add_output(add_action,
-                                                                 artiq_action, ddschn);
-            break;
-        }
-        case TTLOut:
-        case CounterEnable:
-            ab->channels.ttlchns[artiq_action.chn_idx].add_output(add_action,
-                                                                  artiq_action);
-            break;
-        }
-    }
-    for (auto &ttlchn: ab->channels.ttlchns)
-        ttlchn.flush_output(add_action, 0, true, true);
-    for (auto &ttlchn: ab->channels.ttlchns)
-        ttlchn.flush_output(add_action, 0, false, true);
-    for (auto &bus: ab->channels.urukul_busses)
-        bus.flush_output(add_action, 0, true);
-
-
-    std::ranges::stable_sort(rtio_actions, [] (auto &a1, auto &a2) {
-        return a1.time_mu < a2.time_mu;
-    });
-
-    auto total_time_mu = seq_time_to_mu(cseq.basic_cseqs[0]->total_time + max_delay);
-    if (ab->use_dma) {
-        auto rtio_array = ab->rtio_array;
-        auto nactions = rtio_actions.size();
-        // Note that the size calculated below is at least `nactions * 17 + 1`
-        // which is what we need.
-        auto alloc_size = (nactions * 17 / 64 + 1) * 64;
-        PyByteArray_Resize(rtio_array, alloc_size);
-        auto output_ptr = (uint8_t*)PyByteArray_AS_STRING(rtio_array);
-        for (size_t i = 0; i < nactions; i++) {
-            auto &action = rtio_actions[i];
-            auto ptr = &output_ptr[i * 17];
-            auto time_mu = action.time_mu - start_mu;
-            auto target = action.target;
-            auto value = action.value;
-            ptr[0] = 17;
-            ptr[1] = (target >> 8) & 0xff;
-            ptr[2] = (target >> 16) & 0xff;
-            ptr[3] = (target >> 24) & 0xff;
-            ptr[4] = (time_mu >> 0) & 0xff;
-            ptr[5] = (time_mu >> 8) & 0xff;
-            ptr[6] = (time_mu >> 16) & 0xff;
-            ptr[7] = (time_mu >> 24) & 0xff;
-            ptr[8] = (time_mu >> 32) & 0xff;
-            ptr[9] = (time_mu >> 40) & 0xff;
-            ptr[10] = (time_mu >> 48) & 0xff;
-            ptr[11] = (time_mu >> 56) & 0xff;
-            ptr[12] = (target >> 0) & 0xff;
-            ptr[13] = (value >> 0) & 0xff;
-            ptr[14] = (value >> 8) & 0xff;
-            ptr[15] = (value >> 16) & 0xff;
-            ptr[16] = (value >> 24) & 0xff;
-        }
-        if (nactions)
-            total_time_mu = std::max(rtio_actions.back().time_mu, total_time_mu);
-        memset(&output_ptr[nactions * 17], 0, alloc_size - nactions * 17);
-    }
-    else {
-        auto rtio_array = (PyArrayObject*)ab->rtio_array;
-
-        npy_intp rtio_alloc = (npy_intp)PyArray_SIZE(rtio_array);
-        PyArray_Dims pydims{&rtio_alloc, 1};
-        npy_intp rtio_len = 0;
-        uint32_t *rtio_array_data = (uint32_t*)PyArray_DATA(rtio_array);
-        auto resize_rtio = [&] (npy_intp sz) {
-            rtio_alloc = sz;
-            throw_if_not(PyArray_Resize(rtio_array, &pydims, 0, NPY_CORDER));
-        };
-
-        auto alloc_space = [&] (int n) -> uint32_t* {
-            auto old_len = rtio_len;
-            auto new_len = old_len + n;
-            if (new_len > rtio_alloc) {
-                resize_rtio(new_len * 2 + 2);
-                rtio_array_data = (uint32_t*)PyArray_DATA(rtio_array);
-            }
-            rtio_len = new_len;
-            return &rtio_array_data[old_len];
-        };
-
-        auto add_wait = [&] (int64_t t_mu) {
-            const int64_t max_wait = 0x80000000;
-            if (t_mu > max_wait) {
-                auto nwait_eles = t_mu / max_wait;
-                t_mu = t_mu % max_wait;
-                auto wait_cmds = alloc_space(nwait_eles);
-                for (int i = 0; i < nwait_eles; i++) {
-                    wait_cmds[i] = uint32_t(max_wait);
-                }
-            }
-            if (t_mu > 0) {
-                auto wait_cmd = alloc_space(1);
-                wait_cmd[0] = uint32_t(-t_mu);
-            }
-        };
-
-        int64_t time_mu = start_mu;
-        for (auto action: rtio_actions) {
-            add_wait(action.time_mu - time_mu);
-            time_mu = action.time_mu;
-            auto cmd = alloc_space(2);
-            cmd[0] = action.target;
-            cmd[1] = action.value;
-        }
-        if (total_time_mu > time_mu) {
-            add_wait(total_time_mu - time_mu);
-        }
-        else {
-            total_time_mu = time_mu;
-        }
-        resize_rtio(rtio_len);
-    }
-    ab->total_time_mu = total_time_mu - start_mu;
-
-    bb_debug("artiq_runtime_finalize: finish\n");
-    return;
-}
-
 __attribute__((visibility("internal")))
 void UrukulBus::add_dds_action(auto &add_action, DDSAction &action)
 {
@@ -1073,11 +544,762 @@ inline int64_t TimeChecker::find_time(int64_t lb_mu, int64_t t_mu, int64_t ub_mu
     }
 }
 
+__attribute__((visibility("internal")))
+inline ArtiqBackend::Data::Data(py::ptr<> sys, py::ptr<> rtio_array, bool use_dma)
+    : sys(sys.ref()),
+      use_dma(use_dma),
+      rtio_array(rtio_array.ref())
+{
+}
+
+__attribute__((visibility("internal")))
+void ArtiqBackend::Data::finalize(CompiledSeq &cseq)
+{
+    if (cseq.basic_cseqs.size() != 1)
+        py_throw_format(PyExc_ValueError, "Branch not yet supported in artiq backend");
+    channels.collect_channels(prefix, sys, seq, device_delay);
+    std::vector<ArtiqAction> &artiq_actions = all_actions;
+
+    ValueIndexer<bool> bool_values;
+    ValueIndexer<double> float_values;
+
+    py::list event_times = seq->seqinfo->time_mgr->event_times;
+
+    auto add_single_action = [&] (auto *action, ChannelType type, int chn_idx,
+                                  int tid, py::ptr<> value, int cond_reloc,
+                                  bool is_end) {
+        ArtiqAction artiq_action;
+        int aid = action->aid;
+        artiq_action.type = type;
+        artiq_action.cond = true;
+        artiq_action.exact_time = action->exact_time;
+        artiq_action.eval_status = false;
+        artiq_action.chn_idx = chn_idx;
+        artiq_action.tid = tid;
+        artiq_action.is_end = is_end;
+        artiq_action.aid = aid;
+
+        bool needs_reloc = cond_reloc != -1;
+        Relocation reloc{cond_reloc, -1, -1};
+
+        auto event_time = event_times.get<EventTime>(tid);
+        if (event_time->data.is_static()) {
+            PyObject *rt_delay;
+            int64_t delay;
+            if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
+                auto &ddschn = channels.ddschns[chn_idx];
+                delay = ddschn.delay;
+                rt_delay = ddschn.rt_delay;
+            }
+            else {
+                auto &ttlchn = channels.ttlchns[chn_idx];
+                delay = ttlchn.delay;
+                rt_delay = ttlchn.rt_delay;
+            }
+            if (rt_delay) {
+                // We need to fill in the time at runtime
+                // since we don't know the delay value...
+                needs_reloc = true;
+                reloc.time_idx = tid;
+            }
+            else {
+                artiq_action.time_mu =
+                    seq_time_to_mu(event_time->data._get_static() + delay);
+            }
+        }
+        else {
+            needs_reloc = true;
+            reloc.time_idx = tid;
+        }
+        if (rtval::is_rtval(value)) {
+            needs_reloc = true;
+            if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
+                reloc.val_idx = float_values.get_id(value);
+            }
+            else if (type == CounterEnable) {
+                // We aren't really relying on this in the backend
+                // but requiring this makes it easier to infer the number of
+                // results generated from a sequence.
+                bb_throw_format(PyExc_ValueError, action_key(aid),
+                                "Counter value must be static.");
+            }
+            else {
+                reloc.val_idx = bool_values.get_id(value);
+            }
+        }
+        else if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
+            double v = value.as_float(action_key(aid));
+            if (type == DDSFreq) {
+                auto &ddschn = channels.ddschns[chn_idx];
+                artiq_action.value = dds_freq_to_mu(v, ddschn.ftw_per_hz);
+            }
+            else if (type == DDSAmp) {
+                artiq_action.value = dds_amp_to_mu(v);
+            }
+            else {
+                assert(type == DDSPhase);
+                artiq_action.value = dds_phase_to_mu(v);
+            }
+        }
+        else {
+            artiq_action.value = value.as_bool(action_key(aid));
+        }
+        if (needs_reloc) {
+            artiq_action.reloc_id = (int)relocations.size();
+            relocations.push_back(reloc);
+        }
+        else {
+            artiq_action.reloc_id = -1;
+        }
+        artiq_actions.push_back(artiq_action);
+    };
+    auto add_action = [&] (auto *action, ChannelType type, int chn_idx) {
+        py::ptr cond = action->cond;
+        int cond_reloc = -1;
+        if (rtval::is_rtval(cond)) {
+            cond_reloc = bool_values.get_id(cond);
+            assume(cond_reloc >= 0);
+        }
+        else {
+            assert(cond == Py_True);
+        }
+        add_single_action(action, type, chn_idx, action->tid, action->value,
+                          cond_reloc, false);
+        if (action->is_pulse) {
+            add_single_action(action, type, chn_idx, action->end_tid,
+                              action->end_val, cond_reloc, true);
+        }
+    };
+
+    for (auto [chn, ttl_idx]: channels.ttl_chn_map) {
+        auto ttl_chn_info = channels.ttlchns[ttl_idx];
+        auto type = ttl_chn_info.iscounter ? CounterEnable : TTLOut;
+        for (auto action: cseq.basic_cseqs[0]->chn_actions[chn]->actions) {
+            if (action->kws)
+                bb_throw_format(PyExc_ValueError, action_key(action->aid),
+                                "Invalid output keyword argument %S", action->kws);
+            if (action::isramp(action->value))
+                bb_throw_format(PyExc_ValueError, action_key(action->aid),
+                                "TTL Channel cannot be ramped");
+            if (action->cond == Py_False)
+                continue;
+            add_action(action, type, ttl_idx);
+        }
+    }
+
+    for (auto [chn, value]: channels.dds_param_chn_map) {
+        auto [dds_idx, type] = value;
+        for (auto action: cseq.basic_cseqs[0]->chn_actions[chn]->actions) {
+            if (action->kws)
+                bb_throw_format(PyExc_ValueError, action_key(action->aid),
+                                "Invalid output keyword argument %S", action->kws);
+            if (action::isramp(action->value))
+                bb_throw_format(PyExc_ValueError, action_key(action->aid),
+                                "DDS Channel cannot be ramped");
+            if (action->cond == Py_False)
+                continue;
+            add_action(action, type, dds_idx);
+        }
+    }
+
+    this->bool_values = std::move(bool_values.values);
+    this->float_values = std::move(float_values.values);
+}
+
+static inline int64_t convert_device_delay(double fdelay)
+{
+    if (fdelay < 0) {
+        py_throw_format(PyExc_ValueError, "Device time offset %S cannot be negative.",
+                        py::new_float(fdelay));
+    }
+    else if (fdelay > 0.1) {
+        py_throw_format(PyExc_ValueError,
+                        "Device time offset %S cannot be more than 100ms.",
+                        py::new_float(fdelay));
+    }
+    return int64_t(fdelay * event_time::time_scale + 0.5);
+}
+
+__attribute__((visibility("internal")))
+void ArtiqBackend::Data::runtime_finalize(CompiledSeq &cseq, unsigned age)
+{
+    bb_debug("artiq_runtime_finalize: start\n");
+    for (size_t i = 0, nreloc = bool_values.size(); i < nreloc; i++) {
+        auto &[rtval, val] = bool_values[i];
+        val = !rtval::rtval_cache(rtval).is_zero();
+    }
+    for (size_t i = 0, nreloc = float_values.size(); i < nreloc; i++) {
+        auto &[rtval, val] = float_values[i];
+        val = rtval::rtval_cache(rtval).template get<double>();
+    }
+    int64_t max_delay = 0;
+    auto relocate_delay = [&] (int64_t &delay, auto rt_delay) {
+        if (!rt_delay)
+            return;
+        rtval::rt_eval_throw(rt_delay, age);
+        delay = convert_device_delay(rtval::rtval_cache(rt_delay).template get<double>());
+    };
+    for (auto &ttlchn: channels.ttlchns) {
+        relocate_delay(ttlchn.delay, (RuntimeValue*)ttlchn.rt_delay);
+        max_delay = std::max(max_delay, ttlchn.delay);
+    }
+    for (auto &ddschn: channels.ddschns) {
+        relocate_delay(ddschn.delay, (RuntimeValue*)ddschn.rt_delay);
+        max_delay = std::max(max_delay, ddschn.delay);
+    }
+    auto &time_values = seq->seqinfo->time_mgr->time_values;
+
+    auto reloc_action = [this, &time_values] (const ArtiqAction &action) {
+        auto reloc = relocations[action.reloc_id];
+        if (reloc.cond_idx != -1)
+            action.cond = bool_values[reloc.cond_idx].second;
+        // No need to do anything else if we hit a disabled action.
+        if (!action.cond)
+            return;
+        auto type = action.type;
+        auto chn_idx = action.chn_idx;
+        if (reloc.time_idx != -1) {
+            int64_t delay;
+            if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
+                delay = channels.ddschns[chn_idx].delay;
+            }
+            else {
+                delay = channels.ttlchns[chn_idx].delay;
+            }
+            action.time_mu = seq_time_to_mu(time_values[reloc.time_idx] + delay);
+        }
+        if (reloc.val_idx != -1) {
+            if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
+                double v = float_values[reloc.val_idx].second;
+                if (type == DDSFreq) {
+                    auto &ddschn = channels.ddschns[chn_idx];
+                    action.value = dds_freq_to_mu(v, ddschn.ftw_per_hz);
+                }
+                else if (type == DDSAmp) {
+                    action.value = dds_amp_to_mu(v);
+                }
+                else {
+                    assert(type == DDSPhase);
+                    action.value = dds_phase_to_mu(v);
+                }
+            }
+            else {
+                action.value = bool_values[reloc.val_idx].second;
+            }
+        }
+    };
+
+    bool eval_status = !this->eval_status;
+    this->eval_status = eval_status;
+
+    if (all_actions.size() == 1) {
+        auto &a = all_actions[0];
+        if (a.reloc_id >= 0) {
+            a.eval_status = eval_status;
+            reloc_action(a);
+        }
+    }
+    else {
+        std::ranges::sort(all_actions, [&] (const auto &a1, const auto &a2) {
+            if (a1.reloc_id >= 0 && a1.eval_status != eval_status) {
+                a1.eval_status = eval_status;
+                reloc_action(a1);
+            }
+            if (a2.reloc_id >= 0 && a2.eval_status != eval_status) {
+                a2.eval_status = eval_status;
+                reloc_action(a2);
+            }
+            // Move disabled actions to the end
+            if (a1.cond != a2.cond)
+                return int(a1.cond) > int(a2.cond);
+            // Sort by time
+            if (a1.time_mu != a2.time_mu)
+                return a1.time_mu < a2.time_mu;
+            // Sometimes time points with different tid may actually happen
+            // at the same time (especially on the same artiq mu time point)
+            // in these cases we need to make sure we output them in order
+            // in order to generate the right output at the end.
+            if (a1.tid != a2.tid)
+                return a1.tid < a2.tid;
+            // End action technically happens just before the time point
+            // and must be sorted to be before the start action.
+            if (a1.is_end != a2.is_end)
+                return int(a1.is_end) > int(a2.is_end);
+            return a1.aid < a2.aid;
+        });
+    }
+
+    ScopeExit cleanup([&] {
+        time_checker.clear();
+        rtio_actions.clear();
+    });
+    assert(time_checker.empty());
+    assert(rtio_actions.empty());
+
+    auto add_action = [&] (uint32_t target, uint32_t value, int aid,
+                           int64_t request_time_mu, int64_t lb_mu,
+                           bool exact_time) -> int64_t {
+        if (exact_time) {
+            if (request_time_mu < lb_mu) {
+                bb_throw_format(PyExc_ValueError, action_key(aid),
+                                "Exact time output cannot satisfy lower time bound");
+            }
+            else if (!time_checker.check_and_add_time(request_time_mu)) {
+                bb_throw_format(PyExc_ValueError, action_key(aid),
+                                "Too many outputs at the same time");
+            }
+            rtio_actions.push_back({target, value, request_time_mu});
+            return request_time_mu;
+        }
+        // hard code a 10 us bound.
+        constexpr int64_t max_offset = 10000;
+        int64_t ub_mu = request_time_mu + max_offset;
+        if (ub_mu < lb_mu)
+            bb_throw_format(PyExc_ValueError, action_key(aid),
+                            "Cannot find appropriate output time within bound");
+        if (request_time_mu < lb_mu) {
+            request_time_mu = lb_mu;
+        }
+        else {
+            lb_mu = std::max(lb_mu, request_time_mu - max_offset);
+        }
+        auto time_mu = time_checker.find_time(lb_mu, request_time_mu, ub_mu);
+        if (time_mu == INT64_MIN)
+            bb_throw_format(PyExc_ValueError, action_key(aid),
+                            "Too many outputs at the same time");
+        rtio_actions.push_back({target, value, time_mu});
+        return time_mu;
+    };
+
+    int64_t start_mu = 0;
+
+    // Add all the exact time events first
+    for (auto start_trigger: start_triggers) {
+        auto time_mu = start_trigger.time_mu;
+        start_mu = std::min(time_mu, start_mu);
+        if (!time_checker.check_and_add_time(time_mu))
+            py_throw_format(PyExc_ValueError,
+                            "Too many start triggers at the same time");
+        rtio_actions.push_back({start_trigger.target,
+                start_trigger.raising_edge, time_mu});
+    }
+    for (auto start_trigger: start_triggers) {
+        auto time_mu = start_trigger.time_mu;
+        bb_debug("Adding start trigger: time=%" PRId64 ", raising=%d\n",
+                 time_mu, (int)start_trigger.raising_edge);
+        if (start_trigger.raising_edge) {
+            auto end_mu = time_mu + start_trigger.min_time_mu;
+            end_mu = time_checker.find_time(end_mu, end_mu, end_mu + 1000);
+            if (end_mu == INT64_MIN)
+                py_throw_format(PyExc_ValueError,
+                                "Too many start triggers at the same time");
+            rtio_actions.push_back({start_trigger.target, 0, end_mu});
+        }
+        else {
+            auto raise_mu = time_mu - start_trigger.min_time_mu;
+            raise_mu = time_checker.find_time(raise_mu - 1000, raise_mu, raise_mu);
+            if (raise_mu == INT64_MIN)
+                py_throw_format(PyExc_ValueError,
+                                "Too many start triggers at the same time");
+            rtio_actions.push_back({start_trigger.target, 1, raise_mu});
+            start_mu = std::min(raise_mu, start_mu);
+        }
+    }
+
+    // Add a 3 us buffer to queue outputs before the sequence officially starts
+    start_mu -= 3000;
+
+    for (auto &bus: channels.urukul_busses)
+        bus.reset(start_mu);
+    for (auto &ttlchn: channels.ttlchns)
+        ttlchn.reset(start_mu);
+    for (auto &ddschn: channels.ddschns)
+        ddschn.reset();
+
+    for (auto &artiq_action: all_actions) {
+        // All disabled actions should be at the end.
+        if (!artiq_action.cond)
+            break;
+        auto time_mu = artiq_action.time_mu;
+        for (auto &ttlchn: channels.ttlchns)
+            ttlchn.flush_output(add_action, time_mu, true, false);
+        for (auto &ttlchn: channels.ttlchns)
+            ttlchn.flush_output(add_action, time_mu, false, false);
+        for (auto &bus: channels.urukul_busses)
+            bus.flush_output(add_action, time_mu, false);
+
+        switch (artiq_action.type) {
+        case DDSFreq:
+        case DDSAmp:
+        case DDSPhase: {
+            auto &ddschn = channels.ddschns[artiq_action.chn_idx];
+            channels.urukul_busses[ddschn.bus_id].add_output(add_action,
+                                                                 artiq_action, ddschn);
+            break;
+        }
+        case TTLOut:
+        case CounterEnable:
+            channels.ttlchns[artiq_action.chn_idx].add_output(add_action,
+                                                                  artiq_action);
+            break;
+        }
+    }
+    for (auto &ttlchn: channels.ttlchns)
+        ttlchn.flush_output(add_action, 0, true, true);
+    for (auto &ttlchn: channels.ttlchns)
+        ttlchn.flush_output(add_action, 0, false, true);
+    for (auto &bus: channels.urukul_busses)
+        bus.flush_output(add_action, 0, true);
+
+
+    std::ranges::stable_sort(rtio_actions, [] (auto &a1, auto &a2) {
+        return a1.time_mu < a2.time_mu;
+    });
+
+    auto total_time_mu = seq_time_to_mu(cseq.basic_cseqs[0]->total_time + max_delay);
+    if (use_dma) {
+        auto nactions = rtio_actions.size();
+        // Note that the size calculated below is at least `nactions * 17 + 1`
+        // which is what we need.
+        auto alloc_size = (nactions * 17 / 64 + 1) * 64;
+        PyByteArray_Resize((PyObject*)rtio_array, alloc_size);
+        auto output_ptr = (uint8_t*)PyByteArray_AS_STRING((PyObject*)rtio_array);
+        for (size_t i = 0; i < nactions; i++) {
+            auto &action = rtio_actions[i];
+            auto ptr = &output_ptr[i * 17];
+            auto time_mu = action.time_mu - start_mu;
+            auto target = action.target;
+            auto value = action.value;
+            ptr[0] = 17;
+            ptr[1] = (target >> 8) & 0xff;
+            ptr[2] = (target >> 16) & 0xff;
+            ptr[3] = (target >> 24) & 0xff;
+            ptr[4] = (time_mu >> 0) & 0xff;
+            ptr[5] = (time_mu >> 8) & 0xff;
+            ptr[6] = (time_mu >> 16) & 0xff;
+            ptr[7] = (time_mu >> 24) & 0xff;
+            ptr[8] = (time_mu >> 32) & 0xff;
+            ptr[9] = (time_mu >> 40) & 0xff;
+            ptr[10] = (time_mu >> 48) & 0xff;
+            ptr[11] = (time_mu >> 56) & 0xff;
+            ptr[12] = (target >> 0) & 0xff;
+            ptr[13] = (value >> 0) & 0xff;
+            ptr[14] = (value >> 8) & 0xff;
+            ptr[15] = (value >> 16) & 0xff;
+            ptr[16] = (value >> 24) & 0xff;
+        }
+        if (nactions)
+            total_time_mu = std::max(rtio_actions.back().time_mu, total_time_mu);
+        memset(&output_ptr[nactions * 17], 0, alloc_size - nactions * 17);
+    }
+    else {
+        auto _rtio_array = (PyArrayObject*)rtio_array;
+
+        npy_intp rtio_alloc = (npy_intp)PyArray_SIZE(_rtio_array);
+        PyArray_Dims pydims{&rtio_alloc, 1};
+        npy_intp rtio_len = 0;
+        uint32_t *rtio_array_data = (uint32_t*)PyArray_DATA(_rtio_array);
+        auto resize_rtio = [&] (npy_intp sz) {
+            rtio_alloc = sz;
+            throw_if_not(PyArray_Resize(_rtio_array, &pydims, 0, NPY_CORDER));
+        };
+
+        auto alloc_space = [&] (int n) -> uint32_t* {
+            auto old_len = rtio_len;
+            auto new_len = old_len + n;
+            if (new_len > rtio_alloc) {
+                resize_rtio(new_len * 2 + 2);
+                rtio_array_data = (uint32_t*)PyArray_DATA(_rtio_array);
+            }
+            rtio_len = new_len;
+            return &rtio_array_data[old_len];
+        };
+
+        auto add_wait = [&] (int64_t t_mu) {
+            const int64_t max_wait = 0x80000000;
+            if (t_mu > max_wait) {
+                auto nwait_eles = t_mu / max_wait;
+                t_mu = t_mu % max_wait;
+                auto wait_cmds = alloc_space(nwait_eles);
+                for (int i = 0; i < nwait_eles; i++) {
+                    wait_cmds[i] = uint32_t(max_wait);
+                }
+            }
+            if (t_mu > 0) {
+                alloc_space(1)[0] = uint32_t(-t_mu);
+            }
+        };
+
+        int64_t time_mu = start_mu;
+        for (auto action: rtio_actions) {
+            add_wait(action.time_mu - time_mu);
+            time_mu = action.time_mu;
+            auto cmd = alloc_space(2);
+            cmd[0] = action.target;
+            cmd[1] = action.value;
+        }
+        if (total_time_mu > time_mu) {
+            add_wait(total_time_mu - time_mu);
+        }
+        else {
+            total_time_mu = time_mu;
+        }
+        resize_rtio(rtio_len);
+    }
+    this->total_time_mu = total_time_mu - start_mu;
+
+    bb_debug("artiq_runtime_finalize: finish\n");
+}
+
+__attribute__((visibility("internal")))
+void ArtiqBackend::Data::add_start_trigger(py::ptr<> name, py::ptr<> time,
+                                           py::ptr<> min_time, py::ptr<> raising_edge)
+{
+    auto dev = info().get_device(sys, name);
+    if (!dev.isinstance(info().TTLOut))
+        py_throw_format(PyExc_ValueError, "Invalid start trigger device: %S", name);
+    add_start_trigger_ttl(dev.attr("target_o"_py).as_int(),
+                          event_time::round_time_int(time),
+                          event_time::round_time_int(min_time),
+                          raising_edge.as_bool());
+}
+
+__attribute__((visibility("protected")))
+PyTypeObject ArtiqBackend::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.artiq_backend.ArtiqBackend",
+    .tp_basicsize = sizeof(Backend) + sizeof(ArtiqBackend::Data),
+    .tp_dealloc = py::tp_cxx_dealloc<true,ArtiqBackend>,
+    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
+    .tp_traverse = traverse<>,
+    .tp_clear = clear<>,
+    .tp_methods = (
+        py::meth_table<
+        py::meth_fast<"add_start_trigger",[] (py::ptr<ArtiqBackend> self,
+                                              PyObject *const *args, Py_ssize_t nargs) {
+            py::check_num_arg("ArtiqBackend.add_start_trigger", nargs, 4, 4);
+            self->data()->add_start_trigger(args[0], args[1], args[2], args[3]);
+        }>,
+        py::meth_fast<"set_device_delay",[] (py::ptr<ArtiqBackend> self,
+                                             PyObject *const *args, Py_ssize_t nargs) {
+            py::check_num_arg("ArtiqBackend.set_device_delay", nargs, 2, 2);
+            py::ptr name = args[0];
+            py::ptr delay = args[1];
+            if (rtval::is_rtval(delay)) {
+                self->data()->device_delay.set(name, delay);
+                return;
+            }
+            auto delay_mu = convert_device_delay(delay.as_float());
+            self->data()->device_delay.set(name, py::new_int(delay_mu));
+        }>>),
+    .tp_getset = (py::getset_table<
+                  py::getset_def<"total_time_mu",[] (py::ptr<ArtiqBackend> self) {
+                      return py::new_int(self->data()->total_time_mu);
+                  }>>),
+    .tp_base = &Backend::Type,
+    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+                                        ssize_t nargs, py::tuple kwnames) {
+        py::check_num_arg("ArtiqBackend.__init__", nargs, 2, 2);
+        auto [output_format] =
+            py::parse_pos_or_kw_args<"output_format">("ArtiqBackend.__init__",
+                                                      args + 2, 0, kwnames);
+        bool use_dma = false;
+        if (output_format) {
+            auto fmt_str = py::arg_cast<py::str>(output_format, "output_format");
+            if (fmt_str.compare_ascii("dma") == 0) {
+                use_dma = true;
+            }
+            else if (fmt_str.compare_ascii("bytecode") != 0) {
+                py_throw_format(PyExc_ValueError, "Unknown output type: '%U'",
+                                output_format);
+            }
+        }
+        if (use_dma) {
+            py::arg_cast<PyObject>(args[1], &PyByteArray_Type, "rtio_array");
+        }
+        else {
+            if (!PyArray_Check(args[1]))
+                py_throw_format(PyExc_TypeError, "Unexpected type '%S' for rtio_array",
+                                Py_TYPE(args[1]));
+            auto rtio_array = (PyArrayObject*)args[1];
+            if (PyArray_NDIM(rtio_array) != 1)
+                py_throw_format(PyExc_ValueError, "RTIO output must be a 1D array");
+            if (PyArray_TYPE(rtio_array) != NPY_INT32)
+                py_throw_format(PyExc_TypeError, "RTIO output must be a int32 array");
+        }
+        return alloc(args[0], args[1], use_dma);
+    }>
+};
+
 static rtval::TagVal evalonce_callback(auto *self)
 {
-    if (self->value == Py_None)
+    if (!self->value)
         py_throw_format(PyExc_RuntimeError, "Value evaluated too early");
     return rtval::TagVal::from_py(self->value);
+}
+
+struct EvalOnceCallback : rtval::ExternCallback {
+    py::ref<> value;
+    py::ref<> callback;
+
+    static inline py::ref<EvalOnceCallback> alloc(py::ptr<> callback)
+    {
+        auto self = py::generic_alloc<EvalOnceCallback>();
+        self->fptr = (void*)evalonce_callback<EvalOnceCallback>;
+        call_constructor(&self->value);
+        call_constructor(&self->callback, py::newref(callback));
+        return self;
+    }
+    static PyTypeObject Type;
+};
+
+PyTypeObject EvalOnceCallback::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.artiq_backend.EvalOnceCallback",
+    .tp_basicsize = sizeof(EvalOnceCallback),
+    .tp_dealloc = py::tp_cxx_dealloc<true,EvalOnceCallback>,
+    .tp_str = py::unifunc<[] (py::ptr<EvalOnceCallback> self) {
+        return py::str_format("(%S)()", self->callback);
+    }>,
+    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
+    .tp_traverse = py::tp_field_traverse<EvalOnceCallback,&EvalOnceCallback::value,&EvalOnceCallback::callback>,
+    .tp_clear = py::tp_field_clear<EvalOnceCallback,&EvalOnceCallback::value,&EvalOnceCallback::callback>,
+    .tp_base = &ExternCallback::Type,
+};
+
+struct DatasetCallback : rtval::ExternCallback {
+    py::ref<> value;
+    py::ref<> cb;
+    py::str_ref key;
+    py::ref<> def_val;
+
+    static inline py::ref<DatasetCallback> alloc(py::ptr<> cb, py::str key,
+                                                 py::ptr<> def_val)
+    {
+        auto self = py::generic_alloc<DatasetCallback>();
+        self->fptr = (void*)evalonce_callback<DatasetCallback>;
+        call_constructor(&self->value);
+        call_constructor(&self->cb, py::newref(cb));
+        call_constructor(&self->key, py::newref(key));
+        call_constructor(&self->def_val, def_val.xref());
+        return self;
+    }
+    static PyTypeObject Type;
+};
+
+PyTypeObject DatasetCallback::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.artiq_backend.DatasetCallback",
+    .tp_basicsize = sizeof(DatasetCallback),
+    .tp_dealloc = py::tp_cxx_dealloc<true,DatasetCallback>,
+    .tp_str = py::unifunc<[] (py::ptr<DatasetCallback> self) {
+        if (!PyMethod_Check(self->cb))
+            return py::str_format("<dataset %S for %S>", self->key, self->cb);
+        py::ptr func = PyMethod_GET_FUNCTION((PyObject*)self->cb);
+        py::ptr obj = PyMethod_GET_SELF((PyObject*)self->cb);
+        if (py::arg_cast<py::str>(func.attr("__name__"_py),
+                                  "__name__").compare_ascii("get_dataset_sys") == 0)
+            return py::str_format("<dataset_sys %S for %S>", self->key, obj);
+        return py::str_format("<dataset %S for %S>", self->key, obj);
+    }>,
+    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
+    .tp_traverse = py::tp_field_traverse<DatasetCallback,&DatasetCallback::value,&DatasetCallback::cb,&DatasetCallback::def_val>,
+    .tp_clear = py::tp_field_clear<DatasetCallback,&DatasetCallback::value,&DatasetCallback::cb,&DatasetCallback::key,&DatasetCallback::def_val>,
+    .tp_base = &ExternCallback::Type,
+};
+
+static inline py::ref<> check_bb_rt_values(py::ptr<> self)
+{
+    auto vals = self.try_attr("_bb_rt_values"_py);
+    if (vals)
+        return vals;
+    vals.take(py::new_dict());
+    self.set_attr("_bb_rt_values"_py, vals);
+    return vals;
+}
+
+static inline py::ref<> _call_with_opt(py::ptr<> cb, py::ptr<> key, py::ptr<> def_val)
+{
+    if (def_val) {
+        return cb(key, def_val);
+    }
+    else {
+        return cb(key);
+    }
+}
+
+template<bool sys>
+static inline py::ref<> _rt_dataset(py::ptr<> self, PyObject *const *args,
+                                    Py_ssize_t nargs, py::tuple kwnames)
+{
+    auto fname = sys ? "rt_dataset_sys" : "rt_dataset";
+    py::check_num_arg(fname, nargs, 1, 2);
+    auto key = py::arg_cast<py::str>(args[0], "key");
+    auto [def_val] = py::parse_pos_or_kw_args<"default">(fname, args + 1,
+                                                         nargs - 1, kwnames);
+    auto _vals = check_bb_rt_values(self);
+    auto cb = self.attr(sys ? "get_dataset_sys"_py : "get_dataset"_py);
+    if (_vals.is_none())
+        return _call_with_opt(cb, key, def_val);
+    auto vals = py::arg_cast<py::dict>(_vals, "_bb_rt_values");
+    auto _key = py::new_tuple(key, py::new_bool(sys));
+    auto res = vals.try_get(_key);
+    if (res)
+        return py::ref(rtval::new_extern(std::move(res), &PyFloat_Type));
+    auto rtcb = DatasetCallback::alloc(cb, key, def_val);
+    vals.set(_key, rtcb);
+    return py::ref(rtval::new_extern(std::move(rtcb), &PyFloat_Type));
+}
+
+static PyMethodDef env_methods[] = {
+    py::meth_noargs<"_eval_all_rtvals", [] (py::ptr<> self) {
+        auto vals = self.try_attr("_bb_rt_values"_py);
+        if (vals.is_none())
+            return;
+        if (vals && vals.isa<py::dict>()) {
+            for (auto [_, val]: py::dict_iter(vals)) {
+                if (auto dval = py::cast<DatasetCallback>(val)) {
+                    dval->value.take(_call_with_opt(dval->cb, dval->key, dval->def_val));
+                }
+                else if (auto eoval = py::cast<EvalOnceCallback>(val)) {
+                    eoval->value.take(eoval->callback());
+                }
+                else {
+                    py_throw_format(PyExc_RuntimeError,
+                                    "Unknown object in runtime callbacks");
+                }
+            }
+        }
+        self.set_attr("_bb_rt_values"_py, py::new_none());
+        self.attr("call_child_method"_py)("_eval_all_rtvals"_py);
+    }>,
+    py::meth_o<"rt_value", [] (py::ptr<> self, py::ptr<> cb) -> py::ref<> {
+        auto vals = check_bb_rt_values(self);
+        if (vals.is_none())
+            return cb();
+        auto rtcb = EvalOnceCallback::alloc(cb);
+        py::arg_cast<py::dict>(vals, "_bb_rt_values").set(cb, rtcb);
+        return py::ref(rtval::new_extern(std::move(rtcb), &PyFloat_Type));
+    }>,
+    py::meth_fastkw<"rt_dataset",_rt_dataset<false>>,
+    py::meth_fastkw<"rt_dataset_sys",_rt_dataset<true>>
+};
+
+void patch_artiq()
+{
+    for (auto &meth_def: env_methods) {
+        py::ref descr(throw_if_not(PyDescr_NewMethod(&PyBaseObject_Type, &meth_def)));
+        info().HasEnvironment.set_attr(meth_def.ml_name, descr);
+    }
+}
+
+__attribute__((visibility("hidden")))
+void init()
+{
+    _import_array();
+    throw_if(PyType_Ready(&ArtiqBackend::Type) < 0);
+    throw_if(PyType_Ready(&EvalOnceCallback::Type) < 0);
+    throw_if(PyType_Ready(&DatasetCallback::Type) < 0);
 }
 
 }

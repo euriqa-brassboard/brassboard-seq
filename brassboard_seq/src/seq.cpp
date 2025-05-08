@@ -253,7 +253,7 @@ static py::ref<TimeSeq> add_step_real(py::ptr<CondSeq> self, PyObject *const *ar
     return res;
 }
 
-}
+} // (anonymous)
 
 __attribute__((visibility("internal")))
 inline int SeqInfo::get_channel_id(py::str name)

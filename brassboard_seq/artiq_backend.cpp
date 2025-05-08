@@ -17,19 +17,18 @@
  *************************************************************************/
 
 #include "src/utils.h"
-
-#include "src/event_time.h"
+#include "src/artiq_backend.h"
 
 using namespace brassboard_seq;
 
-static PyModuleDef _utils_module = {
+static PyModuleDef artiq_backend_module = {
     .m_base = PyModuleDef_HEAD_INIT,
-    .m_name = "brassboard_seq._utils",
+    .m_name = "brassboard_seq.artiq_backend",
     .m_size = -1,
 };
 
-PY_MODINIT(_utils, _utils_module)
+PY_MODINIT(artiq_backend, artiq_backend_module)
 {
-    // event_time
-    m.add_type(&event_time::TimeManager::Type);
+    artiq_backend::patch_artiq();
+    m.add_type(&artiq_backend::ArtiqBackend::Type);
 }

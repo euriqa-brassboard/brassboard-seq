@@ -2,6 +2,54 @@
 
 from brassboard_seq cimport artiq_backend
 from libc.stdint cimport *
+from libcpp.vector cimport vector
+
+cdef extern from * namespace "brassboard_seq::artiq_backend":
+    """
+    namespace brassboard_seq::artiq_backend {
+    static inline auto &ab_get_channels(ArtiqBackend *ab)
+    {
+        return ab->data()->channels;
+    }
+    static inline auto &ab_get_all_actions(ArtiqBackend *ab)
+    {
+        return ab->data()->all_actions;
+    }
+    static inline auto *ab_get_bool_values(ArtiqBackend *ab)
+    {
+        return py::new_nlist(ab->data()->bool_values.size(), [&] (int i) {
+            return py::ptr(ab->data()->bool_values[i].first).ref();
+        }).rel();
+    }
+    static inline auto *ab_get_float_values(ArtiqBackend *ab)
+    {
+        return py::new_nlist(ab->data()->float_values.size(), [&] (int i) {
+            return py::ptr(ab->data()->float_values[i].first).ref();
+        }).rel();
+    }
+    static inline auto &ab_get_relocations(ArtiqBackend *ab)
+    {
+        return ab->data()->relocations;
+    }
+    static inline auto &ab_get_start_triggers(ArtiqBackend *ab)
+    {
+        return ab->data()->start_triggers;
+    }
+    static inline void ab_add_start_trigger(ArtiqBackend *ab, uint32_t tgt, long long time,
+                                            int min_time, bool raising_edge)
+    {
+        return ab->data()->add_start_trigger_ttl(tgt, time, min_time, raising_edge);
+    }
+    }
+    """
+    artiq_backend.ChannelsInfo &ab_get_channels(artiq_backend.ArtiqBackend ab)
+    vector[artiq_backend.ArtiqAction] &ab_get_all_actions(artiq_backend.ArtiqBackend ab)
+    list ab_get_bool_values(artiq_backend.ArtiqBackend ab) except +
+    list ab_get_float_values(artiq_backend.ArtiqBackend ab) except +
+    vector[artiq_backend.Relocation] &ab_get_relocations(artiq_backend.ArtiqBackend ab)
+    vector[artiq_backend.StartTrigger] &ab_get_start_triggers(artiq_backend.ArtiqBackend ab)
+    void ab_add_start_trigger(artiq_backend.ArtiqBackend ab, uint32_t tgt, long long time,
+                              int min_time, bint raising_edge) except +
 
 cdef class UrukulBus:
     cdef public uint32_t channel
@@ -50,7 +98,7 @@ class ChannelsInfo:
 
 def get_channel_info(artiq_backend.ArtiqBackend ab):
     self = ChannelsInfo()
-    info = &ab.channels
+    info = &ab_get_channels(ab)
     self.urukul_busses = [new_urukul_bus(bus) for bus in info.urukul_busses]
     self.ttlchns = [new_ttl_channel(&info.ttlchns[i]) for i in range(info.ttlchns.size())]
     self.ddschns = [new_dds_channel(dds) for dds in info.ddschns]
@@ -115,11 +163,11 @@ class CompiledInfo:
 
 def get_compiled_info(artiq_backend.ArtiqBackend ab):
     self = CompiledInfo()
-    self.all_actions = [new_artiq_action(ab.all_actions[i])
-                            for i in range(ab.all_actions.size())]
-    self.bool_values = [<object>p.first for p in ab.bool_values]
-    self.float_values = [<object>p.first for p in ab.float_values]
-    self.relocations = [new_relocation(action) for action in ab.relocations]
+    self.all_actions = [new_artiq_action(ab_get_all_actions(ab)[i])
+                            for i in range(ab_get_all_actions(ab).size())]
+    self.bool_values = ab_get_bool_values(ab)
+    self.float_values = ab_get_float_values(ab)
+    self.relocations = [new_relocation(action) for action in ab_get_relocations(ab)]
     return self
 
 cdef class StartTrigger:
@@ -137,11 +185,8 @@ cdef StartTrigger new_start_trigger(artiq_backend.StartTrigger c_trigger):
     return py_trigger
 
 def get_start_trigger(artiq_backend.ArtiqBackend ab):
-    return [new_start_trigger(trigger) for trigger in ab.start_triggers]
+    return [new_start_trigger(trigger) for trigger in ab_get_start_triggers(ab)]
 
 def add_start_trigger(artiq_backend.ArtiqBackend ab, uint32_t tgt, long long time,
                       int min_time, bint raising_edge):
-    ab.add_start_trigger_ttl(tgt, time, min_time, raising_edge)
-
-def get_start_trigger(artiq_backend.ArtiqBackend ab):
-    return [new_start_trigger(trigger) for trigger in ab.start_triggers]
+    ab_add_start_trigger(ab, tgt, time, min_time, raising_edge)

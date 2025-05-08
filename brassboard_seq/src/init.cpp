@@ -17,9 +17,13 @@
  *************************************************************************/
 
 #include "action.h"
+#include "artiq_backend.h"
+#include "backend.h"
 #include "config.h"
 #include "event_time.h"
 #include "rfsoc.h"
+#include "rfsoc_backend.h"
+#include "rfsoc_gen.h"
 #include "rtprop.h"
 #include "rtval.h"
 #include "scan.h"
@@ -36,10 +40,15 @@ void init()
 {
     std::call_once(init_flag, [] {
         rtval::init();
+        backend::init();
+
         action::init();
+        artiq_backend::init();
         config::init();
         event_time::init();
         rfsoc::init();
+        rfsoc_backend::init();
+        rfsoc_gen::init();
         rtprop::init();
         scan::init();
         seq::init();

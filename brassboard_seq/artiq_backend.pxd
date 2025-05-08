@@ -17,16 +17,18 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.backend cimport Backend
 
 from libcpp.map cimport map as cppmap
 from libcpp.utility cimport pair
 from libcpp.vector cimport vector
 from libc.stdint cimport *
 
-from cpython cimport PyObject
-
 cdef extern from "src/artiq_backend.h" namespace "brassboard_seq::artiq_backend":
+    # Cython doesn't seem to allow namespace in the object property
+    # for the imported extension class
+    """
+    using _brassboard_seq_artiq_backend_ArtiqBackend = brassboard_seq::artiq_backend::ArtiqBackend;
+    """
     enum ChannelType:
         DDSFreq
         DDSAmp
@@ -51,17 +53,12 @@ cdef extern from "src/artiq_backend.h" namespace "brassboard_seq::artiq_backend"
         uint8_t chip_select
         int64_t delay
 
-    cppclass DDSAction:
-        pass
-
     cppclass UrukulBus:
         uint32_t channel
         uint32_t addr_target
         uint32_t data_target
         uint32_t io_update_target
         uint8_t ref_period_mu
-
-        vector[DDSAction] dds_status
 
     cppclass TTLChannel:
         uint32_t target
@@ -89,31 +86,5 @@ cdef extern from "src/artiq_backend.h" namespace "brassboard_seq::artiq_backend"
         int time_idx
         int val_idx
 
-    cppclass RTIOAction:
+    ctypedef class brassboard_seq.artiq_backend.ArtiqBackend [object _brassboard_seq_artiq_backend_ArtiqBackend, check_size ignore]:
         pass
-
-    cppclass TimeChecker:
-        pass
-
-
-cdef class ArtiqBackend(Backend):
-    # Artiq system object
-    cdef sys
-
-    cdef ChannelsInfo channels
-    cdef vector[ArtiqAction] all_actions
-    cdef vector[pair[void*,bint]] bool_values
-    cdef vector[pair[void*,double]] float_values
-    cdef vector[Relocation] relocations
-    cdef bint eval_status
-    cdef bint use_dma
-    cdef readonly int64_t total_time_mu
-    cdef vector[RTIOAction] rtio_actions
-    cdef TimeChecker time_checker
-    cdef object rtio_array # ndarray
-
-    cdef vector[StartTrigger] start_triggers
-    cdef dict device_delay
-
-    cdef int add_start_trigger_ttl(self, uint32_t tgt, int64_t time,
-                                   int min_time, bint raising_edge) except -1

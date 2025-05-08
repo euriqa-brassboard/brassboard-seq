@@ -17,19 +17,29 @@
  *************************************************************************/
 
 #include "src/utils.h"
-
-#include "src/event_time.h"
+#include "src/rfsoc.h"
+#include "src/rfsoc_gen.h"
+#include "src/rfsoc_backend.h"
 
 using namespace brassboard_seq;
 
-static PyModuleDef _utils_module = {
+static PyModuleDef rfsoc_backend_module = {
     .m_base = PyModuleDef_HEAD_INIT,
-    .m_name = "brassboard_seq._utils",
+    .m_name = "brassboard_seq.rfsoc_backend",
     .m_size = -1,
 };
 
-PY_MODINIT(_utils, _utils_module)
+PY_MODINIT(rfsoc_backend, rfsoc_backend_module)
 {
-    // event_time
-    m.add_type(&event_time::TimeManager::Type);
+    m.add_type(&rfsoc::JaqalInst_v1_Type);
+    m.add_type(&rfsoc::Jaqal_v1_Type);
+    m.add_type(&rfsoc::JaqalChannelGen_v1_Type);
+    m.add_type(&rfsoc::JaqalInst_v1_3_Type);
+    m.add_type(&rfsoc::Jaqal_v1_3_Type);
+
+    m.add_type(&rfsoc_gen::PulseCompilerGenerator_Type);
+    m.add_type(&rfsoc_gen::Jaqalv1Generator_Type);
+    m.add_type(&rfsoc_gen::Jaqalv1_3Generator_Type);
+
+    m.add_type(&rfsoc_backend::RFSOCBackend::Type);
 }

@@ -16,10 +16,6 @@
 # License along with this library. If not,
 # see <http://www.gnu.org/licenses/>.
 
-from cpython cimport PyObject
-
-from libc.stdint cimport *
-
 cdef extern from "<ostream>" namespace "std":
     ctypedef struct seekdir "std::ios_base::seekdir":
         pass
@@ -48,25 +44,8 @@ cdef extern from "src/utils.h" namespace "brassboard_seq::py":
         ref getvalue() except +
 
 cdef extern from * namespace "brassboard_seq":
-    PyObject *PyErr_Format(PyObject *exception, char *format, ...) except NULL
-
     cppclass pybytes_ostream(ostream):
         object get_buf() except +
 
     cppclass pybytearray_ostream(ostream):
         object get_buf() except +
-
-# Cython does not declare these in cpython cimport
-cdef extern from *:
-    PyObject *Py_None
-    PyObject *Py_True
-    PyObject *Py_False
-    PyObject *PyExc_AttributeError
-    PyObject *PyExc_KeyError
-    PyObject *PyExc_IndexError
-    PyObject *PyExc_SyntaxError
-    PyObject *PyExc_TypeError
-    PyObject *PyExc_ValueError
-    PyObject *PyExc_RuntimeError
-    PyObject *Py_NotImplemented
-    object PyObject_Vectorcall(PyObject*, PyObject**, size_t, PyObject*)

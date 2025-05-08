@@ -23,8 +23,6 @@
 
 #include <array>
 
-#include <stdint.h>
-
 namespace brassboard_seq::rfsoc {
 
 // order of the coefficient is order0, order1, order2, order3

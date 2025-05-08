@@ -17,23 +17,20 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.backend cimport Backend
 
 from libc.stdint cimport *
 from libcpp.vector cimport vector
 from libcpp.map cimport map as cppmap
-from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport pair
 
 from cpython cimport PyObject
 
 cdef extern from "src/rfsoc_backend.h" namespace "brassboard_seq::rfsoc_backend":
-    struct cubic_spline_t:
-        double order0
-        double order1
-        double order2
-        double order3
-
+    # Cython doesn't seem to allow namespace in the object property
+    # for the imported extension class
+    """
+    using _brassboard_seq_rfsoc_backend_RFSOCBackend = brassboard_seq::rfsoc_backend::RFSOCBackend;
+    """
     enum ToneParam:
         ToneFreq
         TonePhase
@@ -67,27 +64,5 @@ cdef extern from "src/rfsoc_backend.h" namespace "brassboard_seq::rfsoc_backend"
         cppmap[int,pair[int,ToneParam]] chn_map
         cppmap[int,int64_t] dds_delay
 
-        int add_tone_channel(int chn) nogil
-        void add_seq_channel(int seq_chn, int chn_idx, ToneParam param) nogil
-        void set_dds_delay(int dds, int64_t delay) nogil
-
-    cppclass ToneBuffer:
+    ctypedef class brassboard_seq.rfsoc_backend.RFSOCBackend [object _brassboard_seq_rfsoc_backend_RFSOCBackend, check_size ignore]:
         pass
-
-    cppclass Generator:
-        pass
-
-cdef class RFSOCGenerator:
-    cdef unique_ptr[Generator] gen
-
-cdef class RFSOCBackend(Backend):
-    cdef RFSOCGenerator generator
-    cdef ChannelInfo channels
-    cdef vector[pair[void*,bint]] bool_values
-    cdef vector[pair[void*,double]] float_values
-    cdef vector[Relocation] relocations
-    cdef bint eval_status
-    cdef public bint use_all_channels
-    cdef ToneBuffer tone_buffer
-
-    cdef dict rt_dds_delay

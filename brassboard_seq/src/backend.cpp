@@ -16,7 +16,7 @@
  *   see <http://www.gnu.org/licenses/>.                                 *
  *************************************************************************/
 
-#include "seq.h"
+#include "backend.h"
 
 #include <algorithm>
 #include <vector>
@@ -272,10 +272,9 @@ inline void CompiledSeq::populate_values(py::ptr<seq::Seq> seq)
     populate_bseq_values(seq, basic_cseqs[0], chn_status);
 }
 
-template<typename Backend>
-static inline void compiler_finalize(auto comp, Backend*)
+__attribute__((visibility("internal")))
+inline void SeqCompiler::finalize()
 {
-    py::ptr seq = comp->seq;
     py::ptr seqinfo = seq->seqinfo;
     auto bt_guard = set_global_tracker(&seqinfo->cinfo->bt_tracker);
     // This relies on the event times being in the order of allocation
@@ -283,17 +282,16 @@ static inline void compiler_finalize(auto comp, Backend*)
     check_seq_flow(seq);
     for (auto [i, path]: py::list_iter<py::tuple>(seqinfo->channel_paths)) {
         auto prefix = path.get(0);
-        if (py::dict(comp->backends).contains(prefix)) [[likely]]
+        if (py::dict(backends).contains(prefix)) [[likely]]
             continue;
         py_throw_format(PyExc_ValueError, "Unhandled channel: %U",
                         config::channel_name_from_path(path));
     }
     seqinfo->channel_name_map.take(py::new_none()); // Free up memory
-    auto &cseq = comp->cseq;
     cseq.initialize(seq);
     cseq.populate_values(seq);
-    for (auto [name, backend]: py::dict_iter<Backend>(comp->backends)) {
-        throw_if(backend->__pyx_vtab->finalize(backend, cseq) < 0);
+    for (auto [name, backend]: py::dict_iter<Backend>(backends)) {
+        backend->finalize(cseq);
     }
 }
 
@@ -376,13 +374,11 @@ inline void CompiledSeq::eval_chn_actions(py::ptr<seq::Seq> seq, unsigned age)
     }
 }
 
-template<typename Backend>
-static inline void compiler_runtime_finalize(auto comp, py::ptr<> _age, Backend*)
+__attribute__((visibility("internal")))
+inline void SeqCompiler::runtime_finalize(py::ptr<> _age)
 {
     unsigned age = _age.as_int();
-    py::ptr seq = comp->seq;
     py::ptr ginfo = seq->seqinfo;
-    auto &cseq = comp->cseq;
     auto bt_guard = set_global_tracker(&ginfo->cinfo->bt_tracker);
     for (auto [bseq_id, bseq]: py::list_iter<BasicSeq>(seq->basic_seqs)) {
         assert(cseq.basic_cseqs[bseq_id]->bseq_id == bseq_id);
@@ -397,9 +393,80 @@ static inline void compiler_runtime_finalize(auto comp, py::ptr<> _age, Backend*
         }
     }
     cseq.eval_chn_actions(seq, age);
-    for (auto [name, backend]: py::dict_iter<Backend>(comp->backends)) {
-        throw_if(backend->__pyx_vtab->runtime_finalize(backend, cseq, age) < 0);
+    for (auto [name, backend]: py::dict_iter<Backend>(backends)) {
+        backend->runtime_finalize(cseq, age);
     }
+}
+
+__attribute__((visibility("protected")))
+PyTypeObject Backend::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.backend.Backend",
+    .tp_basicsize = sizeof(Backend) + sizeof(Backend::Data),
+    .tp_dealloc = py::tp_cxx_dealloc<true,Backend>,
+    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
+    .tp_traverse = _traverse<Backend>,
+    .tp_clear = _clear<Backend>,
+    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+                                        ssize_t nargs, py::tuple kwnames) {
+        py::check_num_arg("Backend.__init__", nargs, 0, 0);
+        py::check_no_kwnames("Backend.__init__", kwnames);
+        auto self = py::generic_alloc<Backend>();
+        call_constructor(self->data());
+        return self;
+    }>
+};
+
+__attribute__((visibility("protected")))
+PyTypeObject SeqCompiler::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.backend.SeqCompiler",
+    .tp_basicsize = sizeof(SeqCompiler),
+    .tp_dealloc = py::tp_cxx_dealloc<true,SeqCompiler>,
+    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE|Py_TPFLAGS_HAVE_GC,
+    .tp_traverse = py::tp_field_traverse<SeqCompiler,&SeqCompiler::seq,&SeqCompiler::backends>,
+    .tp_clear = py::tp_field_clear<SeqCompiler,&SeqCompiler::seq,&SeqCompiler::backends>,
+    .tp_methods = (
+        py::meth_table<
+        py::meth_fast<"add_backend",[] (py::ptr<SeqCompiler> self, PyObject *const *args,
+                                        Py_ssize_t nargs) {
+            py::check_num_arg("SeqCompiler.add_backend", nargs, 2, 2);
+            auto name = py::arg_cast<py::str>(args[0], "name");
+            auto backend = py::arg_cast<Backend>(args[1], "backend");
+            if (self->backends.contains(name))
+                py_throw_format(PyExc_ValueError, "Backend %U already exist", name);
+            self->backends.set(name, backend);
+            backend->data()->seq.assign(self->seq);
+            backend->data()->prefix.assign(name);
+        }>,
+        py::meth_noargs<"finalize",[] (py::ptr<SeqCompiler> self) { self->finalize(); }>,
+        py::meth_o<"runtime_finalize",[] (py::ptr<SeqCompiler> self, py::ptr<> pyage) {
+            self->runtime_finalize(pyage);
+        }>>),
+    .tp_members = (py::mem_table<
+                   py::mem_def<"seq",T_OBJECT_EX,&SeqCompiler::seq,READONLY>>),
+    .tp_init = py::itrifunc<[] (py::ptr<SeqCompiler> self, py::tuple args, py::dict kws) {
+        py::check_num_arg("SeqCompiler.__init__", args ? args.size() : 0, 1, 1);
+        if (kws) {
+            for (auto [name, _]: py::dict_iter(kws)) {
+                unexpected_kwarg_error("SeqCompiler.__init__", name);
+            }
+        }
+        self->seq.assign(py::arg_cast<seq::Seq>(args.get(0), "seq"));
+    }>,
+    .tp_new = py::tp_new<[] (PyTypeObject *t, auto...) {
+        auto self = py::generic_alloc<SeqCompiler>(t);
+        call_constructor(&self->seq, py::new_none());
+        call_constructor(&self->backends, py::new_dict());
+        return self;
+    }>,
+};
+
+__attribute__((visibility("hidden")))
+void init()
+{
+    throw_if(PyType_Ready(&Backend::Type) < 0);
+    throw_if(PyType_Ready(&SeqCompiler::Type) < 0);
 }
 
 }

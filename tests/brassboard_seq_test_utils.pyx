@@ -2,8 +2,6 @@
 
 from brassboard_seq cimport action, backend, event_time, rtval, seq, utils
 
-import numpy as np
-
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 from libcpp.string cimport string as cppstr

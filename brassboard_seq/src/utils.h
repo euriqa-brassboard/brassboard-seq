@@ -19,9 +19,9 @@
 #ifndef BRASSBOARD_SEQ_SRC_UTILS_H
 #define BRASSBOARD_SEQ_SRC_UTILS_H
 
-#include "Python.h"
-#include "frameobject.h"
-#include "structmember.h"
+#include <Python.h>
+#include <frameobject.h>
+#include <structmember.h>
 
 #include <algorithm>
 #include <array>
@@ -79,31 +79,6 @@
 #elif BB_CPU_AARCH64
 #  include <arm_neon.h>
 #endif
-
-namespace {
-
-template<typename T>
-__attribute__((always_inline, flatten))
-static inline constexpr auto _pyx_find_base(T &&p, auto cb)
-{
-    if constexpr (requires { cb(std::forward<T>(p)); }) {
-        if constexpr (std::is_pointer_v<std::remove_cvref_t<T>>) {
-            return p;
-        }
-        else {
-            return p.operator->();
-        }
-    }
-    else {
-        return _pyx_find_base(&p->__pyx_base, cb);
-    }
-}
-
-}
-
-#define pyx_find_base(p, fld)                                           \
-    (::_pyx_find_base((p), [] (auto &&_x) constexpr requires requires { _x->fld; } {}))
-#define pyx_fld(p, fld) (pyx_find_base((p), fld)->fld)
 
 namespace brassboard_seq {
 

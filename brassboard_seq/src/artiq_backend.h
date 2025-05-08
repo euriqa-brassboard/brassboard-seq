@@ -19,7 +19,8 @@
 #ifndef BRASSBOARD_SEQ_SRC_ARTIQ_BACKEND_H
 #define BRASSBOARD_SEQ_SRC_ARTIQ_BACKEND_H
 
-#include <stdint.h>
+#include "backend.h"
+#include "seq.h"
 
 #include <cmath>
 #include <map>
@@ -28,6 +29,8 @@
 #include <vector>
 
 namespace brassboard_seq::artiq_backend {
+
+using namespace backend;
 
 enum ChannelType : uint8_t {
     DDSFreq,
@@ -249,6 +252,52 @@ static inline uint32_t dds_freq_to_mu(double freq, double ftw_per_hz)
 {
     return uint32_t(freq * ftw_per_hz + 0.5);
 }
+
+struct ArtiqBackend : Backend::Base<ArtiqBackend> {
+    struct Data : Backend::Data {
+        // Artiq system object
+        py::ref<> sys;
+
+        ChannelsInfo channels;
+        std::vector<ArtiqAction> all_actions;
+        std::vector<std::pair<void*,bool>> bool_values;
+        std::vector<std::pair<void*,double>> float_values;
+        std::vector<Relocation> relocations;
+        bool eval_status{false};
+        bool use_dma;
+        int64_t total_time_mu;
+        std::vector<RTIOAction> rtio_actions;
+        TimeChecker time_checker;
+        py::ref<> rtio_array;
+
+        std::vector<StartTrigger> start_triggers;
+        py::dict_ref device_delay{py::new_dict()};
+
+        Data(py::ptr<> sys, py::ptr<> rtio_array, bool use_dma);
+
+        void finalize(CompiledSeq&) override;
+        void runtime_finalize(CompiledSeq&, unsigned) override;
+        void add_start_trigger_ttl(uint32_t tgt, int64_t time,
+                                   int min_time, bool raising_edge)
+        {
+            start_triggers.push_back({
+                    .target = tgt,
+                    .min_time_mu = (uint16_t)std::max((int)seq_time_to_mu(min_time), 8),
+                    .raising_edge = raising_edge,
+                    .time_mu = seq_time_to_mu(time),
+                });
+        }
+        void add_start_trigger(py::ptr<> name, py::ptr<> time,
+                               py::ptr<> min_time, py::ptr<> raising_edge);
+    };
+
+    using fields = field_pack<Backend::fields,&Data::sys,&Data::rtio_array,
+                              &Data::device_delay>;
+    static PyTypeObject Type;
+};
+
+void patch_artiq();
+void init();
 
 }
 

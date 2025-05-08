@@ -20,7 +20,7 @@
 
 #include "yaml.h"
 
-#include "numpy/arrayobject.h"
+#include <numpy/arrayobject.h>
 
 namespace brassboard_seq::scan {
 

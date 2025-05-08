@@ -3,6 +3,37 @@
 from brassboard_seq cimport rfsoc_backend
 
 from libc.stdint cimport *
+from libcpp.vector cimport vector
+
+cdef extern from * namespace "brassboard_seq::rfsoc_backend":
+    """
+    namespace brassboard_seq::rfsoc_backend {
+    static inline auto &rb_get_channels(RFSOCBackend *rb)
+    {
+        return rb->data()->channels;
+    }
+    static inline auto *rb_get_bool_values(RFSOCBackend *rb)
+    {
+        return py::new_nlist(rb->data()->bool_values.size(), [&] (int i) {
+            return py::ptr(rb->data()->bool_values[i].first).ref();
+        }).rel();
+    }
+    static inline auto *rb_get_float_values(RFSOCBackend *rb)
+    {
+        return py::new_nlist(rb->data()->float_values.size(), [&] (int i) {
+            return py::ptr(rb->data()->float_values[i].first).ref();
+        }).rel();
+    }
+    static inline auto &rb_get_relocations(RFSOCBackend *rb)
+    {
+        return rb->data()->relocations;
+    }
+    }
+    """
+    rfsoc_backend.ChannelInfo &rb_get_channels(rfsoc_backend.RFSOCBackend rb)
+    list rb_get_bool_values(rfsoc_backend.RFSOCBackend rb) except +
+    list rb_get_float_values(rfsoc_backend.RFSOCBackend rb) except +
+    vector[rfsoc_backend.Relocation] &rb_get_relocations(rfsoc_backend.RFSOCBackend rb)
 
 class RFSOCAction:
     pass
@@ -57,7 +88,7 @@ cdef ChannelInfo new_channel_info(rfsoc_backend.ChannelInfo *info):
     return self
 
 def get_channel_info(rfsoc_backend.RFSOCBackend rb):
-    return new_channel_info(&rb.channels)
+    return new_channel_info(&rb_get_channels(rb))
 
 cdef class Relocation:
     cdef public int cond_idx
@@ -76,7 +107,7 @@ class CompiledInfo:
 
 def get_compiled_info(rfsoc_backend.RFSOCBackend rb):
     self = CompiledInfo()
-    self.bool_values = [<object>p.first for p in rb.bool_values]
-    self.float_values = [<object>p.first for p in rb.float_values]
-    self.relocations = [new_relocation(action) for action in rb.relocations]
+    self.bool_values = rb_get_bool_values(rb)
+    self.float_values = rb_get_float_values(rb)
+    self.relocations = [new_relocation(action) for action in rb_get_relocations(rb)]
     return self

@@ -17,20 +17,15 @@
 # see <http://www.gnu.org/licenses/>.
 
 # Do not use relative import since it messes up cython file name tracking
-from brassboard_seq.seq cimport Seq
 
 cdef extern from "src/backend.h" namespace "brassboard_seq::backend":
+    # Cython doesn't seem to allow namespace in the object property
+    # for the imported extension class
+    """
+    using _brassboard_seq_backend_SeqCompiler = brassboard_seq::backend::SeqCompiler;
+    """
     cppclass CompiledSeq:
         pass
 
-cdef class Backend:
-    cdef Seq seq
-    cdef str prefix
-
-    cdef int finalize(self, CompiledSeq&) except -1
-    cdef int runtime_finalize(self, CompiledSeq&, unsigned age) except -1
-
-cdef class SeqCompiler:
-    cdef readonly Seq seq
-    cdef CompiledSeq cseq
-    cdef dict backends
+    ctypedef class brassboard_seq.backend.SeqCompiler [object _brassboard_seq_backend_SeqCompiler, check_size ignore]:
+        cdef CompiledSeq cseq
