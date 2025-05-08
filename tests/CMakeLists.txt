@@ -16,11 +16,11 @@ function(test_cxx_mod name)
     PREFIX ""
     SUFFIX "${PYTHON_EXTENSION_SUFFIX}")
 endfunction()
+test_cxx_mod(brassboard_seq_artiq_backend_utils)
 test_cxx_mod(brassboard_seq_rfsoc_backend_utils)
 
 python_test("${CMAKE_BINARY_DIR}"
   brassboard_seq_test_utils.pyx
-  brassboard_seq_artiq_backend_utils.pyx
   conftest.py
   dummy_artiq.py
   dummy_pulse_compiler.py

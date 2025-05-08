@@ -69,7 +69,6 @@ cython_link_libraries(brassboard_seq_utils -fopenmp)
 python_install_module("${CMAKE_CURRENT_SOURCE_DIR}/.." brassboard_seq
   __init__.py
   action.pxd
-  artiq_backend.pxd
   backend.pxd
   event_time.pxd
   rtval.pxd

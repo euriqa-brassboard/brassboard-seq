@@ -35,7 +35,7 @@ static auto value_pair_list(auto &values)
     return py::new_nlist(values.size(), [&] (int i) { return py::ptr(values[i].first); });
 }
 
-template<typename T> static inline auto to_py(T &&v);
+template<typename T> static inline auto to_py(const T &v);
 
 template<typename> struct py_convert {
     static inline auto convert(bool b)
@@ -77,9 +77,9 @@ template<typename T, size_t N> struct py_convert<T[N]> {
     }
 };
 
-template<typename T> static inline auto to_py(T &&v)
+template<typename T> static inline auto to_py(const T &v)
 {
-    return py_convert<std::remove_cvref_t<T>>::convert(std::forward<T>(v));
+    return py_convert<std::remove_cvref_t<T>>::convert(v);
 }
 
 #endif

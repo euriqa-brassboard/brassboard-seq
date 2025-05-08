@@ -107,7 +107,7 @@ class Compiler(backend.SeqCompiler):
                 is_ttl = False
                 assert chn in channels.dds_param_chn_map
                 ddsid, chntype = channels.dds_param_chn_map[chn]
-                assert artiq_action.type == artiq_utils.channel_type_names[chntype]
+                assert artiq_action.type == chntype
                 assert artiq_action.chn_idx == ddsid
             # Check value
             if val_idx >= 0:
@@ -427,7 +427,7 @@ def test_channels(max_bt):
     assert not channels.ttlchns[0].iscounter
     assert not channels.ttlchns[1].iscounter
     assert channels.ttlchns[2].iscounter
-    assert channels.dds_param_chn_map == {4: (0, 0), 5: (0, 1), 6: (1, 2)}
+    assert channels.dds_param_chn_map == {4: (0, 'ddsfreq'), 5: (0, 'ddsamp'), 6: (1, 'ddsphase')}
     compiled_info = comp.get_compiled_info()
     assert not compiled_info.all_actions
     assert not compiled_info.bool_values
@@ -451,7 +451,7 @@ def test_channels(max_bt):
     assert not channels.ttlchns[0].iscounter
     assert not channels.ttlchns[1].iscounter
     assert channels.ttlchns[2].iscounter
-    assert channels.dds_param_chn_map == {1: (0, 0), 3: (0, 1), 5: (1, 2)}
+    assert channels.dds_param_chn_map == {1: (0, 'ddsfreq'), 3: (0, 'ddsamp'), 5: (1, 'ddsphase')}
     compiled_info = comp.get_compiled_info()
     assert not compiled_info.all_actions
     assert not compiled_info.bool_values
