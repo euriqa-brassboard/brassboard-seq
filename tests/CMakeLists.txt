@@ -6,10 +6,21 @@ include_directories("${CMAKE_CURRENT_SOURCE_DIR}")
 
 cython_link_libraries(brassboard_seq_utils)
 
+function(test_cxx_mod name)
+  add_library("test_${name}_mod" MODULE "${name}.cpp")
+  target_include_directories("test_${name}_mod" PRIVATE ${Python_INCLUDE_DIRS})
+  target_link_libraries("test_${name}_mod" brassboard_seq_utils)
+  set_target_properties("test_${name}_mod"
+    PROPERTIES POSITION_INDEPENDENT_CODE ON
+    LIBRARY_OUTPUT_NAME "${name}"
+    PREFIX ""
+    SUFFIX "${PYTHON_EXTENSION_SUFFIX}")
+endfunction()
+test_cxx_mod(brassboard_seq_rfsoc_backend_utils)
+
 python_test("${CMAKE_BINARY_DIR}"
   brassboard_seq_test_utils.pyx
   brassboard_seq_artiq_backend_utils.pyx
-  brassboard_seq_rfsoc_backend_utils.pyx
   conftest.py
   dummy_artiq.py
   dummy_pulse_compiler.py

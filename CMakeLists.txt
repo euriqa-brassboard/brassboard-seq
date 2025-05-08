@@ -18,7 +18,8 @@ require_cython("3.0.0")
 cython_default_language("C++")
 
 option(ENABLE_TESTING "Enable building and running testing" On)
-add_definitions(-DPY_SSIZE_T_CLEAN)
+add_definitions(-DPY_SSIZE_T_CLEAN -DNPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION
+  -Wno-missing-field-initializers)
 
 add_subdirectory(brassboard_seq)
 if(ENABLE_TESTING)
