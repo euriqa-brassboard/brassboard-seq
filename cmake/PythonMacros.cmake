@@ -370,7 +370,7 @@ function(_cython_copy_pxd SOURCE_FILE OUT_PXD)
     COMMAND ${CMAKE_COMMAND} -E copy "${src_pxd}" "${dst_pxd}"
     DEPENDS "${src_pxd}")
   add_custom_target("${_cy_compile_target}-pxd"
-    DEPENDS "${dst_pxd}")
+    ALL DEPENDS "${dst_pxd}")
   add_dependencies(cython-all-pxd-target "${_cy_compile_target}-pxd")
 
   set(${OUT_PXD} "${dst_pxd}" PARENT_SCOPE)
