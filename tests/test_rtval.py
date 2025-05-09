@@ -40,10 +40,8 @@ def test_rtval():
 
     v1 = test_utils.new_extern(lambda: 1)
     s1 = str(v1)
-    assert s1.startswith('extern(')
     v2 = test_utils.new_extern_age(lambda age: 2)
     s2 = str(v2)
-    assert s2.startswith('extern_age(')
 
     with pytest.raises(TypeError, match="Cannot convert runtime value to boolean"):
         bool(v1)

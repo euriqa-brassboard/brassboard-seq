@@ -4,6 +4,8 @@ cython_include_directories("${CMAKE_BINARY_DIR}")
 include_directories("${CMAKE_SOURCE_DIR}/brassboard_seq")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}")
 
+add_definitions(-UNDEBUG)
+
 cython_link_libraries(brassboard_seq_utils)
 
 function(test_cxx_mod name)
@@ -16,11 +18,11 @@ function(test_cxx_mod name)
     PREFIX ""
     SUFFIX "${PYTHON_EXTENSION_SUFFIX}")
 endfunction()
+test_cxx_mod(brassboard_seq_test_utils)
 test_cxx_mod(brassboard_seq_artiq_backend_utils)
 test_cxx_mod(brassboard_seq_rfsoc_backend_utils)
 
 python_test("${CMAKE_BINARY_DIR}"
-  brassboard_seq_test_utils.pyx
   conftest.py
   dummy_artiq.py
   dummy_pulse_compiler.py

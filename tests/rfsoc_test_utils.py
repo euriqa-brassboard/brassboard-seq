@@ -34,10 +34,9 @@ class Compiler(backend.SeqCompiler):
         assert test_utils.compiler_num_basic_seq(self) == 1
         for (chn, actions) in enumerate(test_utils.compiler_get_all_actions(self, 0)):
             for action in actions:
-                if test_utils.action_get_cond(action) is False:
+                if action.get_cond() is False:
                     continue
-                all_actions[test_utils.action_get_aid(action)] = (chn, action,
-                                                                  [False, False])
+                all_actions[action.get_aid()] = (chn, action, [False, False])
         bool_values_used = [False for _ in range(len(compiled_info.bool_values))]
         float_values_used = [False for _ in range(len(compiled_info.float_values))]
         relocations_used = [False for _ in range(len(compiled_info.relocations))]
@@ -47,7 +46,7 @@ class Compiler(backend.SeqCompiler):
                 param = ['freq', 'amp', 'phase', 'ff'][param]
                 for rfsoc_action in param_actions:
                     chn, action, seen = all_actions[rfsoc_action.aid]
-                    action_info = test_utils.action_get_compile_info(action)
+                    action_info = action.get_compile_info()
                     if rfsoc_action.reloc_id >= 0:
                         reloc = compiled_info.relocations[rfsoc_action.reloc_id]
                         relocations_used[rfsoc_action.reloc_id] = True
@@ -61,7 +60,7 @@ class Compiler(backend.SeqCompiler):
                         val_idx = -1
                         time_idx = -1
 
-                    cond = test_utils.action_get_cond(action)
+                    cond = action.get_cond()
                     if cond_idx >= 0:
                         bool_values_used[cond_idx] = True
                         assert isinstance(cond, rtval.RuntimeValue)
@@ -76,7 +75,7 @@ class Compiler(backend.SeqCompiler):
                     else:
                         assert static_time == rfsoc_action.seq_time
 
-                    action_value = test_utils.action_get_value(action)
+                    action_value = action.get_value()
                     isramp = test_utils.isramp(action_value)
                     if rfsoc_action.tid == action_info['tid']:
                         assert not seen[0]
@@ -85,8 +84,8 @@ class Compiler(backend.SeqCompiler):
                         assert isramp == rfsoc_action.isramp
                     else:
                         assert rfsoc_action.tid == action_info['end_tid']
-                        isramp = test_utils.isramp(test_utils.action_get_value(action))
-                        assert test_utils.action_get_is_pulse(action) or isramp
+                        isramp = test_utils.isramp(action.get_value())
+                        assert action.get_is_pulse() or isramp
                         assert not seen[1]
                         seen[1] = True
                         value = action_info['end_val']
@@ -118,9 +117,9 @@ class Compiler(backend.SeqCompiler):
 
         for chn, action, seen in all_actions.values():
             assert seen[0]
-            action_value = test_utils.action_get_value(action)
+            action_value = action.get_value()
             isramp = test_utils.isramp(action_value)
-            if test_utils.action_get_is_pulse(action) or isramp:
+            if action.get_is_pulse() or isramp:
                 assert seen[1]
             else:
                 assert not seen[1]

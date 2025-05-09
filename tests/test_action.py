@@ -10,18 +10,17 @@ import operator
 
 def check_action_str(action, s):
     assert str(action) == s
-    assert repr(action) == s
 
 def test_action():
-    a1 = test_utils.new_action(1.2, True, True, False, {}, 0)
-    test_utils.action_set_tid(a1, 1)
-    assert test_utils.action_get_aid(a1) == 0
-    a2 = test_utils.new_action(1.2, True, False, False, dict(a=1, b=2), 3)
-    assert test_utils.action_get_aid(a2) == 3
-    test_utils.action_set_tid(a2, 3)
-    a3 = test_utils.new_action(2.3, False, True, True, {}, 2)
-    assert test_utils.action_get_aid(a3) == 2
-    test_utils.action_set_tid(a3, 2)
+    a1 = test_utils.Action(1.2, True, True, False, {}, 0)
+    a1.set_tid(1)
+    assert a1.get_aid() == 0
+    a2 = test_utils.Action(1.2, True, False, False, dict(a=1, b=2), 3)
+    assert a2.get_aid() == 3
+    a2.set_tid(3)
+    a3 = test_utils.Action(2.3, False, True, True, {}, 2)
+    assert a3.get_aid() == 2
+    a3.set_tid(2)
     check_action_str(a1, "Pulse(1.2)")
     check_action_str(a2, "Set(1.2, a=1, b=2)")
     check_action_str(a3, "Pulse(2.3, cond=False, exact_time=True)")

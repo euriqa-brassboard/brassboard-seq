@@ -1965,22 +1965,22 @@ static inline PyObject *trifunc(PyObject *v1, PyObject *v2, PyObject *v3)
     return cxx_catch([&] { return F(v1, v2, v3); });
 }
 
-template<auto F>
-static inline int iunifunc(PyObject *v1)
+template<auto F, typename I=int>
+static inline I iunifunc(PyObject *v1)
 {
-    return cxx_catch<int>([&] { return F(v1); });
+    return cxx_catch<I>([&] { return F(v1); });
 }
 
-template<auto F>
-static inline int ibinfunc(PyObject *v1, PyObject *v2)
+template<auto F, typename I=int>
+static inline I ibinfunc(PyObject *v1, PyObject *v2)
 {
-    return cxx_catch<int>([&] { return F(v1, v2); });
+    return cxx_catch<I>([&] { return F(v1, v2); });
 }
 
-template<auto F>
-static inline int itrifunc(PyObject *v1, PyObject *v2, PyObject *v3)
+template<auto F, typename I=int>
+static inline I itrifunc(PyObject *v1, PyObject *v2, PyObject *v3)
 {
-    return cxx_catch<int>([&] { return F(v1, v2, v3); });
+    return cxx_catch<I>([&] { return F(v1, v2, v3); });
 }
 
 template<str_literal name, auto F, int flags, str_literal doc>
@@ -2091,6 +2091,12 @@ template<auto F>
 static inline int sq_ass_item(PyObject *o, Py_ssize_t i, PyObject *v)
 {
     return cxx_catch<int>([&] { return F(o, i, v); });
+}
+
+template<auto F>
+static inline PyObject *sq_item(PyObject *o, Py_ssize_t i)
+{
+    return cxx_catch([&] { return F(o, i); });
 }
 
 template<bool gc, typename T>

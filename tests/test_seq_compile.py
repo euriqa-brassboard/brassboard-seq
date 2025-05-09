@@ -75,8 +75,8 @@ def test_cond_order1(max_bt):
     action2 = actions[0][1]
     assert str(action1) == f'Set(True, cond=bool({c1}))'
     assert str(action2) == f'Set(False)'
-    info1 = test_utils.action_get_compile_info(action1)
-    info2 = test_utils.action_get_compile_info(action2)
+    info1 = action1.get_compile_info()
+    info2 = action2.get_compile_info()
     assert info1['tid'] == 1
     assert info1['end_tid'] == 2
     assert info1['length'] == 1
@@ -88,8 +88,8 @@ def test_cond_order1(max_bt):
     assert info2['end_val'] is False
 
     comp.runtime_finalize(1)
-    assert test_utils.action_get_cond_val(action1) is True
-    assert test_utils.action_get_cond_val(action2) is True
+    assert action1.get_cond_val() is True
+    assert action2.get_cond_val() is True
     total_time, times = test_utils.compiler_get_all_times(comp, 0)
 
     assert times == [0,
@@ -101,8 +101,8 @@ def test_cond_order1(max_bt):
 
     c1val = False
     comp.runtime_finalize(2)
-    assert test_utils.action_get_cond_val(action1) is c1val
-    assert test_utils.action_get_cond_val(action2) is True
+    assert action1.get_cond_val() is c1val
+    assert action2.get_cond_val() is True
     total_time, times = test_utils.compiler_get_all_times(comp, 0)
 
     assert times == [0,
@@ -114,8 +114,8 @@ def test_cond_order1(max_bt):
 
     c2val = False
     comp.runtime_finalize(3)
-    assert test_utils.action_get_cond_val(action1) is c1val
-    assert test_utils.action_get_cond_val(action2) is True
+    assert action1.get_cond_val() is c1val
+    assert action2.get_cond_val() is True
     total_time, times = test_utils.compiler_get_all_times(comp, 0)
 
     assert times == [0,
@@ -190,8 +190,8 @@ def test_cond_order2(max_bt):
     action2 = actions[0][1]
     assert str(action1) == f'Set(True, cond=bool({c1}))'
     assert str(action2) == f'Set(False)'
-    info1 = test_utils.action_get_compile_info(action1)
-    info2 = test_utils.action_get_compile_info(action2)
+    info1 = action1.get_compile_info()
+    info2 = action2.get_compile_info()
     assert info1['tid'] == 1
     assert info1['end_tid'] == 2
     assert info1['length'] == 1
@@ -203,8 +203,8 @@ def test_cond_order2(max_bt):
     assert info2['end_val'] is False
 
     comp.runtime_finalize(1)
-    assert test_utils.action_get_cond_val(action1) is True
-    assert test_utils.action_get_cond_val(action2) is True
+    assert action1.get_cond_val() is True
+    assert action2.get_cond_val() is True
     total_time, times = test_utils.compiler_get_all_times(comp, 0)
 
     assert times == [0,
@@ -217,8 +217,8 @@ def test_cond_order2(max_bt):
 
     c1val = False
     comp.runtime_finalize(2)
-    assert test_utils.action_get_cond_val(action1) is c1val
-    assert test_utils.action_get_cond_val(action2) is True
+    assert action1.get_cond_val() is c1val
+    assert action2.get_cond_val() is True
     total_time, times = test_utils.compiler_get_all_times(comp, 0)
 
     assert times == [0,
@@ -231,8 +231,8 @@ def test_cond_order2(max_bt):
 
     c2val = False
     comp.runtime_finalize(3)
-    assert test_utils.action_get_cond_val(action1) is c1val
-    assert test_utils.action_get_cond_val(action2) is True
+    assert action1.get_cond_val() is c1val
+    assert action2.get_cond_val() is True
     total_time, times = test_utils.compiler_get_all_times(comp, 0)
 
     assert times == [0,
@@ -357,8 +357,8 @@ def test_order_error3(max_bt):
     action2 = actions[0][1]
     assert str(action1) == f'Set(True)'
     assert str(action2) == f'Set(False)'
-    info1 = test_utils.action_get_compile_info(action1)
-    info2 = test_utils.action_get_compile_info(action2)
+    info1 = action1.get_compile_info()
+    info2 = action2.get_compile_info()
     assert info1['tid'] == 0
     assert info1['end_tid'] == 1
     assert info1['length'] == 0.1
@@ -408,8 +408,8 @@ def test_order_error3(max_bt):
     action2 = actions[0][1]
     assert str(action1) == f'Set(True)'
     assert str(action2) == f'Pulse(False)'
-    info1 = test_utils.action_get_compile_info(action1)
-    info2 = test_utils.action_get_compile_info(action2)
+    info1 = action1.get_compile_info()
+    info2 = action2.get_compile_info()
     assert info1['tid'] == 0
     assert info1['end_tid'] == 1
     assert info1['length'] == 0.1
@@ -421,8 +421,8 @@ def test_order_error3(max_bt):
     assert info2['end_val'] is True
 
     comp.runtime_finalize(1)
-    assert test_utils.action_get_cond_val(action1) is True
-    assert test_utils.action_get_cond_val(action2) is True
+    assert action1.get_cond_val() is True
+    assert action2.get_cond_val() is True
     total_time, times = test_utils.compiler_get_all_times(comp, 0)
 
     assert times == [0,
@@ -557,9 +557,9 @@ def test_ramp_order1(max_bt):
     assert str(action1) == f'Set({c1})'
     assert str(action2) == f'Set({f1})'
     assert str(action3) == f'Pulse(0.1)'
-    info1 = test_utils.action_get_compile_info(action1)
-    info2 = test_utils.action_get_compile_info(action2)
-    info3 = test_utils.action_get_compile_info(action3)
+    info1 = action1.get_compile_info()
+    info2 = action2.get_compile_info()
+    info3 = action3.get_compile_info()
     assert info1['tid'] == 0
     assert info1['end_tid'] == 1
     assert info1['length'] == 0
@@ -576,9 +576,9 @@ def test_ramp_order1(max_bt):
     assert info3['end_val'] is info2['end_val']
 
     comp.runtime_finalize(1)
-    assert test_utils.action_get_cond_val(action1) is True
-    assert test_utils.action_get_cond_val(action2) is True
-    assert test_utils.action_get_cond_val(action3) is True
+    assert action1.get_cond_val() is True
+    assert action2.get_cond_val() is True
+    assert action3.get_cond_val() is True
     total_time, times = test_utils.compiler_get_all_times(comp, 0)
 
     assert times == [0,
@@ -591,9 +591,9 @@ def test_ramp_order1(max_bt):
 
     c2val = 0.5
     comp.runtime_finalize(2)
-    assert test_utils.action_get_cond_val(action1) is True
-    assert test_utils.action_get_cond_val(action2) is True
-    assert test_utils.action_get_cond_val(action3) is True
+    assert action1.get_cond_val() is True
+    assert action2.get_cond_val() is True
+    assert action3.get_cond_val() is True
     total_time, times = test_utils.compiler_get_all_times(comp, 0)
 
     assert times == [0,
@@ -794,8 +794,8 @@ def test_bseq_split(max_bt):
     assert test_utils.compiler_get_all_times(comp, 1) == (1000_000_000_000, [0, 1000_000_000_000])
     assert test_utils.compiler_get_all_times(comp, 2) == (0, [0])
     assert test_utils.compiler_get_all_times(comp, 3) == (0, [0])
-    assert test_utils.action_get_cond_val(actions0[0][0]) is True
-    assert test_utils.action_get_cond_val(actions1[0][0]) is True
+    assert actions0[0][0].get_cond_val() is True
+    assert actions1[0][0].get_cond_val() is True
 
     comp = test_env.new_comp(max_bt)
     s = comp.seq
@@ -852,10 +852,10 @@ def test_bseq_split(max_bt):
     assert test_utils.compiler_get_all_times(comp, 1) == (1000_000_000_000, [0, 1000_000_000_000])
     assert test_utils.compiler_get_all_times(comp, 2) == (100_000_000_000, [0, 100_000_000_000])
     assert test_utils.compiler_get_all_times(comp, 3) == (100_000_000_000, [0, 100_000_000_000])
-    assert test_utils.action_get_cond_val(actions0[0][0]) is True
-    assert test_utils.action_get_cond_val(actions1[0][0]) is True
-    assert test_utils.action_get_cond_val(actions2[0][0]) is True
-    assert test_utils.action_get_cond_val(actions3[0][0]) is True
+    assert actions0[0][0].get_cond_val() is True
+    assert actions1[0][0].get_cond_val() is True
+    assert actions2[0][0].get_cond_val() is True
+    assert actions3[0][0].get_cond_val() is True
 
     comp = test_env.new_comp(max_bt)
     s = comp.seq
@@ -896,7 +896,7 @@ def test_bseq_split(max_bt):
     assert len(actions2) == 1
     assert len(actions2[0]) == 1
     assert str(actions2[0][0]) == 'Pulse(0.2)'
-    info2 = test_utils.action_get_compile_info(actions2[0][0])
+    info2 = actions2[0][0].get_compile_info()
     assert info2['end_val'] == 1.0
 
     assert test_utils.compiler_get_bseq_id(comp, 3) == 2
@@ -908,7 +908,7 @@ def test_bseq_split(max_bt):
     assert len(actions3) == 1
     assert len(actions3[0]) == 1
     assert str(actions3[0][0]) == 'Pulse(0.2)'
-    info3 = test_utils.action_get_compile_info(actions3[0][0])
+    info3 = actions3[0][0].get_compile_info()
     assert info3['end_val'] is v1
     assert not test_utils.compiler_check_action_reuse(comp, 2, 3, 0)
 
@@ -917,10 +917,10 @@ def test_bseq_split(max_bt):
     assert test_utils.compiler_get_all_times(comp, 1) == (1000_000_000_000, [0, 1000_000_000_000])
     assert test_utils.compiler_get_all_times(comp, 2) == (10_000_000_000, [0, 10_000_000_000])
     assert test_utils.compiler_get_all_times(comp, 3) == (10_000_000_000, [0, 10_000_000_000])
-    assert test_utils.action_get_cond_val(actions0[0][0]) is True
-    assert test_utils.action_get_cond_val(actions1[0][0]) is True
-    assert test_utils.action_get_cond_val(actions2[0][0]) is True
-    assert test_utils.action_get_cond_val(actions3[0][0]) is True
+    assert actions0[0][0].get_cond_val() is True
+    assert actions1[0][0].get_cond_val() is True
+    assert actions2[0][0].get_cond_val() is True
+    assert actions3[0][0].get_cond_val() is True
 
     comp = test_env.new_comp(max_bt)
     s = comp.seq
@@ -965,7 +965,7 @@ def test_bseq_split(max_bt):
     assert len(actions2[0]) == 2
     assert str(actions2[0][0]) == f'Set({func_ramp})'
     assert str(actions2[0][1]) == 'Pulse(1)'
-    info2 = test_utils.action_get_compile_info(actions2[0][1])
+    info2 = actions2[0][1].get_compile_info()
     assert str(info2['end_val']) == f'-0.4 + {r1} * 2'
 
     assert test_utils.compiler_get_bseq_id(comp, 3) == 2
@@ -978,7 +978,7 @@ def test_bseq_split(max_bt):
     assert len(actions3[0]) == 2
     assert str(actions3[0][0]) == f'Set({func_ramp})'
     assert str(actions3[0][1]) == 'Pulse(1)'
-    info3 = test_utils.action_get_compile_info(actions3[0][1])
+    info3 = actions3[0][1].get_compile_info()
     assert info3['end_val'] is info2['end_val']
     assert not test_utils.compiler_check_action_reuse(comp, 2, 3, 0)
 
@@ -987,12 +987,12 @@ def test_bseq_split(max_bt):
     assert test_utils.compiler_get_all_times(comp, 1) == (1000_000_000_000, [0, 1000_000_000_000])
     assert test_utils.compiler_get_all_times(comp, 2) == (20_000_000_000, [0, 10_000_000_000, 20_000_000_000])
     assert test_utils.compiler_get_all_times(comp, 3) == (20_000_000_000, [0, 10_000_000_000, 20_000_000_000])
-    assert test_utils.action_get_cond_val(actions0[0][0]) is True
-    assert test_utils.action_get_cond_val(actions1[0][0]) is True
-    assert test_utils.action_get_cond_val(actions2[0][0]) is True
-    assert test_utils.action_get_cond_val(actions2[0][1]) is True
-    assert test_utils.action_get_cond_val(actions3[0][0]) is True
-    assert test_utils.action_get_cond_val(actions3[0][1]) is True
+    assert actions0[0][0].get_cond_val() is True
+    assert actions1[0][0].get_cond_val() is True
+    assert actions2[0][0].get_cond_val() is True
+    assert actions2[0][1].get_cond_val() is True
+    assert actions3[0][0].get_cond_val() is True
+    assert actions3[0][1].get_cond_val() is True
 
     comp = test_env.new_comp(max_bt)
     s = comp.seq
@@ -1028,9 +1028,9 @@ def test_bseq_split(max_bt):
     assert len(actions1[0]) == 2
     assert str(actions1[0][0]) == f'Set(-0.1 + {r1})'
     assert str(actions1[0][1]) == f'Set(2.0 + {r1} * 3)'
-    info10 = test_utils.action_get_compile_info(actions1[0][0])
+    info10 = actions1[0][0].get_compile_info()
     assert str(info10['end_val']) == f'-0.1 + {r1}'
-    info11 = test_utils.action_get_compile_info(actions1[0][1])
+    info11 = actions1[0][1].get_compile_info()
     assert info11['end_val'] is not v1
     assert str(info11['end_val']) == str(v1)
 
@@ -1044,9 +1044,9 @@ def test_bseq_split(max_bt):
     assert len(actions2[0]) == 2
     assert str(actions2[0][0]) == f'Set({func_ramp})'
     assert str(actions2[0][1]) == 'Set(0.2)'
-    info20 = test_utils.action_get_compile_info(actions2[0][0])
+    info20 = actions2[0][0].get_compile_info()
     assert str(info20['end_val']) == f'-0.4 + {r1} * 2'
-    info21 = test_utils.action_get_compile_info(actions2[0][1])
+    info21 = actions2[0][1].get_compile_info()
     assert info21['end_val'] == 0.2
 
     assert test_utils.compiler_get_bseq_id(comp, 3) == 2
@@ -1059,9 +1059,9 @@ def test_bseq_split(max_bt):
     assert len(actions3[0]) == 2
     assert str(actions3[0][0]) == f'Set({func_ramp})'
     assert str(actions3[0][1]) == 'Set(0.2)'
-    info30 = test_utils.action_get_compile_info(actions3[0][0])
+    info30 = actions3[0][0].get_compile_info()
     assert info30['end_val'] is info20['end_val']
-    info31 = test_utils.action_get_compile_info(actions3[0][1])
+    info31 = actions3[0][1].get_compile_info()
     assert info31['end_val'] is info21['end_val']
     assert test_utils.compiler_check_action_reuse(comp, 2, 3, 0)
 
@@ -1070,9 +1070,9 @@ def test_bseq_split(max_bt):
     assert test_utils.compiler_get_all_times(comp, 1) == (1000_000_000_000, [0, 1000_000_000_000, 1000_000_000_000])
     assert test_utils.compiler_get_all_times(comp, 2) == (20_000_000_000, [0, 10_000_000_000, 20_000_000_000])
     assert test_utils.compiler_get_all_times(comp, 3) == (20_000_000_000, [0, 10_000_000_000, 20_000_000_000])
-    assert test_utils.action_get_cond_val(actions0[0][0]) is True
-    assert test_utils.action_get_cond_val(actions1[0][0]) is True
-    assert test_utils.action_get_cond_val(actions2[0][0]) is True
-    assert test_utils.action_get_cond_val(actions2[0][1]) is True
-    assert test_utils.action_get_cond_val(actions3[0][0]) is True
-    assert test_utils.action_get_cond_val(actions3[0][1]) is True
+    assert actions0[0][0].get_cond_val() is True
+    assert actions1[0][0].get_cond_val() is True
+    assert actions2[0][0].get_cond_val() is True
+    assert actions2[0][1].get_cond_val() is True
+    assert actions3[0][0].get_cond_val() is True
+    assert actions3[0][1].get_cond_val() is True

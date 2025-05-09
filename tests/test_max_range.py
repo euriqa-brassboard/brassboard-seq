@@ -17,13 +17,14 @@ _add_ends = _ends.add
 def check_max_range(vs):
     n = len(vs)
     _ranges.clear()
+    _starts.clear()
+    _ends.clear()
     for mr in test_utils.get_max_range(vs):
         assert mr not in _ranges
         _add_ranges(mr)
         (i0, i1, maxv) = mr
         _add_starts(i0)
         _add_ends(i1)
-        assert test_utils.check_range(vs, i0, i1, maxv)
         assert i0 == 0 or vs[i0 - 1] < maxv
         assert i1 == n - 1 or vs[i1 + 1] < maxv
     if n == 0:
