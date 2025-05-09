@@ -1070,9 +1070,10 @@ struct _ref : common<_ref,T> {
         check_refcnt(p);
         return (py_ptr_type<T2>*)p;
     }
-    auto &_get_ptr_slot()
+    using common<_ref,T>::resize;
+    void resize(Py_ssize_t sz) requires std::same_as<T,_bytes>
     {
-        return m_ptr;
+        throw_if(_PyBytes_Resize((PyObject**)&m_ptr, sz));
     }
 
 private:
@@ -2684,7 +2685,7 @@ public:
 private:
     char *extend(size_t sz) override;
 
-    py::ref<> m_buf;
+    py::bytes_ref m_buf;
 };
 
 class pybytearray_streambuf : public buff_streambuf {
