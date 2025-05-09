@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     name: "Update deploy branch"
-    runs-on: ubuntu-24.04 # Required for cython3
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
 
@@ -25,27 +25,11 @@ jobs:
         token: ${{ steps.get_token.outputs.app_token }}
         fetch-depth: 0
 
-    - name: Install dependencies
-      run: sudo apt-get install cython3 python3-numpy python3-coverage python3-pytest
-
-    - name: Configure CMake
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release
-
-    - name: Clean
-      working-directory: ${{github.workspace}}/build
-      run: make clean -j $(nproc)
-
-    - name: Build
-      working-directory: ${{github.workspace}}/build
-      run: make -j $(nproc)
-
     - name: Commit to deploy branch
       run: |
         git config --global user.name 'Yichao Yu'
         git config --global user.email 'yuyichao@users.noreply.github.com'
         git status
         git checkout -b deploy
-        # git add .
         git status
-        # git commit -m 'Deploy sources'
         git push -f origin deploy
