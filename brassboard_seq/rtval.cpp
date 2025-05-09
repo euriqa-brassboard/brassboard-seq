@@ -37,5 +37,4 @@ PY_MODINIT(rtval, rtval_module)
 
     // rtval
     m.add_type(&rtval::RuntimeValue::Type);
-    m.add_type(&rtval::ExternCallback::Type);
 }

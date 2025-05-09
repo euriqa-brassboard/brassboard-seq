@@ -50,7 +50,7 @@ PyTypeObject RampFunctionBase::Type = {
     .tp_name = "brassboard_seq.action.RampFunctionBase",
     .tp_basicsize = sizeof(RampFunctionBase),
     .tp_dealloc = py::tp_cxx_dealloc<true,RampFunctionBase>,
-    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
 };
 
 __attribute__((visibility("internal")))

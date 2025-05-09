@@ -914,9 +914,7 @@ PyTypeObject ExternCallback::Type = {
     .tp_name = "brassboard_seq.rtval.ExternCallback",
     .tp_basicsize = sizeof(ExternCallback),
     .tp_dealloc = py::tp_cxx_dealloc<false,ExternCallback>,
-    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,
-    .tp_new = py::tp_new<[] (PyTypeObject *t, auto...) {
-        return PyType_GenericAlloc(t, 0); }>,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
 };
 
 PyMethodDef methods[] = {
