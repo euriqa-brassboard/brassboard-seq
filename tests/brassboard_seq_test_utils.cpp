@@ -430,7 +430,6 @@ PyNumberMethods PyBits<ELT,N,name>::as_number = {
 };
 template<std::integral ELT,unsigned N,str_literal name>
 PySequenceMethods PyBits<ELT,N,name>::as_sequence = {
-    .sq_length = py::iunifunc<[] (auto) { return N; },Py_ssize_t>,
     .sq_item = py::sq_item<[] (py::ptr<PyBits> self, Py_ssize_t i) {
         return to_py(self->bits[i]);
     }>,
@@ -731,13 +730,6 @@ static PyModuleDef test_module = {
             if (times.size() == 0)
                 return to_py(0);
             return to_py(times.get<event_time::EventTime>(0)->chain_pos.size());
-        }>,
-        py::meth_fast<"time_manager_compute_all_times",[] (auto, PyObject *const *args,
-                                                           Py_ssize_t nargs) {
-            py::check_num_arg("time_manager_compute_all_times", nargs, 2, 2);
-            auto self = py::arg_cast<event_time::TimeManager>(args[0], "time_manager");
-            auto max_time = self->compute_all_times(py::ptr(args[1]).as_int());
-            return py::new_tuple(to_py(max_time), to_py(self->time_values));
         }>,
         py::meth_fast<"event_time_set_base",[] (auto, PyObject *const *args,
                                                 Py_ssize_t nargs) {
