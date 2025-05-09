@@ -271,18 +271,17 @@ struct TagVal {
         }
     }
     static TagVal from_py(py::ptr<> obj);
-    __attribute__((returns_nonnull))
-    PyObject *to_py() const
+    py::ref<> to_py() const
     {
         throw_py_error(err);
         switch (type) {
         case DataType::Bool:
-            return py::immref(val.b_val ? Py_True : Py_False);
+            return py::new_bool(val.b_val);
         case DataType::Int64:
-            return py::new_int(val.i64_val).rel();
+            return py::new_int(val.i64_val);
         default:
         case DataType::Float64:
-            return py::new_float(val.f64_val).rel();
+            return py::new_float(val.f64_val);
         }
     }
     bool is_zero() const
@@ -971,21 +970,17 @@ static inline bool is_rtval(auto &&v)
     return py::typeis<RuntimeValue>(v);
 }
 
-__attribute__((returns_nonnull)) RuntimeValue*
-new_cb_arg2(ValueType type, py::ptr<> cb_arg2, py::ptr<> ty);
+rtval_ref new_cb_arg2(ValueType type, py::ptr<> cb_arg2, py::ptr<> ty);
 
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-new_arg(py::ptr<> idx, py::ptr<> ty)
+static inline auto new_arg(py::ptr<> idx, py::ptr<> ty)
 {
     return new_cb_arg2(Arg, idx, ty);
 }
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-new_extern(py::ptr<> cb, py::ptr<> ty)
+static inline auto new_extern(py::ptr<> cb, py::ptr<> ty)
 {
     return new_cb_arg2(Extern, cb, ty);
 }
-static inline __attribute__((returns_nonnull)) RuntimeValue*
-new_extern_age(py::ptr<> cb, py::ptr<> ty)
+static inline auto new_extern_age(py::ptr<> cb, py::ptr<> ty)
 {
     return new_cb_arg2(ExternAge, cb, ty);
 }

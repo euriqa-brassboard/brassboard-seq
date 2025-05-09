@@ -411,7 +411,7 @@ inline void JaqalPulseCompilerGen::end()
 }
 
 __attribute__((visibility("protected")))
-PyObject *JaqalPulseCompilerGen::get_prefix(int n) const
+py::ref<> JaqalPulseCompilerGen::get_prefix(int n) const
 {
     if (n < 0 || n >= 4)
         throw std::out_of_range("Board index should be in [0, 3]");
@@ -419,7 +419,7 @@ PyObject *JaqalPulseCompilerGen::get_prefix(int n) const
 }
 
 __attribute__((visibility("protected")))
-PyObject *JaqalPulseCompilerGen::get_sequence(int n) const
+py::ref<> JaqalPulseCompilerGen::get_sequence(int n) const
 {
     if (n < 0 || n >= 4)
         throw std::out_of_range("Board index should be in [0, 3]");
@@ -497,7 +497,7 @@ inline void JaqalPulseCompilerGen::add_tone_data(int chn, int64_t duration_cycle
 }
 
 __attribute__((visibility("internal")))
-inline PyObject *JaqalPulseCompilerGen::BoardGen::get_prefix() const
+inline py::ref<> JaqalPulseCompilerGen::BoardGen::get_prefix() const
 {
     pybytes_ostream io;
     for (int chn = 0; chn < 8; chn++) {
@@ -538,7 +538,7 @@ inline PyObject *JaqalPulseCompilerGen::BoardGen::get_prefix() const
 }
 
 __attribute__((visibility("internal")))
-inline PyObject *JaqalPulseCompilerGen::BoardGen::get_sequence() const
+inline py::ref<> JaqalPulseCompilerGen::BoardGen::get_sequence() const
 {
     pybytes_ostream io;
     std::span<const TimedID> chn_gate_ids[8];
@@ -868,15 +868,15 @@ inline void Jaqalv1_3Generator::process_channel(ToneBuffer &tone_buffer, int chn
 }
 
 __attribute__((visibility("protected")))
-PyObject *Jaqalv1_3StreamGen::get_prefix(int n) const
+py::ref<> Jaqalv1_3StreamGen::get_prefix(int n) const
 {
     if (n < 0 || n >= 4)
         throw std::out_of_range("Board index should be in [0, 3]");
-    return py::empty_bytes.immref().rel();
+    return py::empty_bytes.immref();
 }
 
 __attribute__((visibility("protected")))
-PyObject *Jaqalv1_3StreamGen::get_sequence(int n) const
+py::ref<> Jaqalv1_3StreamGen::get_sequence(int n) const
 {
     if (n < 0 || n >= 4)
         throw std::out_of_range("Board index should be in [0, 3]");
@@ -887,7 +887,7 @@ PyObject *Jaqalv1_3StreamGen::get_sequence(int n) const
     auto ptr = res.data();
     for (size_t i = 0; i < ninsts; i++)
         memcpy(&ptr[i * instsz], &insts[i].inst, instsz);
-    return res.rel();
+    return res;
 }
 
 __attribute__((visibility("internal")))

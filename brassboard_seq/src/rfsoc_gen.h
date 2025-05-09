@@ -181,8 +181,8 @@ struct JaqalPulseCompilerGen final: SyncChannelGen {
     struct BoardGen {
         Jaqal_v1::ChannelGen channels[8];
         void clear();
-        PyObject *get_prefix() const;
-        PyObject *get_sequence() const;
+        py::ref<> get_prefix() const;
+        py::ref<> get_sequence() const;
         void end();
     };
     BoardGen boards[4]; // 4 * 8 physical channels
@@ -192,8 +192,8 @@ struct JaqalPulseCompilerGen final: SyncChannelGen {
                        cubic_spline amp, cubic_spline phase,
                        output_flags_t flags, int64_t cur_cycle) override;
     void end() override;
-    __attribute__((returns_nonnull)) PyObject *get_prefix(int n) const;
-    __attribute__((returns_nonnull)) PyObject *get_sequence(int n) const;
+    py::ref<> get_prefix(int n) const;
+    py::ref<> get_sequence(int n) const;
 };
 
 struct Jaqalv1_3Generator: Generator {
@@ -231,8 +231,8 @@ private:
 };
 
 struct Jaqalv1_3StreamGen final: Jaqalv1_3Generator {
-    __attribute__((returns_nonnull)) PyObject *get_prefix(int n) const;
-    __attribute__((returns_nonnull)) PyObject *get_sequence(int n) const;
+    py::ref<> get_prefix(int n) const;
+    py::ref<> get_sequence(int n) const;
 private:
     std::vector<TimedInst> board_insts[4];
     void add_inst(const JaqalInst &inst, int board, int board_chn,

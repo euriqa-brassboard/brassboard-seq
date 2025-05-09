@@ -144,12 +144,9 @@ struct RampFunction : RampFunctionBase::Base<RampFunction> {
         }
         void compile()
         {
-            static rtval::rtval_ptr arg0 =
-                py::ref(rtval::new_arg(py::int_cached(0), &PyFloat_Type)).rel();
-            static rtval::rtval_ptr arg1 =
-                py::ref(rtval::new_arg(py::int_cached(1), &PyFloat_Type)).rel();
-            static rtval::rtval_ptr arg2 =
-                py::ref(rtval::new_arg(py::int_cached(2), &PyFloat_Type)).rel();
+            static py::ptr arg0 = rtval::new_arg(py::int_cached(0), &PyFloat_Type).rel();
+            static py::ptr arg1 = rtval::new_arg(py::int_cached(1), &PyFloat_Type).rel();
+            static py::ptr arg2 = rtval::new_arg(py::int_cached(2), &PyFloat_Type).rel();
             static rtval::rtval_ptr const0 = rtval::new_const(0.0).rel();
             fvalue = call_eval(arg0, arg1, arg2);
             if (rtval::is_rtval(fvalue)) {

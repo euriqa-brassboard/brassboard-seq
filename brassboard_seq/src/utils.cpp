@@ -582,16 +582,16 @@ pybytes_streambuf::~pybytes_streambuf()
 {
 }
 
-__attribute__((returns_nonnull)) PyObject *pybytes_streambuf::get_buf()
+py::bytes_ref pybytes_streambuf::get_buf()
 {
     if (!m_buf)
-        return py::empty_bytes.immref().rel();
+        return py::empty_bytes.immref();
     auto sz = m_end;
     auto buf = m_buf.rel();
     setp(nullptr, nullptr);
     m_end = 0;
     throw_if(_PyBytes_Resize(&buf, sz));
-    return buf;
+    return py::bytes_ref(buf);
 }
 
 char *pybytes_streambuf::extend(size_t sz)
@@ -633,16 +633,16 @@ pybytearray_streambuf::~pybytearray_streambuf()
 {
 }
 
-__attribute__((returns_nonnull)) PyObject *pybytearray_streambuf::get_buf()
+py::ref<> pybytearray_streambuf::get_buf()
 {
     if (!m_buf)
-        return throw_if_not(PyByteArray_FromStringAndSize(nullptr, 0));
+        return py::ref(throw_if_not(PyByteArray_FromStringAndSize(nullptr, 0)));
     auto sz = m_end;
     auto buf = m_buf.rel();
     setp(nullptr, nullptr);
     m_end = 0;
     throw_if(PyByteArray_Resize(buf, sz));
-    return buf;
+    return py::ref(buf);
 }
 
 char *pybytearray_streambuf::extend(size_t sz)

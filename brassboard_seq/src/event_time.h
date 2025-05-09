@@ -186,7 +186,7 @@ struct TimeManager : PyObject {
     time_ref new_round(time_ptr prev, py::ptr<> offset, py::ptr<> cond, time_ptr wait_for);
 
     static PyTypeObject Type;
-    static __attribute__((returns_nonnull)) TimeManager *alloc();
+    static py::ref<TimeManager> alloc();
 private:
     void visit_time(EventTime *t, auto &visited);
 };

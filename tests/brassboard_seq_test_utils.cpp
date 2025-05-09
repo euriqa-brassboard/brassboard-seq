@@ -310,8 +310,7 @@ PyTypeObject _PyByteStream<stm_type,name>::Type = {
             return to_py(self->stm.fail());
         }>,
         py::meth_noargs<"get_buf",[] (py::ptr<_PyByteStream> self) {
-            py::ref buf(self->stm.get_buf());
-            return py::ptr(&PyBytes_Type)(buf);
+            return py::ptr(&PyBytes_Type)(self->stm.get_buf());
         }>>),
     .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {

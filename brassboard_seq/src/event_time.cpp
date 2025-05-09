@@ -273,8 +273,8 @@ int64_t TimeManager::compute_all_times(unsigned age)
     return max_time;
 }
 
-__attribute__((returns_nonnull,visibility("protected")))
-TimeManager *TimeManager::alloc()
+__attribute__((visibility("protected")))
+py::ref<TimeManager> TimeManager::alloc()
 {
     auto self = py::generic_alloc<TimeManager>();
     call_constructor(&self->event_times, py::new_list(0));
@@ -283,7 +283,7 @@ TimeManager *TimeManager::alloc()
     status->ntimes = 0;
     call_constructor(&self->status, status);
     call_constructor(&self->time_values);
-    return self.rel();
+    return self;
 }
 
 __attribute__((visibility("protected")))

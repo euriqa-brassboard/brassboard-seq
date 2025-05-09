@@ -1245,10 +1245,10 @@ static inline py::ref<> _rt_dataset(py::ptr<> self, PyObject *const *args,
     auto _key = py::new_tuple(key, py::new_bool(sys));
     auto res = vals.try_get(_key);
     if (res)
-        return py::ref(rtval::new_extern(std::move(res), &PyFloat_Type));
+        return rtval::new_extern(std::move(res), &PyFloat_Type);
     auto rtcb = DatasetCallback::alloc(cb, key, def_val);
     vals.set(_key, rtcb);
-    return py::ref(rtval::new_extern(std::move(rtcb), &PyFloat_Type));
+    return rtval::new_extern(std::move(rtcb), &PyFloat_Type);
 }
 
 static PyMethodDef env_methods[] = {
@@ -1279,7 +1279,7 @@ static PyMethodDef env_methods[] = {
             return cb();
         auto rtcb = EvalOnceCallback::alloc(cb);
         py::arg_cast<py::dict>(vals, "_bb_rt_values").set(cb, rtcb);
-        return py::ref(rtval::new_extern(std::move(rtcb), &PyFloat_Type));
+        return rtval::new_extern(std::move(rtcb), &PyFloat_Type);
     }>,
     py::meth_fastkw<"rt_dataset",_rt_dataset<false>>,
     py::meth_fastkw<"rt_dataset_sys",_rt_dataset<true>>

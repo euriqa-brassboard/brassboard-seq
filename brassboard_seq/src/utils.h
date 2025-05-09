@@ -2644,7 +2644,7 @@ public:
     pybytes_streambuf();
     ~pybytes_streambuf() override;
 
-    __attribute__((returns_nonnull)) PyObject *get_buf();
+    py::bytes_ref get_buf();
 
 private:
     char *extend(size_t sz) override;
@@ -2657,7 +2657,7 @@ public:
     pybytearray_streambuf();
     ~pybytearray_streambuf() override;
 
-    __attribute__((returns_nonnull)) PyObject *get_buf();
+    py::ref<> get_buf();
 
 private:
     char *extend(size_t sz) override;
@@ -2689,7 +2689,7 @@ public:
     pybytes_ostream();
     ~pybytes_ostream();
 
-    __attribute__((returns_nonnull)) PyObject *get_buf()
+    auto get_buf()
     {
         flush();
         return m_buf.get_buf();
@@ -2704,7 +2704,7 @@ public:
     pybytearray_ostream();
     ~pybytearray_ostream();
 
-    __attribute__((returns_nonnull)) PyObject *get_buf()
+    auto get_buf()
     {
         flush();
         return m_buf.get_buf();

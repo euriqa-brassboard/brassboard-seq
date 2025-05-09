@@ -24,11 +24,11 @@
 
 namespace brassboard_seq::rtval {
 
-__attribute__((returns_nonnull,visibility("protected"))) RuntimeValue*
+__attribute__((visibility("protected"))) rtval_ref
 new_cb_arg2(ValueType type, py::ptr<> cb_arg2, py::ptr<> ty)
 {
     return RuntimeValue::alloc(type, pytype_to_datatype(ty),
-                               py::new_none(), py::new_none(), cb_arg2).rel();
+                               py::new_none(), py::new_none(), cb_arg2);
 }
 
 __attribute__((visibility("protected"))) rtval_ref
@@ -733,7 +733,7 @@ struct rtvalue_printer : py::stringio {
             write_str(v->cb_arg2);
             return write_ascii(")");
         case Const:
-            return write_str(py::ref(rtval_cache(v).to_py()));
+            return write_str(rtval_cache(v).to_py());
         case Add:
             return show_binary(v, " + ", v->type_);
         case Sub:
@@ -925,7 +925,7 @@ PyMethodDef methods[] = {
             rt_eval_cache(args[0], pyage.as_int());
             return rtval_cache(args[0]).to_py();
         }
-        return py::newref(args[0]);
+        return py::ptr(args[0]).ref();
     }>,
     py::meth_o<"inv",[] (auto, py::ptr<> v) -> py::ref<> {
         if (v == Py_True)
