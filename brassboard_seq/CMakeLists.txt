@@ -36,7 +36,6 @@ function(bb_cxx_mod name)
   install(TARGETS "brassboard_seq_${name}_mod"
     DESTINATION "${_PYTHON_SITE_INSTALL_DIR}/brassboard_seq")
 endfunction()
-bb_cxx_mod(_utils)
 bb_cxx_mod(action)
 bb_cxx_mod(artiq_backend)
 bb_cxx_mod(backend)
