@@ -47,7 +47,7 @@ static inline int64_t cycle_to_seq_time(int64_t cycle)
 }
 
 __attribute__((visibility("protected")))
-void ChannelInfo::ensure_unused_tones(bool all)
+void ChannelsInfo::ensure_unused_tones(bool all)
 {
     // For now, do not generate RFSoC data if there's no output.
     // This may be a problem if some of the sequences in a scan contains RFSoC outputs
@@ -82,7 +82,7 @@ static int parse_pos_int(const std::string_view &s, py::tuple path, int max)
 }
 
 __attribute__((visibility("protected")))
-void ChannelInfo::collect_channel(py::ptr<seq::Seq> seq, py::str prefix)
+void ChannelsInfo::collect_channel(py::ptr<seq::Seq> seq, py::str prefix)
 {
     // Channel name format: <prefix>/dds<chn>/<tone>/<param>
     std::map<int,int> chn_idx_map;

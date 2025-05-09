@@ -71,7 +71,7 @@ struct ToneChannel {
     std::vector<RFSOCAction> actions[4];
 };
 
-struct ChannelInfo {
+struct ChannelsInfo {
     std::vector<ToneChannel> channels;
     // map from sequence channel to tone channel index
     std::map<int,std::pair<int,ToneParam>> chn_map;
@@ -88,7 +88,7 @@ struct ChannelInfo {
 struct RFSOCBackend : Backend::Base<RFSOCBackend> {
     struct Data : Backend::Data {
         py::ref<RFSOCGenerator> generator;
-        ChannelInfo channels;
+        ChannelsInfo channels;
         std::vector<std::pair<void*,bool>> bool_values;
         std::vector<std::pair<void*,double>> float_values;
         std::vector<Relocation> relocations;

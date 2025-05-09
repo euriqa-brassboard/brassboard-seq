@@ -63,10 +63,10 @@ struct py_convert<ToneParam> {
 };
 
 template<>
-struct py_convert<ChannelInfo> {
-    static auto convert(const ChannelInfo &info)
+struct py_convert<ChannelsInfo> {
+    static auto convert(const ChannelsInfo &info)
     {
-        auto self = new_object<"ChannelInfo">();
+        auto self = new_object<"ChannelsInfo">();
         self.set_attr("channels", to_py(info.channels));
         self.set_attr("chn_map", to_py(info.chn_map));
         self.set_attr("dds_delay", to_py(info.dds_delay));
