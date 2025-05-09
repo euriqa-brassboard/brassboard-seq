@@ -49,28 +49,5 @@ bb_cxx_mod(seq)
 bb_cxx_mod(utils)
 bb_cxx_mod(yaml)
 
-install(FILES
-  src/action.h
-  src/backend.h
-  src/config.h
-  src/artiq_backend.h
-  src/event_time.h
-  src/rtval.h
-  src/scan.h
-  src/seq.h
-  src/rfsoc.h
-  src/rfsoc_gen.h
-  src/rfsoc_backend.h
-  src/utils.h
-  DESTINATION "${_PYTHON_SITE_INSTALL_DIR}/brassboard_seq/src")
-
-cython_link_libraries(brassboard_seq_utils -fopenmp)
-
 python_install_module("${CMAKE_CURRENT_SOURCE_DIR}/.." brassboard_seq
-  __init__.py
-  action.pxd
-  backend.pxd
-  event_time.pxd
-  rtval.pxd
-  seq.pxd
-  utils.pxd)
+  __init__.py)
