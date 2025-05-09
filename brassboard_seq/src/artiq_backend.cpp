@@ -962,8 +962,9 @@ void ArtiqBackend::Data::runtime_finalize(CompiledSeq &cseq, unsigned age)
         // Note that the size calculated below is at least `nactions * 17 + 1`
         // which is what we need.
         auto alloc_size = (nactions * 17 / 64 + 1) * 64;
-        PyByteArray_Resize((PyObject*)rtio_array, alloc_size);
-        auto output_ptr = (uint8_t*)PyByteArray_AS_STRING((PyObject*)rtio_array);
+        py::bytearray ba = rtio_array;
+        ba.resize(alloc_size);
+        auto output_ptr = (uint8_t*)ba.data();
         for (size_t i = 0; i < nactions; i++) {
             auto &action = rtio_actions[i];
             auto ptr = &output_ptr[i * 17];
@@ -1115,7 +1116,7 @@ PyTypeObject ArtiqBackend::Type = {
             }
         }
         if (use_dma) {
-            py::arg_cast<PyObject>(args[1], &PyByteArray_Type, "rtio_array");
+            py::arg_cast<py::bytearray>(args[1], "rtio_array");
         }
         else {
             if (!PyArray_Check(args[1]))

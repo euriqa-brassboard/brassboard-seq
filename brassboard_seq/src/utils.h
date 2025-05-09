@@ -253,6 +253,9 @@ using tuple_ref = ref<_tuple>;
 struct _bytes : _pyobj_tag_type {};
 using bytes = ptr<_bytes>;
 using bytes_ref = ref<_bytes>;
+struct _bytearray : _pyobj_tag_type {};
+using bytearray = ptr<_bytearray>;
+using bytearray_ref = ref<_bytearray>;
 struct _float : _pyobj_tag_type {};
 using float_ = ptr<_float>;
 using float_ref = ref<_float>;
@@ -463,6 +466,16 @@ public:
         }
         else {
             return PyBytes_Check((PyObject*)_ptr());
+        }
+    }
+    template<typename T2, bool exact=false> bool isa() const
+        requires std::same_as<py_tag_type<T2>,_bytearray>
+    {
+        if constexpr (exact) {
+            return PyByteArray_CheckExact((PyObject*)_ptr());
+        }
+        else {
+            return PyByteArray_Check((PyObject*)_ptr());
         }
     }
     template<typename T2, bool exact=false> bool isa() const
@@ -838,6 +851,19 @@ public:
     auto decode() const requires std::same_as<T,_bytes>
     {
         return str_ref(throw_if_not(PyUnicode_DecodeUTF8(data(), size(), nullptr)));
+    }
+
+    Py_ssize_t size() const requires std::same_as<T,_bytearray>
+    {
+        return PyByteArray_GET_SIZE((PyObject*)_ptr());
+    }
+    char *data() const requires std::same_as<T,_bytearray>
+    {
+        return PyByteArray_AS_STRING((PyObject*)_ptr());
+    }
+    void resize(Py_ssize_t sz) const requires std::same_as<T,_bytearray>
+    {
+        throw_if(PyByteArray_Resize((PyObject*)_ptr(), sz));
     }
 
     Py_ssize_t size() const requires std::same_as<T,_str>
@@ -1298,6 +1324,15 @@ extern bytes empty_bytes;
 static inline bytes_ref new_bytes(const char *data, Py_ssize_t len)
 {
     return ref(throw_if_not(PyBytes_FromStringAndSize(data, len)));
+}
+
+static inline bytearray_ref new_bytearray(const char *data, Py_ssize_t len)
+{
+    return ref(throw_if_not(PyByteArray_FromStringAndSize(data, len)));
+}
+static inline bytearray_ref new_bytearray()
+{
+    return new_bytearray(nullptr, 0);
 }
 
 extern float_ float_m1;
@@ -1776,7 +1811,7 @@ struct BacktraceTracker {
         int lasti;
         int lineno;
         FrameInfo(PyFrameObject *frame);
-        __attribute__((returns_nonnull)) PyObject *get_traceback(PyObject *next);
+        py::ref<> get_traceback(PyObject *next);
     };
 
     void _record(uintptr_t key);
@@ -1792,7 +1827,7 @@ struct BacktraceTracker {
         record((uintptr_t)key);
     }
 
-    PyObject *get_backtrace(uintptr_t key);
+    py::ref<> get_backtrace(uintptr_t key);
     ~BacktraceTracker()
     {
         // Do the freeing here instead of in the destructor of the FrameInfo object
@@ -2657,12 +2692,12 @@ public:
     pybytearray_streambuf();
     ~pybytearray_streambuf() override;
 
-    py::ref<> get_buf();
+    py::bytearray_ref get_buf();
 
 private:
     char *extend(size_t sz) override;
 
-    py::ref<> m_buf;
+    py::bytearray_ref m_buf;
 };
 
 class buff_ostream : public std::ostream {

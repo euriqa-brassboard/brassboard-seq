@@ -260,7 +260,7 @@ inline int SeqInfo::get_channel_id(py::str name)
 {
     if (auto chn = channel_name_map.try_get(name)) [[likely]]
         return chn.as_int();
-    auto path = py::tuple_ref(config->translate_channel(name));
+    auto path = config->translate_channel(name);
     if (auto chn = channel_path_map.try_get(path)) {
         channel_name_map.set(name, chn);
         return chn.as_int();

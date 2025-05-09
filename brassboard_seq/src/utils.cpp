@@ -299,7 +299,7 @@ BacktraceTracker::FrameInfo::FrameInfo(PyFrameObject *frame)
 {
 }
 
-PyObject *BacktraceTracker::FrameInfo::get_traceback(PyObject *next)
+py::ref<> BacktraceTracker::FrameInfo::get_traceback(PyObject *next)
 {
     PyThreadState *tstate = PyThreadState_Get();
     auto globals = py::new_dict();
@@ -307,7 +307,7 @@ PyObject *BacktraceTracker::FrameInfo::get_traceback(PyObject *next)
         py::ptr(next),
         py::ref<>(throw_if_not(PyFrame_New(tstate, code, globals.get(), nullptr))),
         py::new_int(lasti), py::new_int(lineno));
-    return throw_if_not(traceback_new(&PyTraceBack_Type, args.get(), nullptr));
+    return py::ref(throw_if_not(traceback_new(&PyTraceBack_Type, args.get(), nullptr)));
 }
 
 void BacktraceTracker::_record(uintptr_t key)
@@ -334,12 +334,12 @@ void BacktraceTracker::_record(uintptr_t key)
     }
 }
 
-PyObject *BacktraceTracker::get_backtrace(uintptr_t key)
+py::ref<> BacktraceTracker::get_backtrace(uintptr_t key)
 {
     assert(traceback_new);
     auto it = traces.find(key);
     if (it == traces.end())
-        return nullptr;
+        return py::ref();
     auto &trace = it->second;
     py::ref py_trace;
     for (auto &info: trace) {
@@ -351,28 +351,27 @@ PyObject *BacktraceTracker::get_backtrace(uintptr_t key)
             PyErr_Clear();
         }
     }
-    return py_trace.rel();
+    return py_trace;
 }
 
-static PyObject *combine_traceback(PyObject *old_tb, PyObject *tb)
+static py::ref<> combine_traceback(py::ref<> old_tb, py::ref<> tb)
 {
-    // both tb and old_tb are owning references, returning an owning reference.
     if (!old_tb)
         return tb;
     if (tb) {
-        auto last_tb = (PyTracebackObject*)old_tb;
+        auto last_tb = old_tb.ptr<PyTracebackObject>();
         while (last_tb->tb_next)
             last_tb = last_tb->tb_next;
-        last_tb->tb_next = (PyTracebackObject*)tb;
+        last_tb->tb_next = (PyTracebackObject*)tb.rel();
     }
     return old_tb;
 }
 
-static inline PyObject *get_global_backtrace(uintptr_t key)
+static inline auto get_global_backtrace(uintptr_t key)
 {
     if (BacktraceTracker::global_tracker)
         return BacktraceTracker::global_tracker->get_backtrace(key);
-    return nullptr;
+    return py::ref();
 }
 
 [[noreturn]] __attribute__((visibility("protected")))
@@ -386,7 +385,8 @@ void bb_reraise(uintptr_t key)
 {
     PyObject *exc, *type, *old_tb;
     PyErr_Fetch(&type, &exc, &old_tb);
-    PyErr_Restore(type, exc, combine_traceback(old_tb, get_global_backtrace(key)));
+    PyErr_Restore(type, exc, combine_traceback(py::ref(old_tb),
+                                               get_global_backtrace(key)).rel());
 }
 
 [[noreturn]] __attribute__((visibility("protected")))
@@ -633,16 +633,15 @@ pybytearray_streambuf::~pybytearray_streambuf()
 {
 }
 
-py::ref<> pybytearray_streambuf::get_buf()
+py::bytearray_ref pybytearray_streambuf::get_buf()
 {
     if (!m_buf)
-        return py::ref(throw_if_not(PyByteArray_FromStringAndSize(nullptr, 0)));
+        return py::new_bytearray();
     auto sz = m_end;
-    auto buf = m_buf.rel();
     setp(nullptr, nullptr);
+    m_buf.resize(sz);
     m_end = 0;
-    throw_if(PyByteArray_Resize(buf, sz));
-    return py::ref(buf);
+    return std::move(m_buf);
 }
 
 char *pybytearray_streambuf::extend(size_t sz)
@@ -653,14 +652,14 @@ char *pybytearray_streambuf::extend(size_t sz)
     // overallocate.
     auto new_sz = (oldsz + sz) * 3 / 2;
     if (oldbase + new_sz <= epptr())
-        return &PyByteArray_AS_STRING(m_buf.get())[oldsz];
+        return &m_buf.data()[oldsz];
     if (!m_buf) {
-        m_buf.take(throw_if_not(PyByteArray_FromStringAndSize(nullptr, new_sz)));
+        m_buf.take(py::new_bytearray(nullptr, new_sz));
     }
     else {
-        throw_if(PyByteArray_Resize(m_buf.get(), new_sz));
+        m_buf.resize(new_sz);
     }
-    auto buf = PyByteArray_AS_STRING(m_buf.get());
+    auto buf = m_buf.data();
     setp(buf, &buf[new_sz]);
     pbump((int)oldsz);
     return &buf[oldsz];

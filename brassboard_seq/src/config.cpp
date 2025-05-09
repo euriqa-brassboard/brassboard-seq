@@ -68,9 +68,9 @@ inline py::tuple_ref Config::_translate_channel(py::tuple path)
 }
 
 __attribute__((visibility("protected")))
-PyObject *Config::translate_channel(PyObject *name)
+py::tuple_ref Config::translate_channel(PyObject *name)
 {
-    return _translate_channel(split_string_tuple(name)).rel();
+    return _translate_channel(split_string_tuple(name));
 }
 
 __attribute__((visibility("protected")))
