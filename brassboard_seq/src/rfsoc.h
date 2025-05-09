@@ -52,7 +52,7 @@ convert_pdq_spline(std::array<double,4> sp, int64_t cycles, double scale)
     // Here we use `1 - 2 * 2^(-nbits)` just to be safe in case
     // we got the rounding mode wrong or sth...
     // FIXME: constexpr in C++23
-    constexpr double round_thresh = 1 - 2 * std::ldexp(1, -nbits);
+    double round_thresh = 1 - 2 * std::ldexp(1, -nbits);
 
     // Now we'll map floating point values [-0.5, 0.5] to [-2^(nbits-1), 2^(nbits-1)]
 
