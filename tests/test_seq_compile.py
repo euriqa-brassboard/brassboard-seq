@@ -18,6 +18,11 @@ class Env:
 
 test_env = Env()
 
+def test_compiler():
+    s = seq.Seq(test_env.conf)
+    with pytest.raises(TypeError, match="SeqCompiler.__init__ got an unexpected keyword argument 'a'"):
+        backend.SeqCompiler(s, a=True)
+
 @test_utils.with_seq_params
 def test_cond_order1(max_bt):
     comp = test_env.new_comp(max_bt)
