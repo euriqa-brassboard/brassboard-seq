@@ -113,7 +113,7 @@ static inline const ArtiqInfo &info()
 }
 
 __attribute__((visibility("internal")))
-inline void ChannelsInfo::add_channel(py::ptr<> dev, int64_t delay, py::ptr<> rt_delay,
+inline void ChannelsInfo::add_channel(py::ptr<> dev, int64_t delay, rtval_ptr rt_delay,
                                       int idx, py::tuple path)
 {
     if (dev.isinstance(info().AD9910)) {
@@ -197,7 +197,7 @@ inline int ChannelsInfo::add_bus_channel(int bus_channel, uint32_t io_update_tar
 
 __attribute__((visibility("internal")))
 inline void ChannelsInfo::add_ttl_channel(int seqchn, uint32_t target, bool iscounter,
-                                          int64_t delay, PyObject *rt_delay)
+                                          int64_t delay, rtval_ptr rt_delay)
 {
     assert(ttl_chn_map.count(seqchn) == 0);
     auto ttl_id = (int)ttlchns.size();
@@ -208,7 +208,7 @@ inline void ChannelsInfo::add_ttl_channel(int seqchn, uint32_t target, bool isco
 __attribute__((visibility("internal")))
 inline int ChannelsInfo::get_dds_channel_id(uint32_t bus_id, double ftw_per_hz,
                                             uint8_t chip_select, int64_t delay,
-                                            PyObject *rt_delay)
+                                            rtval_ptr rt_delay)
 {
     std::pair<int,int> key{bus_id, chip_select};
     auto it = dds_chn_map.find(key);
@@ -225,7 +225,7 @@ __attribute__((visibility("internal")))
 inline void ChannelsInfo::add_dds_param_channel(int seqchn, uint32_t bus_id,
                                                 double ftw_per_hz, uint8_t chip_select,
                                                 ChannelType param, int64_t delay,
-                                                PyObject *rt_delay)
+                                                rtval_ptr rt_delay)
 {
     assert(dds_param_chn_map.count(seqchn) == 0);
     dds_param_chn_map[seqchn] = {get_dds_channel_id(bus_id, ftw_per_hz, chip_select,
@@ -243,7 +243,7 @@ inline void ChannelsInfo::collect_channels(py::str prefix, py::ptr<> sys,
             config::raise_invalid_channel(path);
         auto devname = path.get<py::str>(1);
         int64_t delay = 0;
-        rtval::rtval_ptr rt_delay;
+        rtval_ptr rt_delay;
         if (auto py_delay = device_delay.try_get(devname)) {
             rt_delay = py::cast<RuntimeValue>(py_delay);
             if (!rt_delay) {
@@ -584,7 +584,7 @@ void ArtiqBackend::Data::finalize(CompiledSeq &cseq)
 
         auto event_time = event_times.get<EventTime>(tid);
         if (event_time->data.is_static()) {
-            PyObject *rt_delay;
+            rtval_ptr rt_delay;
             int64_t delay;
             if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
                 auto &ddschn = channels.ddschns[chn_idx];
@@ -730,21 +730,21 @@ void ArtiqBackend::Data::runtime_finalize(CompiledSeq &cseq, unsigned age)
     }
     for (size_t i = 0, nreloc = float_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = float_values[i];
-        val = rtval::rtval_cache(rtval).template get<double>();
+        val = rtval::rtval_cache(rtval).get<double>();
     }
     int64_t max_delay = 0;
-    auto relocate_delay = [&] (int64_t &delay, auto rt_delay) {
+    auto relocate_delay = [&] (int64_t &delay, rtval_ptr rt_delay) {
         if (!rt_delay)
             return;
         rtval::rt_eval_throw(rt_delay, age);
-        delay = convert_device_delay(rtval::rtval_cache(rt_delay).template get<double>());
+        delay = convert_device_delay(rtval::rtval_cache(rt_delay).get<double>());
     };
     for (auto &ttlchn: channels.ttlchns) {
-        relocate_delay(ttlchn.delay, (RuntimeValue*)ttlchn.rt_delay);
+        relocate_delay(ttlchn.delay, ttlchn.rt_delay);
         max_delay = std::max(max_delay, ttlchn.delay);
     }
     for (auto &ddschn: channels.ddschns) {
-        relocate_delay(ddschn.delay, (RuntimeValue*)ddschn.rt_delay);
+        relocate_delay(ddschn.delay, ddschn.rt_delay);
         max_delay = std::max(max_delay, ddschn.delay);
     }
     auto &time_values = seq->seqinfo->time_mgr->time_values;

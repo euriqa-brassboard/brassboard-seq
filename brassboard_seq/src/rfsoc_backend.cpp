@@ -336,7 +336,7 @@ void RFSOCBackend::Data::runtime_finalize(CompiledSeq &cseq, unsigned age)
     bb_debug("rfsoc_runtime_finalize: start\n");
     for (auto [dds, delay]: py::dict_iter<RuntimeValue>(rt_dds_delay)) {
         rt_eval_throw(delay, age);
-        set_dds_delay(dds.as_int(), rtval_cache(delay).template get<double>());
+        set_dds_delay(dds.as_int(), rtval_cache(delay).get<double>());
     }
 
     for (size_t i = 0, nreloc = bool_values.size(); i < nreloc; i++) {
@@ -345,7 +345,7 @@ void RFSOCBackend::Data::runtime_finalize(CompiledSeq &cseq, unsigned age)
     }
     for (size_t i = 0, nreloc = float_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = float_values[i];
-        val = rtval::rtval_cache(rtval).template get<double>();
+        val = rtval::rtval_cache(rtval).get<double>();
     }
     auto &time_values = seq->seqinfo->time_mgr->time_values;
     auto reloc_action = [this, &time_values] (const RFSOCAction &action,

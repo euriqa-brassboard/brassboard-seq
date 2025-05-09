@@ -291,7 +291,7 @@ void rt_eval_cache(rtval_ptr self, unsigned age)
     rtval_ptr rtarg1 = self->arg1;
     if (type == Select) {
         rtval_ptr rtarg2 = self->cb_arg2;
-        auto rtres = arg0.template get<bool>() ? rtarg1 : rtarg2;
+        auto rtres = arg0.get<bool>() ? rtarg1 : rtarg2;
         rt_eval_cache(rtres, age);
         set_cache(rtval_cache(rtres).convert(self->datatype));
         return;

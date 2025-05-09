@@ -31,6 +31,7 @@
 namespace brassboard_seq::artiq_backend {
 
 using namespace backend;
+using rtval::rtval_ptr;
 
 enum ChannelType : uint8_t {
     DDSFreq,
@@ -65,7 +66,7 @@ struct DDSChannel {
     uint32_t data1{0};
     uint32_t data2{0};
     int64_t delay;
-    PyObject *rt_delay;
+    rtval_ptr rt_delay;
 
     void reset()
     {
@@ -125,11 +126,11 @@ struct TTLChannel {
     int64_t last_time_mu;
 
     int64_t delay;
-    PyObject *rt_delay;
+    rtval_ptr rt_delay;
 
     static constexpr int max_action_shift = 8;
 
-    TTLChannel(uint32_t target, bool iscounter, int64_t delay, PyObject *rt_delay)
+    TTLChannel(uint32_t target, bool iscounter, int64_t delay, rtval_ptr rt_delay)
         : target(target),
           iscounter(iscounter),
           delay(delay),
@@ -182,17 +183,17 @@ struct ChannelsInfo {
     }
     void collect_channels(py::str prefix, py::ptr<> sys, py::ptr<seq::Seq> seq,
                           py::dict device_delay);
-    void add_channel(py::ptr<> dev, int64_t delay, py::ptr<> rt_delay,
+    void add_channel(py::ptr<> dev, int64_t delay, rtval_ptr rt_delay,
                      int idx, py::tuple path);
     int add_bus_channel(int bus_channel, uint32_t io_update_target,
                         uint8_t ref_period_mu);
     void add_ttl_channel(int seqchn, uint32_t target, bool iscounter, int64_t delay,
-                         PyObject *rt_delay);
+                         rtval_ptr rt_delay);
     int get_dds_channel_id(uint32_t bus_id, double ftw_per_hz, uint8_t chip_select,
-                           int64_t delay, PyObject *rt_delay);
+                           int64_t delay, rtval_ptr rt_delay);
     void add_dds_param_channel(int seqchn, uint32_t bus_id, double ftw_per_hz,
                                uint8_t chip_select, ChannelType param,
-                               int64_t delay, PyObject *rt_delay);
+                               int64_t delay, rtval_ptr rt_delay);
 };
 
 struct Relocation {
