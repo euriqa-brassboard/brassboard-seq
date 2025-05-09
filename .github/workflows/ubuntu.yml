@@ -21,14 +21,10 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Install dependencies
-      run: sudo apt-get install cython3 python3-numpy python3-yaml python3-coverage python3-pytest
-
-    - name: Patch cython
-      working-directory: /usr/lib/python3/dist-packages/
-      run: sudo patch -Np1 --no-backup-if-mismatch < ${{github.workspace}}/.github/0001-Set-module-initialization-trace-context-to-the-corre.patch
+      run: sudo apt-get install python3-numpy python3-pytest
 
     - name: Configure CMake
-      run: CXXFLAGS+=" ${CXXFLAGS_COV}" cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.BUILD_TYPE}} -DENABLE_CYTHON_COVERAGE=On
+      run: CXXFLAGS+=" ${CXXFLAGS_COV}" cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.BUILD_TYPE}}
 
     - name: Build
       run: cmake --build ${{github.workspace}}/build --config ${{matrix.BUILD_TYPE}} -j $(nproc)
@@ -39,14 +35,11 @@ jobs:
 
     - name: Generate coverage report
       working-directory: ${{github.workspace}}/build
-      # Repeating the argument to ignore errors seems to make a difference
-      # and I'm too lazy to figure out why for now...
       run: |
-        bash ${{github.workspace}}/scripts/fix_cython_c_path.sh ${{github.workspace}} ${{github.workspace}}/build
-        python3 -m coverage combine --rcfile=${{github.workspace}}/cmake/coveragerc
-        python3 -m coverage xml -i --ignore-errors --omit='tests/*' --rcfile=${{github.workspace}}/cmake/coveragerc
+        echo "Delete tests/ test coverage"
         find ${{github.workspace}}/build/tests -iname '*.gcov' -exec rm -v {} \;
-        find ${{github.workspace}}/ -iname '*tests#test_utils.cpp.gcov' -exec rm -v {} \;
+        echo "All coverage files"
+        find ${{github.workspace}}/ -iname '*.gcov'
 
     - name: Upload coverage
       uses: codecov/codecov-action@v5
