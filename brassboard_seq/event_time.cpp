@@ -30,5 +30,4 @@ static PyModuleDef event_time_module = {
 
 PY_MODINIT(event_time, event_time_module)
 {
-    m.add_type(&event_time::EventTime::Type);
 }

@@ -5,10 +5,6 @@ import py_test_utils as test_utils
 
 import pytest
 
-def test_event_time_constructors():
-    with pytest.raises(TypeError):
-        event_time.EventTime()
-
 def test_round_time():
     assert event_time.time_scale() == 1000000000000
     assert test_utils.round_time(1.2) == 1200_000_000_000
