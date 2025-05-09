@@ -655,7 +655,7 @@ PyTypeObject RFSOCBackend::Type = {
             py::check_num_arg("RFSOCBackend.set_dds_delay", nargs, 2, 2);
             auto dds = py::arg_cast<py::int_>(args[0], "dds");
             py::ptr delay = args[1];
-            if (delay.isa<RuntimeValue>()) {
+            if (rtval::is_rtval(delay)) {
                 self->data()->rt_dds_delay.set(dds, delay);
             }
             else {
