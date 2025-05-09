@@ -39,17 +39,13 @@ jobs:
       working-directory: ${{github.workspace}}/build
       run: make -j $(nproc)
 
-    - name: Update C++ files
-      working-directory: ${{github.workspace}}/build
-      run: make cython-copyback -j $(nproc)
-
     - name: Commit to deploy branch
       run: |
         git config --global user.name 'Yichao Yu'
         git config --global user.email 'yuyichao@users.noreply.github.com'
         git status
         git checkout -b deploy
-        git add .
+        # git add .
         git status
-        git commit -m 'Deploy sources'
+        # git commit -m 'Deploy sources'
         git push -f origin deploy
