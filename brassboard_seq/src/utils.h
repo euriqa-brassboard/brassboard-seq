@@ -901,6 +901,11 @@ public:
     {
         return str_ref(throw_if_not(PyUnicode_Concat((PyObject*)_ptr(), (PyObject*)s2)));
     }
+    auto split(auto &&sep, Py_ssize_t maxsplit) const requires std::same_as<T,_str>
+    {
+        return py::list_ref(throw_if_not(PyUnicode_Split((PyObject*)_ptr(),
+                                                         (PyObject*)sep, maxsplit)));
+    }
     auto join(auto &&items) const requires std::same_as<T,_str>
     {
         return str_ref(throw_if_not(PyUnicode_Join((PyObject*)_ptr(), (PyObject*)items)));
@@ -2539,17 +2544,18 @@ struct Bits {
         stm.width(0);
         stm.setf(flags);
     }
-    PyObject *to_pybytes() const
+    auto to_pybytes() const
     {
-        return py::new_bytes((const char*)&bits[0], sizeof(bits)).rel();
+        return py::new_bytes((const char*)&bits[0], sizeof(bits));
     }
-    PyObject *to_pylong() const
+    auto to_pylong() const
     {
 #if PY_VERSION_HEX >= 0x030d0000
-        return throw_if_not(PyLong_FromUnsignedNativeBytes(&bits[0], sizeof(bits), 1));
+        return py::ref(throw_if_not(PyLong_FromUnsignedNativeBytes(&bits[0],
+                                                                   sizeof(bits), 1)));
 #else
-        return throw_if_not(_PyLong_FromByteArray((const unsigned char*)&bits[0],
-                                                  sizeof(bits), true, 0));
+        return py::ref(throw_if_not(_PyLong_FromByteArray((const unsigned char*)&bits[0],
+                                                          sizeof(bits), true, 0)));
 #endif
     }
 

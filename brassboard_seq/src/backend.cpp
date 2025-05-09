@@ -407,7 +407,7 @@ PyTypeObject Backend::Type = {
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = _traverse<Backend>,
     .tp_clear = _clear<Backend>,
-    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg("Backend.__init__", nargs, 0, 0);
         py::check_no_kwnames("Backend.__init__", kwnames);

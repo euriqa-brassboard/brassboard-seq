@@ -1249,7 +1249,7 @@ PyTypeObject PyChannelGen::Type = {
                 return py::new_tuple(py::new_int(gate.time), py::new_int(gate.id));
             });
         }>>),
-    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const*,
+    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const*,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg("JaqalChannelGen_v1.__init__", nargs, 0, 0);
         py::check_no_kwnames("JaqalChannelGen_v1.__init__", kwnames);

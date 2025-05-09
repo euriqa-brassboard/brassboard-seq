@@ -1072,7 +1072,7 @@ PyTypeObject PyPulseCompilerGenerator::Type = {
                       return ((PulseCompilerGen*)self->gen.get())->get_output();
                   }>>),
     .tp_base = &RFSOCGenerator::Type,
-    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg("PulseCompilerGenerator.__init__", nargs, 0, 0);
         py::check_no_kwnames("PulseCompilerGenerator.__init__", kwnames);
@@ -1103,7 +1103,7 @@ PyTypeObject PyJaqalv1Generator::Type = {
             return ((JaqalPulseCompilerGen*)self->gen.get())->get_sequence(n);
         }>>),
     .tp_base = &RFSOCGenerator::Type,
-    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg("Jaqalv1Generator.__init__", nargs, 0, 0);
         py::check_no_kwnames("Jaqalv1Generator.__init__", kwnames);
@@ -1134,7 +1134,7 @@ PyTypeObject PyJaqalv1_3Generator::Type = {
             return ((Jaqalv1_3StreamGen*)self->gen.get())->get_sequence(n);
         }>>),
     .tp_base = &RFSOCGenerator::Type,
-    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg("Jaqalv1_3Generator.__init__", nargs, 0, 0);
         py::check_no_kwnames("Jaqalv1_3Generator.__init__", kwnames);

@@ -735,7 +735,7 @@ PyTypeObject Seq::Type = {
     .tp_traverse = seq_traverse<Seq>,
     .tp_clear = seq_clear<Seq>,
     .tp_base = &BasicSeq::Type,
-    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg("Seq.__init__", nargs, 1, 2);
         auto [py_max_frame] =

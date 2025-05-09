@@ -28,7 +28,7 @@ struct Config : PyObject {
     py::dict_ref alias_cache;
     py::set_ref supported_prefix;
 
-    py::tuple_ref translate_channel(PyObject *name);
+    py::tuple_ref translate_channel(py::str name);
 
     static PyTypeObject Type;
 private:

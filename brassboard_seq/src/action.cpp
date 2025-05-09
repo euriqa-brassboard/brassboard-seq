@@ -101,7 +101,7 @@ PyTypeObject SeqCubicSpline::Type = {
                   py::getset_def<"order3",[] (py::ptr<SeqCubicSpline> self) {
                       return py::newref(self->data()->order3); }>>),
     .tp_base = &RampFunctionBase::Type,
-    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg("SeqCubicSpline.__init__", nargs, 0, 4);
         auto [order0, order1, order2, order3] =
@@ -281,7 +281,7 @@ PyTypeObject Blackman::Type = {
                   py::getset_def<"offset",[] (py::ptr<Blackman> self) {
                       return py::newref(self->data()->offset); }>>),
     .tp_base = &RampFunctionBase::Type,
-    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg("Blackman.__init__", nargs, 0, 2);
         auto [amp, offset] =
@@ -348,7 +348,7 @@ PyTypeObject BlackmanSquare::Type = {
                   py::getset_def<"offset",[] (py::ptr<BlackmanSquare> self) {
                       return py::newref(self->data()->offset); }>>),
     .tp_base = &RampFunctionBase::Type,
-    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg("BlackmanSquare.__init__", nargs, 0, 2);
         auto [amp, offset] =
@@ -413,7 +413,7 @@ PyTypeObject LinearRamp::Type = {
                   py::getset_def<"end",[] (py::ptr<LinearRamp> self) {
                       return py::newref(self->data()->end); }>>),
     .tp_base = &RampFunctionBase::Type,
-    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg("LinearRamp.__init__", nargs, 0, 2);
         auto [start, end] =

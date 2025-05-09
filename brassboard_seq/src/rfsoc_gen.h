@@ -167,9 +167,9 @@ struct PulseCompilerGen final: SyncChannelGen {
     {}
     void start() override;
     void end() override;
-    PyObject *get_output()
+    auto get_output() const
     {
-        return py::newref(output);
+        return output.ref();
     }
 
     py::dict_ref output;

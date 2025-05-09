@@ -26,9 +26,9 @@ py::str_ref channel_name_from_path(py::ptr<> path)
     return "/"_py.join(path);
 }
 
-static inline auto split_string_tuple(PyObject *s)
+static inline auto split_string_tuple(py::str s)
 {
-    auto list = py::list_ref(throw_if_not(PyUnicode_Split(s, "/"_py, -1)));
+    auto list = s.split("/"_py, -1);
     auto tuple = py::new_tuple(list.size());
     for (auto [i, v]: py::list_iter(list)) {
         tuple.SET(i, py::ref(v.get())); // Steal reference
@@ -68,7 +68,7 @@ inline py::tuple_ref Config::_translate_channel(py::tuple path)
 }
 
 __attribute__((visibility("protected")))
-py::tuple_ref Config::translate_channel(PyObject *name)
+py::tuple_ref Config::translate_channel(py::str name)
 {
     return _translate_channel(split_string_tuple(name));
 }

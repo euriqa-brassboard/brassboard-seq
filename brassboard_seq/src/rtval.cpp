@@ -863,7 +863,7 @@ static auto rtvalue_as_number = PyNumberMethods{
             return self.ref();
         return new_expr1(Abs, self);
     }>,
-    .nb_bool = [] (PyObject *self) {
+    .nb_bool = [] (auto) {
         // It's too easy to accidentally use this in control flow/assertion
         PyErr_Format(PyExc_TypeError, "Cannot convert runtime value to boolean");
         return -1;

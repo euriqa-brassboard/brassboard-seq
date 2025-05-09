@@ -475,7 +475,7 @@ static auto EventTime_as_number = PyNumberMethods{
         call_constructor(&diff->t2, py::newref(other));
         diff->in_eval = false;
         diff->fptr = (void*)EventTimeDiff::eval;
-        return rtval::new_extern_age(diff, (PyObject*)&PyFloat_Type);
+        return rtval::new_extern_age(diff, &PyFloat_Type);
     }>,
 };
 

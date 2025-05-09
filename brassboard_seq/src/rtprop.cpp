@@ -164,7 +164,7 @@ PyTypeObject CompositeRTProp::Type = {
             return self.ref();
         return self->get_res(obj);
     }>,
-    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_no_kwnames("CompositeRTProp.__init__", kwnames);
         py::check_num_arg("CompositeRTProp.__init__", nargs, 1, 1);
@@ -294,7 +294,7 @@ PyTypeObject RTProp::Type = {
     .tp_descr_set = py::itrifunc<[] (py::ptr<RTProp> self, py::ptr<> obj, py::ptr<> val) {
         self->set_res(obj, val);
     }>,
-    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_no_kwnames("RTProp.__init__", kwnames);
         py::check_num_arg("RTProp.__init__", nargs, 0, 0);

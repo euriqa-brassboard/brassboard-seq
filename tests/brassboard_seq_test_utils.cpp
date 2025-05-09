@@ -52,7 +52,7 @@ PyTypeObject IntCollector::Type = {
                 s += i;
             return py::new_int(s);
         }>>),
-    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg("IntCollector", nargs, 0, 0);
         py::check_no_kwnames("IntCollector", kwnames);
@@ -157,7 +157,7 @@ PyTypeObject Action::Type = {
             res.set("cond_val", to_py(self->action->cond_val));
             return res;
         }>>),
-    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg("Action", nargs, 6, 6);
         py::check_no_kwnames("Action", kwnames);
@@ -211,7 +211,7 @@ PyTypeObject RampTest::Type = {
             }
             return res;
         }>>),
-    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg("RampTest", nargs, 3, 3);
         py::check_no_kwnames("RampTest", kwnames);
@@ -251,7 +251,7 @@ PyTypeObject IOBuff::Type = {
         py::meth_noargs<"getvalue",[] (py::ptr<IOBuff> self) {
             return self->io.getvalue();
         }>>),
-    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg("IOBuff", nargs, 0, 0);
         py::check_no_kwnames("IOBuff", kwnames);
@@ -312,7 +312,7 @@ PyTypeObject _PyByteStream<stm_type,name>::Type = {
         py::meth_noargs<"get_buf",[] (py::ptr<_PyByteStream> self) {
             return py::ptr(&PyBytes_Type)(self->stm.get_buf());
         }>>),
-    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg(name, nargs, 0, 0);
         py::check_no_kwnames(name, kwnames);
@@ -488,7 +488,7 @@ PyTypeObject PyBits<ELT,N,name>::Type = {
             return alloc(Bits<ELT,N>::mask(py::ptr(args[0]).as_int(),
                                            py::ptr(args[1]).as_int()));
         },"",METH_STATIC>>),
-    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg(name, nargs, 0, 1);
         py::check_no_kwnames(name, kwnames);

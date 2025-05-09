@@ -674,7 +674,7 @@ PyTypeObject RFSOCBackend::Type = {
                       return py::new_bool(self->data()->channels.channels.size() != 0);
                   }>>),
     .tp_base = &Backend::Type,
-    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg("RFSOCBackend.__init__", nargs, 1, 1);
         py::check_no_kwnames("RFSOCBackend.__init__", kwnames);

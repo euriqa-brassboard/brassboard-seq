@@ -1184,7 +1184,7 @@ For sequence running/saving/loading:
                 return load_v1(obj);
             py_throw_format(PyExc_ValueError, "Unsupported version: %d", version);
         },"",METH_STATIC>>),
-    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const*,
+    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const*,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg("ScanGroup.__init__", nargs, 0, 0);
         py::check_no_kwnames("ScanGroup.__init__", kwnames);
