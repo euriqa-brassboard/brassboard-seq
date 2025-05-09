@@ -128,6 +128,18 @@ def test_channels(max_bt):
 
     comp = test_env.new_comp(max_bt)
     s = comp.seq
+    assert s.get_channel_id('rfsoc/ddsaa/0/freq') == 0
+    with pytest.raises(ValueError, match='Invalid channel name rfsoc/ddsaa/0/freq'):
+        comp.finalize()
+
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
+    assert s.get_channel_id('rfsoc/dds0/l/freq') == 0
+    with pytest.raises(ValueError, match='Invalid channel name rfsoc/dds0/l/freq'):
+        comp.finalize()
+
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
     assert s.get_channel_id('rfsoc/dds0/0/freq/a') == 0
     with pytest.raises(ValueError, match='Invalid channel name rfsoc/dds0/0/freq/a'):
         comp.finalize()
