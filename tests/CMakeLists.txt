@@ -22,7 +22,6 @@ test_cxx_mod(brassboard_seq_rfsoc_backend_utils)
 python_test("${CMAKE_BINARY_DIR}"
   conftest.py
   dummy_artiq.py
-  dummy_pulse_compiler.py
   check_artiq_backend.py
   py_test_utils.py
   rfsoc_test_utils.py
@@ -40,7 +39,6 @@ python_test("${CMAKE_BINARY_DIR}"
   test_backend.py
   test_config.py
   test_event_time.py
-  test_rfsoc_backend.py
   test_rfsoc_backend_jv1.py
   test_rfsoc_backend_jv1_3.py
   test_scan.py

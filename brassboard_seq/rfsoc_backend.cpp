@@ -37,7 +37,6 @@ PY_MODINIT(rfsoc_backend, rfsoc_backend_module)
     m.add_type(&rfsoc::JaqalInst_v1_3_Type);
     m.add_type(&rfsoc::Jaqal_v1_3_Type);
 
-    m.add_type(&rfsoc_gen::PulseCompilerGenerator_Type);
     m.add_type(&rfsoc_gen::Jaqalv1Generator_Type);
     m.add_type(&rfsoc_gen::Jaqalv1_3Generator_Type);
 

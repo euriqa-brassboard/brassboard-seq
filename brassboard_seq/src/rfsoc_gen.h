@@ -155,29 +155,7 @@ struct SyncChannelGen: Generator {
                          int64_t total_cycle) override;
 };
 
-struct PulseCompilerGen final: SyncChannelGen {
-    struct Info;
-    static inline Info *get_info();
-
-    void add_tone_data(int chn, int64_t duration_cycles, cubic_spline freq,
-                       cubic_spline amp, cubic_spline phase,
-                       output_flags_t flags, int64_t) override;
-    PulseCompilerGen()
-        : output(py::new_dict())
-    {}
-    void start() override;
-    void end() override;
-    auto get_output() const
-    {
-        return output.ref();
-    }
-
-    py::dict_ref output;
-    int last_chn;
-    py::list last_tonedatas;
-};
-
-struct JaqalPulseCompilerGen final: SyncChannelGen {
+struct Jaqalv1Gen final: SyncChannelGen {
     struct BoardGen {
         Jaqal_v1::ChannelGen channels[8];
         void clear();
@@ -247,7 +225,6 @@ struct RFSOCGenerator : PyObject {
     static PyTypeObject Type;
 };
 
-extern PyTypeObject &PulseCompilerGenerator_Type;
 extern PyTypeObject &Jaqalv1Generator_Type;
 extern PyTypeObject &Jaqalv1_3Generator_Type;
 

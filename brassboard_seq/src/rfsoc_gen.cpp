@@ -234,157 +234,8 @@ inline void SyncChannelGen::process_channel(ToneBuffer &tone_buffer, int chn,
     }
 }
 
-struct PulseCompilerGen::Info {
-    PyObject *channel_list[64];
-    py::ptr<> CubicSpline;
-    py::ptr<> ToneData;
-    py::ptr<> cubic_0;
-    std::vector<std::pair<PyObject*,PyObject*>> tonedata_fields;
-
-    py::ref<> _new_cubic_spline(cubic_spline sp)
-    {
-        auto newobj = py::generic_alloc<py::tuple>(CubicSpline, 4);
-        newobj.SET(0, py::new_float(sp.order0));
-        newobj.SET(1, py::new_float(sp.order1));
-        newobj.SET(2, py::new_float(sp.order2));
-        newobj.SET(3, py::new_float(sp.order3));
-        return newobj;
-    }
-
-    py::ref<> new_cubic_spline(cubic_spline sp)
-    {
-        if (sp == cubic_spline{0, 0, 0, 0})
-            return cubic_0.ref();
-        return _new_cubic_spline(sp);
-    }
-
-    py::ref<> new_tone_data(int channel, int tone, int64_t duration_cycles,
-                            cubic_spline freq, cubic_spline amp,
-                            cubic_spline phase, output_flags_t flags)
-    {
-        auto td = py::generic_alloc(ToneData);
-        auto td_dict = py::dict_ref(throw_if_not(PyObject_GenericGetDict(td.get(), nullptr)));
-        for (auto [key, value]: tonedata_fields)
-            td_dict.set(key, value);
-        py::assert_int_cache<32>();
-        td_dict.set("channel"_py, py::int_cached(channel));
-        td_dict.set("tone"_py, py::int_cached(tone));
-        td_dict.set("duration_cycles"_py, py::new_int(duration_cycles));
-        td_dict.set("frequency_hz"_py, new_cubic_spline(freq));
-        td_dict.set("amplitude"_py, new_cubic_spline(amp));
-        // tone data wants rad as phase unit.
-        td_dict.set("phase_rad"_py, new_cubic_spline({
-                    phase.order0 * (2 * M_PI), phase.order1 * (2 * M_PI),
-                    phase.order2 * (2 * M_PI), phase.order3 * (2 * M_PI) }));
-        td_dict.set("frame_rotation_rad"_py, cubic_0);
-        td_dict.set("wait_trigger"_py, flags.wait_trigger ? Py_True : Py_False);
-        td_dict.set("sync"_py, flags.sync ? Py_True : Py_False);
-        td_dict.set("output_enable"_py, Py_False);
-        td_dict.set("feedback_enable"_py, flags.feedback_enable ? Py_True : Py_False);
-        td_dict.set("bypass_lookup_tables"_py, Py_False);
-        return td;
-    }
-
-    Info();
-};
-
 __attribute__((visibility("internal")))
-inline auto PulseCompilerGen::get_info() -> Info*
-{
-    static Info info;
-    return &info;
-}
-
-__attribute__((visibility("internal")))
-inline void PulseCompilerGen::add_tone_data(int chn, int64_t duration_cycles,
-                                            cubic_spline freq, cubic_spline amp,
-                                            cubic_spline phase,
-                                            output_flags_t flags, int64_t)
-{
-    bb_debug("outputting tone data: chn=%d, cycles=%" PRId64 ", sync=%d, ff=%d\n",
-             chn, duration_cycles, flags.sync, flags.feedback_enable);
-    auto info = get_info();
-    auto tonedata = info->new_tone_data(chn >> 1, chn & 1, duration_cycles, freq,
-                                        amp, phase, flags);
-    auto key = info->channel_list[chn];
-    py::list tonedatas;
-    if (last_chn == chn) [[likely]] {
-        tonedatas = assume(last_tonedatas);
-    }
-    else {
-        tonedatas = output.try_get(key);
-    }
-    if (!tonedatas) {
-        auto tonedatas = py::new_list(std::move(tonedata));
-        output.set(key, tonedatas);
-        last_tonedatas = tonedatas;
-    }
-    else {
-        py::list(tonedatas).append(std::move(tonedata));
-        last_tonedatas = tonedatas;
-    }
-    last_chn = chn;
-}
-
-__attribute__((visibility("internal")))
-inline void PulseCompilerGen::start()
-{
-    output.clear();
-    last_chn = -1;
-}
-
-__attribute__((visibility("internal")))
-inline void PulseCompilerGen::end()
-{
-}
-
-__attribute__((visibility("internal")))
-inline PulseCompilerGen::Info::Info()
-{
-    auto tonedata_mod = py::import_module("pulsecompiler.rfsoc.tones.tonedata");
-    ToneData = tonedata_mod.attr("ToneData").rel();
-    auto splines_mod = py::import_module("pulsecompiler.rfsoc.structures.splines");
-    CubicSpline = splines_mod.attr("CubicSpline").rel();
-    cubic_0 = _new_cubic_spline({0, 0, 0, 0}).rel();
-    auto pulse_mod = py::import_module("qiskit.pulse");
-    auto ControlChannel = pulse_mod.attr("ControlChannel");
-    auto DriveChannel = pulse_mod.attr("DriveChannel");
-
-    py::assert_int_cache<64>();
-    PyObject *py_nums[64];
-    for (int i = 0; i < 64; i++)
-        py_nums[i] = py::int_cached(i);
-
-    channel_list[0] = ControlChannel(py_nums[0]).rel();
-    channel_list[1] = ControlChannel(py_nums[1]).rel();
-    for (int i = 0; i < 62; i++)
-        channel_list[i + 2] = DriveChannel(py_nums[i]).rel();
-
-    auto orig_post_init = ToneData.attr("__post_init__");
-    static PyMethodDef dummy_post_init_method = py::meth_fast<"__post_init__",[] (auto...) {}>;
-    ToneData.set_attr("__post_init__", py::new_cfunc(&dummy_post_init_method));
-    auto dummy_tonedata = ToneData(py_nums[0], py_nums[0], py_nums[0],
-                                   py_nums[0], py_nums[0], py_nums[0]);
-    ToneData.set_attr("__post_init__", orig_post_init);
-    auto td_dict = py::dict_ref::checked(PyObject_GenericGetDict(dummy_tonedata.get(),
-                                                                 nullptr));
-    for (auto [key, value]: py::dict_iter<PyObject,py::str>(td_dict)) {
-        for (auto name: {"channel", "tone", "duration_cycles", "frequency_hz",
-                "amplitude", "phase_rad", "frame_rotation_rad", "wait_trigger",
-                "sync", "output_enable", "feedback_enable",
-                "bypass_lookup_tables"}) {
-            if (key.compare_ascii(name) == 0) {
-                goto skip_key;
-            }
-        }
-        tonedata_fields.push_back({ py::newref(key), py::newref(value) });
-    skip_key:
-        ;
-    }
-}
-
-__attribute__((visibility("internal")))
-inline void JaqalPulseCompilerGen::BoardGen::clear()
+inline void Jaqalv1Gen::BoardGen::clear()
 {
     for (auto &channel: channels) {
         channel.clear();
@@ -392,7 +243,7 @@ inline void JaqalPulseCompilerGen::BoardGen::clear()
 }
 
 __attribute__((visibility("internal")))
-inline void JaqalPulseCompilerGen::start()
+inline void Jaqalv1Gen::start()
 {
     for (auto &board: boards) {
         board.clear();
@@ -400,7 +251,7 @@ inline void JaqalPulseCompilerGen::start()
 }
 
 __attribute__((visibility("internal")))
-inline void JaqalPulseCompilerGen::end()
+inline void Jaqalv1Gen::end()
 {
 #pragma omp parallel
 #pragma omp single
@@ -411,7 +262,7 @@ inline void JaqalPulseCompilerGen::end()
 }
 
 __attribute__((visibility("protected")))
-py::ref<> JaqalPulseCompilerGen::get_prefix(int n) const
+py::ref<> Jaqalv1Gen::get_prefix(int n) const
 {
     if (n < 0 || n >= 4)
         throw std::out_of_range("Board index should be in [0, 3]");
@@ -419,7 +270,7 @@ py::ref<> JaqalPulseCompilerGen::get_prefix(int n) const
 }
 
 __attribute__((visibility("protected")))
-py::ref<> JaqalPulseCompilerGen::get_sequence(int n) const
+py::ref<> Jaqalv1Gen::get_sequence(int n) const
 {
     if (n < 0 || n >= 4)
         throw std::out_of_range("Board index should be in [0, 3]");
@@ -447,10 +298,10 @@ static inline void chn_add_tone_data(auto &channel_gen, int channel, int tone,
 }
 
 __attribute__((visibility("internal")))
-inline void JaqalPulseCompilerGen::add_tone_data(int chn, int64_t duration_cycles,
-                                                 cubic_spline freq, cubic_spline amp,
-                                                 cubic_spline phase,
-                                                 output_flags_t flags, int64_t cur_cycle)
+inline void Jaqalv1Gen::add_tone_data(int chn, int64_t duration_cycles,
+                                      cubic_spline freq, cubic_spline amp,
+                                      cubic_spline phase,
+                                      output_flags_t flags, int64_t cur_cycle)
 {
     auto board_id = chn >> 4;
     assert(board_id < 4);
@@ -497,7 +348,7 @@ inline void JaqalPulseCompilerGen::add_tone_data(int chn, int64_t duration_cycle
 }
 
 __attribute__((visibility("internal")))
-inline py::ref<> JaqalPulseCompilerGen::BoardGen::get_prefix() const
+inline py::ref<> Jaqalv1Gen::BoardGen::get_prefix() const
 {
     pybytes_ostream io;
     for (int chn = 0; chn < 8; chn++) {
@@ -538,7 +389,7 @@ inline py::ref<> JaqalPulseCompilerGen::BoardGen::get_prefix() const
 }
 
 __attribute__((visibility("internal")))
-inline py::ref<> JaqalPulseCompilerGen::BoardGen::get_sequence() const
+inline py::ref<> Jaqalv1Gen::BoardGen::get_sequence() const
 {
     pybytes_ostream io;
     std::span<const TimedID> chn_gate_ids[8];
@@ -576,7 +427,7 @@ inline py::ref<> JaqalPulseCompilerGen::BoardGen::get_sequence() const
 }
 
 __attribute__((visibility("internal")))
-inline void JaqalPulseCompilerGen::BoardGen::end()
+inline void Jaqalv1Gen::BoardGen::end()
 {
 #pragma omp taskloop
     for (auto &channel_gen: channels) {
@@ -1057,31 +908,6 @@ PyTypeObject RFSOCGenerator::Type = {
 
 namespace {
 
-struct PyPulseCompilerGenerator : RFSOCGenerator {
-    static PyTypeObject Type;
-};
-
-PyTypeObject PyPulseCompilerGenerator::Type = {
-    .ob_base = PyVarObject_HEAD_INIT(0, 0)
-    .tp_name = "brassboard_seq.rfsoc_backend.PulseCompilerGenerator",
-    .tp_basicsize = sizeof(PyPulseCompilerGenerator),
-    .tp_dealloc = py::tp_cxx_dealloc<false,PyPulseCompilerGenerator>,
-    .tp_flags = Py_TPFLAGS_DEFAULT,
-    .tp_getset = (py::getset_table<
-                  py::getset_def<"output",[] (py::ptr<PyPulseCompilerGenerator> self) {
-                      return ((PulseCompilerGen*)self->gen.get())->get_output();
-                  }>>),
-    .tp_base = &RFSOCGenerator::Type,
-    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
-                                        ssize_t nargs, py::tuple kwnames) {
-        py::check_num_arg("PulseCompilerGenerator.__init__", nargs, 0, 0);
-        py::check_no_kwnames("PulseCompilerGenerator.__init__", kwnames);
-        auto self = py::generic_alloc<PyPulseCompilerGenerator>();
-        self->gen.reset(new PulseCompilerGen);
-        return self;
-    }>
-};
-
 struct PyJaqalv1Generator : RFSOCGenerator {
     static PyTypeObject Type;
 };
@@ -1096,11 +922,11 @@ PyTypeObject PyJaqalv1Generator::Type = {
         py::meth_table<
         py::meth_o<"get_prefix",[] (py::ptr<PyJaqalv1Generator> self, py::ptr<> _n) {
             auto n = py::arg_cast<py::int_>(_n, "n").as_int();
-            return ((JaqalPulseCompilerGen*)self->gen.get())->get_prefix(n);
+            return ((Jaqalv1Gen*)self->gen.get())->get_prefix(n);
         }>,
         py::meth_o<"get_sequence",[] (py::ptr<PyJaqalv1Generator> self, py::ptr<> _n) {
             auto n = py::arg_cast<py::int_>(_n, "n").as_int();
-            return ((JaqalPulseCompilerGen*)self->gen.get())->get_sequence(n);
+            return ((Jaqalv1Gen*)self->gen.get())->get_sequence(n);
         }>>),
     .tp_base = &RFSOCGenerator::Type,
     .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
@@ -1108,7 +934,7 @@ PyTypeObject PyJaqalv1Generator::Type = {
         py::check_num_arg("Jaqalv1Generator.__init__", nargs, 0, 0);
         py::check_no_kwnames("Jaqalv1Generator.__init__", kwnames);
         auto self = py::generic_alloc<PyJaqalv1Generator>();
-        self->gen.reset(new JaqalPulseCompilerGen);
+        self->gen.reset(new Jaqalv1Gen);
         return self;
     }>
 };
@@ -1146,7 +972,6 @@ PyTypeObject PyJaqalv1_3Generator::Type = {
 
 } // (anonymous)
 
-PyTypeObject &PulseCompilerGenerator_Type = PyPulseCompilerGenerator::Type;
 PyTypeObject &Jaqalv1Generator_Type = PyJaqalv1Generator::Type;
 PyTypeObject &Jaqalv1_3Generator_Type = PyJaqalv1_3Generator::Type;
 
@@ -1154,7 +979,6 @@ __attribute__((visibility("hidden")))
 void init()
 {
     throw_if(PyType_Ready(&RFSOCGenerator::Type) < 0);
-    throw_if(PyType_Ready(&PyPulseCompilerGenerator::Type) < 0);
     throw_if(PyType_Ready(&PyJaqalv1Generator::Type) < 0);
     throw_if(PyType_Ready(&PyJaqalv1_3Generator::Type) < 0);
 }

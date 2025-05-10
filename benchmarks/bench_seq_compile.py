@@ -2,16 +2,13 @@
 
 import dummy_artiq
 dummy_artiq.inject()
-import dummy_pulse_compiler
-dummy_pulse_compiler.inject()
 
 from brassboard_seq.action import RampFunction, \
     Blackman, BlackmanSquare, LinearRamp, SeqCubicSpline
 from brassboard_seq.artiq_backend import ArtiqBackend
 from brassboard_seq.backend import SeqCompiler
 from brassboard_seq.config import Config
-from brassboard_seq.rfsoc_backend import PulseCompilerGenerator, Jaqalv1Generator, \
-    Jaqalv1_3Generator, RFSOCBackend
+from brassboard_seq.rfsoc_backend import Jaqalv1Generator, Jaqalv1_3Generator, RFSOCBackend
 from brassboard_seq.rtval import inv, ifelse, RTProp, RuntimeValue
 from brassboard_seq.scan import ParamPack, get_param
 from brassboard_seq.seq import Seq
@@ -39,7 +36,6 @@ conf.add_supported_prefix('rfsoc')
 def test(n):
     s = Seq(conf)
     comp = SeqCompiler(s)
-    # rfsoc_gen = PulseCompilerGenerator()
     rfsoc_gen = Jaqalv1Generator()
     # rfsoc_gen = Jaqalv1_3Generator()
     rfsoc = RFSOCBackend(rfsoc_gen)
