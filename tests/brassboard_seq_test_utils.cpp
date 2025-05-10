@@ -733,9 +733,9 @@ static PyModuleDef test_module = {
         py::meth_fast<"event_time_set_base",[] (auto, PyObject *const *args,
                                                 Py_ssize_t nargs) {
             py::check_num_arg("event_time_set_base", nargs, 3, 3);
-            auto self = py::arg_cast<event_time::EventTime>(args[0], "event_time");
-            if (rtval::is_rtval(args[2])) {
-                self->set_base_rt(args[1], rtval::rtval_ptr(args[2]));
+            event_time::time_ptr self = args[0];
+            if (auto rtoffset = py::cast<rtval::RuntimeValue>(args[2])) {
+                self->set_base_rt(args[1], rtoffset);
             }
             else {
                 self->set_base_int(args[1], py::ptr(args[2]).template as_int<int64_t>());
