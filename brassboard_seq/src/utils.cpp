@@ -305,9 +305,9 @@ py::ref<> BacktraceTracker::FrameInfo::get_traceback(PyObject *next)
     auto globals = py::new_dict();
     auto args = py::new_tuple(
         py::ptr(next),
-        py::ref<>(throw_if_not(PyFrame_New(tstate, code, globals.get(), nullptr))),
+        py::ref<>::checked(PyFrame_New(tstate, code, globals.get(), nullptr)),
         py::new_int(lasti), py::new_int(lineno));
-    return py::ref(throw_if_not(traceback_new(&PyTraceBack_Type, args.get(), nullptr)));
+    return py::ref<>::checked(traceback_new(&PyTraceBack_Type, args.get(), nullptr));
 }
 
 void BacktraceTracker::_record(uintptr_t key)
@@ -585,7 +585,7 @@ pybytes_streambuf::~pybytes_streambuf()
 py::bytes_ref pybytes_streambuf::get_buf()
 {
     if (!m_buf)
-        return py::empty_bytes.immref();
+        return py::new_bytes();
     auto sz = m_end;
     setp(nullptr, nullptr);
     m_buf.resize(sz);

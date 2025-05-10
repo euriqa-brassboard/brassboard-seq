@@ -560,25 +560,25 @@ public:
     template<typename T2=T>
     auto ref() const
     {
-        return __ref<py_tag_type<T2>>(py::newref(_ptr()));
+        return __ref<py_tag_type<T2>>(newref(_ptr()));
     }
     template<typename T2=T>
     auto xref() const
     {
-        return __ref<py_tag_type<T2>>(py::xnewref(_ptr()));
+        return __ref<py_tag_type<T2>>(xnewref(_ptr()));
     }
 
     auto str() const
     {
-        return py::str_ref(throw_if_not(PyObject_Str((PyObject*)_ptr())));
+        return str_ref(throw_if_not(PyObject_Str((PyObject*)_ptr())));
     }
     auto list() const
     {
-        return py::list_ref(throw_if_not(PySequence_List((PyObject*)_ptr())));
+        return list_ref(throw_if_not(PySequence_List((PyObject*)_ptr())));
     }
     auto int_() const
     {
-        return py::int_ref(throw_if_not(PyNumber_Long((PyObject*)_ptr())));
+        return int_ref(throw_if_not(PyNumber_Long((PyObject*)_ptr())));
     }
     auto try_int() const
     {
@@ -793,7 +793,7 @@ public:
     void SET(Py_ssize_t i, T2 &&val) const requires std::same_as<T,_list>
     {
         PyList_SET_ITEM((PyObject*)_ptr(), i,
-                        (PyObject*)py::newref(std::forward<T2>(val)));
+                        (PyObject*)newref(std::forward<T2>(val)));
     }
     void SET(Py_ssize_t i, std::nullptr_t) const requires std::same_as<T,_list>
     {
@@ -913,20 +913,26 @@ public:
     }
     auto split(auto &&sep, Py_ssize_t maxsplit) const requires std::same_as<T,_str>
     {
-        return py::list_ref(throw_if_not(PyUnicode_Split((PyObject*)_ptr(),
-                                                         (PyObject*)sep, maxsplit)));
+        return list_ref(throw_if_not(PyUnicode_Split((PyObject*)_ptr(),
+                                                     (PyObject*)sep, maxsplit)));
     }
     auto join(auto &&items) const requires std::same_as<T,_str>
     {
         return str_ref(throw_if_not(PyUnicode_Join((PyObject*)_ptr(), (PyObject*)items)));
     }
+    auto substr(Py_ssize_t start, Py_ssize_t end) const requires std::same_as<T,_str>
+    {
+        return str_ref(throw_if_not(PyUnicode_Substring((PyObject*)_ptr(),
+                                                        start, end)));
+    }
+
     template<typename T2>
     void add_objref(const char *name, T2 &&value) const requires std::same_as<T,_mod>
     {
 #if PY_VERSION_HEX >= 0x030a0000
         throw_if(PyModule_AddObjectRef((PyObject*)_ptr(), name, (PyObject*)value) < 0);
 #else
-        py::ref v(py::newref(std::forward<T2>(value)));
+        py::ref v(newref(std::forward<T2>(value)));
         throw_if(PyModule_AddObject((PyObject*)_ptr(), name, v.get()) < 0);
         v.rel();
 #endif
@@ -1061,10 +1067,6 @@ struct _ref : common<_ref,T> {
         m_ptr = (T*)p;
         XDECREF(ptr);
     }
-    void take_checked(auto *p, auto&&... args)
-    {
-        take(throw_if_not(p, args...));
-    }
     template<typename T2>
     void take(ref<T2> &&h) noexcept
     {
@@ -1076,7 +1078,7 @@ struct _ref : common<_ref,T> {
     template<typename T2>
     void assign(T2 &&p) noexcept
     {
-        take(py::newref(std::forward<T2>(p)));
+        take(newref(std::forward<T2>(p)));
     }
     template<typename T2=T> auto *rel()
     {
@@ -1271,24 +1273,24 @@ static inline bool is_slice_none(ptr<> key)
     return slice->start == Py_None && slice->stop == Py_None && slice->step == Py_None;
 }
 
-static inline dict_ref new_dict()
+static inline auto new_dict()
 {
-    return dict_ref(throw_if_not(PyDict_New()));
+    return dict_ref::checked(PyDict_New());
 }
 ref<> dict_deepcopy(ptr<> d);
 
 template<typename T=PyObject*>
-static inline set_ref new_set(T &&h=nullptr)
+static inline auto new_set(T &&h=nullptr)
 {
-    return set_ref(throw_if_not(PySet_New((PyObject*)h)));
+    return set_ref::checked(PySet_New((PyObject*)h));
 }
 
-static inline list_ref new_list(Py_ssize_t n)
+static inline auto new_list(Py_ssize_t n)
 {
-    return list_ref(throw_if_not(PyList_New(n)));
+    return list_ref::checked(PyList_New(n));
 }
 template<typename T, typename... Args>
-static inline list_ref new_list(T &&first, Args&&... args)
+static inline auto new_list(T &&first, Args&&... args)
     requires (!std::integral<std::remove_cvref_t<T>>)
 {
     Py_ssize_t n = sizeof...(Args) + 1;
@@ -1299,7 +1301,7 @@ static inline list_ref new_list(T &&first, Args&&... args)
         res.SET(i, ref(objs[i]));
     return res;
 }
-static inline list_ref new_nlist(Py_ssize_t n, auto &&cb)
+static inline auto new_nlist(Py_ssize_t n, auto &&cb)
 {
     auto res = new_list(n);
     for (int i = 0; i < n; i++)
@@ -1308,16 +1310,16 @@ static inline list_ref new_nlist(Py_ssize_t n, auto &&cb)
 }
 
 extern tuple empty_tuple;
-static inline tuple_ref new_tuple(Py_ssize_t n)
+static inline auto new_tuple(Py_ssize_t n)
 {
-    return tuple_ref(throw_if_not(PyTuple_New(n)));
+    return tuple_ref::checked(PyTuple_New(n));
 }
-static inline tuple_ref new_tuple()
+static inline auto new_tuple()
 {
     return empty_tuple.immref();
 }
 template<typename T, typename... Args>
-static inline tuple_ref new_tuple(T &&first, Args&&... args)
+static inline auto new_tuple(T &&first, Args&&... args)
     requires (!std::integral<std::remove_cvref_t<T>>)
 {
     Py_ssize_t n = sizeof...(Args) + 1;
@@ -1328,7 +1330,7 @@ static inline tuple_ref new_tuple(T &&first, Args&&... args)
         res.SET(i, ref(objs[i]));
     return res;
 }
-static inline tuple_ref new_ntuple(Py_ssize_t n, auto &&cb)
+static inline auto new_ntuple(Py_ssize_t n, auto &&cb)
 {
     auto res = new_tuple(n);
     for (int i = 0; i < n; i++)
@@ -1337,16 +1339,20 @@ static inline tuple_ref new_ntuple(Py_ssize_t n, auto &&cb)
 }
 
 extern bytes empty_bytes;
-static inline bytes_ref new_bytes(const char *data, Py_ssize_t len)
+static inline auto new_bytes(const char *data, Py_ssize_t len)
 {
-    return ref(throw_if_not(PyBytes_FromStringAndSize(data, len)));
+    return bytes_ref::checked(PyBytes_FromStringAndSize(data, len));
+}
+static inline auto new_bytes()
+{
+    return empty_bytes.immref();
 }
 
-static inline bytearray_ref new_bytearray(const char *data, Py_ssize_t len)
+static inline auto new_bytearray(const char *data, Py_ssize_t len)
 {
-    return ref(throw_if_not(PyByteArray_FromStringAndSize(data, len)));
+    return bytearray_ref::checked(PyByteArray_FromStringAndSize(data, len));
 }
-static inline bytearray_ref new_bytearray()
+static inline auto new_bytearray()
 {
     return new_bytearray(nullptr, 0);
 }
@@ -1356,7 +1362,7 @@ extern float_ float_m0_5;
 extern float_ float_0;
 extern float_ float_0_5;
 extern float_ float_1;
-static inline float_ref new_float(double v)
+static inline auto new_float(double v)
 {
     if (v == -1) {
         return float_m1.ref();
@@ -1373,7 +1379,7 @@ static inline float_ref new_float(double v)
     else if (v == 1) {
         return float_1.ref();
     }
-    return float_ref(throw_if_not(PyFloat_FromDouble(v)));
+    return float_ref::checked(PyFloat_FromDouble(v));
 }
 
 static constexpr int _int_cache_max = 4096;
@@ -1391,37 +1397,36 @@ static consteval void assert_int_cache()
     static_assert(_int_in_cache(v));
 }
 
-static inline int_ int_cached(int v)
+static inline auto int_cached(int v)
 {
     assert(_int_in_cache(v));
     return _int_cache[v + _int_cache_max];
 }
 
 template<std::integral T>
-static inline int_ref new_int(T v)
+static inline auto new_int(T v)
 {
     if (_int_in_cache(v))
         return int_cached(v).ref();
     if constexpr (sizeof(v) > sizeof(long)) {
-        return int_ref(throw_if_not(std::is_signed_v<T> ? PyLong_FromLongLong(v) :
-                                    PyLong_FromUnsignedLongLong(v)));
+        return int_ref::checked(std::is_signed_v<T> ? PyLong_FromLongLong(v) :
+                                PyLong_FromUnsignedLongLong(v));
     }
     else {
-        return int_ref(throw_if_not(std::is_signed_v<T> ? PyLong_FromLong(v) :
-                                    PyLong_FromUnsignedLong(v)));
+        return int_ref::checked(std::is_signed_v<T> ? PyLong_FromLong(v) :
+                                PyLong_FromUnsignedLong(v));
     }
 }
 
-static inline str_ref new_str(const char *str)
+static inline auto new_str(const char *str)
 {
-    return str_ref(throw_if_not(PyUnicode_FromString(str)));
+    return str_ref::checked(PyUnicode_FromString(str));
 }
-static inline str_ref new_str(const char *str, Py_ssize_t len)
+static inline auto new_str(const char *str, Py_ssize_t len)
 {
-    return str_ref(throw_if_not(PyUnicode_FromStringAndSize(str, len)));
+    return str_ref::checked(PyUnicode_FromStringAndSize(str, len));
 }
-
-static inline str_ref new_str(const std::string &str)
+static inline auto new_str(const std::string &str)
 {
     return new_str(str.c_str(), str.size());
 }
@@ -1464,12 +1469,12 @@ private:
     int m_kind{PyUnicode_1BYTE_KIND};
 };
 
-static inline mod_ref import_module(const char *str)
+static inline auto import_module(const char *str)
 {
-    return mod_ref(throw_if_not(PyImport_ImportModule(str)));
+    return mod_ref::checked(PyImport_ImportModule(str));
 }
 
-static inline mod_ref try_import_module(const char *str)
+static inline auto try_import_module(const char *str)
 {
     auto mod = PyImport_ImportModule(str);
     if (!mod)
@@ -1477,9 +1482,9 @@ static inline mod_ref try_import_module(const char *str)
     return mod_ref(mod);
 }
 
-static inline mod_ref new_module(PyModuleDef *def)
+static inline auto new_module(PyModuleDef *def)
 {
-    return mod_ref(throw_if_not(PyModule_Create(def)));
+    return mod_ref::checked(PyModule_Create(def));
 }
 
 #define PY_MODINIT(name, moddef)                                        \
@@ -1495,7 +1500,7 @@ static inline mod_ref new_module(PyModuleDef *def)
 template<typename T1=PyObject*,typename T2=PyObject*>
 static inline auto new_cfunc(PyMethodDef *ml, T1 &&self=nullptr, T2 &&mod=nullptr)
 {
-    return ref(throw_if_not(PyCFunction_NewEx(ml, (PyObject*)self, (PyObject*)mod)));
+    return ref<>::checked(PyCFunction_NewEx(ml, (PyObject*)self, (PyObject*)mod));
 }
 
 template<typename T=PyObject, typename Tty>
@@ -2567,11 +2572,11 @@ struct Bits {
     auto to_pylong() const
     {
 #if PY_VERSION_HEX >= 0x030d0000
-        return py::ref(throw_if_not(PyLong_FromUnsignedNativeBytes(&bits[0],
-                                                                   sizeof(bits), 1)));
+        return py::ref<>::checked(PyLong_FromUnsignedNativeBytes(&bits[0],
+                                                                 sizeof(bits), 1));
 #else
-        return py::ref(throw_if_not(_PyLong_FromByteArray((const unsigned char*)&bits[0],
-                                                          sizeof(bits), true, 0)));
+        return py::ref<>::checked(_PyLong_FromByteArray((const unsigned char*)&bits[0],
+                                                        sizeof(bits), true, 0));
 #endif
     }
 

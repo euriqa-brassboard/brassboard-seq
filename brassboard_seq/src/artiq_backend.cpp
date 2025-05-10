@@ -1288,9 +1288,9 @@ static PyMethodDef env_methods[] = {
 
 void patch_artiq()
 {
-    for (auto &meth_def: env_methods) {
-        py::ref descr(throw_if_not(PyDescr_NewMethod(&PyBaseObject_Type, &meth_def)));
-        info().HasEnvironment.set_attr(meth_def.ml_name, descr);
+    for (auto &def: env_methods) {
+        info().HasEnvironment.set_attr(
+            def.ml_name, py::ref<>::checked(PyDescr_NewMethod(&PyBaseObject_Type, &def)));
     }
 }
 

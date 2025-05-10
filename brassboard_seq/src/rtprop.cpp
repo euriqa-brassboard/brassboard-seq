@@ -214,9 +214,7 @@ PyTypeObject rtprop_callback::Type = {
     .tp_str = py::unifunc<[] (py::ptr<rtprop_callback> self) {
         return py::str_format(
             "<RTProp %U for %S>",
-            py::str_ref::checked(PyUnicode_Substring(self->fieldname.get(),
-                                                     rtprop_prefix_len,
-                                                     PY_SSIZE_T_MAX)), self->obj);
+            self->fieldname.substr(rtprop_prefix_len, PY_SSIZE_T_MAX), self->obj);
     }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = py::tp_field_traverse<rtprop_callback,&rtprop_callback::obj>,

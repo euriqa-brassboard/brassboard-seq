@@ -723,7 +723,7 @@ py::ref<> Jaqalv1_3Gen::get_prefix(int n) const
 {
     if (n < 0 || n >= 4)
         throw std::out_of_range("Board index should be in [0, 3]");
-    return py::empty_bytes.immref();
+    return py::new_bytes();
 }
 
 __attribute__((visibility("protected")))
