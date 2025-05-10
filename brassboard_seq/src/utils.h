@@ -611,12 +611,14 @@ public:
         Ti res;
         if constexpr (sizeof(Ti) > sizeof(long)) {
             static_assert(sizeof(Ti) <= sizeof(long long));
-            res = PyLong_AsLongLong(obj);
+            res = (std::is_signed_v<Ti> ? PyLong_AsLongLong(obj) :
+                   PyLong_AsUnsignedLongLong(obj));
         }
         else {
-            res = PyLong_AsLong(obj);
+            res = (std::is_signed_v<Ti> ? PyLong_AsLong(obj) :
+                   PyLong_AsUnsignedLong(obj));
         }
-        if (res == -1 && PyErr_Occurred())
+        if (res == (Ti)-1 && PyErr_Occurred())
             cb();
         return res;
     }
@@ -1391,7 +1393,7 @@ static inline int_ int_cached(int v)
     return _int_cache[v + _int_cache_max];
 }
 
-static inline int_ref new_int(std::integral auto v)
+static inline int_ref new_int(std::signed_integral auto v)
 {
     if (v < _int_cache_max && v >= -_int_cache_max)
         return int_cached(v).ref();
@@ -1400,6 +1402,18 @@ static inline int_ref new_int(std::integral auto v)
     }
     else {
         return int_ref(throw_if_not(PyLong_FromLong(v)));
+    }
+}
+
+static inline int_ref new_int(std::unsigned_integral auto v)
+{
+    if (v < _int_cache_max)
+        return int_cached(v).ref();
+    if constexpr (sizeof(v) > sizeof(long)) {
+        return int_ref(throw_if_not(PyLong_FromUnsignedLongLong(v)));
+    }
+    else {
+        return int_ref(throw_if_not(PyLong_FromUnsignedLong(v)));
     }
 }
 

@@ -10,7 +10,7 @@ def rand_bits(cls):
     n, bits, sign = cls.spec()
     maxele = (1 << bits) - 1
     v0 = random.randint(0, maxele)
-    if (v0 << 1) > maxele:
+    if sign and (v0 << 1) > maxele:
         self = cls(v0 - (1 << bits))
         assert self[0] == v0 - (1 << bits)
     else:
@@ -20,7 +20,7 @@ def rand_bits(cls):
     for i in range(1, n):
         v = random.randint(0, maxele)
         vi |= v << (i * bits)
-        if (v << 1) > maxele:
+        if sign and (v << 1) > maxele:
             self[i] = v - (1 << bits)
             assert self[i] == v - (1 << bits)
         else:
