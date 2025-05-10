@@ -2361,7 +2361,6 @@ template<std::integral ELT,unsigned N>
 struct Bits {
     static_assert(std::endian::native == std::endian::little);
     constexpr Bits() = default;
-    constexpr Bits(const Bits&) = default;
     static constexpr Bits mask(unsigned b1, unsigned b2)
     {
         Bits res;
