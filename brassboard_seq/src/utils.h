@@ -1379,41 +1379,36 @@ static inline float_ref new_float(double v)
 static constexpr int _int_cache_max = 4096;
 extern const std::array<int_,_int_cache_max * 2> _int_cache;
 
+template<std::integral T>
+static constexpr bool _int_in_cache(T v)
+{
+    return v < _int_cache_max && (!std::is_signed_v<T> || v >= -_int_cache_max);
+}
+
 template<std::integral auto v>
 static consteval void assert_int_cache()
 {
-    static_assert(v < _int_cache_max);
-    static_assert(v >= -_int_cache_max);
+    static_assert(_int_in_cache(v));
 }
 
 static inline int_ int_cached(int v)
 {
-    assert(v < _int_cache_max);
-    assert(v >= -_int_cache_max);
+    assert(_int_in_cache(v));
     return _int_cache[v + _int_cache_max];
 }
 
-static inline int_ref new_int(std::signed_integral auto v)
+template<std::integral T>
+static inline int_ref new_int(T v)
 {
-    if (v < _int_cache_max && v >= -_int_cache_max)
+    if (_int_in_cache(v))
         return int_cached(v).ref();
     if constexpr (sizeof(v) > sizeof(long)) {
-        return int_ref(throw_if_not(PyLong_FromLongLong(v)));
+        return int_ref(throw_if_not(std::is_signed_v<T> ? PyLong_FromLongLong(v) :
+                                    PyLong_FromUnsignedLongLong(v)));
     }
     else {
-        return int_ref(throw_if_not(PyLong_FromLong(v)));
-    }
-}
-
-static inline int_ref new_int(std::unsigned_integral auto v)
-{
-    if (v < _int_cache_max)
-        return int_cached(v).ref();
-    if constexpr (sizeof(v) > sizeof(long)) {
-        return int_ref(throw_if_not(PyLong_FromUnsignedLongLong(v)));
-    }
-    else {
-        return int_ref(throw_if_not(PyLong_FromUnsignedLong(v)));
+        return int_ref(throw_if_not(std::is_signed_v<T> ? PyLong_FromLong(v) :
+                                    PyLong_FromUnsignedLong(v)));
     }
 }
 
