@@ -255,7 +255,7 @@ static inline uint32_t dds_freq_to_mu(double freq, double ftw_per_hz)
 }
 
 struct ArtiqBackend : Backend::Base<ArtiqBackend> {
-    struct Data : Backend::Data {
+    struct Data final : Backend::Data {
         // Artiq system object
         py::ref<> sys;
 

@@ -86,7 +86,7 @@ struct ChannelsInfo {
 };
 
 struct RFSOCBackend : Backend::Base<RFSOCBackend> {
-    struct Data : Backend::Data {
+    struct Data final : Backend::Data {
         py::ref<RFSOCGenerator> generator;
         ChannelsInfo channels;
         std::vector<std::pair<void*,bool>> bool_values;

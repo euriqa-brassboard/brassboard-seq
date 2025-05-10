@@ -2688,7 +2688,7 @@ protected:
     ssize_t m_end;
 };
 
-class pybytes_streambuf : public buff_streambuf {
+class pybytes_streambuf final : public buff_streambuf {
 public:
     pybytes_streambuf();
     ~pybytes_streambuf() override;
@@ -2701,7 +2701,7 @@ private:
     py::bytes_ref m_buf;
 };
 
-class pybytearray_streambuf : public buff_streambuf {
+class pybytearray_streambuf final : public buff_streambuf {
 public:
     pybytearray_streambuf();
     ~pybytearray_streambuf() override;
@@ -2733,7 +2733,7 @@ public:
     }
 };
 
-class pybytes_ostream : public buff_ostream {
+class pybytes_ostream final : public buff_ostream {
 public:
     pybytes_ostream();
     ~pybytes_ostream();
@@ -2748,7 +2748,7 @@ private:
     pybytes_streambuf m_buf;
 };
 
-class pybytearray_ostream : public buff_ostream {
+class pybytearray_ostream final : public buff_ostream {
 public:
     pybytearray_ostream();
     ~pybytearray_ostream();

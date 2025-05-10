@@ -228,8 +228,8 @@ PyTypeObject RampFunction::Type = {
 
 // These ramp functions can be implemented in python code but are provided here
 // to be slightly more efficient.
-struct Blackman final : RampFunctionBase::Base<Blackman> {
-    struct Data : RampFunctionBase::Data {
+struct Blackman : RampFunctionBase::Base<Blackman> {
+    struct Data final : RampFunctionBase::Data {
         double f_amp;
         double f_offset;
         double f_t_scale;
@@ -294,8 +294,8 @@ PyTypeObject Blackman::Type = {
     }>
 };
 
-struct BlackmanSquare final : RampFunctionBase::Base<BlackmanSquare> {
-    struct Data : RampFunctionBase::Data {
+struct BlackmanSquare : RampFunctionBase::Base<BlackmanSquare> {
+    struct Data final : RampFunctionBase::Data {
         double f_amp;
         double f_offset;
         double f_t_scale;
@@ -361,8 +361,8 @@ PyTypeObject BlackmanSquare::Type = {
     }>
 };
 
-struct LinearRamp final : RampFunctionBase::Base<LinearRamp> {
-    struct Data : RampFunctionBase::Data {
+struct LinearRamp : RampFunctionBase::Base<LinearRamp> {
+    struct Data final : RampFunctionBase::Data {
         double f_start;
         double f_end;
         double f_inv_length;
