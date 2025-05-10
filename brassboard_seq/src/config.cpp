@@ -26,6 +26,13 @@ py::str_ref channel_name_from_path(py::ptr<> path)
     return "/"_py.join(path);
 }
 
+[[noreturn]] __attribute__((visibility("protected")))
+void raise_invalid_channel(py::tuple path)
+{
+    py_throw_format(PyExc_ValueError, "Invalid channel name %U",
+                    channel_name_from_path(path));
+}
+
 static inline auto split_string_tuple(py::str s)
 {
     auto list = s.split("/"_py, -1);

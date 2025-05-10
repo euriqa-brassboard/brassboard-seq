@@ -1098,7 +1098,7 @@ PyTypeObject ArtiqBackend::Type = {
                       return py::new_int(self->data()->total_time_mu);
                   }>>),
     .tp_base = &Backend::Type,
-    .tp_vectorcall = py::vectorfunc<[] (PyObject*, PyObject *const *args,
+    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg("ArtiqBackend.__init__", nargs, 2, 2);
         auto [output_format] =

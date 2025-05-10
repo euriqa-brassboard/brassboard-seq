@@ -50,7 +50,7 @@ struct RFSOCAction {
         mutable double float_value;
         mutable bool bool_value;
     };
-    PyObject *ramp;
+    py::ptr<> ramp;
 };
 
 struct Relocation {
