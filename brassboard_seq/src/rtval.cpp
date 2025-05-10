@@ -964,24 +964,9 @@ static __attribute__((flatten, noinline))
 std::pair<EvalError,GenVal> interpret_func(const int *code, GenVal *data,
                                            EvalError *errors)
 {
-#define GEN_UNI_OP(f, t1)                                       \
-    int((char*)&&f##_op_##t1##_label - (char*)&&return_label),
-#define GEN_BIN_OP(f, t1, t2)                                           \
-    int((char*)&&f##_op_##t1##_##t2##_label - (char*)&&return_label),
-#define GEN_SELECT_OP(t2, t3)                                           \
-    int((char*)&&Select_op_##t2##_##t3##_label - (char*)&&return_label),
-    static int const label_offsets[]
-        asm(".L_ZN14brassboard_seq5rtval13label_offsetsE")
-        __attribute__((used)) = {
-#include "rtval_interp.h"
-    };
-#undef GEN_UNI_OP
-#undef GEN_BIN_OP
-#undef GEN_SELECT_OP
-
     // Making this variable `const` messes up clang's codegen for lambda
     // Ref https://github.com/llvm/llvm-project/issues/103309
-    char *base_addr = (char*)&&return_label;
+    char *base_addr = (char*)&&init_label;
 
     auto pop_operand = [&] {
         auto res = *code;
@@ -1046,12 +1031,29 @@ return_label: {
 #undef GEN_UNI_OP
 #undef GEN_BIN_OP
 #undef GEN_SELECT_OP
+
+    [[unlikely]] init_label:
+    static int const label_offsets[] = {
+#define GEN_UNI_OP(f, t1)                                               \
+        int((char*)&&f##_op_##t1##_label - (char*)&&init_label),
+#define GEN_BIN_OP(f, t1, t2)                                           \
+        int((char*)&&f##_op_##t1##_##t2##_label - (char*)&&init_label),
+#define GEN_SELECT_OP(t2, t3)                                           \
+        int((char*)&&Select_op_##t2##_##t3##_label - (char*)&&init_label),
+#include "rtval_interp.h"
+        int((char*)&&return_label - (char*)&&init_label)
+#undef GEN_UNI_OP
+#undef GEN_BIN_OP
+#undef GEN_SELECT_OP
+    };
+    return { EvalError::NoError, { .i64_val = (intptr_t)label_offsets }};
 }
 
 static inline constexpr
 int get_label_id(ValueType f, DataType t1, DataType t2=DataType(0))
 {
-    return f * 9 + int(t1) * 3 + int(t2);
+    // The + 1 reserves a slot for the return instruction
+    return f * 9 + int(t1) * 3 + int(t2) + 1;
 }
 
 static const auto interp_label_offsets = [] {
@@ -1070,14 +1072,14 @@ static const auto interp_label_offsets = [] {
         return res + 1;
     };
     // Call the function once to guarantee that the static variable is initialized
+    int *label_offsets;
     {
-        const int code[] = {0, 0};
+        const int code[] = {0};
         GenVal vals[] = {{}};
         EvalError errors[] = {{}};
-        interpret_func(code, vals, errors);
+        auto [e, v] = interpret_func(code, vals, errors);
+        label_offsets = (int*)(intptr_t)v.i64_val;
     }
-    extern const int __attribute__((visibility("internal"))) label_offsets[]
-        asm(".L_ZN14brassboard_seq5rtval13label_offsetsE");
     std::array<int,get_size()> res{};
     uint16_t idx = 0;
 #define GEN_UNI_OP(f, t1) res[get_label_id(f, DataType::t1)] = label_offsets[idx++];
@@ -1089,6 +1091,8 @@ static const auto interp_label_offsets = [] {
 #undef GEN_UNI_OP
 #undef GEN_BIN_OP
 #undef GEN_SELECT_OP
+    // return instruction
+    res[0] = label_offsets[idx++];
     return res;
 } ();
 
@@ -1120,7 +1124,7 @@ void InterpFunction::set_value(rtval_ptr value, std::vector<DataType> &args)
     }
     ret_type = info.val.type;
     // Insert return instruction to code.
-    code.push_back(0);
+    code.push_back(interp_label_offsets[0]);
     code.push_back(info.idx);
 }
 
