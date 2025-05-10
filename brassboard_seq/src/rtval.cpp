@@ -1032,7 +1032,7 @@ return_label: {
 #undef GEN_BIN_OP
 #undef GEN_SELECT_OP
 
-    [[unlikely]] init_label:
+init_label:
     static int const label_offsets[] = {
 #define GEN_UNI_OP(f, t1)                                               \
         int((char*)&&f##_op_##t1##_label - (char*)&&init_label),
