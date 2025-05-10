@@ -809,23 +809,14 @@ void ArtiqBackend::Data::runtime_finalize(CompiledSeq &cseq, unsigned age)
                 a2.eval_status = eval_status;
                 reloc_action(a2);
             }
-            // Move disabled actions to the end
-            if (a1.cond != a2.cond)
-                return int(a1.cond) > int(a2.cond);
-            // Sort by time
-            if (a1.time_mu != a2.time_mu)
-                return a1.time_mu < a2.time_mu;
-            // Sometimes time points with different tid may actually happen
-            // at the same time (especially on the same artiq mu time point)
-            // in these cases we need to make sure we output them in order
-            // in order to generate the right output at the end.
-            if (a1.tid != a2.tid)
-                return a1.tid < a2.tid;
-            // End action technically happens just before the time point
-            // and must be sorted to be before the start action.
-            if (a1.is_end != a2.is_end)
-                return int(a1.is_end) > int(a2.is_end);
-            return a1.aid < a2.aid;
+            auto to_tuple = [] (const auto &a) {
+                // Move disabled actions to the end,
+                // Sort by time (sort by tid for same time value)
+                // End action technically happens just before the time point
+                // and must be sorted to be before the start action.
+                return std::tuple(-int(a.cond), a.time_mu, a.tid, -int(a.is_end), a.aid);
+            };
+            return to_tuple(a1) < to_tuple(a2);
         });
     }
 

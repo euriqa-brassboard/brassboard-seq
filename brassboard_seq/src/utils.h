@@ -2453,11 +2453,10 @@ struct Bits {
     }
     auto operator<=>(const Bits &other) const
     {
+        // Reverse order and use unsigned comparison
         return std::lexicographical_compare_three_way(
             bits.rbegin(), bits.rend(), other.bits.rbegin(), other.bits.rend(),
-            [&] (UELT v1, UELT v2) {
-                return v1 <=> v2;
-            });
+            [] (UELT v1, UELT v2) { return v1 <=> v2; });
     }
 
     template<std::integral ELT2,unsigned N2>

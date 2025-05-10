@@ -381,34 +381,6 @@ void RFSOCBackend::Data::runtime_finalize(CompiledSeq &cseq, unsigned age)
     for (auto [dds, delay]: channels.dds_delay)
         max_delay = std::max(max_delay, delay);
 
-    auto reloc_and_cmp_action = [&] (const auto &a1, const auto &a2, auto param) {
-        if (a1.reloc_id >= 0 && a1.eval_status != eval_status) {
-            a1.eval_status = eval_status;
-            reloc_action(a1, (ToneParam)param);
-        }
-        if (a2.reloc_id >= 0 && a2.eval_status != eval_status) {
-            a2.eval_status = eval_status;
-            reloc_action(a2, (ToneParam)param);
-        }
-        // Move disabled actions to the end
-        if (a1.cond != a2.cond)
-            return int(a1.cond) > int(a2.cond);
-        // Sort by time
-        if (a1.seq_time != a2.seq_time)
-            return a1.seq_time < a2.seq_time;
-        // Sometimes time points with different tid needs
-        // to be sorted by tid to get the output correct.
-        if (a1.tid != a2.tid)
-            return a1.tid < a2.tid;
-        // End action technically happens
-        // just before the time point and must be sorted
-        // to be before the start action.
-        return int(a1.is_end) > int(a2.is_end);
-        // The frontend/shared finalization code only allow
-        // a single action on the same channel at the same time
-        // so there shouldn't be any ambiguity.
-    };
-
     auto reloc_sort_actions = [&] (auto &actions, auto param) {
         if (actions.size() == 1) {
             auto &a = actions[0];
@@ -419,7 +391,26 @@ void RFSOCBackend::Data::runtime_finalize(CompiledSeq &cseq, unsigned age)
         }
         else {
             std::ranges::sort(actions, [&] (const auto &a1, const auto &a2) {
-                return reloc_and_cmp_action(a1, a2, param);
+                if (a1.reloc_id >= 0 && a1.eval_status != eval_status) {
+                    a1.eval_status = eval_status;
+                    reloc_action(a1, (ToneParam)param);
+                }
+                if (a2.reloc_id >= 0 && a2.eval_status != eval_status) {
+                    a2.eval_status = eval_status;
+                    reloc_action(a2, (ToneParam)param);
+                }
+                auto to_tuple = [] (const auto &a) {
+                    // Move disabled actions to the end,
+                    // Sort by time (sort by tid for same time value)
+                    // End action technically happens just before the time point
+                    // and must be sorted to be before the start action.
+
+                    // The frontend/shared finalization code only allow
+                    // a single action on the same channel at the same time
+                    // so there shouldn't be any ambiguity after time sorting.
+                    return std::tuple(-int(a.cond), a.seq_time, a.tid, -int(a.is_end));
+                };
+                return to_tuple(a1) < to_tuple(a2);
             });
         }
     };
