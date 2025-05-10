@@ -147,15 +147,7 @@ struct Generator {
     virtual ~Generator() = default;
 };
 
-struct SyncChannelGen: Generator {
-    virtual void add_tone_data(int chn, int64_t duration_cycles, cubic_spline freq,
-                               cubic_spline amp, cubic_spline phase,
-                               output_flags_t flags, int64_t cur_cycle) = 0;
-    void process_channel(ToneBuffer &tone_buffer, int chn,
-                         int64_t total_cycle) override;
-};
-
-struct Jaqalv1Gen final: SyncChannelGen {
+struct Jaqalv1Gen final: Generator {
     struct BoardGen {
         Jaqal_v1::ChannelGen channels[8];
         void clear();
@@ -166,17 +158,19 @@ struct Jaqalv1Gen final: SyncChannelGen {
     BoardGen boards[4]; // 4 * 8 physical channels
 
     void start() override;
+    void process_channel(ToneBuffer &tone_buffer, int chn,
+                         int64_t total_cycle) override;
     void add_tone_data(int chn, int64_t duration_cycles, cubic_spline freq,
                        cubic_spline amp, cubic_spline phase,
-                       output_flags_t flags, int64_t cur_cycle) override;
+                       output_flags_t flags, int64_t cur_cycle);
     void end() override;
     py::ref<> get_prefix(int n) const;
     py::ref<> get_sequence(int n) const;
 };
 
-struct Jaqalv1_3Generator: Generator {
-    virtual void add_inst(const JaqalInst &inst, int board, int board_chn,
-                          Jaqal_v1_3::ModType mod, int64_t cycle) = 0;
+struct Jaqalv1_3Gen final: Generator {
+    py::ref<> get_prefix(int n) const;
+    py::ref<> get_sequence(int n) const;
 private:
     struct ChnInfo {
         uint16_t board;
@@ -199,23 +193,19 @@ private:
             return cur + max_cycles;
         return cur + len / 2;
     }
+
+    std::vector<TimedInst> board_insts[4];
+
     void process_freq(std::span<DDSParamAction> freq, std::span<DDSFFAction> ff,
                       ChnInfo chn, int64_t total_cycle);
     template<auto pulsef>
     void process_param(std::span<DDSParamAction> param, ChnInfo chn,
                        int64_t total_cycle, Jaqal_v1_3::ModType modtype);
     void process_frame(ChnInfo chn, int64_t total_cycle, Jaqal_v1_3::ModType modtype);
-    void process_channel(ToneBuffer &tone_buffer, int chn, int64_t total_cycle) override;
-};
-
-struct Jaqalv1_3StreamGen final: Jaqalv1_3Generator {
-    py::ref<> get_prefix(int n) const;
-    py::ref<> get_sequence(int n) const;
-private:
-    std::vector<TimedInst> board_insts[4];
     void add_inst(const JaqalInst &inst, int board, int board_chn,
-                  Jaqal_v1_3::ModType mod, int64_t cycle) override;
+                  Jaqal_v1_3::ModType mod, int64_t cycle);
     void start() override;
+    void process_channel(ToneBuffer &tone_buffer, int chn, int64_t total_cycle) override;
     void end() override;
 };
 

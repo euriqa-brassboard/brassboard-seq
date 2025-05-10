@@ -39,8 +39,8 @@ static inline cubic_spline approximate_spline(double v[5])
 }
 
 __attribute__((visibility("internal")))
-inline void SyncChannelGen::process_channel(ToneBuffer &tone_buffer, int chn,
-                                            int64_t total_cycle)
+inline void Jaqalv1Gen::process_channel(ToneBuffer &tone_buffer, int chn,
+                                        int64_t total_cycle)
 {
     IsFirst trig;
     assert(!tone_buffer.params[0].empty());
@@ -436,9 +436,9 @@ inline void Jaqalv1Gen::BoardGen::end()
 }
 
 inline __attribute__((always_inline))
-void Jaqalv1_3Generator::process_freq(std::span<DDSParamAction> freq_actions,
-                                      std::span<DDSFFAction> ff_actions,
-                                      ChnInfo chn, int64_t total_cycle)
+void Jaqalv1_3Gen::process_freq(std::span<DDSParamAction> freq_actions,
+                                std::span<DDSFFAction> ff_actions,
+                                ChnInfo chn, int64_t total_cycle)
 {
     IsFirst trig;
     assume(chn.tone == 0 || chn.tone == 1);
@@ -578,8 +578,8 @@ void Jaqalv1_3Generator::process_freq(std::span<DDSParamAction> freq_actions,
 
 template<auto pulsef>
 inline __attribute__((always_inline))
-void Jaqalv1_3Generator::process_param(std::span<DDSParamAction> actions, ChnInfo chn,
-                                       int64_t total_cycle, Jaqal_v1_3::ModType modtype)
+void Jaqalv1_3Gen::process_param(std::span<DDSParamAction> actions, ChnInfo chn,
+                                 int64_t total_cycle, Jaqal_v1_3::ModType modtype)
 {
     IsFirst trig;
     int64_t cur_cycle = 0;
@@ -673,8 +673,8 @@ void Jaqalv1_3Generator::process_param(std::span<DDSParamAction> actions, ChnInf
 }
 
 inline __attribute__((always_inline))
-void Jaqalv1_3Generator::process_frame(ChnInfo chn, int64_t total_cycle,
-                                       Jaqal_v1_3::ModType modtype)
+void Jaqalv1_3Gen::process_frame(ChnInfo chn, int64_t total_cycle,
+                                 Jaqal_v1_3::ModType modtype)
 {
     IsFirst trig;
     int64_t cur_cycle = 0;
@@ -697,8 +697,8 @@ void Jaqalv1_3Generator::process_frame(ChnInfo chn, int64_t total_cycle,
 }
 
 __attribute__((visibility("internal")))
-inline void Jaqalv1_3Generator::process_channel(ToneBuffer &tone_buffer, int chn,
-                                                int64_t total_cycle)
+inline void Jaqalv1_3Gen::process_channel(ToneBuffer &tone_buffer, int chn,
+                                          int64_t total_cycle)
 {
     bb_debug("Start outputting jaqal v1.3 insts for channel %d\n", chn);
     assert(!tone_buffer.params[0].empty());
@@ -719,7 +719,7 @@ inline void Jaqalv1_3Generator::process_channel(ToneBuffer &tone_buffer, int chn
 }
 
 __attribute__((visibility("protected")))
-py::ref<> Jaqalv1_3StreamGen::get_prefix(int n) const
+py::ref<> Jaqalv1_3Gen::get_prefix(int n) const
 {
     if (n < 0 || n >= 4)
         throw std::out_of_range("Board index should be in [0, 3]");
@@ -727,7 +727,7 @@ py::ref<> Jaqalv1_3StreamGen::get_prefix(int n) const
 }
 
 __attribute__((visibility("protected")))
-py::ref<> Jaqalv1_3StreamGen::get_sequence(int n) const
+py::ref<> Jaqalv1_3Gen::get_sequence(int n) const
 {
     if (n < 0 || n >= 4)
         throw std::out_of_range("Board index should be in [0, 3]");
@@ -742,8 +742,8 @@ py::ref<> Jaqalv1_3StreamGen::get_sequence(int n) const
 }
 
 __attribute__((visibility("internal")))
-inline void Jaqalv1_3StreamGen::add_inst(const JaqalInst &inst, int board, int board_chn,
-                                         Jaqal_v1_3::ModType mod, int64_t cycle)
+inline void Jaqalv1_3Gen::add_inst(const JaqalInst &inst, int board, int board_chn,
+                                   Jaqal_v1_3::ModType mod, int64_t cycle)
 {
     assert(board >= 0 && board < 4);
     auto &insts = board_insts[board];
@@ -754,7 +754,7 @@ inline void Jaqalv1_3StreamGen::add_inst(const JaqalInst &inst, int board, int b
 }
 
 __attribute__((visibility("internal")))
-inline void Jaqalv1_3StreamGen::start()
+inline void Jaqalv1_3Gen::start()
 {
     for (auto &insts: board_insts) {
         insts.clear();
@@ -762,7 +762,7 @@ inline void Jaqalv1_3StreamGen::start()
 }
 
 __attribute__((visibility("internal")))
-inline void Jaqalv1_3StreamGen::end()
+inline void Jaqalv1_3Gen::end()
 {
 #pragma omp parallel
 #pragma omp single
@@ -908,23 +908,23 @@ PyTypeObject RFSOCGenerator::Type = {
 
 namespace {
 
-struct PyJaqalv1Generator : RFSOCGenerator {
+struct Jaqalv1Generator : RFSOCGenerator {
     static PyTypeObject Type;
 };
 
-PyTypeObject PyJaqalv1Generator::Type = {
+PyTypeObject Jaqalv1Generator::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rfsoc_backend.Jaqalv1Generator",
-    .tp_basicsize = sizeof(PyJaqalv1Generator),
-    .tp_dealloc = py::tp_cxx_dealloc<false,PyJaqalv1Generator>,
+    .tp_basicsize = sizeof(Jaqalv1Generator),
+    .tp_dealloc = py::tp_cxx_dealloc<false,Jaqalv1Generator>,
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_methods = (
         py::meth_table<
-        py::meth_o<"get_prefix",[] (py::ptr<PyJaqalv1Generator> self, py::ptr<> _n) {
+        py::meth_o<"get_prefix",[] (py::ptr<Jaqalv1Generator> self, py::ptr<> _n) {
             auto n = py::arg_cast<py::int_>(_n, "n").as_int();
             return ((Jaqalv1Gen*)self->gen.get())->get_prefix(n);
         }>,
-        py::meth_o<"get_sequence",[] (py::ptr<PyJaqalv1Generator> self, py::ptr<> _n) {
+        py::meth_o<"get_sequence",[] (py::ptr<Jaqalv1Generator> self, py::ptr<> _n) {
             auto n = py::arg_cast<py::int_>(_n, "n").as_int();
             return ((Jaqalv1Gen*)self->gen.get())->get_sequence(n);
         }>>),
@@ -933,54 +933,54 @@ PyTypeObject PyJaqalv1Generator::Type = {
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg("Jaqalv1Generator.__init__", nargs, 0, 0);
         py::check_no_kwnames("Jaqalv1Generator.__init__", kwnames);
-        auto self = py::generic_alloc<PyJaqalv1Generator>();
+        auto self = py::generic_alloc<Jaqalv1Generator>();
         self->gen.reset(new Jaqalv1Gen);
         return self;
     }>
 };
 
-struct PyJaqalv1_3Generator : RFSOCGenerator {
+struct Jaqalv1_3Generator : RFSOCGenerator {
     static PyTypeObject Type;
 };
 
-PyTypeObject PyJaqalv1_3Generator::Type = {
+PyTypeObject Jaqalv1_3Generator::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rfsoc_backend.Jaqalv1_3Generator",
-    .tp_basicsize = sizeof(PyJaqalv1_3Generator),
-    .tp_dealloc = py::tp_cxx_dealloc<false,PyJaqalv1_3Generator>,
+    .tp_basicsize = sizeof(Jaqalv1_3Generator),
+    .tp_dealloc = py::tp_cxx_dealloc<false,Jaqalv1_3Generator>,
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_methods = (
         py::meth_table<
-        py::meth_o<"get_prefix",[] (py::ptr<PyJaqalv1_3Generator> self, py::ptr<> _n) {
+        py::meth_o<"get_prefix",[] (py::ptr<Jaqalv1_3Generator> self, py::ptr<> _n) {
             auto n = py::arg_cast<py::int_>(_n, "n").as_int();
-            return ((Jaqalv1_3StreamGen*)self->gen.get())->get_prefix(n);
+            return ((Jaqalv1_3Gen*)self->gen.get())->get_prefix(n);
         }>,
-        py::meth_o<"get_sequence",[] (py::ptr<PyJaqalv1_3Generator> self, py::ptr<> _n) {
+        py::meth_o<"get_sequence",[] (py::ptr<Jaqalv1_3Generator> self, py::ptr<> _n) {
             auto n = py::arg_cast<py::int_>(_n, "n").as_int();
-            return ((Jaqalv1_3StreamGen*)self->gen.get())->get_sequence(n);
+            return ((Jaqalv1_3Gen*)self->gen.get())->get_sequence(n);
         }>>),
     .tp_base = &RFSOCGenerator::Type,
     .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg("Jaqalv1_3Generator.__init__", nargs, 0, 0);
         py::check_no_kwnames("Jaqalv1_3Generator.__init__", kwnames);
-        auto self = py::generic_alloc<PyJaqalv1_3Generator>();
-        self->gen.reset(new Jaqalv1_3StreamGen);
+        auto self = py::generic_alloc<Jaqalv1_3Generator>();
+        self->gen.reset(new Jaqalv1_3Gen);
         return self;
     }>
 };
 
 } // (anonymous)
 
-PyTypeObject &Jaqalv1Generator_Type = PyJaqalv1Generator::Type;
-PyTypeObject &Jaqalv1_3Generator_Type = PyJaqalv1_3Generator::Type;
+PyTypeObject &Jaqalv1Generator_Type = Jaqalv1Generator::Type;
+PyTypeObject &Jaqalv1_3Generator_Type = Jaqalv1_3Generator::Type;
 
 __attribute__((visibility("hidden")))
 void init()
 {
     throw_if(PyType_Ready(&RFSOCGenerator::Type) < 0);
-    throw_if(PyType_Ready(&PyJaqalv1Generator::Type) < 0);
-    throw_if(PyType_Ready(&PyJaqalv1_3Generator::Type) < 0);
+    throw_if(PyType_Ready(&Jaqalv1Generator::Type) < 0);
+    throw_if(PyType_Ready(&Jaqalv1_3Generator::Type) < 0);
 }
 
 }
