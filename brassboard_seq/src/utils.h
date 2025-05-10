@@ -107,6 +107,14 @@ static constexpr inline __attribute__((always_inline)) auto assume(auto v)
 }
 #endif
 
+#ifdef __clang__
+#  define OPT_FAST_MATH
+#elif defined(__GNUC__)
+#  define OPT_FAST_MATH __attribute__((optimize("-ffast-math")))
+#else
+#  define OPT_FAST_MATH
+#endif
+
 [[noreturn]] void throw0();
 [[noreturn]] void bb_rethrow(uintptr_t key);
 
@@ -2813,13 +2821,13 @@ struct cubic_spline {
     {
         return { order0, order1, order2, order3 };
     }
-    __attribute__((optimize("-ffast-math"),always_inline))
-    constexpr double eval(double t) const
+    constexpr OPT_FAST_MATH __attribute__((always_inline))
+    double eval(double t) const
     {
         return order0 + (order1 + (order2 + order3 * t) * t) * t;
     }
-    __attribute__((optimize("-ffast-math"),always_inline))
-    constexpr cubic_spline resample(double t1, double t2) const
+    constexpr OPT_FAST_MATH __attribute__((always_inline))
+    cubic_spline resample(double t1, double t2) const
     {
         double dt = t2 - t1;
         double dt2 = dt * dt;
@@ -2845,7 +2853,7 @@ struct cubic_spline {
         return { v0, 0, 0, 0 };
     }
 
-    static constexpr __attribute__((optimize("-ffast-math"),always_inline))
+    static constexpr OPT_FAST_MATH __attribute__((always_inline))
     cubic_spline from_values(double v0, double v1, double v2, double v3)
     {
         // v = o0 + o1 * t + o2 * t^2 + o3 * t^3
