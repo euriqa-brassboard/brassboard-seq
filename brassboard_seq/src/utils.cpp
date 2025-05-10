@@ -623,56 +623,6 @@ pybytes_ostream::~pybytes_ostream()
 {
 }
 
-pybytearray_streambuf::pybytearray_streambuf()
-{
-    setp(nullptr, nullptr);
-}
-
-pybytearray_streambuf::~pybytearray_streambuf()
-{
-}
-
-py::bytearray_ref pybytearray_streambuf::get_buf()
-{
-    if (!m_buf)
-        return py::new_bytearray();
-    auto sz = m_end;
-    setp(nullptr, nullptr);
-    m_buf.resize(sz);
-    m_end = 0;
-    return std::move(m_buf);
-}
-
-char *pybytearray_streambuf::extend(size_t sz)
-{
-    auto oldbase = pbase();
-    auto oldptr = pptr();
-    auto oldsz = oldptr - oldbase;
-    // overallocate.
-    auto new_sz = (oldsz + sz) * 3 / 2;
-    if (oldbase + new_sz <= epptr())
-        return &m_buf.data()[oldsz];
-    if (!m_buf) {
-        m_buf.take(py::new_bytearray(nullptr, new_sz));
-    }
-    else {
-        m_buf.resize(new_sz);
-    }
-    auto buf = m_buf.data();
-    setp(buf, &buf[new_sz]);
-    pbump((int)oldsz);
-    return &buf[oldsz];
-}
-
-pybytearray_ostream::pybytearray_ostream()
-    : buff_ostream(&m_buf)
-{
-}
-
-pybytearray_ostream::~pybytearray_ostream()
-{
-}
-
 static void _get_suffix_array(std::span<int> SA, std::span<int> S, std::span<int> ws);
 void get_suffix_array(std::span<int> SA, std::span<int> S, std::span<int> ws)
 {

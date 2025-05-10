@@ -626,8 +626,6 @@ static PyModuleDef test_module = {
         }>,
         py::meth_fast<"test_istream_seek",
         test_istream_seek<pybytes_streambuf,"test_istream_seek">>,
-        py::meth_fast<"test_istream_ba_seek",
-        test_istream_seek<pybytearray_streambuf,"test_istream_ba_seek">>,
         py::meth_fast<"check_num_arg",[] (auto, PyObject *const *args,
                                           Py_ssize_t nargs) {
             py::check_num_arg("check_num_arg", nargs, 4, 4);
@@ -855,7 +853,6 @@ PY_MODINIT(brassboard_seq_test_utils, test_module)
     m.add_type(&RampTest::Type);
     m.add_type(&IOBuff::Type);
     m.add_type(&_PyByteStream<pybytes_ostream,"PyBytesStream">::Type);
-    m.add_type(&_PyByteStream<pybytearray_ostream,"PyByteArrayStream">::Type);
     m.add_type(&Bits_i32x5::Type);
     m.add_type(&Bits_i64x4::Type);
     m.add_type(&Bits_u64x4::Type);

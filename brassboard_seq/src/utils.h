@@ -2714,19 +2714,6 @@ private:
     py::bytes_ref m_buf;
 };
 
-class pybytearray_streambuf final : public buff_streambuf {
-public:
-    pybytearray_streambuf();
-    ~pybytearray_streambuf() override;
-
-    py::bytearray_ref get_buf();
-
-private:
-    char *extend(size_t sz) override;
-
-    py::bytearray_ref m_buf;
-};
-
 class buff_ostream : public std::ostream {
 public:
     buff_ostream(buff_streambuf *buf)
@@ -2759,21 +2746,6 @@ public:
 
 private:
     pybytes_streambuf m_buf;
-};
-
-class pybytearray_ostream final : public buff_ostream {
-public:
-    pybytearray_ostream();
-    ~pybytearray_ostream();
-
-    auto get_buf()
-    {
-        flush();
-        return m_buf.get_buf();
-    }
-
-private:
-    pybytearray_streambuf m_buf;
 };
 
 template<std::signed_integral I, std::floating_point F>

@@ -4,8 +4,7 @@ import py_test_utils as test_utils
 
 import pytest
 
-@pytest.mark.parametrize("streamm_type",
-                         [test_utils.PyBytesStream, test_utils.PyByteArrayStream])
+@pytest.mark.parametrize("streamm_type", [test_utils.PyBytesStream])
 def test_stream(streamm_type):
     io = streamm_type()
     assert io.get_buf() == b''
@@ -54,8 +53,3 @@ def test_istream():
     assert test_utils.test_istream_seek(0, 'beg')
     assert test_utils.test_istream_seek(0, 'end')
     assert test_utils.test_istream_seek(0, 'cur')
-
-    assert test_utils.test_istream_ba_seek(0)
-    assert test_utils.test_istream_ba_seek(0, 'beg')
-    assert test_utils.test_istream_ba_seek(0, 'end')
-    assert test_utils.test_istream_ba_seek(0, 'cur')
