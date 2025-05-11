@@ -397,6 +397,7 @@ inline void SeqCompiler::runtime_finalize(py::ptr<> _age)
     }
 }
 
+__attribute__((visibility("hidden")))
 PyTypeObject BackendBase::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.backend.BackendBase",
