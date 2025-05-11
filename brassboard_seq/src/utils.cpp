@@ -54,21 +54,6 @@ PyMethodDef utils_methods[] = {
         }
     }>, {}};
 
-__attribute__((visibility("protected")))
-void format_double(std::ostream &io, double v)
-{
-    // Unlike `operator<<`, which uses a fixed precision (6 by default),
-    // `std::to_chars` of floating point number (no precision specified)
-    // is guaranteed to use the shortest accurate representation
-    // of the number.
-    // With C++23, we could use `std::print(io, "{}", order)` instead.
-    // (Not using std::format since GCC 11.1 for artiq-7 nix environment
-    //  doesn't have it)
-    char buff[64];
-    auto ptr = to_chars(buff, v);
-    io.write(buff, ptr - buff);
-}
-
 namespace py {
 
 #if PY_VERSION_HEX >= 0x030d0000

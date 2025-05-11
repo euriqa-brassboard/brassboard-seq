@@ -199,16 +199,15 @@ struct str_literal {
     char value[N];
 };
 
-template<typename T>
-static inline char *to_chars(std::span<char> buf, T &&t)
+template<typename... Args>
+static inline char *to_chars(std::span<char> buf, Args&&... args)
 {
-    auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), t);
+    auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + buf.size(),
+                                   std::forward<Args>(args)...);
     if (ec != std::errc())
         throw std::system_error(std::make_error_code(ec));
     return ptr;
 }
-
-void format_double(std::ostream &io, double v);
 
 template<typename T, auto... fld> struct _field_pack {};
 template<typename T, auto... fld>
@@ -1456,8 +1455,36 @@ struct stringio {
         auto ptr = to_chars(str_buff, std::forward<T>(v));
         write_ascii(str_buff.data(), ptr - str_buff.data());
     }
+    template<std::integral T>
+    void write_hex(T v, bool showbase=false, int min_len=0, char fill='0')
+    {
+        std::array<char,sizeof(T) * 8> str_buff;
+        if (showbase)
+            write_ascii("0x");
+        auto ptr = to_chars(str_buff, std::make_unsigned_t<T>(v), 16);
+        auto len = ptr - str_buff.data();
+        if (len < min_len)
+            write_rep_ascii(min_len - len, &fill, 1);
+        write_ascii(str_buff.data(), len);
+    }
     std::pair<int,void*> reserve_buffer(int kind, ssize_t len);
     str_ref getvalue();
+    stringio &operator<<(const char *s)
+    {
+        write_ascii(s);
+        return *this;
+    }
+    stringio &operator<<(bool b)
+    {
+        write_ascii(b ? "true" : "false");
+        return *this;
+    }
+    template<typename T>
+    stringio &operator<<(T v) requires (std::integral<T> || std::floating_point<T>)
+    {
+        write_cxx<64>(v);
+        return *this;
+    }
 
 private:
     void write_kind(const void *data, int kind, ssize_t len);
@@ -2584,6 +2611,14 @@ struct Bits {
         stm.fill(fc);
         stm.width(0);
         stm.setf(flags);
+    }
+    void print(py::stringio &io, bool showbase=false) const
+    {
+        if (showbase)
+            io << "0x";
+        for (auto v: std::ranges::views::reverse(bits)) {
+            io.write_hex(v, false, elbits / 4);
+        }
     }
     auto to_pybytes() const
     {

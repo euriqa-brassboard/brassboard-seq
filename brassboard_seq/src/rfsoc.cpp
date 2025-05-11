@@ -647,13 +647,12 @@ private:
 struct Printer {
     void invalid(const JaqalInst &inst, Executor::Error err)
     {
-        io << "invalid(" << Executor::error_msg(err) << "): "
-           << std::noshowbase << inst;
+        inst.print(io << "invalid(" << Executor::error_msg(err) << "): ");
     }
 
     void next()
     {
-        io << std::endl;
+        io << "\n";
     }
 
     void GLUT(uint8_t chn, const uint16_t *gaddrs, const uint16_t *starts,
@@ -720,11 +719,11 @@ struct Printer {
             io << " eof";
         if (clr_frame)
             io << " clr";
-        io << " fwd:" << std::dec << std::noshowbase << fwd_frame_mask
-           << " inv:" << std::dec << std::noshowbase << inv_frame_mask;
+        io << " fwd:" << fwd_frame_mask
+           << " inv:" << inv_frame_mask;
     }
 
-    std::ostream &io;
+    py::stringio &io;
     bool print_float{true};
 
 private:
@@ -755,17 +754,17 @@ private:
         };
         if (print_float) {
             auto cspl = spl.get_spline(cycles);
-            format_double(io, cspl.order0);
+            io << cspl.order0;
             print_orders(cspl.order1, cspl.order2, cspl.order3,
-                         [&] (int, auto order) { format_double(io << ", ", order); });
+                         [&] (int, auto order) { io << ", " << order; });
         }
         else {
-            io << std::showbase << std::hex << spl.orders[0];
+            io.write_hex(spl.orders[0], spl.orders[0] != 0);
             print_orders(spl.orders[1], spl.orders[2], spl.orders[3],
                          [&] (int i, auto order) {
-                             io << ", " << std::showbase << std::hex << order;
+                             (io << ", ").write_hex(order, order != 0);
                              if (spl.shift) {
-                                 io << ">>" << std::dec << (spl.shift * i);
+                                 io << ">>" << (spl.shift * i);
                              }
                          });
         }
@@ -1008,10 +1007,12 @@ private:
     };
 };
 
-static void print_inst(std::ostream &io, const JaqalInst &inst, bool print_float)
+template<typename T> static auto print_inst(T &&v, bool print_float)
 {
+    py::stringio io;
     Printer printer{io, print_float};
-    Executor::execute(printer, inst);
+    Executor::execute(printer, std::forward<T>(v));
+    return io.getvalue();
 }
 
 struct PyInst : PyJaqalInstBase {
@@ -1024,14 +1025,10 @@ PyTypeObject PyInst::Type = {
     .tp_basicsize = sizeof(PyInst),
     .tp_dealloc = py::tp_cxx_dealloc<false,PyInst>,
     .tp_repr = py::unifunc<[] (py::ptr<PyInst> self) {
-        pybytes_ostream io;
-        print_inst(io, self->inst, false);
-        return io.get_buf().decode();
+        return print_inst(self->inst, false);
     }>,
     .tp_str = py::unifunc<[] (py::ptr<PyInst> self) {
-        pybytes_ostream io;
-        print_inst(io, self->inst, true);
-        return io.get_buf().decode();
+        return print_inst(self->inst, true);
     }>,
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_methods = (py::meth_table<
@@ -1182,10 +1179,7 @@ PyTypeObject PyJaqal::Type = {
             bool pfloat = true;
             if (_pfloat)
                 pfloat = py::arg_cast<py::bool_,true>(_pfloat, "print_float").as_bool();
-            pybytes_ostream io;
-            Printer printer{io, pfloat};
-            Executor::execute(printer, std::span(b.data(), b.size()));
-            return io.get_buf().decode();
+            return print_inst(std::span(b.data(), b.size()), pfloat);
         },"",METH_STATIC>,
         py::meth_o<"extract_pulses",[] (auto, py::ptr<> _b) {
             auto b = py::arg_cast<py::bytes>(_b, "b");
@@ -1529,13 +1523,12 @@ private:
 struct Printer {
     void invalid(const JaqalInst &inst, Executor::Error err)
     {
-        io << "invalid(" << Executor::error_msg(err) << "): "
-           << std::noshowbase << inst;
+        inst.print(io << "invalid(" << Executor::error_msg(err) << "): ");
     }
 
     void next()
     {
-        io << std::endl;
+        io << "\n";
     }
 
     void GLUT(uint8_t chn_mask, const uint16_t *gaddrs, const uint16_t *starts,
@@ -1618,10 +1611,9 @@ struct Printer {
                 if (print_name)
                     io << name;
                 io << "{";
-                format_double(io, cspl.order0);
+                io << cspl.order0;
                 print_orders(cspl.order1, cspl.order2, cspl.order3,
-                             [&] (int, auto order) {
-                                 format_double(io << ", ", order); });
+                             [&] (int, auto order) { io << ", " << order; });
                 io << "}";
             };
             print_spl("freq", Executor::freq_spline, freq);
@@ -1630,12 +1622,12 @@ struct Printer {
         }
         else {
             io << " {";
-            io << std::showbase << std::hex << spl.orders[0];
+            io.write_hex(spl.orders[0], spl.orders[0] != 0);
             print_orders(spl.orders[1], spl.orders[2], spl.orders[3],
                          [&] (int i, auto order) {
-                             io << ", " << std::showbase << std::hex << order;
+                             (io << ", ").write_hex(order, order != 0);
                              if (spl.shift) {
-                                 io << ">>" << std::dec << (spl.shift * i);
+                                 io << ">>" << (spl.shift * i);
                              }
                          });
             io << "}";
@@ -1657,29 +1649,28 @@ struct Printer {
             tgt.type == Executor::PulseTarget::PLUT) {
             print_flag("eof", meta.apply_eof);
             print_flag("clr", meta.clr_frame);
-            io << " fwd:" << std::dec << std::noshowbase << int(meta.fwd_frame_mask)
-               << " inv:" << std::dec << std::noshowbase << int(meta.inv_frame_mask);
+            io << " fwd:" << int(meta.fwd_frame_mask)
+               << " inv:" << int(meta.inv_frame_mask);
         }
     }
 
-    std::ostream &io;
+    py::stringio &io;
     bool print_float{true};
 private:
-    void print_list_ele(const char *name, bool cond, bool &first)
+    void print_list_ele(const char *name, bool cond, IsFirst &first)
     {
         if (!cond)
             return;
-        if (!std::exchange(first, false))
+        if (!first.get())
             io << ",";
         io << name;
     }
     void print_mod_type(ModTypeMask mod_type, bool force_brace)
     {
         bool use_brace = force_brace || (std::popcount(uint8_t(mod_type)) != 1);
-        bool first = true;
-        if (use_brace) {
+        IsFirst first;
+        if (use_brace)
             io << "{";
-        }
         print_list_ele("freq0", mod_type & FRQMOD0_MASK, first);
         print_list_ele("amp0", mod_type & AMPMOD0_MASK, first);
         print_list_ele("phase0", mod_type & PHSMOD0_MASK, first);
@@ -1699,7 +1690,7 @@ private:
         }
         else {
             bool single = std::popcount(chn_mask) == 1;
-            bool first = true;
+            IsFirst first;
             io << (single ? "." : "{");
             print_list_ele("0", chn_mask & 1, first);
             print_list_ele("1", chn_mask & 2, first);
@@ -2021,10 +2012,12 @@ private:
     };
 };
 
-static void print_inst(std::ostream &io, const JaqalInst &inst, bool print_float)
+template<typename T> static auto print_inst(T &&v, bool print_float)
 {
+    py::stringio io;
     Printer printer{io, print_float};
-    Executor::execute(printer, inst);
+    Executor::execute(printer, std::forward<T>(v));
+    return io.getvalue();
 }
 
 struct PyInst : PyJaqalInstBase {
@@ -2037,14 +2030,10 @@ PyTypeObject PyInst::Type = {
     .tp_basicsize = sizeof(PyInst),
     .tp_dealloc = py::tp_cxx_dealloc<false,PyInst>,
     .tp_repr = py::unifunc<[] (py::ptr<PyInst> self) {
-        pybytes_ostream io;
-        print_inst(io, self->inst, false);
-        return io.get_buf().decode();
+        return print_inst(self->inst, false);
     }>,
     .tp_str = py::unifunc<[] (py::ptr<PyInst> self) {
-        pybytes_ostream io;
-        print_inst(io, self->inst, true);
-        return io.get_buf().decode();
+        return print_inst(self->inst, true);
     }>,
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_methods = (py::meth_table<
@@ -2263,10 +2252,7 @@ PyTypeObject PyJaqal::Type = {
             bool pfloat = true;
             if (_pfloat)
                 pfloat = py::arg_cast<py::bool_,true>(_pfloat, "print_float").as_bool();
-            pybytes_ostream io;
-            Printer printer{io, pfloat};
-            Executor::execute(printer, std::span(b.data(), b.size()));
-            return io.get_buf().decode();
+            return print_inst(std::span(b.data(), b.size()), pfloat);
         },"",METH_STATIC>,
         py::meth_fastkw<"extract_pulses",[] (auto, PyObject *const *args, Py_ssize_t nargs,
                                              py::tuple kwnames) {
