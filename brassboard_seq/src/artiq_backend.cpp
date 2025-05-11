@@ -553,17 +553,17 @@ inline ArtiqBackend::Data::Data(py::ptr<> sys, py::ptr<> rtio_array, bool use_dm
 }
 
 __attribute__((visibility("internal")))
-void ArtiqBackend::Data::finalize(CompiledSeq &cseq)
+void ArtiqBackend::Data::finalize(py::ptr<SeqCompiler> comp)
 {
-    if (cseq.basic_cseqs.size() != 1)
+    if (comp->basic_cseqs.size() != 1)
         py_throw_format(PyExc_ValueError, "Branch not yet supported in artiq backend");
-    channels.collect_channels(prefix, sys, seq, device_delay);
+    channels.collect_channels(prefix, sys, comp->seq, device_delay);
     std::vector<ArtiqAction> &artiq_actions = all_actions;
 
     ValueIndexer<bool> bool_values;
     ValueIndexer<double> float_values;
 
-    py::list event_times = seq->seqinfo->time_mgr->event_times;
+    py::list event_times = comp->seq->seqinfo->time_mgr->event_times;
 
     auto add_single_action = [&] (auto *action, ChannelType type, int chn_idx,
                                   int tid, py::ptr<> value, int cond_reloc,
@@ -674,7 +674,7 @@ void ArtiqBackend::Data::finalize(CompiledSeq &cseq)
     for (auto [chn, ttl_idx]: channels.ttl_chn_map) {
         auto ttl_chn_info = channels.ttlchns[ttl_idx];
         auto type = ttl_chn_info.iscounter ? CounterEnable : TTLOut;
-        for (auto action: cseq.basic_cseqs[0]->chn_actions[chn]->actions) {
+        for (auto action: comp->basic_cseqs[0]->chn_actions[chn]->actions) {
             if (action->kws)
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "Invalid output keyword argument %S", action->kws);
@@ -689,7 +689,7 @@ void ArtiqBackend::Data::finalize(CompiledSeq &cseq)
 
     for (auto [chn, value]: channels.dds_param_chn_map) {
         auto [dds_idx, type] = value;
-        for (auto action: cseq.basic_cseqs[0]->chn_actions[chn]->actions) {
+        for (auto action: comp->basic_cseqs[0]->chn_actions[chn]->actions) {
             if (action->kws)
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "Invalid output keyword argument %S", action->kws);
@@ -721,7 +721,7 @@ static inline int64_t convert_device_delay(double fdelay)
 }
 
 __attribute__((visibility("internal")))
-void ArtiqBackend::Data::runtime_finalize(CompiledSeq &cseq, unsigned age)
+void ArtiqBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned age)
 {
     bb_debug("artiq_runtime_finalize: start\n");
     for (size_t i = 0, nreloc = bool_values.size(); i < nreloc; i++) {
@@ -747,7 +747,7 @@ void ArtiqBackend::Data::runtime_finalize(CompiledSeq &cseq, unsigned age)
         relocate_delay(ddschn.delay, ddschn.rt_delay);
         max_delay = std::max(max_delay, ddschn.delay);
     }
-    auto &time_values = seq->seqinfo->time_mgr->time_values;
+    auto &time_values = comp->seq->seqinfo->time_mgr->time_values;
 
     auto reloc_action = [this, &time_values] (const ArtiqAction &action) {
         auto reloc = relocations[action.reloc_id];
@@ -947,7 +947,7 @@ void ArtiqBackend::Data::runtime_finalize(CompiledSeq &cseq, unsigned age)
         return a1.time_mu < a2.time_mu;
     });
 
-    auto total_time_mu = seq_time_to_mu(cseq.basic_cseqs[0]->total_time + max_delay);
+    auto total_time_mu = seq_time_to_mu(comp->basic_cseqs[0]->total_time + max_delay);
     if (use_dma) {
         auto nactions = rtio_actions.size();
         // Note that the size calculated below is at least `nactions * 17 + 1`

@@ -155,15 +155,15 @@ static inline bool parse_action_kws(py::dict kws, int aid)
 }
 
 __attribute__((visibility("internal")))
-void RFSOCBackend::Data::finalize(CompiledSeq &cseq)
+void RFSOCBackend::Data::finalize(py::ptr<SeqCompiler> comp)
 {
-    if (cseq.basic_cseqs.size() != 1)
+    if (comp->basic_cseqs.size() != 1)
         py_throw_format(PyExc_ValueError, "Branch not yet supported in rfsoc backend");
-    channels.collect_channel(seq, prefix);
+    channels.collect_channel(comp->seq, prefix);
 
     ValueIndexer<bool> bool_values;
     ValueIndexer<double> float_values;
-    py::list event_times = seq->seqinfo->time_mgr->event_times;
+    py::list event_times = comp->seq->seqinfo->time_mgr->event_times;
 
     channels.ensure_unused_tones(use_all_channels);
 
@@ -172,7 +172,7 @@ void RFSOCBackend::Data::finalize(CompiledSeq &cseq)
         auto is_ff = param == ToneFF;
         auto &channel = channels.channels[chn_idx];
         auto &rfsoc_actions = channel.actions[(int)param];
-        for (auto action: cseq.basic_cseqs[0]->chn_actions[seq_chn]->actions) {
+        for (auto action: comp->basic_cseqs[0]->chn_actions[seq_chn]->actions) {
             auto sync = parse_action_kws(action->kws, action->aid);
             py::ptr value = action->value;
             auto is_ramp = action::isramp(value);
@@ -331,7 +331,7 @@ void generate_splines(auto &eval_cb, auto &add_sample, double len, double thresh
 }
 
 __attribute__((visibility("internal")))
-void RFSOCBackend::Data::runtime_finalize(CompiledSeq &cseq, unsigned age)
+void RFSOCBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned age)
 {
     bb_debug("rfsoc_runtime_finalize: start\n");
     for (auto [dds, delay]: py::dict_iter<RuntimeValue>(rt_dds_delay)) {
@@ -347,7 +347,7 @@ void RFSOCBackend::Data::runtime_finalize(CompiledSeq &cseq, unsigned age)
         auto &[rtval, val] = float_values[i];
         val = rtval::rtval_cache(rtval).get<double>();
     }
-    auto &time_values = seq->seqinfo->time_mgr->time_values;
+    auto &time_values = comp->seq->seqinfo->time_mgr->time_values;
     auto reloc_action = [this, &time_values] (const RFSOCAction &action,
                                               ToneParam param) {
         auto reloc = relocations[action.reloc_id];
@@ -419,7 +419,7 @@ void RFSOCBackend::Data::runtime_finalize(CompiledSeq &cseq, unsigned age)
     gen->start();
 
     // Add extra cycles to be able to handle the requirement of minimum 4 cycles.
-    auto total_cycle = seq_time_to_cycle(cseq.basic_cseqs[0]->total_time + max_delay) + 8;
+    auto total_cycle = seq_time_to_cycle(comp->basic_cseqs[0]->total_time + max_delay) + 8;
     for (auto &channel: channels.channels) {
         ScopeExit cleanup([&] {
             tone_buffer.clear();

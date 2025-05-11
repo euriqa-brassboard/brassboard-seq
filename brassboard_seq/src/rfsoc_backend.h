@@ -103,8 +103,8 @@ struct RFSOCBackend : Backend::Base<RFSOCBackend> {
         {
         }
 
-        void finalize(CompiledSeq&) override;
-        void runtime_finalize(CompiledSeq&, unsigned) override;
+        void finalize(py::ptr<SeqCompiler>) override;
+        void runtime_finalize(py::ptr<SeqCompiler>, unsigned) override;
         void set_dds_delay(int dds, double delay);
     };
 

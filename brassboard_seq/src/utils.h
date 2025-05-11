@@ -2250,6 +2250,7 @@ template<typename Flds> struct _field_visit {};
 template<typename T, auto ...flds> struct _field_visit<_field_pack<T,flds...>> {
     static inline void visit(py::ptr<T> self, tp_visitor &visitor)
     {
+        (void)self; (void)visitor;
         (visitor(self.get()->*flds),...);
     }
 };
@@ -2267,6 +2268,7 @@ template<typename Flds> struct _field_clear {};
 template<typename T, auto ...flds> struct _field_clear<_field_pack<T,flds...>> {
     static inline void clear(py::ptr<T> self)
     {
+        (void)self;
         (CLEAR(self.get()->*flds),...);
     }
 };

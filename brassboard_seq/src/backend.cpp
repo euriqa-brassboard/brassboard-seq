@@ -52,8 +52,7 @@ static void collect_actions(SubSeq *self, ChannelAction **chn_actions)
 }
 
 __attribute__((visibility("internal")))
-inline void CompiledSeq::populate_bseq_values(py::ptr<seq::Seq> seq,
-                                              CompiledBasicSeq *cbseq,
+inline void SeqCompiler::populate_bseq_values(CompiledBasicSeq *cbseq,
                                               std::vector<uint8_t> &chn_status)
 {
     py::ptr ginfo = seq->seqinfo;
@@ -133,7 +132,7 @@ inline void CompiledSeq::populate_bseq_values(py::ptr<seq::Seq> seq,
             for (int chn = 0; chn < nchn; chn++)
                 next_chn_actions[chn]->start_value.assign(final_values[chn]);
             std::ranges::fill(chn_status, false);
-            populate_bseq_values(seq, next_cbseq, chn_status);
+            populate_bseq_values(next_cbseq, chn_status);
             cbseq->next_bseq.push_back(next_id);
             continue;
         }
@@ -163,7 +162,7 @@ inline void CompiledSeq::populate_bseq_values(py::ptr<seq::Seq> seq,
             chn_action->start_value.assign(final_values[chn]);
             chn_action->actions = action_list[0]->actions;
         }
-        populate_bseq_values(seq, &new_cbseq, chn_status);
+        populate_bseq_values(&new_cbseq, chn_status);
     }
 }
 
@@ -198,7 +197,7 @@ static inline void check_seq_flow(py::ptr<BasicSeq> bseq)
 }
 
 __attribute__((visibility("internal")))
-inline void CompiledSeq::initialize(py::ptr<seq::Seq> seq)
+inline void SeqCompiler::initialize()
 {
     py::ptr ginfo = seq->seqinfo;
     nchn = ginfo->channel_paths.size();
@@ -261,7 +260,7 @@ inline void CompiledSeq::initialize(py::ptr<seq::Seq> seq)
 }
 
 __attribute__((visibility("internal")))
-inline void CompiledSeq::populate_values(py::ptr<seq::Seq> seq)
+inline void SeqCompiler::populate_values()
 {
     if (nchn == 0) [[unlikely]]
         return;
@@ -269,7 +268,7 @@ inline void CompiledSeq::populate_values(py::ptr<seq::Seq> seq)
     for (int chn = 0; chn < nchn; chn++)
         chn_actions0[chn]->start_value.take(py::new_false());
     std::vector<uint8_t> chn_status(nchn, false);
-    populate_bseq_values(seq, basic_cseqs[0], chn_status);
+    populate_bseq_values(basic_cseqs[0], chn_status);
 }
 
 __attribute__((visibility("internal")))
@@ -288,10 +287,10 @@ inline void SeqCompiler::finalize()
                         config::channel_name_from_path(path));
     }
     seqinfo->channel_name_map.take(py::new_none()); // Free up memory
-    cseq.initialize(seq);
-    cseq.populate_values(seq);
+    initialize();
+    populate_values();
     for (auto [name, backend]: py::dict_iter<Backend>(backends)) {
-        backend->finalize(cseq);
+        backend->finalize(this);
     }
 }
 
@@ -313,7 +312,7 @@ static inline auto action_get_condval(auto action, unsigned age)
 }
 
 __attribute__((visibility("internal")))
-inline void CompiledSeq::eval_chn_actions(py::ptr<seq::Seq> seq, unsigned age)
+inline void SeqCompiler::eval_chn_actions(unsigned age)
 {
     int ncbseq = basic_cseqs.size();
     py::ptr basic_seqs = seq->basic_seqs;
@@ -381,8 +380,8 @@ inline void SeqCompiler::runtime_finalize(py::ptr<> _age)
     py::ptr ginfo = seq->seqinfo;
     auto bt_guard = set_global_tracker(&ginfo->cinfo->bt_tracker);
     for (auto [bseq_id, bseq]: py::list_iter<BasicSeq>(seq->basic_seqs)) {
-        assert(cseq.basic_cseqs[bseq_id]->bseq_id == bseq_id);
-        cseq.basic_cseqs[bseq_id]->total_time =
+        assert(basic_cseqs[bseq_id]->bseq_id == bseq_id);
+        basic_cseqs[bseq_id]->total_time =
             bseq->seqinfo->time_mgr->compute_all_times(age);
     }
     for (auto [assert_id, a]: py::list_iter<py::tuple>(ginfo->assertions)) {
@@ -392,9 +391,9 @@ inline void SeqCompiler::runtime_finalize(py::ptr<> _age)
             bb_throw_format(PyExc_AssertionError, assert_key(assert_id), "%U", a.get(1));
         }
     }
-    cseq.eval_chn_actions(seq, age);
+    eval_chn_actions(age);
     for (auto [name, backend]: py::dict_iter<Backend>(backends)) {
-        backend->runtime_finalize(cseq, age);
+        backend->runtime_finalize(this, age);
     }
 }
 
@@ -403,10 +402,8 @@ PyTypeObject Backend::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.backend.Backend",
     .tp_basicsize = sizeof(Backend) + sizeof(Backend::Data),
-    .tp_dealloc = py::tp_cxx_dealloc<true,Backend>,
-    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
-    .tp_traverse = _traverse<Backend>,
-    .tp_clear = _clear<Backend>,
+    .tp_dealloc = py::tp_cxx_dealloc<false,Backend>,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg("Backend.__init__", nargs, 0, 0);
@@ -436,7 +433,6 @@ PyTypeObject SeqCompiler::Type = {
             if (self->backends.contains(name))
                 py_throw_format(PyExc_ValueError, "Backend %U already exist", name);
             self->backends.set(name, backend);
-            backend->data()->seq.assign(self->seq);
             backend->data()->prefix.assign(name);
         }>,
         py::meth_noargs<"finalize",[] (py::ptr<SeqCompiler> self) { self->finalize(); }>,

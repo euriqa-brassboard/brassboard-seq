@@ -41,20 +41,22 @@ struct CompiledBasicSeq {
     std::vector<int> next_bseq;
 };
 
-struct CompiledSeq {
+struct SeqCompiler : PyObject {
+    py::ref<seq::Seq> seq;
     int nchn;
     int nbseq;
     std::vector<CompiledBasicSeq*> basic_cseqs;
     PermAllocator<CompiledBasicSeq,16> basic_seq_alloc;
     PermAllocator<ChannelAction,16> chn_action_alloc;
     std::vector<std::vector<ChannelAction*>> all_chn_actions;
-    void initialize(py::ptr<seq::Seq>);
-    void populate_values(py::ptr<seq::Seq>);
+    py::dict_ref backends;
+
+    void initialize();
+    void populate_values();
     // Use std::vector<uint8_t> to pass in the status rather than std::vector<bool>
     // to avoid dealing with the special std::vector<bool> (i.e. bit array) interface.
-    void populate_bseq_values(py::ptr<seq::Seq>, CompiledBasicSeq *cbseq,
-                              std::vector<uint8_t> &chn_status);
-    void eval_chn_actions(py::ptr<seq::Seq>, unsigned age);
+    void populate_bseq_values(CompiledBasicSeq *cbseq, std::vector<uint8_t> &chn_status);
+    void eval_chn_actions(unsigned age);
     std::vector<ChannelAction*> &get_action_list(int chn, int bseq_id)
     {
         return all_chn_actions[chn + bseq_id * nchn];
@@ -65,6 +67,11 @@ struct CompiledSeq {
         get_action_list(chn, bseq_id).push_back(res);
         return res;
     }
+
+    void finalize();
+    void runtime_finalize(py::ptr<>);
+
+    static PyTypeObject Type;
 };
 
 struct Backend : py::VBase<Backend> {
@@ -77,10 +84,9 @@ private:
             py::field_pack_clear<typename T::fields>(self->data()); }>;
 public:
     struct Data {
-        py::ref<seq::Seq> seq;
         py::str_ref prefix;
-        virtual void finalize(CompiledSeq&) {}
-        virtual void runtime_finalize(CompiledSeq&, unsigned) {}
+        virtual void finalize(py::ptr<SeqCompiler>) {}
+        virtual void runtime_finalize(py::ptr<SeqCompiler>, unsigned) {}
     };
     template<typename T>
     struct Base : py::VBase<Backend>::Base<T> {
@@ -88,27 +94,20 @@ public:
         template<typename=void> static constexpr auto traverse = _traverse<T>;
         template<typename=void> static constexpr auto clear = _clear<T>;
     };
-    void finalize(CompiledSeq &cseq)
+    void finalize(py::ptr<SeqCompiler> comp)
     {
-        data()->finalize(cseq);
+        data()->finalize(comp);
     }
-    void runtime_finalize(CompiledSeq &cseq, unsigned age)
+    void runtime_finalize(py::ptr<SeqCompiler> comp, unsigned age)
     {
-        data()->runtime_finalize(cseq, age);
+        data()->runtime_finalize(comp, age);
+    }
+    ~Backend()
+    {
+        data()->Data::~Data();
     }
 
-    using fields = field_pack<Data,&Data::seq>;
-    static PyTypeObject Type;
-};
-
-struct SeqCompiler : PyObject {
-    py::ref<seq::Seq> seq;
-    CompiledSeq cseq;
-    py::dict_ref backends;
-
-    void finalize();
-    void runtime_finalize(py::ptr<>);
-
+    using fields = field_pack<Data>;
     static PyTypeObject Type;
 };
 

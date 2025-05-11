@@ -276,8 +276,8 @@ struct ArtiqBackend : Backend::Base<ArtiqBackend> {
 
         Data(py::ptr<> sys, py::ptr<> rtio_array, bool use_dma);
 
-        void finalize(CompiledSeq&) override;
-        void runtime_finalize(CompiledSeq&, unsigned) override;
+        void finalize(py::ptr<SeqCompiler>) override;
+        void runtime_finalize(py::ptr<SeqCompiler>, unsigned) override;
         void add_start_trigger_ttl(uint32_t tgt, int64_t time,
                                    int min_time, bool raising_edge)
         {
