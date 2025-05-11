@@ -297,7 +297,6 @@ struct ArtiqBackend : BackendBase::Base<ArtiqBackend> {
     static PyTypeObject Type;
 };
 
-void patch_artiq();
 void init();
 
 }

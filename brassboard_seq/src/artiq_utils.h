@@ -16,47 +16,16 @@
  *   see <http://www.gnu.org/licenses/>.                                 *
  *************************************************************************/
 
-#include "action.h"
-#include "artiq_backend.h"
-#include "artiq_utils.h"
-#include "backend.h"
-#include "config.h"
-#include "event_time.h"
-#include "rfsoc.h"
-#include "rfsoc_backend.h"
-#include "rfsoc_gen.h"
-#include "rtprop.h"
-#include "rtval.h"
-#include "scan.h"
-#include "seq.h"
-#include "yaml.h"
+#ifndef BRASSBOARD_SEQ_SRC_ARTIQ_UTILS_H
+#define BRASSBOARD_SEQ_SRC_ARTIQ_UTILS_H
 
-#include <mutex>
+#include "utils.h"
 
-namespace brassboard_seq {
+namespace brassboard_seq::artiq_utils {
 
-static std::once_flag init_flag;
-
-void init()
-{
-    std::call_once(init_flag, [] {
-        rtval::init();
-        backend::init();
-
-        action::init();
-        artiq_backend::init();
-        artiq_utils::init();
-        config::init();
-        event_time::init();
-        rfsoc::init();
-        rfsoc_backend::init();
-        rfsoc_gen::init();
-        rtprop::init();
-        scan::init();
-        seq::init();
-        yaml::init();
-        return 0;
-    });
-}
+void patch_artiq();
+void init();
 
 }
+
+#endif

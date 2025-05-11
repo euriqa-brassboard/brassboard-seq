@@ -18,6 +18,7 @@
 
 #include "src/utils.h"
 #include "src/artiq_backend.h"
+#include "src/artiq_utils.h"
 
 using namespace brassboard_seq;
 
@@ -29,6 +30,6 @@ static PyModuleDef artiq_backend_module = {
 
 PY_MODINIT(artiq_backend, artiq_backend_module)
 {
-    artiq_backend::patch_artiq();
+    artiq_utils::patch_artiq();
     m.add_type(&artiq_backend::ArtiqBackend::Type);
 }

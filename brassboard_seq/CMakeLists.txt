@@ -7,6 +7,7 @@ add_definitions(-fopenmp)
 add_library(brassboard_seq_utils SHARED
   src/action.cpp
   src/artiq_backend.cpp
+  src/artiq_utils.cpp
   src/backend.cpp
   src/config.cpp
   src/event_time.cpp
