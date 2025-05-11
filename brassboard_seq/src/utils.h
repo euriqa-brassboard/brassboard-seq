@@ -1534,6 +1534,23 @@ static inline auto new_module(PyModuleDef *def)
     return mod_ref::checked(PyModule_Create(def));
 }
 
+template<str_literal modname,str_literal... names>
+static inline auto imp()
+{
+    constexpr auto len = sizeof...(names);
+    if constexpr (len == 0) {
+        static mod m = import_module(modname).rel();
+        return m;
+    }
+    else {
+        static ptr res = [] <size_t... I> (std::index_sequence<I...>) {
+            constexpr std::tuple name_tuple(names...);
+            return imp<modname,std::get<I>(name_tuple)...>().attr((names,...)).rel();
+        } (std::make_index_sequence<len - 1>());
+        return res;
+    }
+}
+
 #define PY_MODINIT(name, moddef)                                        \
     static inline void __PyInit_##name(brassboard_seq::py::mod);        \
     PyMODINIT_FUNC PyInit_##name(void) { return cxx_catch([] {          \
@@ -2290,15 +2307,6 @@ template<str_literal lit>
 static inline auto operator ""_py()
 {
     return _py_string_cache<lit>;
-}
-
-template<str_literal lit>
-static inline auto operator ""_pymod()
-{
-    // Use a local static variable to make sure the initialization order
-    // is correct when this is used to initialize another global variable
-    static auto m = py::mod(py::import_module(lit.value).rel());
-    return m;
 }
 
 template<typename T>

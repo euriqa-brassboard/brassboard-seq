@@ -461,56 +461,6 @@ static inline rtval_ref build_addsub(py::ptr<> v0, py::ptr<> v1, bool issub)
     return new_addsub(nc, nv, ns);
 }
 
-namespace np {
-#define GET_NP(name) static auto const name = "numpy"_pymod.attr(#name).rel()
-GET_NP(add);
-GET_NP(subtract);
-GET_NP(multiply);
-GET_NP(divide);
-GET_NP(remainder);
-GET_NP(bitwise_and);
-GET_NP(bitwise_or);
-GET_NP(bitwise_xor);
-GET_NP(logical_not);
-GET_NP(power);
-GET_NP(less);
-GET_NP(greater);
-GET_NP(less_equal);
-GET_NP(greater_equal);
-GET_NP(equal);
-GET_NP(not_equal);
-
-GET_NP(fmin);
-GET_NP(fmax);
-
-GET_NP(abs);
-GET_NP(ceil);
-GET_NP(exp);
-GET_NP(expm1);
-GET_NP(floor);
-GET_NP(log);
-GET_NP(log1p);
-GET_NP(log2);
-GET_NP(log10);
-GET_NP(sqrt);
-GET_NP(arcsin);
-GET_NP(arccos);
-GET_NP(arctan);
-GET_NP(arctan2);
-GET_NP(arcsinh);
-GET_NP(arccosh);
-GET_NP(arctanh);
-GET_NP(sin);
-GET_NP(cos);
-GET_NP(tan);
-GET_NP(sinh);
-GET_NP(cosh);
-GET_NP(tanh);
-GET_NP(hypot);
-GET_NP(rint);
-#undef GET_NP
-};
-
 static inline bool is_integer(auto v)
 {
     return (v->datatype != DataType::Float64 || v->type_ == Ceil ||
@@ -526,11 +476,11 @@ static py::ref<> rtvalue_array_ufunc(rtval_ptr self, PyObject *const *args,
         return py::new_not_implemented();
     // numpy type support would dispatch arithmetic operations to this function
     // so we need to implement the corresponding ufuncs to support these.
-    if (ufunc == np::add) {
+    if (ufunc == py::imp<"numpy","add">()) {
         py::check_num_arg("RuntimeValue.__array_ufunc__", nargs, 4, 4);
         return build_addsub(args[2], args[3], false);
     }
-    if (ufunc == np::subtract) {
+    if (ufunc == py::imp<"numpy","subtract">()) {
         py::check_num_arg("RuntimeValue.__array_ufunc__", nargs, 4, 4);
         return build_addsub(args[2], args[3], true);
     }
@@ -539,91 +489,91 @@ static py::ref<> rtvalue_array_ufunc(rtval_ptr self, PyObject *const *args,
         py::check_num_arg("RuntimeValue.__array_ufunc__", nargs, 4, 4);
         return new_expr2_wrap1(type, args[2], args[3]);
     };
-    if (ufunc == np::multiply)
+    if (ufunc == py::imp<"numpy","multiply">())
         return bin_expr(Mul);
-    if (ufunc == np::divide)
+    if (ufunc == py::imp<"numpy","divide">())
         return bin_expr(Div);
-    if (ufunc == np::remainder)
+    if (ufunc == py::imp<"numpy","remainder">())
         return bin_expr(Mod);
-    if (ufunc == np::bitwise_and)
+    if (ufunc == py::imp<"numpy","bitwise_and">())
         return bin_expr(And);
-    if (ufunc == np::bitwise_or)
+    if (ufunc == py::imp<"numpy","bitwise_or">())
         return bin_expr(Or);
-    if (ufunc == np::bitwise_xor)
+    if (ufunc == py::imp<"numpy","bitwise_xor">())
         return bin_expr(Xor);
-    if (ufunc == np::logical_not)
+    if (ufunc == py::imp<"numpy","logical_not">())
         return (self->type_ == Not ? rt_convert_bool(self->arg0) : uni_expr(Not));
-    if (ufunc == np::power)
+    if (ufunc == py::imp<"numpy","power">())
         return bin_expr(Pow);
-    if (ufunc == np::less)
+    if (ufunc == py::imp<"numpy","less">())
         return bin_expr(CmpLT);
-    if (ufunc == np::greater)
+    if (ufunc == py::imp<"numpy","greater">())
         return bin_expr(CmpGT);
-    if (ufunc == np::less_equal)
+    if (ufunc == py::imp<"numpy","less_equal">())
         return bin_expr(CmpLE);
-    if (ufunc == np::greater_equal)
+    if (ufunc == py::imp<"numpy","greater_equal">())
         return bin_expr(CmpGE);
-    if (ufunc == np::equal)
+    if (ufunc == py::imp<"numpy","equal">())
         return bin_expr(CmpEQ);
-    if (ufunc == np::not_equal)
+    if (ufunc == py::imp<"numpy","not_equal">())
         return bin_expr(CmpNE);
-    if (ufunc == np::fmin) {
+    if (ufunc == py::imp<"numpy","fmin">()) {
         py::check_num_arg("RuntimeValue.__array_ufunc__", nargs, 4, 4);
         return args[2] == args[3] ? self.ref() : bin_expr(Min);
     }
-    if (ufunc == np::fmax) {
+    if (ufunc == py::imp<"numpy","fmax">()) {
         py::check_num_arg("RuntimeValue.__array_ufunc__", nargs, 4, 4);
         return args[2] == args[3] ? self.ref() : bin_expr(Max);
     }
-    if (ufunc == np::abs)
+    if (ufunc == py::imp<"numpy","abs">())
         return self->type_ == Abs ? self.ref() : uni_expr(Abs);
-    if (ufunc == np::ceil)
+    if (ufunc == py::imp<"numpy","ceil">())
         return is_integer(self) ? self.ref() : uni_expr(Ceil);
-    if (ufunc == np::exp)
+    if (ufunc == py::imp<"numpy","exp">())
         return uni_expr(Exp);
-    if (ufunc == np::expm1)
+    if (ufunc == py::imp<"numpy","expm1">())
         return uni_expr(Expm1);
-    if (ufunc == np::floor)
+    if (ufunc == py::imp<"numpy","floor">())
         return is_integer(self) ? self.ref() : uni_expr(Floor);
-    if (ufunc == np::log)
+    if (ufunc == py::imp<"numpy","log">())
         return uni_expr(Log);
-    if (ufunc == np::log1p)
+    if (ufunc == py::imp<"numpy","log1p">())
         return uni_expr(Log1p);
-    if (ufunc == np::log2)
+    if (ufunc == py::imp<"numpy","log2">())
         return uni_expr(Log2);
-    if (ufunc == np::log10)
+    if (ufunc == py::imp<"numpy","log10">())
         return uni_expr(Log10);
-    if (ufunc == np::sqrt)
+    if (ufunc == py::imp<"numpy","sqrt">())
         return uni_expr(Sqrt);
-    if (ufunc == np::arcsin)
+    if (ufunc == py::imp<"numpy","arcsin">())
         return uni_expr(Asin);
-    if (ufunc == np::arccos)
+    if (ufunc == py::imp<"numpy","arccos">())
         return uni_expr(Acos);
-    if (ufunc == np::arctan)
+    if (ufunc == py::imp<"numpy","arctan">())
         return uni_expr(Atan);
-    if (ufunc == np::arctan2)
+    if (ufunc == py::imp<"numpy","arctan2">())
         return bin_expr(Atan2);
-    if (ufunc == np::arcsinh)
+    if (ufunc == py::imp<"numpy","arcsinh">())
         return uni_expr(Asinh);
-    if (ufunc == np::arccosh)
+    if (ufunc == py::imp<"numpy","arccosh">())
         return uni_expr(Acosh);
-    if (ufunc == np::arctanh)
+    if (ufunc == py::imp<"numpy","arctanh">())
         return uni_expr(Atanh);
-    if (ufunc == np::sin)
+    if (ufunc == py::imp<"numpy","sin">())
         return uni_expr(Sin);
-    if (ufunc == np::cos)
+    if (ufunc == py::imp<"numpy","cos">())
         return uni_expr(Cos);
-    if (ufunc == np::tan)
+    if (ufunc == py::imp<"numpy","tan">())
         return uni_expr(Tan);
-    if (ufunc == np::sinh)
+    if (ufunc == py::imp<"numpy","sinh">())
         return uni_expr(Sinh);
-    if (ufunc == np::cosh)
+    if (ufunc == py::imp<"numpy","cosh">())
         return uni_expr(Cosh);
-    if (ufunc == np::tanh)
+    if (ufunc == py::imp<"numpy","tanh">())
         return uni_expr(Tanh);
-    if (ufunc == np::hypot)
+    if (ufunc == py::imp<"numpy","hypot">())
         return bin_expr(Hypot);
-    if (ufunc == np::rint)
+    if (ufunc == py::imp<"numpy","rint">())
         return is_integer(self) ? self.ref() : uni_expr(Rint);
     return py::new_not_implemented();
 }

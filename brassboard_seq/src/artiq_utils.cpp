@@ -182,10 +182,8 @@ static PyMethodDef env_methods[] = {
 
 void patch_artiq()
 {
-    auto env = py::import_module("artiq.language.environment");
-    auto HasEnvironment = env.attr("HasEnvironment");
     for (auto &def: env_methods) {
-        HasEnvironment.set_attr(
+        py::imp<"artiq.language.environment","HasEnvironment">().set_attr(
             def.ml_name, py::ref<>::checked(PyDescr_NewMethod(&PyBaseObject_Type, &def)));
     }
 }
