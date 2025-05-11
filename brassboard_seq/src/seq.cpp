@@ -716,16 +716,28 @@ PyTypeObject Seq::Type = {
     .tp_dealloc = seq_dealloc<Seq>,
     .tp_repr = seq_str<Seq>,
     .tp_str = seq_str<Seq>,
-    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
+    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC|Py_TPFLAGS_BASETYPE,
     .tp_traverse = seq_traverse<Seq>,
     .tp_clear = seq_clear<Seq>,
     .tp_base = &BasicSeq::Type,
-    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
-                                        ssize_t nargs, py::tuple kwnames) {
-        py::check_num_arg("Seq.__init__", nargs, 1, 2);
-        auto [py_max_frame] =
-            py::parse_pos_or_kw_args<"max_frame">("Seq.__init__", args + 1,
-                                                  nargs - 1, kwnames);
+    .tp_init = py::itrifunc<[] (py::ptr<Seq> self, py::tuple args, py::dict kws) {
+        py::check_num_arg("Seq.__init__", args.size(), 1, 2);
+        py::ptr py_max_frame;
+        if (args.size() >= 2)
+            py_max_frame = args.get(1);
+        if (kws) {
+            for (auto [kwname, kwval]: py::dict_iter<PyObject,py::str>(kws)) {
+                if (kwname.compare_ascii("max_frame") == 0) {
+                    if (py_max_frame)
+                        py_throw_format(PyExc_TypeError, "Seq.__init__ got multiple "
+                                        "values for argument 'max_frame'");
+                    py_max_frame = kwval;
+                }
+                else {
+                    unexpected_kwarg_error("Seq.__init__", kwname);
+                }
+            }
+        }
         int max_frame = 0;
         if (py_max_frame) {
             max_frame = py_max_frame.as_int();
@@ -733,7 +745,16 @@ PyTypeObject Seq::Type = {
                 py_throw_format(PyExc_ValueError, "max_frame cannot be negative");
             }
         }
-        auto self = py::generic_alloc<Seq>();
+        if (std::exchange(self->inited, true))
+            py_throw_format(PyExc_RuntimeError, "Seq cannot be reinitialized");
+        py::ptr seqinfo = self->seqinfo;
+        seqinfo->cinfo->bt_tracker.max_frame = max_frame;
+        seqinfo->config.assign(py::arg_cast<config::Config>(args.get(0), "config"));
+        seqinfo->cinfo->bt_tracker.record(
+            event_time_key(seqinfo->time_mgr->event_times.get(0)));
+    }>,
+    .tp_new = py::tp_new<[] (PyTypeObject *t, auto...) {
+        auto self = py::generic_alloc<Seq>(t);
         self->bseq_id = 0;
         self->term_status = TerminateStatus::Default;
         call_constructor(&self->basic_seqs, py::new_list(self));
@@ -743,8 +764,11 @@ PyTypeObject Seq::Type = {
         call_constructor(&self->dummy_step, py::new_none());
         auto seqinfo = py::generic_alloc<SeqInfo>();
         call_constructor(&seqinfo->cinfo, new CInfo);
-        seqinfo->cinfo->bt_tracker.max_frame = max_frame;
-        call_constructor(&seqinfo->config, py::newref(py::arg_cast<config::Config>(args[0], "config")));
+        seqinfo->cinfo->bt_tracker.max_frame = 0;
+        // Fill config with a dummy one so that we'll raise a proper error
+        // instead of crashing if the user decide to call any method
+        // without calling __init__
+        call_constructor(&seqinfo->config, config::Config::alloc());
         call_constructor(&seqinfo->time_mgr, event_time::TimeManager::alloc());
         call_constructor(&seqinfo->assertions, py::new_list(0));
         call_constructor(&seqinfo->channel_name_map, py::new_dict());
@@ -754,7 +778,6 @@ PyTypeObject Seq::Type = {
         call_constructor(&self->end_time,
                          seqinfo->time_mgr->new_int(Py_None, 0, false,
                                                     Py_True, Py_None));
-        seqinfo->cinfo->bt_tracker.record(event_time_key(self->end_time));
         call_constructor(&self->seqinfo, std::move(seqinfo));
         return self;
     }>,

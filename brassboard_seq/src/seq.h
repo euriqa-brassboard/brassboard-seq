@@ -172,6 +172,7 @@ struct BasicSeq : SubSeq {
 };
 
 struct Seq : BasicSeq {
+    bool inited{false};
     void show(py::stringio &io, int indent) const;
 
     static PyTypeObject Type;

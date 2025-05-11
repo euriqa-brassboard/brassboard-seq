@@ -5,6 +5,32 @@ from brassboard_seq import seq, rtval, scan
 import py_test_utils as test_utils
 import pytest
 
+class NoInitSeq(seq.Seq):
+    def __init__(self):
+        pass
+
+class MySeq(seq.Seq):
+    def __init__(self):
+        conf = Config()
+        conf.add_supported_prefix('artiq')
+        conf.add_channel_alias('test_ttl', 'artiq/ttl1')
+        super().__init__(conf)
+
+def test_seq_inherit():
+    s = NoInitSeq()
+    # Should not hard crash without calling __init__
+    with pytest.raises(ValueError, match="Unsupported channel name: artiq/ttl1"):
+        s.get_channel_id('artiq/ttl1')
+    seq.Seq.__init__(s, Config())
+    with pytest.raises(RuntimeError, match="Seq cannot be reinitialized"):
+        seq.Seq.__init__(s, Config())
+
+    s = MySeq()
+    assert s.get_channel_id('artiq/ttl1') == 0
+    assert s.get_channel_id('test_ttl') == 0
+    with pytest.raises(RuntimeError, match="Seq cannot be reinitialized"):
+        seq.Seq.__init__(s, Config())
+
 def test_seq():
     conf = Config()
     conf.add_supported_prefix('artiq')
@@ -12,6 +38,17 @@ def test_seq():
 
     with pytest.raises(ValueError, match="max_frame cannot be negative"):
         seq.Seq(conf, -2)
+
+    with pytest.raises(TypeError):
+        seq.Seq()
+    with pytest.raises(TypeError):
+        seq.Seq(conf, 1, 2)
+    with pytest.raises(TypeError, match="got multiple values for argument"):
+        seq.Seq(conf, 1, max_frame=2)
+    with pytest.raises(TypeError, match="got an unexpected keyword argument"):
+        seq.Seq(conf, 1, test=2)
+    with pytest.raises(TypeError, match="got an unexpected keyword argument"):
+        seq.Seq(conf, max_frame=1, test=2)
 
     s = seq.Seq(conf)
     assert str(s) == """Seq - T[0]

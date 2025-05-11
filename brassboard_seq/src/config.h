@@ -30,6 +30,7 @@ struct Config : PyObject {
 
     py::tuple_ref translate_channel(py::str name);
 
+    static py::ref<Config> alloc(PyTypeObject *t=&Type);
     static PyTypeObject Type;
 private:
     py::tuple_ref _translate_channel(py::tuple path);

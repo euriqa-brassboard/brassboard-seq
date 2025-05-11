@@ -81,6 +81,16 @@ py::tuple_ref Config::translate_channel(py::str name)
 }
 
 __attribute__((visibility("protected")))
+py::ref<Config> Config::alloc(PyTypeObject *t)
+{
+    auto self = py::generic_alloc<Config>(t);
+    call_constructor(&self->channel_alias, py::new_dict());
+    call_constructor(&self->alias_cache, py::new_dict());
+    call_constructor(&self->supported_prefix, py::new_set());
+    return self;
+}
+
+__attribute__((visibility("protected")))
 PyTypeObject Config::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.config.Config",
@@ -108,11 +118,7 @@ PyTypeObject Config::Type = {
             return self->translate_channel(py::arg_cast<py::str>(name, "name"));
         }>>),
     .tp_new = py::tp_new<[] (PyTypeObject *t, auto...) {
-        auto self = py::generic_alloc<Config>(t);
-        call_constructor(&self->channel_alias, py::new_dict());
-        call_constructor(&self->alias_cache, py::new_dict());
-        call_constructor(&self->supported_prefix, py::new_set());
-        return self;
+        return alloc(t);
     }>,
 };
 
