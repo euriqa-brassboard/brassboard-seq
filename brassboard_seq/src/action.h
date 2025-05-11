@@ -50,7 +50,7 @@ struct Action {
     {
     }
 
-    py::str_ref py_str();
+    void print(py::stringio &io);
 };
 
 using ActionAllocator = PermAllocator<Action,146>;

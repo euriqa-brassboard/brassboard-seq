@@ -116,7 +116,9 @@ PyTypeObject Action::Type = {
     .tp_basicsize = sizeof(Action),
     .tp_dealloc = py::tp_cxx_dealloc<true,Action>,
     .tp_str = py::unifunc<[] (py::ptr<Action> self) {
-        return self->action->py_str();
+        py::stringio io;
+        self->action->print(io);
+        return io.getvalue();
     }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = py::tp_field_traverse<Action,&Action::ref>,

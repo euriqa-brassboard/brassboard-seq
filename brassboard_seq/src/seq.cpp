@@ -291,10 +291,9 @@ __attribute__((visibility("internal")))
 inline void TimeSeq::show_cond_suffix(py::stringio &io) const
 {
     if (cond != Py_True) {
-        io.write_ascii(" if ");
-        io.write_str(cond);
+        (io << " if ").write_str(cond);
     }
-    io.write_ascii("\n");
+    io << "\n";
 }
 
 __attribute__((visibility("protected")))
@@ -389,11 +388,9 @@ __attribute__((visibility("internal")))
 inline void TimeStep::show(py::stringio &io, int indent) const
 {
     io.write_rep_ascii(indent, " ");
-    io.write_ascii("TimeStep(");
+    io << "TimeStep(";
     io.write_str(length);
-    io.write_ascii(")@T[");
-    io.write_cxx<32>(start_time->data.id);
-    io.write_ascii("]");
+    io << ")@T[" << start_time->data.id << "]";
     show_cond_suffix(io);
     int nactions = actions.size();
     for (int chn_idx = 0; chn_idx < nactions; chn_idx++) {
@@ -402,9 +399,9 @@ inline void TimeStep::show(py::stringio &io, int indent) const
             continue;
         io.write_rep_ascii(indent + 2, " ");
         io.write(seqinfo->channel_name_from_id(chn_idx));
-        io.write_ascii(": ");
-        io.write(action->py_str());
-        io.write_ascii("\n");
+        io << ": ";
+        action->print(io);
+        io << "\n";
     }
 }
 
@@ -442,11 +439,7 @@ __attribute__((visibility("internal")))
 inline void SubSeq::show(py::stringio &io, int indent) const
 {
     io.write_rep_ascii(indent, " ");
-    io.write_ascii("SubSeq@T[");
-    io.write_cxx<32>(start_time->data.id);
-    io.write_ascii("] - T[");
-    io.write_cxx<32>(end_time->data.id);
-    io.write_ascii("]");
+    io << "SubSeq@T[" << start_time->data.id << "] - T[" << end_time->data.id << "]";
     show_cond_suffix(io);
     show_subseqs(io, indent + 2);
 }
@@ -553,9 +546,9 @@ __attribute__((visibility("internal")))
 inline void ConditionalWrapper::show(py::stringio &io, int indent) const
 {
     io.write_rep_ascii(indent, " ");
-    io.write_ascii("ConditionalWrapper(");
+    io << "ConditionalWrapper(";
     io.write_str(cond);
-    io.write_ascii(") for\n");
+    io << ") for\n";
     if (auto s = py::exact_cast<Seq>(seq))
         return s->show(io, indent + 2);
     seq->show(io, indent + 2);
@@ -608,16 +601,16 @@ inline void BasicSeq::show_next(py::stringio &io, int indent) const
     if (next_bseq.empty())
         return;
     io.write_rep_ascii(indent, " ");
-    io.write_ascii("branches: [");
+    io << "branches: [";
     for (int i = 0, n = next_bseq.size(); i < n; i++) {
         if (i != 0)
-            io.write_ascii(" ");
-        io.write_cxx<32>(next_bseq[i]);
+            io << " ";
+        io << next_bseq[i];
     }
-    io.write_ascii("]");
+    io << "]";
     if (may_terminate())
-        io.write_ascii(" may terminate");
-    io.write_ascii("\n");
+        io << " may terminate";
+    io << "\n";
 }
 
 __attribute__((visibility("internal")))
@@ -625,11 +618,9 @@ inline void BasicSeq::show_times(py::stringio &io, int indent) const
 {
     for (auto [i, t]: py::list_iter(seqinfo->time_mgr->event_times)) {
         io.write_rep_ascii(indent, " ");
-        io.write_ascii("T[");
-        io.write_cxx<32>(i);
-        io.write_ascii("]: ");
+        io << "T[" << i << "]: ";
         io.write_str(t);
-        io.write_ascii("\n");
+        io << "\n";
     }
 }
 
@@ -637,11 +628,7 @@ __attribute__((visibility("internal")))
 inline void BasicSeq::show(py::stringio &io, int indent) const
 {
     io.write_rep_ascii(indent, " ");
-    io.write_ascii("BasicSeq[");
-    io.write_cxx<32>(bseq_id);
-    io.write_ascii("] - T[");
-    io.write_cxx<32>(end_time->data.id);
-    io.write_ascii("]\n");
+    io << "BasicSeq[" << bseq_id << "] - T[" << end_time->data.id << "]\n";
     show_next(io, indent + 1);
     show_times(io, indent + 1);
     show_subseqs(io, indent + 2);
@@ -708,9 +695,7 @@ __attribute__((visibility("internal")))
 inline void Seq::show(py::stringio &io, int indent) const
 {
     io.write_rep_ascii(indent, " ");
-    io.write_ascii("Seq - T[");
-    io.write_cxx<32>(end_time->data.id);
-    io.write_ascii("]\n");
+    io << "Seq - T[" << end_time->data.id << "]\n";
     if (basic_seqs.size() > 1)
         show_next(io, indent + 1);
     show_times(io, indent + 1);
@@ -718,7 +703,7 @@ inline void Seq::show(py::stringio &io, int indent) const
     for (auto [i, bseq]: py::list_iter<BasicSeq>(basic_seqs)) {
         if (i == 0)
             continue;
-        io.write_ascii("\n");
+        io << "\n";
         bseq->show(io, indent + 1);
     }
 }

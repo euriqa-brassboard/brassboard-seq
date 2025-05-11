@@ -260,42 +260,36 @@ struct ScanND : PyObject {
         if (baseidx != -1) {
             empty = false;
             io.write_rep_ascii(indent, " ");
-            io.write_ascii("Base index: ");
-            io.write_cxx<32>(baseidx);
-            io.write_ascii("\n");
+            io << "Base index: " << baseidx << "\n";
         }
         auto new_indent = indent + 3;
         if (auto fixed = recursive_get(this->fixed, path);
             fixed && (!fixed.typeis<py::dict>() || py::dict(fixed).size() != 0)) {
             empty = false;
             io.write_rep_ascii(indent, " ");
-            io.write_ascii("Fixed parameters:\n");
+            io << "Fixed parameters:\n";
             io.write_rep_ascii(new_indent, " ");
             yaml::print(io, fixed, new_indent);
-            io.write_ascii("\n");
+            io << "\n";
         }
         for (auto [i, var]: py::list_iter<Scan1D>(vars)) {
             if (var->size == 0)
                 continue;
             empty = false;
             io.write_rep_ascii(indent, " ");
-            io.write_ascii("Scan dimension ");
-            io.write_cxx<32>(i);
-            io.write_ascii(": (size ");
-            io.write_cxx<32>(var->size);
-            io.write_ascii(")\n");
+            io << "Scan dimension " << i << ": (size " << var->size << ")\n";
             io.write_rep_ascii(new_indent, " ");
             if (auto params = recursive_get(var->params, path)) {
                 yaml::print(io, params, new_indent);
-                io.write_ascii("\n");
+                io << "\n";
             }
             else {
-                io.write_ascii("<empty>\n");
+                io << "<empty>\n";
             }
         }
         if (empty) {
             io.write_rep_ascii(indent, " ");
-            io.write_ascii("<empty>\n");
+            io << "<empty>\n";
         }
     }
     void check_noconflict(py::tuple path, int scandim)
@@ -559,17 +553,15 @@ struct ScanGroup : PyObject {
     static py::str_ref py_str(py::ptr<ScanGroup> self)
     {
         py::stringio io;
-        io.write_ascii("ScanGroup\n");
+        io << "ScanGroup\n";
         if (!self->base->is_default()) {
-            io.write_ascii("  Scan Base:\n");
+            io << "  Scan Base:\n";
             self->base->show(io, 4, py::empty_tuple);
         }
         assert(self->scans.size() >= 1);
         if (self->scans.size() > 1 || !self->scans.get<ScanND>(0)->is_default()) {
             for (auto [i, scan]: py::list_iter<ScanND>(self->scans)) {
-                io.write_ascii("  Scan ");
-                io.write_cxx<32>(i);
-                io.write_ascii(":\n");
+                io << "  Scan " << i << ":\n";
                 scan->show(io, 4, py::empty_tuple);
             }
         }
@@ -639,21 +631,20 @@ struct ScanWrapper : PyObject {
     {
         py::stringio io;
         if (self->idx == -1) {
-            io.write_ascii("Scan Base");
+            io << "Scan Base";
         }
         else {
-            io.write_ascii("Scan ");
-            io.write_cxx<32>(self->idx);
+            io << "Scan " << self->idx;
         }
         if (self->path.size()) {
-            io.write_ascii(" [");
+            io << " [";
             for (auto [i, p]: py::tuple_iter(self->path)) {
-                io.write_ascii(".");
+                io << ".";
                 io.write(p);
             }
-            io.write_ascii("]");
+            io << "]";
         }
-        io.write_ascii(":\n");
+        io << ":\n";
         self->scan->show(io, 2, self->path);
         return io.getvalue();
     }

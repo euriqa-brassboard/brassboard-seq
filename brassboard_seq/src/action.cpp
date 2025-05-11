@@ -21,9 +21,8 @@
 namespace brassboard_seq::action {
 
 __attribute__((visibility("protected")))
-py::str_ref Action::py_str()
+void Action::print(py::stringio &io)
 {
-    py::stringio io;
     io.write_ascii(is_pulse ? "Pulse(" : "Set(");
     io.write_str(value);
     if (cond != Py_True) {
@@ -41,7 +40,6 @@ py::str_ref Action::py_str()
         }
     }
     io.write_ascii(")");
-    return io.getvalue();
 }
 
 __attribute__((visibility("protected")))
