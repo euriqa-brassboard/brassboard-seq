@@ -23,7 +23,6 @@
 #include "action.h"
 #include "seq.h"
 
-#include <list>
 #include <memory>
 #include <vector>
 
