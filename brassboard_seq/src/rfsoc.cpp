@@ -840,10 +840,10 @@ struct DictConverter {
         pulse_to_dict(tgt, (param == Executor::ParamType::Freq ? "freq"_py :
                             (param == Executor::ParamType::Amp ? "amp"_py :
                              "phase"_py)), chn, tone, cycles, spl);
-        dict.set("trig"_py, waittrig ? Py_True : Py_False);
-        dict.set("sync"_py, sync ? Py_True : Py_False);
-        dict.set("enable"_py, enable ? Py_True : Py_False);
-        dict.set("ff"_py, fb_enable ? Py_True : Py_False);
+        dict.set("trig"_py, py::new_bool(waittrig));
+        dict.set("sync"_py, py::new_bool(sync));
+        dict.set("enable"_py, py::new_bool(enable));
+        dict.set("ff"_py, py::new_bool(fb_enable));
     }
     void frame_pulse(int chn, int tone, const PDQSpline &spl, int64_t cycles,
                      bool waittrig, bool apply_eof, bool clr_frame,
@@ -851,9 +851,9 @@ struct DictConverter {
                      Executor::PulseTarget tgt)
     {
         pulse_to_dict(tgt, "frame_rot"_py, chn, tone, cycles, spl);
-        dict.set("trig"_py, waittrig ? Py_True : Py_False);
-        dict.set("eof"_py, apply_eof ? Py_True : Py_False);
-        dict.set("clr"_py, clr_frame ? Py_True : Py_False);
+        dict.set("trig"_py, py::new_bool(waittrig));
+        dict.set("eof"_py, py::new_bool(apply_eof));
+        dict.set("clr"_py, py::new_bool(clr_frame));
         dict.set("fwd"_py, py::int_cached(fwd_frame_mask));
         dict.set("inv"_py, py::int_cached(inv_frame_mask));
     }
@@ -1817,12 +1817,12 @@ struct DictConverter {
         set_spline("spline_freq"_py, Executor::freq_spline, freq);
         set_spline("spline_amp"_py, Executor::amp_spline, amp);
         set_spline("spline_phase"_py, Executor::phase_spline, phase);
-        dict.set("trig"_py, meta.trig ? Py_True : Py_False);
-        dict.set("sync"_py, meta.sync ? Py_True : Py_False);
-        dict.set("enable"_py, meta.en ? Py_True : Py_False);
-        dict.set("ff"_py, meta.fb ? Py_True : Py_False);
-        dict.set("eof"_py, meta.apply_eof ? Py_True : Py_False);
-        dict.set("clr"_py, meta.clr_frame ? Py_True : Py_False);
+        dict.set("trig"_py, py::new_bool(meta.trig));
+        dict.set("sync"_py, py::new_bool(meta.sync));
+        dict.set("enable"_py, py::new_bool(meta.en));
+        dict.set("ff"_py, py::new_bool(meta.fb));
+        dict.set("eof"_py, py::new_bool(meta.apply_eof));
+        dict.set("clr"_py, py::new_bool(meta.clr_frame));
         dict.set("fwd"_py, py::int_cached(meta.fwd_frame_mask));
         dict.set("inv"_py, py::int_cached(meta.inv_frame_mask));
     }
