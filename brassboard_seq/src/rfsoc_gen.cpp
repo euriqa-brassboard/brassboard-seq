@@ -350,12 +350,12 @@ inline void Jaqalv1Gen::add_tone_data(int chn, int64_t duration_cycles,
 __attribute__((visibility("internal")))
 inline py::ref<> Jaqalv1Gen::BoardGen::get_prefix() const
 {
-    pybytes_ostream io;
+    py::bytesio io;
     for (int chn = 0; chn < 8; chn++) {
         auto &channel_gen = channels[chn];
         for (auto &[pulse, addr]: channel_gen.pulses.pulses) {
             auto inst = Jaqal_v1::program_PLUT(pulse, addr);
-            io.write((char*)&inst, sizeof(inst));
+            io.write(&inst, sizeof(inst));
         }
         uint16_t idxbuff[std::max(Jaqal_v1::SLUT_MAXCNT, Jaqal_v1::GLUT_MAXCNT)];
         for (int i = 0; i < sizeof(idxbuff) / sizeof(uint16_t); i++)
@@ -368,7 +368,7 @@ inline py::ref<> Jaqalv1Gen::BoardGen::get_prefix() const
             auto inst = Jaqal_v1::program_SLUT(chn, idxbuff,
                                                (const uint16_t*)&channel_gen.slut[i],
                                                blksize);
-            io.write((char*)&inst, sizeof(inst));
+            io.write(&inst, sizeof(inst));
         }
         auto nglut = (int)channel_gen.glut.size();
         uint16_t starts[Jaqal_v1::GLUT_MAXCNT];
@@ -382,16 +382,16 @@ inline py::ref<> Jaqalv1Gen::BoardGen::get_prefix() const
                 idxbuff[j] = i + j;
             }
             auto inst = Jaqal_v1::program_GLUT(chn, idxbuff, starts, ends, blksize);
-            io.write((char*)&inst, sizeof(inst));
+            io.write(&inst, sizeof(inst));
         }
     }
-    return io.get_buf();
+    return std::move(io.getvalue());
 }
 
 __attribute__((visibility("internal")))
 inline py::ref<> Jaqalv1Gen::BoardGen::get_sequence() const
 {
-    pybytes_ostream io;
+    py::bytesio io;
     std::span<const TimedID> chn_gate_ids[8];
     for (int chn = 0; chn < 8; chn++)
         chn_gate_ids[chn] = std::span(channels[chn].gate_ids);
@@ -403,7 +403,7 @@ inline py::ref<> Jaqalv1Gen::BoardGen::get_sequence() const
         for (int i = 0; i < blksize; i++)
             gaddrs[i] = gate_ids[i].id;
         auto inst = Jaqal_v1::sequence(chn, Jaqal_v1::SeqMode::GATE, gaddrs, blksize);
-        io.write((char*)&inst, sizeof(inst));
+        io.write(&inst, sizeof(inst));
         gate_ids = gate_ids.subspan(blksize);
     };
     while (true) {
@@ -423,7 +423,7 @@ inline py::ref<> Jaqalv1Gen::BoardGen::get_sequence() const
             break;
         output_channel(out_chn);
     }
-    return io.get_buf();
+    return std::move(io.getvalue());
 }
 
 __attribute__((visibility("internal")))

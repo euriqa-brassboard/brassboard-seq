@@ -1469,6 +1469,27 @@ private:
     int m_kind{PyUnicode_1BYTE_KIND};
 };
 
+struct bytesio {
+    bytesio &operator=(const bytesio&) = delete;
+    void write(const void *data, ssize_t len)
+    {
+        memcpy(reserve_buffer(len), data, len);
+    }
+    void *reserve_buffer(ssize_t len)
+    {
+        auto oldsz = m_buff.size();
+        m_buff.resize(oldsz + len);
+        return &m_buff.data()[oldsz];
+    }
+    bytes_ref &getvalue()
+    {
+        return m_buff;
+    }
+
+private:
+    bytes_ref m_buff{new_bytes()};
+};
+
 static inline auto import_module(const char *str)
 {
     return mod_ref::checked(PyImport_ImportModule(str));
