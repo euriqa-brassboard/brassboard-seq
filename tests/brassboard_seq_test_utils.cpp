@@ -24,8 +24,6 @@
 #include "src/seq.h"
 #include "src/yaml.h"
 
-#include <sstream>
-
 using namespace brassboard_seq;
 
 namespace {
@@ -443,17 +441,16 @@ PyTypeObject PyBits<ELT,N,name>::Type = {
     .tp_basicsize = sizeof(PyBits),
     .tp_dealloc = py::tp_cxx_dealloc<false,PyBits>,
     .tp_repr = py::unifunc<[] (py::ptr<PyBits> self) {
-        std::ostringstream io;
-        io << std::showbase;
-        io << self->bits;
-        return py::new_str(io.str().c_str());
+        py::stringio io;
+        self->bits.print(io, true);
+        return io.getvalue();
     }>,
     .tp_as_number = &as_number,
     .tp_as_sequence = &as_sequence,
     .tp_str = py::unifunc<[] (py::ptr<PyBits> self) {
-        std::ostringstream io;
-        io << self->bits;
-        return py::new_str(io.str().c_str());
+        py::stringio io;
+        self->bits.print(io, false);
+        return io.getvalue();
     }>,
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_richcompare = py::tp_richcompare<[] (py::ptr<PyBits> v1, py::ptr<> _v2, int op) {
@@ -516,28 +513,6 @@ static auto to_vector_int(py::ptr<> ary)
     for (auto v: ary.generic_iter())
         V.push_back(v.as_int());
     return V;
-}
-
-template<typename buff_type,str_literal name>
-static auto test_istream_seek(PyObject*, PyObject *const *args, Py_ssize_t nargs)
-{
-    py::check_num_arg(name, nargs, 1, 2);
-    buff_type buf;
-    std::istream stm(&buf);
-    auto p = py::ptr(args[0]).template as_int<ssize_t>();
-    if (nargs < 2) {
-        stm.seekg(p);
-    }
-    else {
-        auto _dir = py::arg_cast<py::str>(args[1], "dir");
-        if (_dir.compare_ascii("beg") == 0)
-            stm.seekg(p, std::ios_base::beg);
-        else if (_dir.compare_ascii("end") == 0)
-            stm.seekg(p, std::ios_base::end);
-        else if (_dir.compare_ascii("cur") == 0)
-            stm.seekg(p, std::ios_base::cur);
-    }
-    return to_py(stm.fail());
 }
 
 static PyModuleDef test_module = {
@@ -624,8 +599,6 @@ static PyModuleDef test_module = {
         py::meth_o<"int_throw_if_not",[] (auto, py::ptr<> v) {
             return to_py(throw_if_not(v.as_int()));
         }>,
-        py::meth_fast<"test_istream_seek",
-        test_istream_seek<pybytes_streambuf,"test_istream_seek">>,
         py::meth_fast<"check_num_arg",[] (auto, PyObject *const *args,
                                           Py_ssize_t nargs) {
             py::check_num_arg("check_num_arg", nargs, 4, 4);
@@ -852,7 +825,6 @@ PY_MODINIT(brassboard_seq_test_utils, test_module)
     m.add_type(&Action::Type);
     m.add_type(&RampTest::Type);
     m.add_type(&IOBuff::Type);
-    m.add_type(&_PyByteStream<pybytes_ostream,"PyBytesStream">::Type);
     m.add_type(&Bits_i32x5::Type);
     m.add_type(&Bits_i64x4::Type);
     m.add_type(&Bits_u64x4::Type);

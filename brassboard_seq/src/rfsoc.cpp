@@ -18,8 +18,6 @@
 
 #include "rfsoc.h"
 
-#include <sstream>
-
 namespace brassboard_seq::rfsoc {
 
 namespace {
@@ -777,9 +775,9 @@ struct DictConverter {
     {
         dict.set("type"_py, "invalid"_py);
         dict.set("error"_py, Executor::py_error_msg(err));
-        std::ostringstream stm;
-        stm << inst;
-        dict.set("inst"_py, py::new_str(stm.str()));
+        py::stringio io;
+        inst.print(io);
+        dict.set("inst"_py, io.getvalue());
     }
 
     void GLUT(uint8_t chn, const uint16_t *gaddrs, const uint16_t *starts,
@@ -1712,9 +1710,9 @@ struct DictConverter {
     {
         dict.set("type"_py, "invalid"_py);
         dict.set("error"_py, Executor::py_error_msg(err));
-        std::ostringstream stm;
-        stm << inst;
-        dict.set("inst"_py, py::new_str(stm.str()));
+        py::stringio io;
+        inst.print(io);
+        dict.set("inst"_py, io.getvalue());
     }
 
     void GLUT(uint8_t chn_mask, const uint16_t *gaddrs, const uint16_t *starts,

@@ -44,7 +44,6 @@ python_test("${CMAKE_BINARY_DIR}"
   test_scan.py
   test_seq.py
   test_seq_compile.py
-  test_stream.py
   test_utils.py
   test_yaml.py
 )
