@@ -134,6 +134,19 @@ struct py::converter<StartTrigger> {
     }
 };
 
+template<>
+struct py::converter<StartValue> {
+    static auto py(const StartValue &sv)
+    {
+        auto self = new_object<"StartValue">();
+        self.set_attr("type", to_py(sv.type));
+        self.set_attr("chn_idx", to_py(sv.chn_idx));
+        self.set_attr("value", to_py(sv.value));
+        self.set_attr("val_id", to_py(sv.val_id));
+        return self;
+    }
+};
+
 static PyModuleDef artiq_module = {
     .m_base = PyModuleDef_HEAD_INIT,
     .m_name = "brassboard_seq_artiq_backend_utils",
@@ -146,7 +159,12 @@ static PyModuleDef artiq_module = {
         py::meth_o<"get_compiled_info",[] (auto, py::ptr<ArtiqBackend> ab) {
             auto &abd = *ab->data();
             auto self = new_object<"CompiledInfo">();
-            self.set_attr("all_actions", to_py(abd.all_actions));
+            self.set_attr("all_actions", py::new_nlist(abd.all_outputs.size(), [&] (int i) {
+                return to_py(abd.all_outputs.get<ArtiqBackend::Output>(i)->actions);
+            }));
+            self.set_attr("start_values", py::new_nlist(abd.all_outputs.size(), [&] (int i) {
+                return to_py(abd.all_outputs.get<ArtiqBackend::Output>(i)->start_values);
+            }));
             self.set_attr("bool_values", value_pair_list(abd.bool_values));
             self.set_attr("float_values", value_pair_list(abd.float_values));
             self.set_attr("relocations", to_py(abd.relocations));

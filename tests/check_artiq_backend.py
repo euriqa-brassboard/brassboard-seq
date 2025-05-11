@@ -15,49 +15,82 @@ def bytes_to_int32(i0, i8, i16, i24):
 def bytes_to_int64(i0, i8, i16, i24, i32, i40, i48, i56):
     return bytes_to_int32(i0, i8, i16, i24) | bytes_to_int32(i32, i40, i48, i56)
 
-class Compiler(backend.SeqCompiler):
-    def __init__(self, s, ab):
-        super().__init__(s)
-        self.ab = ab
+class CompiledInfoChecker:
+    def __init__(self, comp):
+        self.comp = comp
+        self.compiled_info = artiq_utils.get_compiled_info(comp.ab)
+        self.channels = artiq_utils.get_channel_info(comp.ab)
 
-    def get_channel_info(self):
-        channels = artiq_utils.get_channel_info(self.ab)
-        ttl_tgts = set(ttl.target for ttl in channels.ttlchns)
-        assert len(ttl_tgts) == len(channels.ttlchns)
-        assert len(ttl_tgts) == len(channels.ttl_chn_map)
-        bus_chns = set(bus.channel for bus in channels.urukul_busses)
-        assert len(bus_chns) == len(channels.urukul_busses)
-        bus_ids = set(dds.bus_id for dds in channels.ddschns)
-        assert bus_ids == set(range(len(bus_chns)))
-        all_chip_selects = {i: set() for i in range(len(bus_chns))}
-        for dds in channels.ddschns:
-            chip_selects = all_chip_selects[dds.bus_id]
-            assert dds.chip_select not in chip_selects
-            chip_selects.add(dds.chip_select)
-        assert sum(len(cs) for cs in all_chip_selects.values()) == len(channels.ddschns)
-        return channels
+    def check(self):
+        self.bool_values_used = [False] * len(self.compiled_info.bool_values)
+        self.float_values_used = [False] * len(self.compiled_info.float_values)
+        self.relocations_used = [False] * len(self.compiled_info.relocations)
+        ncbseq = test_utils.compiler_num_basic_seq(self.comp)
+        if not self.comp.allow_branch:
+            assert ncbseq == 1
+        assert len(self.compiled_info.all_actions) == ncbseq
+        assert len(self.compiled_info.start_values) == ncbseq
+        for cbseq_id in range(ncbseq):
+            self.check_cbseq(cbseq_id)
+        assert all(self.bool_values_used)
+        assert all(self.float_values_used)
+        assert all(self.relocations_used)
 
-    def get_compiled_info(self):
-        s = self.seq
-        compiled_info = artiq_utils.get_compiled_info(self.ab)
-        channels = artiq_utils.get_channel_info(self.ab)
+    def check_cbseq(self, cbseq_id):
+        bseq_id = test_utils.compiler_get_bseq_id(self.comp, cbseq_id)
+        if cbseq_id == 0:
+            assert self.compiled_info.start_values[cbseq_id] == []
+        else:
+            all_starts = {}
+            for (chn, start_value) in enumerate(test_utils.compiler_get_all_start_values(self.comp, cbseq_id)):
+                if chn in self.channels.ttl_chn_map:
+                    ttlid = self.channels.ttl_chn_map[chn]
+                    ttlchn = self.channels.ttlchns[ttlid]
+                    key = (ttlid, 'counter' if ttlchn.iscounter else 'ttl')
+                else:
+                    assert chn in self.channels.dds_param_chn_map
+                    key = self.channels.dds_param_chn_map[chn]
+                all_starts[key] = (start_value, [False])
+            for sv in self.compiled_info.start_values[cbseq_id]:
+                value, used = all_starts[(sv.chn_idx, sv.type)]
+                used[0] = True
+                val_idx = sv.val_id
+                if val_idx >= 0:
+                    assert isinstance(value, rtval.RuntimeValue)
+                    if sv.type == 'ttl' or sv.type == 'counter':
+                        assert self.compiled_info.bool_values[val_idx] is value
+                        self.bool_values_used[val_idx] = True
+                    else:
+                        assert self.compiled_info.float_values[val_idx] is value
+                        self.float_values_used[val_idx] = True
+                else:
+                    assert not isinstance(value, rtval.RuntimeValue)
+                    if sv.type == 'ttl':
+                        assert value == bool(sv.value)
+                    elif sv.type == 'counter':
+                        assert value == bool(sv.value)
+                    elif sv.type == 'ddsfreq':
+                        assert dds_freq_to_mu(value) == sv.value
+                    elif sv.type == 'ddsamp':
+                        assert dds_amp_to_mu(value) == sv.value
+                    elif sv.type == 'ddsphase':
+                        assert dds_phase_to_mu(value) == sv.value
+                    else:
+                        assert False, "Unknown channel type"
+            assert all(used[0] for (value, used) in all_starts.values())
         all_actions = {}
-        assert test_utils.compiler_num_basic_seq(self) == 1
-        for (chn, actions) in enumerate(test_utils.compiler_get_all_actions(self, 0)):
+        for (chn, actions) in enumerate(test_utils.compiler_get_all_actions(self.comp, cbseq_id)):
             for action in actions:
                 if action.get_cond() is False:
                     continue
                 all_actions[action.get_aid()] = (chn, action, [False, False])
-        bool_values_used = [False for _ in range(len(compiled_info.bool_values))]
-        float_values_used = [False for _ in range(len(compiled_info.float_values))]
-        relocations_used = [False for _ in range(len(compiled_info.relocations))]
-        for artiq_action in compiled_info.all_actions:
+        for artiq_action in self.compiled_info.all_actions[cbseq_id]:
             chn, action, seen = all_actions[artiq_action.aid]
             action_info = action.get_compile_info()
             assert action.get_exact_time() == artiq_action.exact_time
             if artiq_action.reloc_id >= 0:
-                reloc = compiled_info.relocations[artiq_action.reloc_id]
-                relocations_used[artiq_action.reloc_id] = True
+                reloc = self.compiled_info.relocations[artiq_action.reloc_id]
+                self.relocations_used[artiq_action.reloc_id] = True
                 assert reloc.cond_idx >= 0 or reloc.val_idx >= 0 or reloc.time_idx >= 0
                 cond_idx = reloc.cond_idx
                 val_idx = reloc.val_idx
@@ -69,13 +102,14 @@ class Compiler(backend.SeqCompiler):
 
             cond = action.get_cond()
             if cond_idx >= 0:
-                bool_values_used[cond_idx] = True
+                self.bool_values_used[cond_idx] = True
                 assert isinstance(cond, rtval.RuntimeValue)
-                assert compiled_info.bool_values[cond_idx] is cond
+                assert self.compiled_info.bool_values[cond_idx] is cond
             else:
                 assert cond
 
-            event_time = test_utils.seq_get_event_time(s, artiq_action.tid)
+            event_time = test_utils.seq_get_event_time(self.comp.seq,
+                                                       artiq_action.tid, bseq_id)
             static_time = test_utils.event_time_get_static(event_time)
             if time_idx >= 0:
                 assert static_time == -1
@@ -93,30 +127,30 @@ class Compiler(backend.SeqCompiler):
                 seen[1] = True
                 value = action_info['end_val']
             # Check channel
-            if chn in channels.ttl_chn_map:
+            if chn in self.channels.ttl_chn_map:
                 is_ttl = True
-                ttlid = channels.ttl_chn_map[chn]
+                ttlid = self.channels.ttl_chn_map[chn]
                 assert ttlid == artiq_action.chn_idx
-                ttlchn = channels.ttlchns[ttlid]
+                ttlchn = self.channels.ttlchns[ttlid]
                 if ttlchn.iscounter:
                     assert artiq_action.type == 'counter'
                 else:
                     assert artiq_action.type == 'ttl'
             else:
                 is_ttl = False
-                assert chn in channels.dds_param_chn_map
-                ddsid, chntype = channels.dds_param_chn_map[chn]
+                assert chn in self.channels.dds_param_chn_map
+                ddsid, chntype = self.channels.dds_param_chn_map[chn]
                 assert artiq_action.type == chntype
                 assert artiq_action.chn_idx == ddsid
             # Check value
             if val_idx >= 0:
                 assert isinstance(value, rtval.RuntimeValue)
                 if is_ttl:
-                    bool_values_used[val_idx] = True
-                    assert compiled_info.bool_values[val_idx] is value
+                    self.bool_values_used[val_idx] = True
+                    assert self.compiled_info.bool_values[val_idx] is value
                 else:
-                    float_values_used[val_idx] = True
-                    assert compiled_info.float_values[val_idx] is value
+                    self.float_values_used[val_idx] = True
+                    assert self.compiled_info.float_values[val_idx] is value
             else:
                 assert not isinstance(value, rtval.RuntimeValue)
                 if artiq_action.type == 'ttl':
@@ -138,22 +172,47 @@ class Compiler(backend.SeqCompiler):
                 assert seen[1]
             else:
                 assert not seen[1]
-        assert all(bool_values_used)
-        assert all(float_values_used)
-        assert all(relocations_used)
-        return compiled_info
+
+class Compiler(backend.SeqCompiler):
+    def __init__(self, s, ab, allow_branch):
+        super().__init__(s)
+        self.ab = ab
+        self.allow_branch = allow_branch
+
+    def get_channel_info(self):
+        channels = artiq_utils.get_channel_info(self.ab)
+        ttl_tgts = set(ttl.target for ttl in channels.ttlchns)
+        assert len(ttl_tgts) == len(channels.ttlchns)
+        assert len(ttl_tgts) == len(channels.ttl_chn_map)
+        bus_chns = set(bus.channel for bus in channels.urukul_busses)
+        assert len(bus_chns) == len(channels.urukul_busses)
+        bus_ids = set(dds.bus_id for dds in channels.ddschns)
+        assert bus_ids == set(range(len(bus_chns)))
+        all_chip_selects = {i: set() for i in range(len(bus_chns))}
+        for dds in channels.ddschns:
+            chip_selects = all_chip_selects[dds.bus_id]
+            assert dds.chip_select not in chip_selects
+            chip_selects.add(dds.chip_select)
+        assert sum(len(cs) for cs in all_chip_selects.values()) == len(channels.ddschns)
+        return channels
+
+    def get_compiled_info(self):
+        checker = CompiledInfoChecker(self)
+        checker.check()
+        return checker.compiled_info
 
 class Env:
     def __init__(self):
         self.use_dma = False
+        self.allow_branch = False
         self.np_rtio = np.ndarray((0,), np.int32)
         self.dma_buf = bytearray()
         self.conf = Config()
         self.conf.add_supported_prefix('artiq')
         self.conf.add_supported_prefix('rfsoc')
 
-    def get_list_bytecode(self, ab):
-        res = list(self.np_rtio)
+    def get_list_bytecode(self, output):
+        res = [int(r) for r in output.rtios]
         n = len(res)
         i = 0
         total_mu = 0
@@ -165,11 +224,12 @@ class Env:
             else:
                 assert r != 0x80000000
                 i += 2
-        assert total_mu == ab.total_time_mu
+        assert total_mu == output.total_time_mu
         return res
 
-    def get_list_dma(self, ab):
-        assert len(self.dma_buf) % 64 == 0
+    def get_list_dma(self, output):
+        dma_buf = output.rtios
+        assert len(dma_buf) % 64 == 0
         cur_t = 0
         res = []
         def set_cur_time(new_t):
@@ -178,55 +238,77 @@ class Env:
             assert wait_t >= 0
             cur_t = new_t
             while wait_t > 0x80000000:
-                res.append(np.int32(-0x80000000))
+                res.append(-0x80000000)
                 wait_t -= 0x80000000
             if wait_t == 0:
                 return
-            res.append(np.int32(-wait_t))
+            res.append(-wait_t)
         def add_action(t, target, value):
             set_cur_time(t)
-            res.append(np.int32(target))
-            res.append(np.int32(value))
-        for i in range(0, len(self.dma_buf), 17):
-            if self.dma_buf[i] == 0:
-                assert len(self.dma_buf) - i <= 64
-                for j in range(i + 1, len(self.dma_buf)):
-                    assert self.dma_buf[j] == 0
-                set_cur_time(ab.total_time_mu)
+            res.append(target)
+            res.append(value)
+        for i in range(0, len(dma_buf), 17):
+            if dma_buf[i] == 0:
+                assert len(dma_buf) - i <= 64
+                for j in range(i + 1, len(dma_buf)):
+                    assert dma_buf[j] == 0
+                set_cur_time(output.total_time_mu)
                 return res
-            assert self.dma_buf[i] == 17
-            target = bytes_to_int32(self.dma_buf[i + 12], self.dma_buf[i + 1],
-                                    self.dma_buf[i + 2], self.dma_buf[i + 3])
-            value = bytes_to_int32(self.dma_buf[i + 13], self.dma_buf[i + 14],
-                                   self.dma_buf[i + 15], self.dma_buf[i + 16])
-            t = bytes_to_int64(self.dma_buf[i + 4], self.dma_buf[i + 5],
-                               self.dma_buf[i + 6], self.dma_buf[i + 7],
-                               self.dma_buf[i + 8], self.dma_buf[i + 9],
-                               self.dma_buf[i + 10], self.dma_buf[i + 11])
+            assert dma_buf[i] == 17
+            target = bytes_to_int32(dma_buf[i + 12], dma_buf[i + 1],
+                                    dma_buf[i + 2], dma_buf[i + 3])
+            value = bytes_to_int32(dma_buf[i + 13], dma_buf[i + 14],
+                                   dma_buf[i + 15], dma_buf[i + 16])
+            t = bytes_to_int64(dma_buf[i + 4], dma_buf[i + 5],
+                               dma_buf[i + 6], dma_buf[i + 7],
+                               dma_buf[i + 8], dma_buf[i + 9],
+                               dma_buf[i + 10], dma_buf[i + 11])
             assert t >= 0
             add_action(t, target, value)
         assert False
 
-    def get_list(self, comp):
-        comp.last_list = (self.get_list_dma(comp.ab) if self.use_dma else
-                          self.get_list_bytecode(comp.ab))
+    def get_lists(self, comp):
+        getter = (self.get_list_dma if self.use_dma else self.get_list_bytecode)
+        assert comp.ab.output[0].total_time_mu == comp.ab.total_time_mu
+        outputs = comp.ab.output
+        comp.last_list = [getter(output) for output in outputs]
+        assert len(outputs) >= 1
+        if not self.allow_branch:
+            assert len(outputs) == 1
+        if len(outputs) == 1:
+            output0 = outputs[0]
+            assert output0.bseq_id == 0
+            assert output0.may_term
+            assert output0.next == []
         return comp.last_list
 
-    def check_list(self, comp, expected):
-        rtio = self.get_list(comp)
+    def get_list(self, comp, cbseq_id=0):
+        return self.get_lists(comp)[cbseq_id]
+
+    def check_lists(self, comp, expected):
+        rtio = self.get_lists(comp)
+        assert rtio == expected
+
+    def check_list(self, comp, expected, cbseq_id=0):
+        rtio = self.get_list(comp, cbseq_id)
         assert rtio == expected
 
     def check_unchanged(self, comp):
         last_list = comp.last_list
-        assert self.get_list(comp) == last_list
+        assert self.get_lists(comp) == last_list
 
     def new_comp(self, max_bt, sys):
         s = seq.Seq(self.conf, max_bt)
-        if self.use_dma:
+        if self.allow_branch:
+            ab = artiq_backend.ArtiqBackend(sys, output_format=('dma' if self.use_dma
+                                                                else 'bytecode'))
+        elif self.use_dma:
             ab = artiq_backend.ArtiqBackend(sys, self.dma_buf, output_format='dma')
+            assert ab.output[0].rtios is self.dma_buf
         else:
             ab = artiq_backend.ArtiqBackend(sys, self.np_rtio)
-        comp = Compiler(s, ab)
+            assert ab.output[0].rtios is self.np_rtio
+        comp = Compiler(s, ab, self.allow_branch)
         comp.add_backend('artiq', ab)
         comp.add_backend('rfsoc', backend.Backend()) # Dummy backend
         return comp
@@ -278,24 +360,33 @@ dds_conf_data_len = dds_config_len + dds_data_len
 dds_total_len = dds_conf_addr_len + dds_conf_data_len * 2
 dds_headless_len = dds_conf_addr_len + dds_conf_data_len * 2 - dds_config_len
 
-def with_dma_param(f):
+def with_dma_param(f, require_branch):
     import inspect
     old_sig = inspect.signature(f)
-    params = [inspect.Parameter('use_dma', inspect.Parameter.POSITIONAL_OR_KEYWORD)]
+    params = [inspect.Parameter('use_dma', inspect.Parameter.POSITIONAL_OR_KEYWORD),
+              inspect.Parameter('allow_branch', inspect.Parameter.POSITIONAL_OR_KEYWORD)]
     params.extend(old_sig.parameters.values())
     new_sig = inspect.Signature(params)
-    def cb(use_dma, *args, **kws):
+    def cb(use_dma, allow_branch, *args, **kws):
         test_env.use_dma = use_dma
+        test_env.allow_branch = allow_branch
         return f(*args, **kws)
     cb.__name__ = f.__name__
     if hasattr(f, 'pytestmark'):
         cb.pytestmark = f.pytestmark
     cb.__signature__ = new_sig
-    return pytest.mark.parametrize("use_dma", [False, True])(cb)
+    cb = pytest.mark.parametrize("use_dma", [False, True])(cb)
+    if require_branch:
+        return pytest.mark.parametrize("allow_branch", [True])(cb)
+    return pytest.mark.parametrize("allow_branch", [False, True])(cb)
 
 def with_artiq_params(f):
     f = test_utils.with_seq_params(f)
-    return with_dma_param(f)
+    return with_dma_param(f, False)
+
+def with_artiq_br_params(f):
+    f = test_utils.with_seq_params(f)
+    return with_dma_param(f, True)
 
 def test_constructors():
     with pytest.raises(TypeError):
@@ -428,7 +519,7 @@ def test_channels(max_bt):
     assert channels.ttlchns[2].iscounter
     assert channels.dds_param_chn_map == {4: (0, 'ddsfreq'), 5: (0, 'ddsamp'), 6: (1, 'ddsphase')}
     compiled_info = comp.get_compiled_info()
-    assert not compiled_info.all_actions
+    assert not compiled_info.all_actions[0]
     assert not compiled_info.bool_values
     assert not compiled_info.float_values
     assert not compiled_info.relocations
@@ -452,7 +543,7 @@ def test_channels(max_bt):
     assert channels.ttlchns[2].iscounter
     assert channels.dds_param_chn_map == {1: (0, 'ddsfreq'), 3: (0, 'ddsamp'), 5: (1, 'ddsphase')}
     compiled_info = comp.get_compiled_info()
-    assert not compiled_info.all_actions
+    assert not compiled_info.all_actions[0]
     assert not compiled_info.bool_values
     assert not compiled_info.float_values
     assert not compiled_info.relocations
@@ -552,7 +643,7 @@ def test_ttl(max_bt):
     s.conditional(False).add_step(0.1).set('artiq/ttl3', True)
     comp.finalize()
     compiled_info = comp.get_compiled_info()
-    assert len(compiled_info.all_actions) == 8
+    assert len(compiled_info.all_actions[0]) == 8
 
     comp.runtime_finalize(1)
     channels = comp.get_channel_info()
@@ -603,7 +694,7 @@ def test_counter(max_bt):
          .set('artiq/ttl1_counter', True)
     comp.finalize()
     compiled_info = comp.get_compiled_info()
-    assert len(compiled_info.all_actions) == 9
+    assert len(compiled_info.all_actions[0]) == 9
 
     comp.runtime_finalize(1)
     channels = comp.get_channel_info()
@@ -678,7 +769,7 @@ def test_dds(max_bt):
     s.conditional(False).add_step(0.1).set('artiq/urukul0_ch2/freq', 100e6)
     comp.finalize()
     compiled_info = comp.get_compiled_info()
-    assert len(compiled_info.all_actions) == 14
+    assert len(compiled_info.all_actions[0]) == 14
 
     channels = comp.get_channel_info()
     addr_tgts = [bus.addr_target for bus in channels.urukul_busses]
@@ -1957,6 +2048,450 @@ def test_device_delay(max_bt, use_rt):
         upd_tgts[0], 0,
     ])
 
+def test_empty_branch_backend():
+    ab = artiq_backend.ArtiqBackend(dummy_artiq.DummyDaxSystem(), output_format="dma")
+    assert ab.total_time_mu == 0
+
+    ab = artiq_backend.ArtiqBackend(dummy_artiq.DummyDaxSystem(), output_format="bytecode")
+    assert ab.total_time_mu == 0
+
+@with_artiq_params
+def test_branch_error(max_bt):
+    comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
+    s = comp.seq
+    bs1 = s.new_basic_seq()
+    s.add_branch(bs1)
+
+    if not test_env.allow_branch:
+        with pytest.raises(ValueError, match="not initialized for branch support"):
+            comp.finalize()
+        return
+    comp.finalize()
+    assert len(comp.ab.output) == 2
+    assert comp.ab.output[0].bseq_id == 0
+    assert not comp.ab.output[0].may_term
+    assert comp.ab.output[0].next == [1]
+    assert comp.ab.output[1].bseq_id == 1
+    assert comp.ab.output[1].may_term
+    assert comp.ab.output[1].next == []
+    comp.runtime_finalize(1)
+    # Builtin 3us wait
+    test_env.check_lists(comp, [[-3000], [-3000]])
+    assert comp.ab.output[0].total_time_mu == 3000
+    assert comp.ab.output[1].total_time_mu == 3000
+
+@with_artiq_br_params
+def test_branch_ttl(max_bt):
+    comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
+    s = comp.seq
+    s.add_step(0.1).set('artiq/ttl0', True)
+    bs1 = s.new_basic_seq()
+    s.add_branch(bs1)
+    bs1.add_step(0.2).pulse('artiq/ttl0', False)
+
+    comp.finalize()
+    assert len(comp.ab.output) == 2
+    assert comp.ab.output[0].bseq_id == 0
+    assert not comp.ab.output[0].may_term
+    assert comp.ab.output[0].next == [1]
+    assert comp.ab.output[1].bseq_id == 1
+    assert comp.ab.output[1].may_term
+    assert comp.ab.output[1].next == []
+    channels = comp.get_channel_info()
+    ttlchns = channels.ttlchns
+
+    comp.runtime_finalize(1)
+    assert comp.ab.output[0].total_time_mu == 100_003_000
+    assert comp.ab.output[1].total_time_mu == 200_003_000
+    test_env.check_lists(comp, [[
+        -3000,
+        ttlchns[0].target, 1,
+        -100_000_000
+        ], [
+        -3000,
+        ttlchns[0].target, 0,
+        -200_000_000,
+        ttlchns[0].target, 1]])
+
+    comp.runtime_finalize(2)
+    test_env.check_unchanged(comp)
+
+    b1 = True
+    b2 = False
+    comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
+    s = comp.seq
+    s.add_step(0.1).set('artiq/ttl0', test_utils.new_extern(lambda: b1))
+    bs1 = s.new_basic_seq()
+    s.add_branch(bs1)
+    bs1.add_step(0.2).pulse('artiq/ttl0', test_utils.new_extern(lambda: b2))
+
+    comp.finalize()
+    assert len(comp.ab.output) == 2
+    assert comp.ab.output[0].bseq_id == 0
+    assert not comp.ab.output[0].may_term
+    assert comp.ab.output[0].next == [1]
+    assert comp.ab.output[1].bseq_id == 1
+    assert comp.ab.output[1].may_term
+    assert comp.ab.output[1].next == []
+    channels = comp.get_channel_info()
+    ttlchns = channels.ttlchns
+
+    comp.runtime_finalize(1)
+    assert comp.ab.output[0].total_time_mu == 100_003_000
+    assert comp.ab.output[1].total_time_mu == 200_003_000
+    test_env.check_lists(comp, [[
+        -3000,
+        ttlchns[0].target, 1,
+        -100_000_000
+        ], [
+        -3000,
+        ttlchns[0].target, 0,
+        -200_000_000,
+        ttlchns[0].target, 1]])
+
+    comp.runtime_finalize(2)
+    test_env.check_unchanged(comp)
+
+    b1 = False
+    b2 = False
+    comp.runtime_finalize(3)
+    assert comp.ab.output[0].total_time_mu == 100_003_000
+    assert comp.ab.output[1].total_time_mu == 200_003_000
+    test_env.check_lists(comp, [[
+        -3000,
+        ttlchns[0].target, 0,
+        -100_000_000
+        ], [
+        -200_003_000]])
+
+    comp.runtime_finalize(4)
+    test_env.check_unchanged(comp)
+
+    b1 = False
+    b2 = True
+    comp.runtime_finalize(5)
+    assert comp.ab.output[0].total_time_mu == 100_003_000
+    assert comp.ab.output[1].total_time_mu == 200_003_000
+    test_env.check_lists(comp, [[
+        -3000,
+        ttlchns[0].target, 0,
+        -100_000_000
+        ], [
+        -3000,
+        ttlchns[0].target, 1,
+        -200_000_000,
+        ttlchns[0].target, 0]])
+
+    comp.runtime_finalize(6)
+    test_env.check_unchanged(comp)
+
+    b1 = True
+    b2 = True
+    comp.runtime_finalize(7)
+    assert comp.ab.output[0].total_time_mu == 100_003_000
+    assert comp.ab.output[1].total_time_mu == 200_003_000
+    test_env.check_lists(comp, [[
+        -3000,
+        ttlchns[0].target, 1,
+        -100_000_000
+        ], [
+        -200_003_000]])
+
+    comp.runtime_finalize(8)
+    test_env.check_unchanged(comp)
+
+@with_artiq_br_params
+def test_branch_dds(max_bt):
+    comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
+    s = comp.seq
+    s.add_step(0.1) \
+         .pulse('artiq/urukul0_ch0/amp', 0.2) \
+         .set('artiq/urukul0_ch0/phase', 0.7) \
+         .set('artiq/urukul0_ch0/freq', 120e6)
+    bs1 = s.new_basic_seq()
+    s.add_branch(bs1)
+    bs1.add_step(0.2).pulse('artiq/urukul0_ch0/amp', 0.4)
+
+    comp.finalize()
+    assert len(comp.ab.output) == 2
+    assert comp.ab.output[0].bseq_id == 0
+    assert not comp.ab.output[0].may_term
+    assert comp.ab.output[0].next == [1]
+    assert comp.ab.output[1].bseq_id == 1
+    assert comp.ab.output[1].may_term
+    assert comp.ab.output[1].next == []
+    channels = comp.get_channel_info()
+    addr_tgts = [bus.addr_target for bus in channels.urukul_busses]
+    data_tgts = [bus.data_target for bus in channels.urukul_busses]
+    upd_tgts = [bus.io_update_target for bus in channels.urukul_busses]
+    css = [dds.chip_select for dds in channels.ddschns]
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+
+    comp.runtime_finalize(1)
+    assert comp.ab.output[0].total_time_mu == 100_003_008
+    assert comp.ab.output[1].total_time_mu == 200_003_008
+    test_env.check_lists(comp, [[
+        addr_tgts[0], dds_config_addr(css[0]), -dds_config_len,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(0.2, 0.7), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(120e6), -dds_data_len,
+        addr_tgts[0], dds_config_addr(css[0]), -(3000 - dds_total_len),
+        # Beginning of sequence
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(0, 0.7), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(120e6),
+        -(100_000_000 - dds_headless_len + dds_data_len - 8),
+        # End of step
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        ], [
+        addr_tgts[0], dds_config_addr(css[0]), -dds_config_len,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(0.4, 0.7), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(120e6), -dds_data_len,
+        addr_tgts[0], dds_config_addr(css[0]), -(3000 - dds_total_len),
+        # Beginning of sequence
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(0, 0.7), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(120e6),
+        -(200_000_000 - dds_headless_len + dds_data_len - 8),
+        # End of step
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0]])
+
+    comp.runtime_finalize(2)
+
+    amp1 = 0.2
+    phase1 = 0.7
+    freq1 = 120e6
+    amp2 = 0.4
+    test_env.check_unchanged(comp)
+    comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
+    s = comp.seq
+    s.add_step(0.1) \
+         .pulse('artiq/urukul0_ch0/amp', test_utils.new_extern(lambda: amp1)) \
+         .set('artiq/urukul0_ch0/phase', test_utils.new_extern(lambda: phase1)) \
+         .set('artiq/urukul0_ch0/freq', test_utils.new_extern(lambda: freq1))
+    bs1 = s.new_basic_seq()
+    s.add_branch(bs1)
+    bs1.add_step(0.2).pulse('artiq/urukul0_ch0/amp', test_utils.new_extern(lambda: amp2))
+
+    comp.finalize()
+    assert len(comp.ab.output) == 2
+    assert comp.ab.output[0].bseq_id == 0
+    assert not comp.ab.output[0].may_term
+    assert comp.ab.output[0].next == [1]
+    assert comp.ab.output[1].bseq_id == 1
+    assert comp.ab.output[1].may_term
+    assert comp.ab.output[1].next == []
+    channels = comp.get_channel_info()
+    addr_tgts = [bus.addr_target for bus in channels.urukul_busses]
+    data_tgts = [bus.data_target for bus in channels.urukul_busses]
+    upd_tgts = [bus.io_update_target for bus in channels.urukul_busses]
+    css = [dds.chip_select for dds in channels.ddschns]
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+
+    comp.runtime_finalize(1)
+    assert comp.ab.output[0].total_time_mu == 100_003_008
+    assert comp.ab.output[1].total_time_mu == 200_003_008
+    test_env.check_lists(comp, [[
+        addr_tgts[0], dds_config_addr(css[0]), -dds_config_len,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(0.2, 0.7), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(120e6), -dds_data_len,
+        addr_tgts[0], dds_config_addr(css[0]), -(3000 - dds_total_len),
+        # Beginning of sequence
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(0, 0.7), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(120e6),
+        -(100_000_000 - dds_headless_len + dds_data_len - 8),
+        # End of step
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        ], [
+        addr_tgts[0], dds_config_addr(css[0]), -dds_config_len,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(0.4, 0.7), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(120e6), -dds_data_len,
+        addr_tgts[0], dds_config_addr(css[0]), -(3000 - dds_total_len),
+        # Beginning of sequence
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(0, 0.7), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(120e6),
+        -(200_000_000 - dds_headless_len + dds_data_len - 8),
+        # End of step
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0]])
+
+    comp.runtime_finalize(2)
+    test_env.check_unchanged(comp)
+
+    freq1 = 100e6
+    comp.runtime_finalize(3)
+    assert comp.ab.output[0].total_time_mu == 100_003_008
+    assert comp.ab.output[1].total_time_mu == 200_003_008
+    test_env.check_lists(comp, [[
+        addr_tgts[0], dds_config_addr(css[0]), -dds_config_len,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(0.2, 0.7), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(100e6), -dds_data_len,
+        addr_tgts[0], dds_config_addr(css[0]), -(3000 - dds_total_len),
+        # Beginning of sequence
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(0, 0.7), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(100e6),
+        -(100_000_000 - dds_headless_len + dds_data_len - 8),
+        # End of step
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        ], [
+        addr_tgts[0], dds_config_addr(css[0]), -dds_config_len,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(0.4, 0.7), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(100e6), -dds_data_len,
+        addr_tgts[0], dds_config_addr(css[0]), -(3000 - dds_total_len),
+        # Beginning of sequence
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(0, 0.7), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(100e6),
+        -(200_000_000 - dds_headless_len + dds_data_len - 8),
+        # End of step
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0]])
+
+    comp.runtime_finalize(4)
+    test_env.check_unchanged(comp)
+
+    phase1 = 0.3
+    comp.runtime_finalize(5)
+    assert comp.ab.output[0].total_time_mu == 100_003_008
+    assert comp.ab.output[1].total_time_mu == 200_003_008
+    test_env.check_lists(comp, [[
+        addr_tgts[0], dds_config_addr(css[0]), -dds_config_len,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(0.2, 0.3), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(100e6), -dds_data_len,
+        addr_tgts[0], dds_config_addr(css[0]), -(3000 - dds_total_len),
+        # Beginning of sequence
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(0, 0.3), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(100e6),
+        -(100_000_000 - dds_headless_len + dds_data_len - 8),
+        # End of step
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        ], [
+        addr_tgts[0], dds_config_addr(css[0]), -dds_config_len,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(0.4, 0.3), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(100e6), -dds_data_len,
+        addr_tgts[0], dds_config_addr(css[0]), -(3000 - dds_total_len),
+        # Beginning of sequence
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(0, 0.3), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(100e6),
+        -(200_000_000 - dds_headless_len + dds_data_len - 8),
+        # End of step
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0]])
+
+    comp.runtime_finalize(6)
+    test_env.check_unchanged(comp)
+
+    amp2 = 0
+    comp.runtime_finalize(7)
+    assert comp.ab.output[0].total_time_mu == 100_003_008
+    assert comp.ab.output[1].total_time_mu == 200_003_000
+    test_env.check_lists(comp, [[
+        addr_tgts[0], dds_config_addr(css[0]), -dds_config_len,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(0.2, 0.3), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(100e6), -dds_data_len,
+        addr_tgts[0], dds_config_addr(css[0]), -(3000 - dds_total_len),
+        # Beginning of sequence
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(0, 0.3), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(100e6),
+        -(100_000_000 - dds_headless_len + dds_data_len - 8),
+        # End of step
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        ], [-200_003_000]])
+
+    comp.runtime_finalize(8)
+    test_env.check_unchanged(comp)
 
 class DummySystem:
     pass

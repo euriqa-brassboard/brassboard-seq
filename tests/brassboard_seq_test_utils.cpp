@@ -749,8 +749,9 @@ static PyModuleDef test_module = {
         }>,
         py::meth_fast<"seq_get_event_time",[] (auto, PyObject *const *args,
                                                Py_ssize_t nargs) {
-            py::check_num_arg("seq_get_event_time", nargs, 2, 2);
-            auto s = py::arg_cast<seq::BasicSeq>(args[0], "s");
+            py::check_num_arg("seq_get_event_time", nargs, 3, 3);
+            py::ptr basic_seqs = py::arg_cast<seq::Seq>(args[0], "s")->basic_seqs;
+            auto s = basic_seqs.get<seq::BasicSeq>(py::ptr(args[2]).as_int());
             return s->seqinfo->time_mgr->event_times.get(py::ptr(args[1]).as_int()).ref();
         }>,
         py::meth_o<"seq_get_cond",[] (auto, py::ptr<> condseq) {

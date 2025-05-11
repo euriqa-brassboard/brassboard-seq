@@ -111,6 +111,21 @@ static inline const ArtiqInfo &info()
 }
 
 __attribute__((visibility("internal")))
+inline uint32_t ChannelsInfo::dds_to_mu(ChannelType type, int dds_idx, double v) const
+{
+    if (type == DDSFreq) {
+        return uint32_t(v * ddschns[dds_idx].ftw_per_hz + 0.5);
+    }
+    else if (type == DDSAmp) {
+        return std::clamp(int(v * 0x3fff + 0.5), 0, 0x3fff);
+    }
+    else {
+        assert(type == DDSPhase);
+        return round<int32_t>(v * 0x10000) & 0xffff;
+    }
+}
+
+__attribute__((visibility("internal")))
 inline void ChannelsInfo::add_channel(py::ptr<> dev, int64_t delay, rtval_ptr rt_delay,
                                       int idx, py::tuple path)
 {
@@ -336,22 +351,25 @@ inline void UrukulBus::flush_output(auto &add_action, int64_t time_mu, bool forc
     }
 }
 
+static inline void update_dds_data(uint32_t &data1, uint32_t &data2,
+                                   ChannelType type, uint32_t value)
+{
+    if (type == DDSFreq) {
+        data2 = value;
+    }
+    else if (type == DDSAmp) {
+        data1 = (data1 & 0xffff) | (value << 16);
+    }
+    else {
+        assert(type == DDSPhase);
+        data1 = (data1 & 0xffff0000) | value;
+    }
+}
+
 __attribute__((visibility("internal")))
 inline void UrukulBus::add_output(auto &add_action, const ArtiqAction &action,
                                   DDSChannel &ddschn)
 {
-    auto update_dds_data = [&] (uint32_t &data1, uint32_t &data2) {
-        if (action.type == DDSFreq) {
-            data2 = action.value;
-        }
-        else if (action.type == DDSAmp) {
-            data1 = (data1 & 0xffff) | (action.value << 16);
-        }
-        else {
-            assert(action.type == DDSPhase);
-            data1 = (data1 & 0xffff0000) | action.value;
-        }
-    };
     bb_debug("add_dds: time=%" PRId64 ", exact_time=%d, chn=%d, nactions=%zd, "
              "type=%s, value=%x\n",
              action.time_mu, action.exact_time, channel, dds_actions.size(),
@@ -377,7 +395,7 @@ inline void UrukulBus::add_output(auto &add_action, const ArtiqAction &action,
                 dds_actions.erase(dds_actions.begin(), last);
                 break;
             }
-            update_dds_data(dds_action.data1, dds_action.data2);
+            update_dds_data(dds_action.data1, dds_action.data2, action.type, action.value);
             if (ddschn.had_output && dds_action.data1 == ddschn.data1 &&
                 dds_action.data2 == ddschn.data2) {
                 bb_debug("add_dds: new values the same as the old values "
@@ -405,7 +423,7 @@ inline void UrukulBus::add_output(auto &add_action, const ArtiqAction &action,
     // New action
     uint32_t data1 = ddschn.data1;
     uint32_t data2 = ddschn.data2;
-    update_dds_data(data1, data2);
+    update_dds_data(data1, data2, action.type, action.value);
     if (ddschn.had_output && data1 == ddschn.data1 && data2 == ddschn.data2) {
         bb_debug("add_dds: new values the same as the old values "
                  "(data1=%x, data2=%x), skipping\n", data1, data2);
@@ -437,18 +455,23 @@ inline void TTLChannel::flush_output(auto &add_action, int64_t cur_time_mu,
 }
 
 __attribute__((visibility("internal")))
-inline void TTLChannel::add_output(auto &add_action, const ArtiqAction &action)
+inline uint8_t TTLChannel::ttl_to_mu(bool v) const
 {
-    uint8_t val;
     if (!iscounter) {
-        val = action.value;
+        return v;
     }
-    else if (action.value) {
-        val = info().COUNTER_ENABLE;
+    else if (v) {
+        return info().COUNTER_ENABLE;
     }
     else {
-        val = info().COUNTER_DISABLE;
+        return info().COUNTER_DISABLE;
     }
+}
+
+__attribute__((visibility("internal")))
+inline void TTLChannel::add_output(auto &add_action, const ArtiqAction &action)
+{
+    uint8_t val = ttl_to_mu(action.value);
 
     bb_debug("add_ttl: time=%" PRId64 ", exact_time=%d, tgt=%d, "
              "iscounter=%d, value=%x\n", action.time_mu, action.exact_time, target,
@@ -542,28 +565,67 @@ inline int64_t TimeChecker::find_time(int64_t lb_mu, int64_t t_mu, int64_t ub_mu
     }
 }
 
+struct __attribute__((visibility("internal"))) ArtiqBackend::Data::Indexers {
+    ValueIndexer<bool> bool_values;
+    ValueIndexer<double> float_values;
+};
+
 __attribute__((visibility("internal")))
-inline ArtiqBackend::Data::Data(py::ptr<> sys, py::ptr<> rtio_array, bool use_dma)
+auto ArtiqBackend::Output::alloc(int bseq_id, py::ref<> rtios, bool may_term,
+                                 std::vector<int> next_cbseq) -> py::ref<Output>
+{
+    auto self = py::generic_alloc<Output>();
+    self->bseq_id = bseq_id;
+    self->may_term = may_term;
+    call_constructor(&self->next_cbseq, std::move(next_cbseq));
+    call_constructor(&self->actions);
+    call_constructor(&self->start_values);
+    call_constructor(&self->rtios, std::move(rtios));
+    self->total_time_mu = 0;
+    return self;
+}
+__attribute__((visibility("internal")))
+PyTypeObject ArtiqBackend::Output::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.artiq_backend.Output",
+    .tp_basicsize = sizeof(Output),
+    .tp_dealloc = py::tp_cxx_dealloc<true,Output>,
+    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
+    .tp_traverse = py::tp_field_traverse<Output,&Output::rtios>,
+    .tp_clear = py::tp_field_clear<Output,&Output::rtios>,
+    .tp_members = (py::mem_table<
+                   py::mem_def<"bseq_id",T_INT,&Output::bseq_id,READONLY>,
+                   py::mem_def<"may_term",T_BOOL,&Output::may_term,READONLY>,
+                   py::mem_def<"rtios",T_OBJECT_EX,&Output::rtios,READONLY>>),
+    .tp_getset = (py::getset_table<
+                  py::getset_def<"next",[] (py::ptr<Output> self) {
+                      return to_py(self->next_cbseq);
+                  }>,
+                  py::getset_def<"total_time_mu",[] (py::ptr<Output> self) {
+                      return to_py(self->total_time_mu);
+                  }>>),
+};
+
+__attribute__((visibility("internal")))
+inline ArtiqBackend::Data::Data(py::ptr<> sys, py::ref<> all_outputs, bool use_dma,
+                                bool support_branch)
     : sys(sys.ref()),
       use_dma(use_dma),
-      rtio_array(rtio_array.ref())
+      support_branch(support_branch),
+      all_outputs(std::move(all_outputs))
 {
 }
 
 __attribute__((visibility("internal")))
-void ArtiqBackend::Data::finalize(py::ptr<SeqCompiler> comp)
+void ArtiqBackend::Data::process_bseq(py::ptr<SeqCompiler> comp, CompiledBasicSeq &cbseq,
+                                      py::ptr<Output> output, Indexers &idr)
 {
-    if (comp->basic_cseqs.size() != 1)
-        py_throw_format(PyExc_ValueError, "Branch not yet supported in artiq backend");
-    channels.collect_channels(prefix, sys, comp->seq, device_delay);
-    std::vector<ArtiqAction> &artiq_actions = all_actions;
+    auto &artiq_actions = output->actions;
+    int bseq_id = cbseq.bseq_id;
+    py::ptr bseq = comp->seq->basic_seqs.get<seq::BasicSeq>(bseq_id);
+    py::list event_times = bseq->seqinfo->time_mgr->event_times;
 
-    ValueIndexer<bool> bool_values;
-    ValueIndexer<double> float_values;
-
-    py::list event_times = comp->seq->seqinfo->time_mgr->event_times;
-
-    auto add_single_action = [&] (auto *action, ChannelType type, int chn_idx,
+    auto add_single_action = [&] (action::Action *action, ChannelType type, int chn_idx,
                                   int tid, py::ptr<> value, int cond_reloc,
                                   bool is_end) {
         ArtiqAction artiq_action;
@@ -612,7 +674,7 @@ void ArtiqBackend::Data::finalize(py::ptr<SeqCompiler> comp)
         if (rtval::is_rtval(value)) {
             needs_reloc = true;
             if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
-                reloc.val_idx = float_values.get_id(value);
+                reloc.val_idx = idr.float_values.get_id(value);
             }
             else if (type == CounterEnable) {
                 // We aren't really relying on this in the backend
@@ -622,22 +684,12 @@ void ArtiqBackend::Data::finalize(py::ptr<SeqCompiler> comp)
                                 "Counter value must be static.");
             }
             else {
-                reloc.val_idx = bool_values.get_id(value);
+                reloc.val_idx = idr.bool_values.get_id(value);
             }
         }
         else if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
-            double v = value.as_float(action_key(aid));
-            if (type == DDSFreq) {
-                auto &ddschn = channels.ddschns[chn_idx];
-                artiq_action.value = dds_freq_to_mu(v, ddschn.ftw_per_hz);
-            }
-            else if (type == DDSAmp) {
-                artiq_action.value = dds_amp_to_mu(v);
-            }
-            else {
-                assert(type == DDSPhase);
-                artiq_action.value = dds_phase_to_mu(v);
-            }
+            artiq_action.value = channels.dds_to_mu(type, chn_idx,
+                                                    value.as_float(action_key(aid)));
         }
         else {
             artiq_action.value = value.as_bool(action_key(aid));
@@ -651,11 +703,11 @@ void ArtiqBackend::Data::finalize(py::ptr<SeqCompiler> comp)
         }
         artiq_actions.push_back(artiq_action);
     };
-    auto add_action = [&] (auto *action, ChannelType type, int chn_idx) {
+    auto add_action = [&] (action::Action *action, ChannelType type, int chn_idx) {
         py::ptr cond = action->cond;
         int cond_reloc = -1;
         if (rtval::is_rtval(cond)) {
-            cond_reloc = bool_values.get_id(cond);
+            cond_reloc = idr.bool_values.get_id(cond);
             assume(cond_reloc >= 0);
         }
         else {
@@ -669,10 +721,31 @@ void ArtiqBackend::Data::finalize(py::ptr<SeqCompiler> comp)
         }
     };
 
+    // FIXME:
+    // We use a different semantics for start value for the first bseq compared to others.
+    // For the first bseq, we assume the channel is unknown but we only initialize
+    // the channel when we use it. For the rest of the bseq, we assume the channel
+    // already has the value recorded in start value by previous bseq.
+    // There is in priciple a problem that if a channel is not used in the first bseq
+    // then the first use of it in later bseq would not initialize it if the value
+    // we want to set it to matches the start value.
+    bool is_entry = &cbseq == &comp->basic_cseqs[0];
     for (auto [chn, ttl_idx]: channels.ttl_chn_map) {
         auto ttl_chn_info = channels.ttlchns[ttl_idx];
         auto type = ttl_chn_info.iscounter ? CounterEnable : TTLOut;
-        for (auto action: comp->basic_cseqs[0].chn_actions[chn]->actions) {
+        auto chn_action = cbseq.chn_actions[chn];
+        if (!is_entry) {
+            StartValue start_value{ .type = type, .chn_idx = ttl_idx };
+            if (rtval::is_rtval(chn_action->start_value)) {
+                start_value.val_id = idr.bool_values.get_id(chn_action->start_value.get());
+            }
+            else {
+                start_value.val_id = -1;
+                start_value.value = chn_action->start_value.as_bool();
+            }
+            output->start_values.push_back(start_value);
+        }
+        for (auto action: chn_action->actions) {
             if (action->kws)
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "Invalid output keyword argument %S", action->kws);
@@ -687,7 +760,21 @@ void ArtiqBackend::Data::finalize(py::ptr<SeqCompiler> comp)
 
     for (auto [chn, value]: channels.dds_param_chn_map) {
         auto [dds_idx, type] = value;
-        for (auto action: comp->basic_cseqs[0].chn_actions[chn]->actions) {
+        auto chn_action = cbseq.chn_actions[chn];
+        if (!is_entry) {
+            StartValue start_value{ .type = type, .chn_idx = dds_idx };
+            if (rtval::is_rtval(chn_action->start_value)) {
+                start_value.val_id =
+                    idr.float_values.get_id(chn_action->start_value.get());
+            }
+            else {
+                start_value.val_id = -1;
+                start_value.value =
+                    channels.dds_to_mu(type, dds_idx, chn_action->start_value.as_float());
+            }
+            output->start_values.push_back(start_value);
+        }
+        for (auto action: chn_action->actions) {
             if (action->kws)
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "Invalid output keyword argument %S", action->kws);
@@ -699,9 +786,35 @@ void ArtiqBackend::Data::finalize(py::ptr<SeqCompiler> comp)
             add_action(action, type, dds_idx);
         }
     }
+}
 
-    this->bool_values = std::move(bool_values.values);
-    this->float_values = std::move(float_values.values);
+__attribute__((visibility("internal")))
+void ArtiqBackend::Data::finalize(py::ptr<SeqCompiler> comp)
+{
+    if (comp->basic_cseqs.size() != 1 && !support_branch)
+        py_throw_format(PyExc_ValueError,
+                        "Artiq backend not initialized for branch support");
+    channels.collect_channels(prefix, sys, comp->seq, device_delay);
+    if (support_branch) {
+        assert(all_outputs.size() == 0);
+        auto new_rtios = [&] () -> py::ref<> {
+            if (use_dma)
+                return py::new_bytearray();
+            npy_intp sz = 0;
+            return py::ref(PyArray_SimpleNew(1, &sz, NPY_INT32));
+        };
+        for (auto &cbseq: comp->basic_cseqs) {
+            all_outputs.append(Output::alloc(cbseq.bseq_id, new_rtios(),
+                                             cbseq.may_term, cbseq.next_bseq));
+        }
+    }
+
+    Indexers idr;
+    for (auto [cbseq_id, output]: py::list_iter(all_outputs))
+        process_bseq(comp, comp->basic_cseqs[cbseq_id], output, idr);
+
+    bool_values = std::move(idr.bool_values.values);
+    float_values = std::move(idr.float_values.values);
 }
 
 static inline int64_t convert_device_delay(double fdelay)
@@ -718,33 +831,12 @@ static inline int64_t convert_device_delay(double fdelay)
 }
 
 __attribute__((visibility("internal")))
-void ArtiqBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned age)
+void ArtiqBackend::Data::generate_bseq(py::ptr<SeqCompiler> comp,
+                                       CompiledBasicSeq &cbseq, py::ptr<Output> output)
 {
-    bb_debug("artiq_runtime_finalize: start\n");
-    for (size_t i = 0, nreloc = bool_values.size(); i < nreloc; i++) {
-        auto &[rtval, val] = bool_values[i];
-        val = !rtval::rtval_cache(rtval).is_zero();
-    }
-    for (size_t i = 0, nreloc = float_values.size(); i < nreloc; i++) {
-        auto &[rtval, val] = float_values[i];
-        val = rtval::rtval_cache(rtval).get<double>();
-    }
-    int64_t max_delay = 0;
-    auto relocate_delay = [&] (int64_t &delay, rtval_ptr rt_delay) {
-        if (!rt_delay)
-            return;
-        rtval::rt_eval_throw(rt_delay, age);
-        delay = convert_device_delay(rtval::rtval_cache(rt_delay).get<double>());
-    };
-    for (auto &ttlchn: channels.ttlchns) {
-        relocate_delay(ttlchn.delay, ttlchn.rt_delay);
-        max_delay = std::max(max_delay, ttlchn.delay);
-    }
-    for (auto &ddschn: channels.ddschns) {
-        relocate_delay(ddschn.delay, ddschn.rt_delay);
-        max_delay = std::max(max_delay, ddschn.delay);
-    }
-    auto &time_values = comp->seq->seqinfo->time_mgr->time_values;
+    int bseq_id = output->bseq_id;
+    py::ptr bseq = comp->seq->basic_seqs.get<seq::BasicSeq>(bseq_id);
+    auto &time_values = bseq->seqinfo->time_mgr->time_values;
 
     auto reloc_action = [this, &time_values] (const ArtiqAction &action) {
         auto reloc = relocations[action.reloc_id];
@@ -767,18 +859,8 @@ void ArtiqBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned ag
         }
         if (reloc.val_idx != -1) {
             if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
-                double v = float_values[reloc.val_idx].second;
-                if (type == DDSFreq) {
-                    auto &ddschn = channels.ddschns[chn_idx];
-                    action.value = dds_freq_to_mu(v, ddschn.ftw_per_hz);
-                }
-                else if (type == DDSAmp) {
-                    action.value = dds_amp_to_mu(v);
-                }
-                else {
-                    assert(type == DDSPhase);
-                    action.value = dds_phase_to_mu(v);
-                }
+                action.value = channels.dds_to_mu(type, chn_idx,
+                                                  float_values[reloc.val_idx].second);
             }
             else {
                 action.value = bool_values[reloc.val_idx].second;
@@ -786,18 +868,16 @@ void ArtiqBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned ag
         }
     };
 
-    bool eval_status = !this->eval_status;
-    this->eval_status = eval_status;
-
-    if (all_actions.size() == 1) {
-        auto &a = all_actions[0];
+    auto &artiq_actions = output->actions;
+    if (artiq_actions.size() == 1) {
+        auto &a = artiq_actions[0];
         if (a.reloc_id >= 0) {
             a.eval_status = eval_status;
             reloc_action(a);
         }
     }
     else {
-        std::ranges::sort(all_actions, [&] (const auto &a1, const auto &a2) {
+        std::ranges::sort(artiq_actions, [&] (const auto &a1, const auto &a2) {
             if (a1.reloc_id >= 0 && a1.eval_status != eval_status) {
                 a1.eval_status = eval_status;
                 reloc_action(a1);
@@ -903,8 +983,33 @@ void ArtiqBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned ag
         ttlchn.reset(start_mu);
     for (auto &ddschn: channels.ddschns)
         ddschn.reset();
+    for (const auto &start_value: output->start_values) {
+        switch (start_value.type) {
+        case DDSFreq:
+        case DDSAmp:
+        case DDSPhase: {
+            auto value = start_value.val_id == -1 ? start_value.value :
+                channels.dds_to_mu(start_value.type, start_value.chn_idx,
+                                   float_values[start_value.val_id].second);
+            auto &ddschn = channels.ddschns[start_value.chn_idx];
+            ddschn.had_output = true;
+            update_dds_data(ddschn.data1, ddschn.data2, start_value.type, value);
+            break;
+        }
+        case TTLOut:
+        case CounterEnable: {
+            auto &ttlchn = channels.ttlchns[start_value.chn_idx];
+            auto value = ttlchn.ttl_to_mu(start_value.val_id == -1 ?
+                                          bool(start_value.value) :
+                                          bool_values[start_value.val_id].second);
+            ttlchn.cur_val = value;
+            ttlchn.new_val = value;
+            break;
+        }
+        }
+    }
 
-    for (auto &artiq_action: all_actions) {
+    for (auto &artiq_action: artiq_actions) {
         // All disabled actions should be at the end.
         if (!artiq_action.cond)
             break;
@@ -922,13 +1027,13 @@ void ArtiqBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned ag
         case DDSPhase: {
             auto &ddschn = channels.ddschns[artiq_action.chn_idx];
             channels.urukul_busses[ddschn.bus_id].add_output(add_action,
-                                                                 artiq_action, ddschn);
+                                                             artiq_action, ddschn);
             break;
         }
         case TTLOut:
         case CounterEnable:
             channels.ttlchns[artiq_action.chn_idx].add_output(add_action,
-                                                                  artiq_action);
+                                                              artiq_action);
             break;
         }
     }
@@ -939,18 +1044,17 @@ void ArtiqBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned ag
     for (auto &bus: channels.urukul_busses)
         bus.flush_output(add_action, 0, true);
 
-
     std::ranges::stable_sort(rtio_actions, [] (auto &a1, auto &a2) {
         return a1.time_mu < a2.time_mu;
     });
 
-    auto total_time_mu = seq_time_to_mu(comp->basic_cseqs[0].total_time + max_delay);
+    auto total_time_mu = seq_time_to_mu(cbseq.total_time + max_delay);
     if (use_dma) {
         auto nactions = rtio_actions.size();
         // Note that the size calculated below is at least `nactions * 17 + 1`
         // which is what we need.
         auto alloc_size = (nactions * 17 / 64 + 1) * 64;
-        py::bytearray ba = rtio_array;
+        py::bytearray ba = output->rtios;
         ba.resize(alloc_size);
         auto output_ptr = (uint8_t*)ba.data();
         for (size_t i = 0; i < nactions; i++) {
@@ -982,15 +1086,15 @@ void ArtiqBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned ag
         memset(&output_ptr[nactions * 17], 0, alloc_size - nactions * 17);
     }
     else {
-        auto _rtio_array = (PyArrayObject*)rtio_array;
+        auto rtio_array = (PyArrayObject*)output->rtios;
 
-        npy_intp rtio_alloc = (npy_intp)PyArray_SIZE(_rtio_array);
+        npy_intp rtio_alloc = (npy_intp)PyArray_SIZE(rtio_array);
         PyArray_Dims pydims{&rtio_alloc, 1};
         npy_intp rtio_len = 0;
-        uint32_t *rtio_array_data = (uint32_t*)PyArray_DATA(_rtio_array);
+        uint32_t *rtio_array_data = (uint32_t*)PyArray_DATA(rtio_array);
         auto resize_rtio = [&] (npy_intp sz) {
             rtio_alloc = sz;
-            throw_if_not(PyArray_Resize(_rtio_array, &pydims, 0, NPY_CORDER));
+            throw_if_not(PyArray_Resize(rtio_array, &pydims, 0, NPY_CORDER));
         };
 
         auto alloc_space = [&] (int n) -> uint32_t* {
@@ -998,7 +1102,7 @@ void ArtiqBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned ag
             auto new_len = old_len + n;
             if (new_len > rtio_alloc) {
                 resize_rtio(new_len * 2 + 2);
-                rtio_array_data = (uint32_t*)PyArray_DATA(_rtio_array);
+                rtio_array_data = (uint32_t*)PyArray_DATA(rtio_array);
             }
             rtio_len = new_len;
             return &rtio_array_data[old_len];
@@ -1035,7 +1139,37 @@ void ArtiqBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned ag
         }
         resize_rtio(rtio_len);
     }
-    this->total_time_mu = total_time_mu - start_mu;
+    output->total_time_mu = total_time_mu - start_mu;
+}
+
+__attribute__((visibility("internal")))
+void ArtiqBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned age)
+{
+    bb_debug("artiq_runtime_finalize: start\n");
+    for (size_t i = 0, nreloc = bool_values.size(); i < nreloc; i++) {
+        auto &[rtval, val] = bool_values[i];
+        val = !rtval::rtval_cache(rtval).is_zero();
+    }
+    for (size_t i = 0, nreloc = float_values.size(); i < nreloc; i++) {
+        auto &[rtval, val] = float_values[i];
+        val = rtval::rtval_cache(rtval).get<double>();
+    }
+    max_delay = 0;
+    auto relocate_delay = [&] (int64_t &delay, rtval_ptr rt_delay) {
+        if (!rt_delay)
+            return;
+        rtval::rt_eval_throw(rt_delay, age);
+        delay = convert_device_delay(rtval::rtval_cache(rt_delay).get<double>());
+        max_delay = std::max(max_delay, delay);
+    };
+    for (auto &ttlchn: channels.ttlchns)
+        relocate_delay(ttlchn.delay, ttlchn.rt_delay);
+    for (auto &ddschn: channels.ddschns)
+        relocate_delay(ddschn.delay, ddschn.rt_delay);
+
+    eval_status = !eval_status;
+    for (auto [cbseq_id, output]: py::list_iter<Output>(all_outputs))
+        generate_bseq(comp, comp->basic_cseqs[cbseq_id], output);
 
     bb_debug("artiq_runtime_finalize: finish\n");
 }
@@ -1083,15 +1217,21 @@ PyTypeObject ArtiqBackend::Type = {
         }>>),
     .tp_getset = (py::getset_table<
                   py::getset_def<"total_time_mu",[] (py::ptr<ArtiqBackend> self) {
-                      return to_py(self->data()->total_time_mu);
+                      auto d = self->data();
+                      if (d->all_outputs.size() == 0)
+                          return to_py(0);
+                      return to_py(d->all_outputs.get<Output>(0)->total_time_mu);
+                  }>,
+                  py::getset_def<"output",[] (py::ptr<ArtiqBackend> self) {
+                      return self->data()->all_outputs.ref();
                   }>>),
     .tp_base = &BackendBase::Type,
     .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
-        py::check_num_arg("ArtiqBackend.__init__", nargs, 2, 2);
+        py::check_num_arg("ArtiqBackend.__init__", nargs, 1, 2);
         auto [output_format] =
             py::parse_pos_or_kw_args<"output_format">("ArtiqBackend.__init__",
-                                                      args + 2, 0, kwnames);
+                                                      args + nargs, 0, kwnames);
         bool use_dma = false;
         if (output_format) {
             auto fmt_str = py::arg_cast<py::str>(output_format, "output_format");
@@ -1103,20 +1243,30 @@ PyTypeObject ArtiqBackend::Type = {
                                 output_format);
             }
         }
-        if (use_dma) {
-            py::arg_cast<py::bytearray>(args[1], "rtio_array");
+        bool support_branch = false;
+        auto all_outputs = py::new_list(0);
+        if (nargs >= 2) {
+            py::ptr rtios;
+            if (use_dma) {
+                rtios = py::arg_cast<py::bytearray>(args[1], "rtio_array");
+            }
+            else {
+                if (!PyArray_Check(args[1]))
+                    py_throw_format(PyExc_TypeError, "Unexpected type '%S' for rtio_array",
+                                    Py_TYPE(args[1]));
+                auto array = (PyArrayObject*)args[1];
+                if (PyArray_NDIM(array) != 1)
+                    py_throw_format(PyExc_ValueError, "RTIO output must be a 1D array");
+                if (PyArray_TYPE(array) != NPY_INT32)
+                    py_throw_format(PyExc_TypeError, "RTIO output must be a int32 array");
+                rtios = array;
+            }
+            all_outputs.append(Output::alloc(0, rtios.ref(), true, {}));
         }
         else {
-            if (!PyArray_Check(args[1]))
-                py_throw_format(PyExc_TypeError, "Unexpected type '%S' for rtio_array",
-                                Py_TYPE(args[1]));
-            auto rtio_array = (PyArrayObject*)args[1];
-            if (PyArray_NDIM(rtio_array) != 1)
-                py_throw_format(PyExc_ValueError, "RTIO output must be a 1D array");
-            if (PyArray_TYPE(rtio_array) != NPY_INT32)
-                py_throw_format(PyExc_TypeError, "RTIO output must be a int32 array");
+            support_branch = true;
         }
-        return alloc(args[0], args[1], use_dma);
+        return alloc(args[0], std::move(all_outputs), use_dma, support_branch);
     }>
 };
 
@@ -1124,6 +1274,7 @@ __attribute__((visibility("hidden")))
 void init()
 {
     _import_array();
+    throw_if(PyType_Ready(&ArtiqBackend::Output::Type) < 0);
     throw_if(PyType_Ready(&ArtiqBackend::Type) < 0);
 }
 

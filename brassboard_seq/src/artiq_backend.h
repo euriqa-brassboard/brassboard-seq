@@ -58,6 +58,13 @@ struct ArtiqAction {
     mutable int64_t time_mu;
 };
 
+struct StartValue {
+    ChannelType type: 4;
+    int chn_idx: 28;
+    mutable uint32_t value;
+    int val_id;
+};
+
 struct DDSChannel {
     double ftw_per_hz;
     uint32_t bus_id;
@@ -144,6 +151,7 @@ struct TTLChannel {
         cur_val = uint8_t(-1);
         new_val = uint8_t(-1);
     }
+    uint8_t ttl_to_mu(bool) const;
     void flush_output(auto &add_action, int64_t cur_time_mu,
                       bool exact_time_only, bool force);
     void add_output(auto &add_action, const ArtiqAction &action);
@@ -174,13 +182,14 @@ struct ChannelsInfo {
     ChannelsInfo(const ChannelsInfo&) = delete;
     ChannelsInfo(ChannelsInfo&&) = delete;
 
-    inline int find_bus_id(int bus_channel)
+    int find_bus_id(int bus_channel) const
     {
         auto it = bus_chn_map.find(bus_channel);
         if (it == bus_chn_map.end())
             return -1;
         return it->second;
     }
+    uint32_t dds_to_mu(ChannelType type, int dds_idx, double v) const;
     void collect_channels(py::str prefix, py::ptr<> sys, py::ptr<seq::Seq> seq,
                           py::dict device_delay);
     void add_channel(py::ptr<> dev, int64_t delay, rtval_ptr rt_delay,
@@ -234,47 +243,40 @@ static inline int64_t seq_time_to_mu(int64_t time)
     return (time + 1000 * coarse_time_mu / 2) / (1000 * coarse_time_mu) * coarse_time_mu;
 }
 
-static inline uint32_t dds_amp_to_mu(double amp)
-{
-    auto v = int(amp * 0x3fff + 0.5);
-    if (v < 0)
-        return 0;
-    if (v > 0x3fff)
-        return 0x3fff;
-    return v;
-}
-
-static inline uint32_t dds_phase_to_mu(double phase)
-{
-    return uint32_t(round<int32_t>(phase * 0x10000) & 0xffff);
-}
-
-static inline uint32_t dds_freq_to_mu(double freq, double ftw_per_hz)
-{
-    return uint32_t(freq * ftw_per_hz + 0.5);
-}
-
 struct ArtiqBackend : BackendBase::Base<ArtiqBackend> {
+    struct Output : PyObject {
+        int bseq_id;
+        bool may_term;
+        std::vector<int> next_cbseq;
+        std::vector<ArtiqAction> actions;
+        std::vector<StartValue> start_values;
+        py::ref<> rtios;
+        int64_t total_time_mu;
+
+        static py::ref<Output> alloc(int bseq_id, py::ref<> rtios, bool may_term,
+                                     std::vector<int> next_cbseq);
+        static PyTypeObject Type;
+    };
     struct Data final : BackendBase::Data {
         // Artiq system object
         py::ref<> sys;
 
         ChannelsInfo channels;
-        std::vector<ArtiqAction> all_actions;
         std::vector<std::pair<void*,bool>> bool_values;
         std::vector<std::pair<void*,double>> float_values;
+        std::vector<RTIOAction> rtio_actions;
         std::vector<Relocation> relocations;
         bool eval_status{false};
         bool use_dma;
-        int64_t total_time_mu;
-        std::vector<RTIOAction> rtio_actions;
+        bool support_branch;
+        int64_t max_delay;
         TimeChecker time_checker;
-        py::ref<> rtio_array;
+        py::list_ref all_outputs;
 
         std::vector<StartTrigger> start_triggers;
         py::dict_ref device_delay{py::new_dict()};
 
-        Data(py::ptr<> sys, py::ptr<> rtio_array, bool use_dma);
+        Data(py::ptr<> sys, py::ref<> all_outputs, bool use_dma, bool support_branch);
 
         void finalize(py::ptr<SeqCompiler>) override;
         void runtime_finalize(py::ptr<SeqCompiler>, unsigned) override;
@@ -290,9 +292,14 @@ struct ArtiqBackend : BackendBase::Base<ArtiqBackend> {
         }
         void add_start_trigger(py::ptr<> name, py::ptr<> time,
                                py::ptr<> min_time, py::ptr<> raising_edge);
+    private:
+        struct Indexers;
+        void process_bseq(py::ptr<SeqCompiler>, CompiledBasicSeq&,
+                          py::ptr<Output>, Indexers&);
+        void generate_bseq(py::ptr<SeqCompiler>, CompiledBasicSeq&, py::ptr<Output>);
     };
 
-    using fields = field_pack<BackendBase::fields,&Data::sys,&Data::rtio_array,
+    using fields = field_pack<BackendBase::fields,&Data::sys,&Data::all_outputs,
                               &Data::device_delay>;
     static PyTypeObject Type;
 };

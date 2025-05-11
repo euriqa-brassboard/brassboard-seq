@@ -68,7 +68,7 @@ class Compiler(backend.SeqCompiler):
                     else:
                         assert cond
 
-                    event_time = test_utils.seq_get_event_time(s, rfsoc_action.tid)
+                    event_time = test_utils.seq_get_event_time(s, rfsoc_action.tid, 0)
                     static_time = test_utils.event_time_get_static(event_time)
                     if time_idx >= 0:
                         assert static_time == -1
