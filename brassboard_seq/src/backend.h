@@ -74,7 +74,7 @@ struct SeqCompiler : PyObject {
     static PyTypeObject Type;
 };
 
-struct Backend : py::VBase<Backend> {
+struct BackendBase : py::VBase<BackendBase> {
 private:
     template<typename T> static constexpr auto _traverse =
         py::tp_traverse<[] (py::ptr<T> self, auto &visitor) {
@@ -89,27 +89,17 @@ public:
         virtual void runtime_finalize(py::ptr<SeqCompiler>, unsigned) {}
     };
     template<typename T>
-    struct Base : py::VBase<Backend>::Base<T> {
+    struct Base : py::VBase<BackendBase>::Base<T> {
     protected:
         template<typename=void> static constexpr auto traverse = _traverse<T>;
         template<typename=void> static constexpr auto clear = _clear<T>;
     };
-    void finalize(py::ptr<SeqCompiler> comp)
-    {
-        data()->finalize(comp);
-    }
-    void runtime_finalize(py::ptr<SeqCompiler> comp, unsigned age)
-    {
-        data()->runtime_finalize(comp, age);
-    }
-    ~Backend()
-    {
-        data()->Data::~Data();
-    }
 
     using fields = field_pack<Data>;
     static PyTypeObject Type;
 };
+
+extern PyTypeObject &Backend_Type;
 
 void init();
 

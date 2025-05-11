@@ -634,7 +634,7 @@ __attribute__((visibility("protected")))
 PyTypeObject RFSOCBackend::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rfsoc_backend.RFSOCBackend",
-    .tp_basicsize = sizeof(Backend) + sizeof(RFSOCBackend::Data),
+    .tp_basicsize = sizeof(BackendBase) + sizeof(RFSOCBackend::Data),
     .tp_dealloc = py::tp_cxx_dealloc<true,RFSOCBackend>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = traverse<>,
@@ -664,7 +664,7 @@ PyTypeObject RFSOCBackend::Type = {
                   py::getset_def<"has_output",[] (py::ptr<RFSOCBackend> self) {
                       return py::new_bool(self->data()->channels.channels.size() != 0);
                   }>>),
-    .tp_base = &Backend::Type,
+    .tp_base = &BackendBase::Type,
     .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg("RFSOCBackend.__init__", nargs, 1, 1);

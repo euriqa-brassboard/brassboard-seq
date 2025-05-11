@@ -254,8 +254,8 @@ static inline uint32_t dds_freq_to_mu(double freq, double ftw_per_hz)
     return uint32_t(freq * ftw_per_hz + 0.5);
 }
 
-struct ArtiqBackend : Backend::Base<ArtiqBackend> {
-    struct Data final : Backend::Data {
+struct ArtiqBackend : BackendBase::Base<ArtiqBackend> {
+    struct Data final : BackendBase::Data {
         // Artiq system object
         py::ref<> sys;
 
@@ -292,7 +292,7 @@ struct ArtiqBackend : Backend::Base<ArtiqBackend> {
                                py::ptr<> min_time, py::ptr<> raising_edge);
     };
 
-    using fields = field_pack<Backend::fields,&Data::sys,&Data::rtio_array,
+    using fields = field_pack<BackendBase::fields,&Data::sys,&Data::rtio_array,
                               &Data::device_delay>;
     static PyTypeObject Type;
 };

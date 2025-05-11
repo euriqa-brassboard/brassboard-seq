@@ -29,6 +29,6 @@ static PyModuleDef backend_module = {
 
 PY_MODINIT(backend, backend_module)
 {
-    m.add_type(&backend::Backend::Type);
+    m.add_type(&backend::Backend_Type);
     m.add_type(&backend::SeqCompiler::Type);
 }

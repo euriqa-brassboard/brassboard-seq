@@ -85,8 +85,8 @@ struct ChannelsInfo {
     void ensure_unused_tones(bool all);
 };
 
-struct RFSOCBackend : Backend::Base<RFSOCBackend> {
-    struct Data final : Backend::Data {
+struct RFSOCBackend : BackendBase::Base<RFSOCBackend> {
+    struct Data final : BackendBase::Data {
         py::ref<RFSOCGenerator> generator;
         ChannelsInfo channels;
         std::vector<std::pair<void*,bool>> bool_values;
@@ -108,7 +108,7 @@ struct RFSOCBackend : Backend::Base<RFSOCBackend> {
         void set_dds_delay(int dds, double delay);
     };
 
-    using fields = field_pack<Backend::fields,&Data::generator,&Data::rt_dds_delay>;
+    using fields = field_pack<BackendBase::fields,&Data::generator,&Data::rt_dds_delay>;
     static PyTypeObject Type;
 };
 

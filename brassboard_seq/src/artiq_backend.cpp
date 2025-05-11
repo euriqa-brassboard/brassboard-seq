@@ -1060,7 +1060,7 @@ __attribute__((visibility("protected")))
 PyTypeObject ArtiqBackend::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.artiq_backend.ArtiqBackend",
-    .tp_basicsize = sizeof(Backend) + sizeof(ArtiqBackend::Data),
+    .tp_basicsize = sizeof(BackendBase) + sizeof(ArtiqBackend::Data),
     .tp_dealloc = py::tp_cxx_dealloc<true,ArtiqBackend>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = traverse<>,
@@ -1088,7 +1088,7 @@ PyTypeObject ArtiqBackend::Type = {
                   py::getset_def<"total_time_mu",[] (py::ptr<ArtiqBackend> self) {
                       return py::new_int(self->data()->total_time_mu);
                   }>>),
-    .tp_base = &Backend::Type,
+    .tp_base = &BackendBase::Type,
     .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
         py::check_num_arg("ArtiqBackend.__init__", nargs, 2, 2);

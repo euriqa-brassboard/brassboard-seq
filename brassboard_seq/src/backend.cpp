@@ -289,8 +289,8 @@ inline void SeqCompiler::finalize()
     seqinfo->channel_name_map.take(py::new_none()); // Free up memory
     initialize();
     populate_values();
-    for (auto [name, backend]: py::dict_iter<Backend>(backends)) {
-        backend->finalize(this);
+    for (auto [name, backend]: py::dict_iter<BackendBase>(backends)) {
+        backend->data()->finalize(this);
     }
 }
 
@@ -392,26 +392,16 @@ inline void SeqCompiler::runtime_finalize(py::ptr<> _age)
         }
     }
     eval_chn_actions(age);
-    for (auto [name, backend]: py::dict_iter<Backend>(backends)) {
-        backend->runtime_finalize(this, age);
+    for (auto [name, backend]: py::dict_iter<BackendBase>(backends)) {
+        backend->data()->runtime_finalize(this, age);
     }
 }
 
-__attribute__((visibility("protected")))
-PyTypeObject Backend::Type = {
+PyTypeObject BackendBase::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
-    .tp_name = "brassboard_seq.backend.Backend",
-    .tp_basicsize = sizeof(Backend) + sizeof(Backend::Data),
-    .tp_dealloc = py::tp_cxx_dealloc<false,Backend>,
-    .tp_flags = Py_TPFLAGS_DEFAULT,
-    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
-                                        ssize_t nargs, py::tuple kwnames) {
-        py::check_num_arg("Backend.__init__", nargs, 0, 0);
-        py::check_no_kwnames("Backend.__init__", kwnames);
-        auto self = py::generic_alloc<Backend>();
-        call_constructor(self->data());
-        return self;
-    }>
+    .tp_name = "brassboard_seq.backend.BackendBase",
+    .tp_basicsize = sizeof(BackendBase) + sizeof(BackendBase::Data),
+    .tp_flags = Py_TPFLAGS_DEFAULT
 };
 
 __attribute__((visibility("protected")))
@@ -429,7 +419,7 @@ PyTypeObject SeqCompiler::Type = {
                                         Py_ssize_t nargs) {
             py::check_num_arg("SeqCompiler.add_backend", nargs, 2, 2);
             auto name = py::arg_cast<py::str>(args[0], "name");
-            auto backend = py::arg_cast<Backend>(args[1], "backend");
+            auto backend = py::arg_cast<BackendBase>(args[1], "backend");
             if (self->backends.contains(name))
                 py_throw_format(PyExc_ValueError, "Backend %U already exist", name);
             self->backends.set(name, backend);
@@ -458,9 +448,35 @@ PyTypeObject SeqCompiler::Type = {
     }>,
 };
 
+namespace {
+struct Backend : BackendBase::Base<Backend> {
+    struct Data final : BackendBase::Data {};
+    static PyTypeObject Type;
+};
+PyTypeObject Backend::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.backend.Backend",
+    .tp_basicsize = sizeof(BackendBase) + sizeof(Backend::Data),
+    .tp_dealloc = py::tp_cxx_dealloc<false,Backend>,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_base = &BackendBase::Type,
+    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
+                                        ssize_t nargs, py::tuple kwnames) {
+        py::check_num_arg("Backend.__init__", nargs, 0, 0);
+        py::check_no_kwnames("Backend.__init__", kwnames);
+        auto self = py::generic_alloc<Backend>();
+        call_constructor(self->data());
+        return self;
+    }>
+};
+} // (anonymous)
+
+PyTypeObject &Backend_Type = Backend::Type;
+
 __attribute__((visibility("hidden")))
 void init()
 {
+    throw_if(PyType_Ready(&BackendBase::Type) < 0);
     throw_if(PyType_Ready(&Backend::Type) < 0);
     throw_if(PyType_Ready(&SeqCompiler::Type) < 0);
 }
