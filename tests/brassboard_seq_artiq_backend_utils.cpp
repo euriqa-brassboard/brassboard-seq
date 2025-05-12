@@ -23,8 +23,8 @@ using namespace brassboard_seq;
 using namespace brassboard_seq::artiq_backend;
 
 template<>
-struct py_convert<UrukulBus> {
-    static auto convert(const UrukulBus &bus)
+struct py::converter<UrukulBus> {
+    static auto py(const UrukulBus &bus)
     {
         auto self = new_object<"UrukulBus">();
         self.set_attr("channel", to_py(bus.channel));
@@ -37,8 +37,8 @@ struct py_convert<UrukulBus> {
 };
 
 template<>
-struct py_convert<DDSChannel> {
-    static auto convert(const DDSChannel &dds)
+struct py::converter<DDSChannel> {
+    static auto py(const DDSChannel &dds)
     {
         auto self = new_object<"DDSChannel">();
         self.set_attr("ftw_per_hz", to_py(dds.ftw_per_hz));
@@ -50,8 +50,8 @@ struct py_convert<DDSChannel> {
 };
 
 template<>
-struct py_convert<TTLChannel> {
-    static auto convert(const TTLChannel &ttl)
+struct py::converter<TTLChannel> {
+    static auto py(const TTLChannel &ttl)
     {
         auto self = new_object<"TTLChannel">();
         self.set_attr("target", to_py(ttl.target));
@@ -62,8 +62,8 @@ struct py_convert<TTLChannel> {
 };
 
 template<>
-struct py_convert<ChannelType> {
-    static auto convert(ChannelType type)
+struct py::converter<ChannelType> {
+    static auto py(ChannelType type)
     {
         switch (type) {
         default:
@@ -77,8 +77,8 @@ struct py_convert<ChannelType> {
 };
 
 template<>
-struct py_convert<ChannelsInfo> {
-    static auto convert(const ChannelsInfo &info)
+struct py::converter<ChannelsInfo> {
+    static auto py(const ChannelsInfo &info)
     {
         auto self = new_object<"ChannelsInfo">();
         self.set_attr("urukul_busses", to_py(info.urukul_busses));
@@ -92,8 +92,8 @@ struct py_convert<ChannelsInfo> {
 };
 
 template<>
-struct py_convert<ArtiqAction> {
-    static auto convert(const ArtiqAction &action)
+struct py::converter<ArtiqAction> {
+    static auto py(const ArtiqAction &action)
     {
         auto self = new_object<"ArtiqAction">();
         self.set_attr("type", to_py(action.type));
@@ -110,8 +110,8 @@ struct py_convert<ArtiqAction> {
 };
 
 template<>
-struct py_convert<Relocation> {
-    static auto convert(const Relocation &reloc)
+struct py::converter<Relocation> {
+    static auto py(const Relocation &reloc)
     {
         auto self = new_object<"Relocation">();
         self.set_attr("cond_idx", to_py(reloc.cond_idx));
@@ -122,8 +122,8 @@ struct py_convert<Relocation> {
 };
 
 template<>
-struct py_convert<StartTrigger> {
-    static auto convert(const StartTrigger &trig)
+struct py::converter<StartTrigger> {
+    static auto py(const StartTrigger &trig)
     {
         auto self = new_object<"StartTrigger">();
         self.set_attr("target", to_py(trig.target));

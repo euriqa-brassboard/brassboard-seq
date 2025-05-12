@@ -158,7 +158,7 @@ struct RampFunction : RampFunctionBase::Base<RampFunction> {
                 interp_func->set_value(fvalue, args);
             }
             else if (!fvalue.typeis<py::float_>()) {
-                fvalue = py::new_float(fvalue.as_float());
+                fvalue = to_py(fvalue.as_float());
             }
         }
 
@@ -174,8 +174,7 @@ struct RampFunction : RampFunctionBase::Base<RampFunction> {
             }
             if (!_spline_segments)
                 return py::new_none();
-            return _spline_segments(py_self(), py::new_float(length),
-                                    py::new_float(oldval));
+            return _spline_segments(py_self(), to_py(length), to_py(oldval));
         }
         void set_runtime_params(unsigned age) override
         {

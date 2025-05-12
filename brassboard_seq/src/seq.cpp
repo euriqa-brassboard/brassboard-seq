@@ -216,13 +216,9 @@ static py::ref<TimeSeq> add_step_real(py::ptr<CondSeq> self, PyObject *const *ar
 
     auto tuple_nargs = nargs - nargs_min;
     auto get_args_tuple = [&] {
-        if (tuple_nargs == 0)
-            return py::new_tuple();
-        auto res = py::new_tuple(tuple_nargs);
-        auto *tuple_args = args + nargs_min;
-        for (auto i = 0; i < tuple_nargs; i++)
-            res.SET(i, py::ptr(tuple_args[i]));
-        return res;
+        return py::new_ntuple(tuple_nargs, [&] (int i) {
+            return py::ptr(args[nargs_min + i]);
+        });
     };
 
     py::ref<TimeSeq> res;
@@ -267,7 +263,7 @@ inline int SeqInfo::get_channel_id(py::str name)
     }
     int cid = channel_paths.size();
     channel_paths.append(path);
-    auto pycid = py::new_int(cid);
+    auto pycid = to_py(cid);
     channel_path_map.set(path, pycid);
     channel_name_map.set(name, pycid);
     return cid;
@@ -308,7 +304,7 @@ PyTypeObject TimeSeq::Type = {
     .tp_methods = (
         py::meth_table<
         py::meth_o<"get_channel_id",[] (py::ptr<TimeSeq> self, py::ptr<> name) {
-            return py::new_int(self->seqinfo->get_channel_id(name));
+            return to_py(self->seqinfo->get_channel_id(name));
         }>,
         py::meth_fastkw<"set_time",[] (py::ptr<TimeSeq> self, PyObject *const *args,
                                        Py_ssize_t nargs, PyObject *kwnames) {

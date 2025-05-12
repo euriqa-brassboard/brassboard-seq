@@ -27,7 +27,7 @@ namespace brassboard_seq::event_time {
 
 PyMethodDef methods[] = {
     py::meth_noargs<"time_scale",[] (auto) {
-        static auto val = py::new_int(time_scale).rel();
+        static auto val = to_py(time_scale).rel();
         return py::newref(val);
     }>, {}};
 

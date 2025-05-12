@@ -135,7 +135,7 @@ static inline py::ref<> _rt_dataset(py::ptr<> self, PyObject *const *args,
     if (_vals.is_none())
         return _call_with_opt(cb, key, def_val);
     auto vals = py::arg_cast<py::dict>(_vals, "_bb_rt_values");
-    auto _key = py::new_tuple(key, py::new_bool(sys));
+    auto _key = py::new_tuple(key, to_py(sys));
     auto res = vals.try_get(_key);
     if (res)
         return rtval::new_extern(std::move(res), &PyFloat_Type);

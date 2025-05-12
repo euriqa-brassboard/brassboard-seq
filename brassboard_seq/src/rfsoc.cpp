@@ -790,9 +790,9 @@ struct DictConverter {
         auto py_starts = py::new_list(cnt);
         auto py_ends = py::new_list(cnt);
         for (int i = 0; i < cnt; i++) {
-            py_gaddrs.SET(i, py::new_int(gaddrs[i]));
-            py_starts.SET(i, py::new_int(starts[i]));
-            py_ends.SET(i, py::new_int(ends[i]));
+            py_gaddrs.SET(i, to_py(gaddrs[i]));
+            py_starts.SET(i, to_py(starts[i]));
+            py_ends.SET(i, to_py(ends[i]));
         }
         dict.set("gaddrs"_py, py_gaddrs);
         dict.set("starts"_py, py_starts);
@@ -807,8 +807,8 @@ struct DictConverter {
         auto py_saddrs = py::new_list(cnt);
         auto py_paddrs = py::new_list(cnt);
         for (int i = 0; i < cnt; i++) {
-            py_saddrs.SET(i, py::new_int(saddrs[i]));
-            py_paddrs.SET(i, py::new_int(paddrs[i]));
+            py_saddrs.SET(i, to_py(saddrs[i]));
+            py_paddrs.SET(i, to_py(paddrs[i]));
         }
         dict.set("saddrs"_py, py_saddrs);
         dict.set("paddrs"_py, py_paddrs);
@@ -828,7 +828,7 @@ struct DictConverter {
         dict.set("count"_py, py::int_cached(cnt));
         auto py_gaddrs = py::new_list(cnt);
         for (int i = 0; i < cnt; i++)
-            py_gaddrs.SET(i, py::new_int(gaddrs[i]));
+            py_gaddrs.SET(i, to_py(gaddrs[i]));
         dict.set("gaddrs"_py, py_gaddrs);
     }
 
@@ -840,10 +840,10 @@ struct DictConverter {
         pulse_to_dict(tgt, (param == Executor::ParamType::Freq ? "freq"_py :
                             (param == Executor::ParamType::Amp ? "amp"_py :
                              "phase"_py)), chn, tone, cycles, spl);
-        dict.set("trig"_py, py::new_bool(waittrig));
-        dict.set("sync"_py, py::new_bool(sync));
-        dict.set("enable"_py, py::new_bool(enable));
-        dict.set("ff"_py, py::new_bool(fb_enable));
+        dict.set("trig"_py, to_py(waittrig));
+        dict.set("sync"_py, to_py(sync));
+        dict.set("enable"_py, to_py(enable));
+        dict.set("ff"_py, to_py(fb_enable));
     }
     void frame_pulse(int chn, int tone, const PDQSpline &spl, int64_t cycles,
                      bool waittrig, bool apply_eof, bool clr_frame,
@@ -851,9 +851,9 @@ struct DictConverter {
                      Executor::PulseTarget tgt)
     {
         pulse_to_dict(tgt, "frame_rot"_py, chn, tone, cycles, spl);
-        dict.set("trig"_py, py::new_bool(waittrig));
-        dict.set("eof"_py, py::new_bool(apply_eof));
-        dict.set("clr"_py, py::new_bool(clr_frame));
+        dict.set("trig"_py, to_py(waittrig));
+        dict.set("eof"_py, to_py(apply_eof));
+        dict.set("clr"_py, to_py(clr_frame));
         dict.set("fwd"_py, py::int_cached(fwd_frame_mask));
         dict.set("inv"_py, py::int_cached(inv_frame_mask));
     }
@@ -875,20 +875,20 @@ private:
         }
         dict.set("channel"_py, py::int_cached(chn));
         if (tgt.type == Executor::PulseTarget::PLUT)
-            dict.set("paddr"_py, py::new_int(tgt.addr));
+            dict.set("paddr"_py, to_py(tgt.addr));
         dict.set("param"_py, name);
         dict.set("tone"_py, py::int_cached(tone));
-        dict.set("cycles"_py, py::new_int(cycles));
-        dict.set("spline_mu"_py, py::new_list(py::new_int(spl.orders[0]),
-                                              py::new_int(spl.orders[1]),
-                                              py::new_int(spl.orders[2]),
-                                              py::new_int(spl.orders[3])));
+        dict.set("cycles"_py, to_py(cycles));
+        dict.set("spline_mu"_py, py::new_list(to_py(spl.orders[0]),
+                                              to_py(spl.orders[1]),
+                                              to_py(spl.orders[2]),
+                                              to_py(spl.orders[3])));
         dict.set("spline_shift"_py, py::int_cached(spl.shift));
         auto fspl = spl.get_spline(cycles);
-        dict.set("spline"_py, py::new_list(py::new_float(fspl.order0),
-                                           py::new_float(fspl.order1),
-                                           py::new_float(fspl.order2),
-                                           py::new_float(fspl.order3)));
+        dict.set("spline"_py, py::new_list(to_py(fspl.order0),
+                                           to_py(fspl.order1),
+                                           to_py(fspl.order2),
+                                           to_py(fspl.order3)));
     }
 };
 
@@ -1037,7 +1037,7 @@ PyTypeObject PyInst::Type = {
                    }>>),
     .tp_getset = (py::getset_table<
                   py::getset_def<"channel",[] (py::ptr<PyInst> self) {
-                      return py::new_int(get_chn(self->inst)); }>>),
+                      return to_py(get_chn(self->inst)); }>>),
     .tp_base = &PyJaqalInstBase::Type,
     .tp_vectorcall = py::vectorfunc<vectornew<PyInst>>,
 };
@@ -1222,23 +1222,16 @@ PyTypeObject PyChannelGen::Type = {
             return res;
         }>,
         py::meth_noargs<"get_slut",[] (py::ptr<PyChannelGen> self) {
-            auto &slut = self->chn_gen.slut;
-            return py::new_nlist(slut.size(), [&] (int i) {
-                return py::new_int(slut[i]);
-            });
+            return to_py(self->chn_gen.slut);
         }>,
         py::meth_noargs<"get_glut",[] (py::ptr<PyChannelGen> self) {
-            auto &glut = self->chn_gen.glut;
-            return py::new_nlist(glut.size(), [&] (int i) {
-                auto gate = glut[i];
-                return py::new_tuple(py::new_int(gate.first), py::new_int(gate.second));
-            });
+            return to_py(self->chn_gen.glut);
         }>,
         py::meth_noargs<"get_gseq",[] (py::ptr<PyChannelGen> self) {
             auto &gate_ids = self->chn_gen.gate_ids;
             return py::new_nlist(gate_ids.size(), [&] (int i) {
                 auto gate = gate_ids[i];
-                return py::new_tuple(py::new_int(gate.time), py::new_int(gate.id));
+                return py::new_tuple(to_py(gate.time), to_py(gate.id));
             });
         }>>),
     .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const*,
@@ -1725,9 +1718,9 @@ struct DictConverter {
         auto py_starts = py::new_list(cnt);
         auto py_ends = py::new_list(cnt);
         for (int i = 0; i < cnt; i++) {
-            py_gaddrs.SET(i, py::new_int(gaddrs[i]));
-            py_starts.SET(i, py::new_int(starts[i]));
-            py_ends.SET(i, py::new_int(ends[i]));
+            py_gaddrs.SET(i, to_py(gaddrs[i]));
+            py_starts.SET(i, to_py(starts[i]));
+            py_ends.SET(i, to_py(ends[i]));
         }
         dict.set("gaddrs"_py, py_gaddrs);
         dict.set("starts"_py, py_starts);
@@ -1744,8 +1737,8 @@ struct DictConverter {
         auto py_modtypes = py::new_list(cnt);
         auto py_paddrs = py::new_list(cnt);
         for (int i = 0; i < cnt; i++) {
-            py_saddrs.SET(i, py::new_int(saddrs[i]));
-            py_paddrs.SET(i, py::new_int(paddrs[i]));
+            py_saddrs.SET(i, to_py(saddrs[i]));
+            py_paddrs.SET(i, to_py(paddrs[i]));
             py_modtypes.SET(i, mod_type_list(mod_types[i]));
         }
         dict.set("saddrs"_py, py_saddrs);
@@ -1767,7 +1760,7 @@ struct DictConverter {
         dict.set("count"_py, py::int_cached(cnt));
         auto py_gaddrs = py::new_list(cnt);
         for (int i = 0; i < cnt; i++)
-            py_gaddrs.SET(i, py::new_int(gaddrs[i]));
+            py_gaddrs.SET(i, to_py(gaddrs[i]));
         dict.set("gaddrs"_py, py_gaddrs);
     }
 
@@ -1785,17 +1778,15 @@ struct DictConverter {
         }
         bool is_plut = tgt.type == Executor::PulseTarget::PLUT;
         if (is_plut) {
-            dict.set("paddr"_py, py::new_int(tgt.addr));
+            dict.set("paddr"_py, to_py(tgt.addr));
         }
         else {
             dict.set("modtype"_py, mod_type_list(mod_type));
         }
         set_channels(chn_mask);
-        dict.set("cycles"_py, py::new_int(cycles));
-        dict.set("spline_mu"_py, py::new_list(py::new_int(spl.orders[0]),
-                                              py::new_int(spl.orders[1]),
-                                              py::new_int(spl.orders[2]),
-                                              py::new_int(spl.orders[3])));
+        dict.set("cycles"_py, to_py(cycles));
+        dict.set("spline_mu"_py, py::new_list(to_py(spl.orders[0]), to_py(spl.orders[1]),
+                                              to_py(spl.orders[2]), to_py(spl.orders[3])));
         dict.set("spline_shift"_py, py::int_cached(spl.shift));
         bool freq = mod_type & (FRQMOD0_MASK | FRQMOD1_MASK) || is_plut;
         bool amp = mod_type & (AMPMOD0_MASK | AMPMOD1_MASK) || is_plut;
@@ -1806,10 +1797,8 @@ struct DictConverter {
             if (!cond)
                 return;
             auto fspl = cb(spl, cycles);
-            auto py_fspl = py::new_list(py::new_float(fspl.order0),
-                                        py::new_float(fspl.order1),
-                                        py::new_float(fspl.order2),
-                                        py::new_float(fspl.order3));
+            auto py_fspl = py::new_list(to_py(fspl.order0), to_py(fspl.order1),
+                                        to_py(fspl.order2), to_py(fspl.order3));
             if (unprefix_spline)
                 dict.set("spline"_py, py_fspl);
             dict.set(name, py_fspl);
@@ -1817,12 +1806,12 @@ struct DictConverter {
         set_spline("spline_freq"_py, Executor::freq_spline, freq);
         set_spline("spline_amp"_py, Executor::amp_spline, amp);
         set_spline("spline_phase"_py, Executor::phase_spline, phase);
-        dict.set("trig"_py, py::new_bool(meta.trig));
-        dict.set("sync"_py, py::new_bool(meta.sync));
-        dict.set("enable"_py, py::new_bool(meta.en));
-        dict.set("ff"_py, py::new_bool(meta.fb));
-        dict.set("eof"_py, py::new_bool(meta.apply_eof));
-        dict.set("clr"_py, py::new_bool(meta.clr_frame));
+        dict.set("trig"_py, to_py(meta.trig));
+        dict.set("sync"_py, to_py(meta.sync));
+        dict.set("enable"_py, to_py(meta.en));
+        dict.set("ff"_py, to_py(meta.fb));
+        dict.set("eof"_py, to_py(meta.apply_eof));
+        dict.set("clr"_py, to_py(meta.clr_frame));
         dict.set("fwd"_py, py::int_cached(meta.fwd_frame_mask));
         dict.set("inv"_py, py::int_cached(meta.inv_frame_mask));
     }
@@ -1840,7 +1829,7 @@ private:
                 continue;
             if (nchns == 1)
                 dict.set("channel"_py, py::int_cached(chn));
-            chns.SET(chn_added, py::new_int(chn));
+            chns.SET(chn_added, to_py(chn));
             chn_added++;
         }
         assert(nchns == chn_added);
@@ -2042,13 +2031,13 @@ PyTypeObject PyInst::Type = {
                    }>>),
     .tp_getset = (py::getset_table<
                   py::getset_def<"channel_mask",[] (py::ptr<PyInst> self) {
-                      return py::new_int(get_chn_mask(self->inst)); }>,
+                      return to_py(get_chn_mask(self->inst)); }>,
                   py::getset_def<"channels",[] (py::ptr<PyInst> self) {
                       auto res = py::new_list(0);
                       auto chn_mask = get_chn_mask(self->inst);
                       for (int i = 0; i < 8; i++) {
                           if ((chn_mask >> i) & 1) {
-                              res.append(py::new_int(i));
+                              res.append(to_py(i));
                           }
                       }
                       return res;

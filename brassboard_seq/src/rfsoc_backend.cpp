@@ -130,10 +130,10 @@ void RFSOCBackend::Data::set_dds_delay(int dds, double delay)
 {
     if (delay < 0)
         py_throw_format(PyExc_ValueError, "DDS time offset %S cannot be negative.",
-                        py::new_float(delay));
+                        to_py(delay));
     if (delay > 0.1)
         py_throw_format(PyExc_ValueError, "DDS time offset %S cannot be more than 100ms.",
-                        py::new_float(delay));
+                        to_py(delay));
     channels.set_dds_delay(dds, event_time::round_time_f64(delay));
 }
 

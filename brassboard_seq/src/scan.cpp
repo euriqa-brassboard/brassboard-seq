@@ -140,7 +140,7 @@ struct Scan1D : PyObject {
     py::dict_ref dump()
     {
         auto res = py::new_dict();
-        res.set("size"_py, py::new_int(size));
+        res.set("size"_py, to_py(size));
         res.set("params"_py, params);
         return res;
     }
@@ -221,7 +221,7 @@ struct ScanND : PyObject {
     {
         auto res = py::new_dict();
         if (dumpbase)
-            res.set("baseidx"_py, py::new_int(baseidx + 1));
+            res.set("baseidx"_py, to_py(baseidx + 1));
         res.set("params"_py, fixed);
         res.set("vars"_py, py::new_nlist(vars.size(), [&] (int i) {
             return vars.get<Scan1D>(i)->dump();
@@ -407,9 +407,9 @@ static py::ref<> convert_param_value(py::ptr<> obj, bool allow_dict)
     if (PyArray_IsScalar(obj, Bool))
         return py::new_bool(obj.as_bool());
     if (PyArray_IsScalar(obj, Integer))
-        return py::new_int(obj.as_int());
+        return to_py(obj.as_int());
     if (PyArray_IsScalar(obj, Floating))
-        return py::new_float(obj.as_float());
+        return to_py(obj.as_float());
     if (auto list = py::cast<py::list>(obj))
         return py::new_nlist(list.size(), [&] (int i) {
             return convert_param_value(list.get(i), true);
@@ -984,10 +984,10 @@ For sequence running/saving/loading:
             if (!self->new_empty_called && idx == 1 &&
                 self->scans.get<ScanND>(0)->is_default()) {
                 self->new_empty_called = true;
-                return py::new_int(0);
+                return to_py(0);
             }
             self->add_empty();
-            return py::new_int(idx);
+            return to_py(idx);
         }>,
         py::meth_fast<"setbaseidx",[] (py::ptr<ScanGroup> self, PyObject *const *args,
                                        Py_ssize_t nargs) {
@@ -1042,18 +1042,18 @@ For sequence running/saving/loading:
             if (idx < 0 || idx >= nscans)
                 py_throw_format(PyExc_IndexError,
                                 "Scan group index out of bound: %d.", idx);
-            return py::new_int(self->scans.get<ScanND>(idx)->baseidx);
+            return to_py(self->scans.get<ScanND>(idx)->baseidx);
         }>,
         py::meth_noargs<"groupsize",[] (py::ptr<ScanGroup> self) {
-            return py::new_int(self->scans.size());
+            return to_py(self->scans.size());
         }>,
         py::meth_o<"scandim",[] (py::ptr<ScanGroup> self, py::ptr<> _idx) {
             auto idx = py::arg_cast<py::int_>(_idx, "idx").as_int();
-            return py::new_int(self->getfullscan(idx, false)->vars.size());
+            return to_py(self->getfullscan(idx, false)->vars.size());
         }>,
         py::meth_o<"scansize",[] (py::ptr<ScanGroup> self, py::ptr<> _idx) {
             auto idx = py::arg_cast<py::int_>(_idx, "idx").as_int();
-            return py::new_int(self->getfullscan(idx, false)->size());
+            return to_py(self->getfullscan(idx, false)->size());
         }>,
         py::meth_fast<"axisnum",[] (py::ptr<ScanGroup> self, PyObject *const *args,
                                     Py_ssize_t nargs) {
@@ -1073,20 +1073,20 @@ For sequence running/saving/loading:
             auto scan = self->getfullscan(idx, false);
             py::list vars = scan->vars;
             if (dim < 0 || dim >= vars.size())
-                return py::new_int(0);
+                return to_py(0);
             auto var = vars.get<Scan1D>(dim);
             if (var->size == 0)
-                return py::new_int(0);
+                return to_py(0);
             int res = 0;
             foreach_nondict(var->params, [&] (auto) { res += 1; });
-            return py::new_int(res);
+            return to_py(res);
         }>,
         py::meth_noargs<"nseq",[] (py::ptr<ScanGroup> self) {
             int nscans = self->scans.size();
             int res = 0;
             for (int i = 0; i < nscans; i++)
                 res += self->getfullscan(i, false)->size();
-            return py::new_int(res);
+            return to_py(res);
         }>,
         py::meth_o<"getseq",[] (py::ptr<ScanGroup> self, py::ptr<> _n) {
             auto n = py::arg_cast<py::int_>(_n, "n").as_int();
@@ -1154,7 +1154,7 @@ For sequence running/saving/loading:
             if (dim < 0 || dim >= nvars)
                 py_throw_format(PyExc_IndexError, "Scan dimension out of bound: %d.", dim);
             auto var = vars.get<Scan1D>(dim);
-            return py::new_tuple(var->params, py::new_int(var->size));
+            return py::new_tuple(var->params, to_py(var->size));
         }>,
         py::meth_noargs<"dump",[] (py::ptr<ScanGroup> self) {
             auto res = py::new_dict();

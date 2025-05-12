@@ -23,8 +23,8 @@ using namespace brassboard_seq;
 using namespace brassboard_seq::rfsoc_backend;
 
 template<>
-struct py_convert<RFSOCAction> {
-    static auto convert(const RFSOCAction &action)
+struct py::converter<RFSOCAction> {
+    static auto py(const RFSOCAction &action)
     {
         auto self = new_object<"RFSOCAction">();
         self.set_attr("cond", to_py(action.cond));
@@ -44,8 +44,8 @@ struct py_convert<RFSOCAction> {
 };
 
 template<>
-struct py_convert<ToneChannel> {
-    static auto convert(const ToneChannel &tone_chn)
+struct py::converter<ToneChannel> {
+    static auto py(const ToneChannel &tone_chn)
     {
         auto self = new_object<"ToneChannel">();
         self.set_attr("chn", to_py(tone_chn.chn));
@@ -55,16 +55,16 @@ struct py_convert<ToneChannel> {
 };
 
 template<>
-struct py_convert<ToneParam> {
-    static auto convert(ToneParam param)
+struct py::converter<ToneParam> {
+    static auto py(ToneParam param)
     {
         return py::new_str(param_name(param));
     }
 };
 
 template<>
-struct py_convert<ChannelsInfo> {
-    static auto convert(const ChannelsInfo &info)
+struct py::converter<ChannelsInfo> {
+    static auto py(const ChannelsInfo &info)
     {
         auto self = new_object<"ChannelsInfo">();
         self.set_attr("channels", to_py(info.channels));
@@ -75,8 +75,8 @@ struct py_convert<ChannelsInfo> {
 };
 
 template<>
-struct py_convert<Relocation> {
-    static auto convert(const Relocation &reloc)
+struct py::converter<Relocation> {
+    static auto py(const Relocation &reloc)
     {
         auto self = new_object<"Relocation">();
         self.set_attr("cond_idx", to_py(reloc.cond_idx));

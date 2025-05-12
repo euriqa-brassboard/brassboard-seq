@@ -291,7 +291,7 @@ py::ref<> BacktraceTracker::FrameInfo::get_traceback(PyObject *next)
     auto args = py::new_tuple(
         py::ptr(next),
         py::ref<>::checked(PyFrame_New(tstate, code, globals.get(), nullptr)),
-        py::new_int(lasti), py::new_int(lineno));
+        to_py(lasti), to_py(lineno));
     return py::ref<>::checked(traceback_new(&PyTraceBack_Type, args.get(), nullptr));
 }
 

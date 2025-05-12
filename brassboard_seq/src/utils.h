@@ -2299,6 +2299,57 @@ static constexpr auto tp_field_pack_clear = iunifunc<field_pack_clear<T>>;
 template<typename T, auto... fld>
 static constexpr auto tp_field_clear = tp_field_pack_clear<field_pack<T,fld...>>;
 
+} // py
+
+template<typename T> static inline auto to_py(const T &v);
+
+namespace py {
+
+template<typename> struct converter {
+    static inline ptr<> py(bool b)
+    {
+        return b ? Py_True : Py_False;
+    }
+    static inline auto py(std::integral auto i)
+    {
+        return new_int(i);
+    }
+    static inline auto py(std::floating_point auto f)
+    {
+        return new_float(f);
+    }
+    template<typename T1, typename T2>
+    static inline auto py(const std::pair<T1,T2> &p)
+    {
+        return new_tuple(to_py(p.first), to_py(p.second));
+    }
+    template<typename T>
+    static inline auto py(const std::vector<T> &v)
+    {
+        return new_nlist(v.size(), [&] (int i) { return to_py(v[i]); });
+    }
+    template<typename K, typename V>
+    static inline auto py(const std::map<K,V> &m)
+    {
+        auto res = new_dict();
+        for (auto [k, v]: m)
+            res.set(to_py(k), to_py(v));
+        return res;
+    }
+};
+
+template<typename T, size_t N> struct converter<T[N]> {
+    static inline auto py(const auto *v)
+    {
+        return new_nlist(N, [&] (int i) { return to_py(v[i]); });
+    }
+};
+
+} // py
+
+template<typename T> static inline auto to_py(const T &v)
+{
+    return py::converter<std::remove_cvref_t<T>>::py(v);
 }
 
 template<str_literal lit>

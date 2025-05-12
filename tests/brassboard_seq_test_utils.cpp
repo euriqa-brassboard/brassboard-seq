@@ -48,7 +48,7 @@ PyTypeObject IntCollector::Type = {
             int s = 0;
             for (int &i: self->alloc)
                 s += i;
-            return py::new_int(s);
+            return to_py(s);
         }>>),
     .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {

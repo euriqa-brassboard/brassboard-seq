@@ -36,12 +36,11 @@ void raise_invalid_channel(py::tuple path)
 static inline auto split_string_tuple(py::str s)
 {
     auto list = s.split("/"_py, -1);
-    auto tuple = py::new_tuple(list.size());
-    for (auto [i, v]: py::list_iter(list)) {
-        tuple.SET(i, py::ref(v.get())); // Steal reference
+    return py::new_ntuple(list.size(), [&] (int i) {
+        auto v = py::ref(list.get(i).get()); // Steal reference
         list.SET(i, nullptr);
-    }
-    return tuple;
+        return v;
+    });
 }
 
 __attribute__((visibility("internal")))

@@ -708,12 +708,11 @@ static inline int64_t convert_device_delay(double fdelay)
 {
     if (fdelay < 0) {
         py_throw_format(PyExc_ValueError, "Device time offset %S cannot be negative.",
-                        py::new_float(fdelay));
+                        to_py(fdelay));
     }
     else if (fdelay > 0.1) {
         py_throw_format(PyExc_ValueError,
-                        "Device time offset %S cannot be more than 100ms.",
-                        py::new_float(fdelay));
+                        "Device time offset %S cannot be more than 100ms.", to_py(fdelay));
     }
     return int64_t(fdelay * event_time::time_scale + 0.5);
 }
@@ -1080,11 +1079,11 @@ PyTypeObject ArtiqBackend::Type = {
                 return;
             }
             auto delay_mu = convert_device_delay(delay.as_float());
-            self->data()->device_delay.set(name, py::new_int(delay_mu));
+            self->data()->device_delay.set(name, to_py(delay_mu));
         }>>),
     .tp_getset = (py::getset_table<
                   py::getset_def<"total_time_mu",[] (py::ptr<ArtiqBackend> self) {
-                      return py::new_int(self->data()->total_time_mu);
+                      return to_py(self->data()->total_time_mu);
                   }>>),
     .tp_base = &BackendBase::Type,
     .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
