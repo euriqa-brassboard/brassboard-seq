@@ -28,6 +28,8 @@
 
 namespace brassboard_seq::backend {
 
+using seq::BasicSeq;
+
 struct ChannelAction {
     std::vector<action::Action*> actions;
     py::ref<> start_value;
@@ -51,7 +53,9 @@ struct SeqCompiler : PyObject {
     std::vector<std::vector<ChannelAction*>> all_chn_actions;
     py::dict_ref backends;
 
-    void initialize();
+    void visit_bseq(py::ptr<BasicSeq> bseq, std::vector<uint8_t> &visit_status);
+    void initialize_bseqs();
+    void initialize_actions();
     void populate_values();
     // Use std::vector<uint8_t> to pass in the status rather than std::vector<bool>
     // to avoid dealing with the special std::vector<bool> (i.e. bit array) interface.

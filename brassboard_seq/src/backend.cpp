@@ -26,7 +26,6 @@ namespace brassboard_seq::backend {
 using namespace rtval;
 using seq::TimeStep;
 using seq::SubSeq;
-using seq::BasicSeq;
 using event_time::EventTime;
 
 static void collect_actions(SubSeq *self, ChannelAction **chn_actions)
@@ -171,7 +170,9 @@ static inline auto basic_seq_key(py::ptr<BasicSeq> bseq)
     return event_time_key(bseq->seqinfo->time_mgr->event_times.get(0));
 }
 
-static void _check_seq_flow(py::ptr<BasicSeq> bseq, std::vector<uint8_t> &visit_status)
+__attribute__((visibility("internal")))
+inline void SeqCompiler::visit_bseq(py::ptr<BasicSeq> bseq,
+                                    std::vector<uint8_t> &visit_status)
 {
     auto &status = visit_status[bseq->bseq_id];
     if (status == 2)
@@ -180,15 +181,19 @@ static void _check_seq_flow(py::ptr<BasicSeq> bseq, std::vector<uint8_t> &visit_
         bb_throw_format(PyExc_ValueError, basic_seq_key(bseq), "Loop found in sequence");
     status = 1;
     for (auto next_id: bseq->next_bseq)
-        _check_seq_flow(bseq->basic_seqs.get<BasicSeq>(next_id), visit_status);
+        visit_bseq(bseq->basic_seqs.get<BasicSeq>(next_id), visit_status);
     status = 2;
 }
 
-static inline void check_seq_flow(py::ptr<BasicSeq> bseq)
+__attribute__((visibility("internal")))
+inline void SeqCompiler::initialize_bseqs()
 {
-    std::vector<uint8_t> status(bseq->basic_seqs.size(), 0);
-    _check_seq_flow(bseq, status);
-    for (auto [i, s]: py::list_iter<BasicSeq>(bseq->basic_seqs)) {
+    py::ptr ginfo = seq->seqinfo;
+    nchn = ginfo->channel_paths.size();
+    nbseq = seq->basic_seqs.size();
+    std::vector<uint8_t> status(nbseq, 0);
+    visit_bseq(seq, status);
+    for (auto [i, s]: py::list_iter<BasicSeq>(seq->basic_seqs)) {
         if (status[i] != 2) {
             bb_throw_format(PyExc_ValueError, basic_seq_key(s),
                             "BasicSeq %d unreachable", i);
@@ -197,11 +202,8 @@ static inline void check_seq_flow(py::ptr<BasicSeq> bseq)
 }
 
 __attribute__((visibility("internal")))
-inline void SeqCompiler::initialize()
+inline void SeqCompiler::initialize_actions()
 {
-    py::ptr ginfo = seq->seqinfo;
-    nchn = ginfo->channel_paths.size();
-    nbseq = seq->basic_seqs.size();
     all_chn_actions.resize(nchn * nbseq);
     basic_cseqs.resize(nbseq);
     for (auto [bseq_id, bseq]: py::list_iter<BasicSeq>(seq->basic_seqs)) {
@@ -278,7 +280,7 @@ inline void SeqCompiler::finalize()
     auto bt_guard = set_global_tracker(&seqinfo->cinfo->bt_tracker);
     // This relies on the event times being in the order of allocation
     // so this should be done before finalizing the time manager.
-    check_seq_flow(seq);
+    initialize_bseqs();
     for (auto [i, path]: py::list_iter<py::tuple>(seqinfo->channel_paths)) {
         auto prefix = path.get(0);
         if (py::dict(backends).contains(prefix)) [[likely]]
@@ -287,7 +289,7 @@ inline void SeqCompiler::finalize()
                         config::channel_name_from_path(path));
     }
     seqinfo->channel_name_map.take(py::new_none()); // Free up memory
-    initialize();
+    initialize_actions();
     populate_values();
     for (auto [name, backend]: py::dict_iter<BackendBase>(backends)) {
         backend->data()->finalize(this);
