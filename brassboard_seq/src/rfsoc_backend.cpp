@@ -172,7 +172,7 @@ void RFSOCBackend::Data::finalize(py::ptr<SeqCompiler> comp)
         auto is_ff = param == ToneFF;
         auto &channel = channels.channels[chn_idx];
         auto &rfsoc_actions = channel.actions[(int)param];
-        for (auto action: comp->basic_cseqs[0]->chn_actions[seq_chn]->actions) {
+        for (auto action: comp->basic_cseqs[0].chn_actions[seq_chn]->actions) {
             auto sync = parse_action_kws(action->kws, action->aid);
             py::ptr value = action->value;
             auto is_ramp = action::isramp(value);
@@ -419,7 +419,7 @@ void RFSOCBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned ag
     gen->start();
 
     // Add extra cycles to be able to handle the requirement of minimum 4 cycles.
-    auto total_cycle = seq_time_to_cycle(comp->basic_cseqs[0]->total_time + max_delay) + 8;
+    auto total_cycle = seq_time_to_cycle(comp->basic_cseqs[0].total_time + max_delay) + 8;
     for (auto &channel: channels.channels) {
         ScopeExit cleanup([&] {
             tone_buffer.clear();

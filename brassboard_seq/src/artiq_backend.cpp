@@ -672,7 +672,7 @@ void ArtiqBackend::Data::finalize(py::ptr<SeqCompiler> comp)
     for (auto [chn, ttl_idx]: channels.ttl_chn_map) {
         auto ttl_chn_info = channels.ttlchns[ttl_idx];
         auto type = ttl_chn_info.iscounter ? CounterEnable : TTLOut;
-        for (auto action: comp->basic_cseqs[0]->chn_actions[chn]->actions) {
+        for (auto action: comp->basic_cseqs[0].chn_actions[chn]->actions) {
             if (action->kws)
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "Invalid output keyword argument %S", action->kws);
@@ -687,7 +687,7 @@ void ArtiqBackend::Data::finalize(py::ptr<SeqCompiler> comp)
 
     for (auto [chn, value]: channels.dds_param_chn_map) {
         auto [dds_idx, type] = value;
-        for (auto action: comp->basic_cseqs[0]->chn_actions[chn]->actions) {
+        for (auto action: comp->basic_cseqs[0].chn_actions[chn]->actions) {
             if (action->kws)
                 bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                 "Invalid output keyword argument %S", action->kws);
@@ -944,7 +944,7 @@ void ArtiqBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned ag
         return a1.time_mu < a2.time_mu;
     });
 
-    auto total_time_mu = seq_time_to_mu(comp->basic_cseqs[0]->total_time + max_delay);
+    auto total_time_mu = seq_time_to_mu(comp->basic_cseqs[0].total_time + max_delay);
     if (use_dma) {
         auto nactions = rtio_actions.size();
         // Note that the size calculated below is at least `nactions * 17 + 1`

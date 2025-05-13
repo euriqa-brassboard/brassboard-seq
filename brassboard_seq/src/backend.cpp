@@ -51,12 +51,12 @@ static void collect_actions(SubSeq *self, ChannelAction **chn_actions)
 }
 
 __attribute__((visibility("internal")))
-inline void SeqCompiler::populate_bseq_values(CompiledBasicSeq *cbseq,
+inline void SeqCompiler::populate_bseq_values(CompiledBasicSeq &cbseq,
                                               std::vector<uint8_t> &chn_status)
 {
     py::ptr ginfo = seq->seqinfo;
     auto cinfo = ginfo->cinfo.get();
-    auto chn_actions = cbseq->chn_actions.get();
+    auto chn_actions = cbseq.chn_actions.get();
     std::vector<py::ref<>> final_values(nchn);
     for (int chn = 0; chn < nchn; chn++) {
         auto chn_action = chn_actions[chn];
@@ -122,46 +122,36 @@ inline void SeqCompiler::populate_bseq_values(CompiledBasicSeq *cbseq,
         }
         final_values[chn].assign(actions.back()->end_val);
     }
-    py::ptr basic_seqs = seq->basic_seqs;
-    auto bseq = basic_seqs.get<BasicSeq>(cbseq->bseq_id);
-    for (auto next_id: bseq->next_bseq) {
-        auto next_cbseq = basic_cseqs[next_id];
-        auto next_chn_actions = next_cbseq->chn_actions.get();
-        if (!next_cbseq->chn_actions[0]->start_value) {
+    for (auto next_cbseq_id: cbseq.next_bseq) {
+        auto &next_cbseq = basic_cseqs[next_cbseq_id];
+        auto next_chn_actions = next_cbseq.chn_actions.get();
+        auto next_bseq_id = next_cbseq.bseq_id;
+        if (next_bseq_id == next_cbseq_id) {
             for (int chn = 0; chn < nchn; chn++)
                 next_chn_actions[chn]->start_value.assign(final_values[chn]);
             std::ranges::fill(chn_status, false);
-            populate_bseq_values(next_cbseq, chn_status);
-            cbseq->next_bseq.push_back(next_id);
-            continue;
         }
-        auto &new_cbseq = *basic_seq_alloc.alloc();
-        auto new_cbseq_id = (int)basic_cseqs.size();
-        basic_cseqs.push_back(&new_cbseq);
-        new_cbseq.bseq_id = next_id;
-        new_cbseq.may_term = next_cbseq->may_term;
-        cbseq->next_bseq.push_back(new_cbseq_id);
-        auto new_chn_actions = new ChannelAction*[nchn];
-        new_cbseq.chn_actions.reset(new_chn_actions);
-        for (int chn = 0; chn < nchn; chn++) {
-            bool found = false;
-            auto &action_list = get_action_list(chn, next_id);
-            for (auto chn_action: action_list) {
-                if (same_value(chn_action->start_value, final_values[chn])) {
-                    new_chn_actions[chn] = chn_action;
-                    found = true;
-                    break;
+        else {
+            for (int chn = 0; chn < nchn; chn++) {
+                bool found = false;
+                auto &action_list = get_action_list(chn, next_bseq_id);
+                for (auto chn_action: action_list) {
+                    if (same_value(chn_action->start_value, final_values[chn])) {
+                        next_chn_actions[chn] = chn_action;
+                        found = true;
+                        break;
+                    }
                 }
+                chn_status[chn] = found;
+                if (found)
+                    continue;
+                auto chn_action = new_chn_action(chn, next_bseq_id);
+                next_chn_actions[chn] = chn_action;
+                chn_action->start_value.assign(final_values[chn]);
+                chn_action->actions = action_list[0]->actions;
             }
-            chn_status[chn] = found;
-            if (found)
-                continue;
-            auto chn_action = new_chn_action(chn, next_id);
-            new_chn_actions[chn] = chn_action;
-            chn_action->start_value.assign(final_values[chn]);
-            chn_action->actions = action_list[0]->actions;
         }
-        populate_bseq_values(&new_cbseq, chn_status);
+        populate_bseq_values(next_cbseq, chn_status);
     }
 }
 
@@ -171,18 +161,33 @@ static inline auto basic_seq_key(py::ptr<BasicSeq> bseq)
 }
 
 __attribute__((visibility("internal")))
-inline void SeqCompiler::visit_bseq(py::ptr<BasicSeq> bseq,
-                                    std::vector<uint8_t> &visit_status)
+inline int SeqCompiler::visit_bseq(py::ptr<BasicSeq> bseq,
+                                   std::vector<uint8_t> &visit_status)
 {
-    auto &status = visit_status[bseq->bseq_id];
-    if (status == 2)
-        return;
+    auto bseq_id = bseq->bseq_id;
+    auto &status = visit_status[bseq_id];
     if (status == 1)
         bb_throw_format(PyExc_ValueError, basic_seq_key(bseq), "Loop found in sequence");
-    status = 1;
+    int cbseq_id;
+    if (status == 2) {
+        cbseq_id = basic_cseqs.size();
+        basic_cseqs.emplace_back();
+    }
+    else {
+        status = 1;
+        cbseq_id = bseq->bseq_id;
+    }
+    std::vector<int> next_bseq;
     for (auto next_id: bseq->next_bseq)
-        visit_bseq(bseq->basic_seqs.get<BasicSeq>(next_id), visit_status);
+        next_bseq.push_back(visit_bseq(bseq->basic_seqs.get<BasicSeq>(next_id),
+                                       visit_status));
+    auto &cbseq = basic_cseqs[cbseq_id];
+    cbseq.bseq_id = bseq_id;
+    cbseq.may_term = bseq->may_terminate();
+    cbseq.next_bseq = std::move(next_bseq);
+    cbseq.chn_actions.reset(new ChannelAction*[nchn]);
     status = 2;
+    return cbseq_id;
 }
 
 __attribute__((visibility("internal")))
@@ -192,6 +197,7 @@ inline void SeqCompiler::initialize_bseqs()
     nchn = ginfo->channel_paths.size();
     nbseq = seq->basic_seqs.size();
     std::vector<uint8_t> status(nbseq, 0);
+    basic_cseqs.resize(nbseq);
     visit_bseq(seq, status);
     for (auto [i, s]: py::list_iter<BasicSeq>(seq->basic_seqs)) {
         if (status[i] != 2) {
@@ -205,18 +211,14 @@ __attribute__((visibility("internal")))
 inline void SeqCompiler::initialize_actions()
 {
     all_chn_actions.resize(nchn * nbseq);
-    basic_cseqs.resize(nbseq);
     for (auto [bseq_id, bseq]: py::list_iter<BasicSeq>(seq->basic_seqs)) {
         assert(bseq->bseq_id == bseq_id);
         py::ptr binfo = bseq->seqinfo;
         py::ptr time_mgr = binfo->time_mgr;
         time_mgr->finalize();
-        auto &cbseq = *basic_seq_alloc.alloc();
-        basic_cseqs[bseq_id] = &cbseq;
-        cbseq.bseq_id = bseq_id;
-        cbseq.may_term = bseq->may_terminate();
-        auto chn_actions = new ChannelAction*[nchn];
-        cbseq.chn_actions.reset(chn_actions);
+        auto &cbseq = basic_cseqs[bseq_id];
+        assert(cbseq.bseq_id == bseq_id);
+        auto chn_actions = cbseq.chn_actions.get();
         for (int chn = 0; chn < nchn; chn++)
             chn_actions[chn] = new_chn_action(chn, bseq_id);
         collect_actions(bseq, chn_actions);
@@ -264,9 +266,7 @@ inline void SeqCompiler::initialize_actions()
 __attribute__((visibility("internal")))
 inline void SeqCompiler::populate_values()
 {
-    if (nchn == 0) [[unlikely]]
-        return;
-    auto chn_actions0 = basic_cseqs[0]->chn_actions.get();
+    auto chn_actions0 = basic_cseqs[0].chn_actions.get();
     for (int chn = 0; chn < nchn; chn++)
         chn_actions0[chn]->start_value.take(py::new_false());
     std::vector<uint8_t> chn_status(nchn, false);
@@ -319,12 +319,12 @@ inline void SeqCompiler::eval_chn_actions(unsigned age)
     int ncbseq = basic_cseqs.size();
     py::ptr basic_seqs = seq->basic_seqs;
     for (int cbseq_id = 0; cbseq_id < ncbseq; cbseq_id++) {
-        auto cbseq = basic_cseqs[cbseq_id];
-        auto bseq_id = cbseq->bseq_id;
+        auto &cbseq = basic_cseqs[cbseq_id];
+        auto bseq_id = cbseq.bseq_id;
         auto bseq = basic_seqs.get<BasicSeq>(bseq_id);
         if (bseq_id != cbseq_id) {
             // We handle all the actions when handling the original cbseq
-            cbseq->total_time = basic_cseqs[bseq_id]->total_time;
+            cbseq.total_time = basic_cseqs[bseq_id].total_time;
             continue;
         }
         py::ptr time_mgr = bseq->seqinfo->time_mgr;
@@ -382,8 +382,8 @@ inline void SeqCompiler::runtime_finalize(py::ptr<> _age)
     py::ptr ginfo = seq->seqinfo;
     auto bt_guard = set_global_tracker(&ginfo->cinfo->bt_tracker);
     for (auto [bseq_id, bseq]: py::list_iter<BasicSeq>(seq->basic_seqs)) {
-        assert(basic_cseqs[bseq_id]->bseq_id == bseq_id);
-        basic_cseqs[bseq_id]->total_time =
+        assert(basic_cseqs[bseq_id].bseq_id == bseq_id);
+        basic_cseqs[bseq_id].total_time =
             bseq->seqinfo->time_mgr->compute_all_times(age);
     }
     for (auto [assert_id, a]: py::list_iter<py::tuple>(ginfo->assertions)) {

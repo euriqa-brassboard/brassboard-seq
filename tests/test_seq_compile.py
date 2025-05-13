@@ -747,6 +747,44 @@ def test_invalid_flow(max_bt):
     test_utils.check_bt(exc, max_bt, 'jkiaj8f92fasd')
 
 @test_utils.with_seq_params
+def test_bseq_empty(max_bt):
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
+    bt1 = s.new_basic_seq()
+    bt2 = s.new_basic_seq()
+    s.add_branch(bt1)
+    bt1.add_branch(bt2)
+    s.add_branch(bt2)
+    comp.finalize()
+    assert test_utils.compiler_num_basic_seq(comp) == 4
+
+    assert test_utils.compiler_get_bseq_id(comp, 0) == 0
+    assert test_utils.compiler_get_next_cbseq(comp, 0) == [1, 3]
+    assert test_utils.compiler_get_all_start_values(comp, 0) == []
+    assert test_utils.compiler_get_all_actions(comp, 0) == []
+
+    assert test_utils.compiler_get_bseq_id(comp, 1) == 1
+    assert test_utils.compiler_get_next_cbseq(comp, 1) == [2]
+    assert test_utils.compiler_get_all_start_values(comp, 1) == []
+    assert test_utils.compiler_get_all_actions(comp, 1) == []
+
+    assert test_utils.compiler_get_bseq_id(comp, 2) == 2
+    assert test_utils.compiler_get_next_cbseq(comp, 2) == [-1]
+    assert test_utils.compiler_get_all_start_values(comp, 2) == []
+    assert test_utils.compiler_get_all_actions(comp, 2) == []
+
+    assert test_utils.compiler_get_bseq_id(comp, 3) == 2
+    assert test_utils.compiler_get_next_cbseq(comp, 3) == [-1]
+    assert test_utils.compiler_get_all_start_values(comp, 3) == []
+    assert test_utils.compiler_get_all_actions(comp, 3) == []
+
+    comp.runtime_finalize(1)
+    assert test_utils.compiler_get_all_times(comp, 0) == (0, [0])
+    assert test_utils.compiler_get_all_times(comp, 1) == (0, [0])
+    assert test_utils.compiler_get_all_times(comp, 2) == (0, [0])
+    assert test_utils.compiler_get_all_times(comp, 3) == (0, [0])
+
+@test_utils.with_seq_params
 def test_bseq_split(max_bt):
     r1 = test_utils.new_extern(lambda: 1)
     b1 = test_utils.new_extern(lambda: True)

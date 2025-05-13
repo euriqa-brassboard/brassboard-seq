@@ -767,7 +767,7 @@ static PyModuleDef test_module = {
             auto comp = py::arg_cast<backend::SeqCompiler>(args[0], "comp");
             auto cbseq_id = py::ptr(args[1]).as_int();
             return py::new_nlist(comp->nchn, [&] (int chn) {
-                return comp->basic_cseqs[cbseq_id]->chn_actions[chn]->start_value.ref();
+                return comp->basic_cseqs[cbseq_id].chn_actions[chn]->start_value.ref();
             });
         }>,
         py::meth_fast<"compiler_get_all_actions",[] (auto, PyObject *const *args,
@@ -776,7 +776,7 @@ static PyModuleDef test_module = {
             auto comp = py::arg_cast<backend::SeqCompiler>(args[0], "comp");
             auto cbseq_id = py::ptr(args[1]).as_int();
             return py::new_nlist(comp->nchn, [&] (int chn) {
-                auto &actions = comp->basic_cseqs[cbseq_id]->chn_actions[chn]->actions;
+                auto &actions = comp->basic_cseqs[cbseq_id].chn_actions[chn]->actions;
                 return py::new_nlist(actions.size(), [&] (int i) {
                     return Action::ref_action(actions[i], comp->seq);
                 });
@@ -787,13 +787,13 @@ static PyModuleDef test_module = {
             py::check_num_arg("compiler_get_bseq_id", nargs, 2, 2);
             auto comp = py::arg_cast<backend::SeqCompiler>(args[0], "comp");
             auto cbseq_id = py::ptr(args[1]).as_int();
-            return to_py(comp->basic_cseqs[cbseq_id]->bseq_id);
+            return to_py(comp->basic_cseqs[cbseq_id].bseq_id);
         }>,
         py::meth_fast<"compiler_get_all_times",[] (auto, PyObject *const *args,
                                                    Py_ssize_t nargs) {
             py::check_num_arg("compiler_get_all_times", nargs, 2, 2);
             auto comp = py::arg_cast<backend::SeqCompiler>(args[0], "comp");
-            auto &cbseq = *comp->basic_cseqs[py::ptr(args[1]).as_int()];
+            auto &cbseq = comp->basic_cseqs[py::ptr(args[1]).as_int()];
             py::ptr time_mgr =
                 comp->seq->basic_seqs.get<seq::BasicSeq>(cbseq.bseq_id)->seqinfo->time_mgr;
             return py::new_tuple(to_py(cbseq.total_time), to_py(time_mgr->time_values));
@@ -802,7 +802,7 @@ static PyModuleDef test_module = {
                                                    Py_ssize_t nargs) {
             py::check_num_arg("compiler_get_next_cbseq", nargs, 2, 2);
             auto comp = py::arg_cast<backend::SeqCompiler>(args[0], "comp");
-            auto &cbseq = *comp->basic_cseqs[py::ptr(args[1]).as_int()];
+            auto &cbseq = comp->basic_cseqs[py::ptr(args[1]).as_int()];
             auto res = cbseq.next_bseq;
             if (cbseq.may_term)
                 res.push_back(-1);
@@ -815,8 +815,8 @@ static PyModuleDef test_module = {
             auto cbseq_id1 = py::ptr(args[1]).as_int();
             auto cbseq_id2 = py::ptr(args[2]).as_int();
             auto chn = py::ptr(args[3]).as_int();
-            return to_py(comp->basic_cseqs[cbseq_id1]->chn_actions[chn] ==
-                         comp->basic_cseqs[cbseq_id2]->chn_actions[chn]);
+            return to_py(comp->basic_cseqs[cbseq_id1].chn_actions[chn] ==
+                         comp->basic_cseqs[cbseq_id2].chn_actions[chn]);
         }>>),
 };
 
