@@ -64,16 +64,16 @@ PyTypeObject Action::Type = {
             return to_py(self->action->aid);
         }>,
         py::meth_noargs<"get_is_pulse",[] (py::ptr<Action> self) {
-            return to_py(self->action->is_pulse);
+            return py::new_bool(self->action->is_pulse);
         }>,
         py::meth_noargs<"get_exact_time",[] (py::ptr<Action> self) {
-            return to_py(self->action->exact_time);
+            return py::new_bool(self->action->exact_time);
         }>,
         py::meth_noargs<"get_cond",[] (py::ptr<Action> self) {
             return py::ptr(self->action->cond).ref();
         }>,
         py::meth_noargs<"get_cond_val",[] (py::ptr<Action> self) {
-            return to_py(self->action->cond_val);
+            return py::new_bool(self->action->cond_val);
         }>,
         py::meth_noargs<"get_value",[] (py::ptr<Action> self) {
             return py::ptr(self->action->value).ref();
@@ -332,8 +332,8 @@ static PyModuleDef test_module = {
             auto cbseq_id1 = py::ptr(args[1]).as_int();
             auto cbseq_id2 = py::ptr(args[2]).as_int();
             auto chn = py::ptr(args[3]).as_int();
-            return to_py(comp->basic_cseqs[cbseq_id1].chn_actions[chn] ==
-                         comp->basic_cseqs[cbseq_id2].chn_actions[chn]);
+            return py::new_bool(comp->basic_cseqs[cbseq_id1].chn_actions[chn] ==
+                                comp->basic_cseqs[cbseq_id2].chn_actions[chn]);
         }>>),
 };
 
