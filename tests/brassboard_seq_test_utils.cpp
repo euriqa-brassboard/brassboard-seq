@@ -261,67 +261,6 @@ PyTypeObject IOBuff::Type = {
     }>
 };
 
-template<typename stm_type,str_literal name>
-struct _PyByteStream : PyObject {
-    stm_type stm;
-
-    static PyTypeObject Type;
-};
-template<typename stm_type,str_literal name>
-PyTypeObject _PyByteStream<stm_type,name>::Type = {
-    .ob_base = PyVarObject_HEAD_INIT(0, 0)
-    .tp_name = name,
-    .tp_basicsize = sizeof(_PyByteStream),
-    .tp_dealloc = py::tp_cxx_dealloc<false,_PyByteStream>,
-    .tp_flags = Py_TPFLAGS_DEFAULT,
-    .tp_methods = (
-        py::meth_table<
-        py::meth_o<"put",[] (py::ptr<_PyByteStream> self, py::ptr<> c) {
-            self->stm.put(c.as_int());
-        }>,
-        py::meth_o<"write",[] (py::ptr<_PyByteStream> self, py::ptr<> _s) {
-            auto s = py::arg_cast<py::str>(_s, "s").utf8_view();
-            self->stm.write(s.data(), s.size());
-        }>,
-        py::meth_fast<"seek",[] (py::ptr<_PyByteStream> self, PyObject *const *args,
-                                 ssize_t nargs) {
-            py::check_num_arg("seek", nargs, 1, 2);
-            auto p = py::ptr(args[0]).template as_int<ssize_t>();
-            if (nargs < 2) {
-                self->stm.seekp(p);
-            }
-            else {
-                auto _dir = py::arg_cast<py::str>(args[1], "dir");
-                if (_dir.compare_ascii("beg") == 0)
-                    self->stm.seekp(p, std::ios_base::beg);
-                else if (_dir.compare_ascii("end") == 0)
-                    self->stm.seekp(p, std::ios_base::end);
-                else if (_dir.compare_ascii("cur") == 0)
-                    self->stm.seekp(p, std::ios_base::cur);
-            }
-        }>,
-        py::meth_noargs<"flush",[] (py::ptr<_PyByteStream> self) {
-            self->stm.flush();
-        }>,
-        py::meth_noargs<"clear",[] (py::ptr<_PyByteStream> self) {
-            self->stm.clear();
-        }>,
-        py::meth_noargs<"fail",[] (py::ptr<_PyByteStream> self) {
-            return to_py(self->stm.fail());
-        }>,
-        py::meth_noargs<"get_buf",[] (py::ptr<_PyByteStream> self) {
-            return py::ptr(&PyBytes_Type)(self->stm.get_buf());
-        }>>),
-    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
-                                        ssize_t nargs, py::tuple kwnames) {
-        py::check_num_arg(name, nargs, 0, 0);
-        py::check_no_kwnames(name, kwnames);
-        auto self = py::generic_alloc<_PyByteStream>();
-        call_constructor(&self->stm);
-        return self;
-    }>
-};
-
 template<std::integral ELT,unsigned N,str_literal name>
 struct PyBits : PyObject {
     Bits<ELT,N> bits;
