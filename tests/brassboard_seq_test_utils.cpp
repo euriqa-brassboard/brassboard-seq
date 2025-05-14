@@ -269,17 +269,17 @@ PyTypeObject PyBits<ELT,N,name>::Type = {
         switch (op) {
         default:
         case Py_EQ:
-            return to_py(v1->bits == v2->bits);
+            return py::new_bool(v1->bits == v2->bits);
         case Py_NE:
-            return to_py(v1->bits != v2->bits);
+            return py::new_bool(v1->bits != v2->bits);
         case Py_GT:
-            return to_py(v1->bits > v2->bits);
+            return py::new_bool(v1->bits > v2->bits);
         case Py_LT:
-            return to_py(v1->bits < v2->bits);
+            return py::new_bool(v1->bits < v2->bits);
         case Py_GE:
-            return to_py(v1->bits >= v2->bits);
+            return py::new_bool(v1->bits >= v2->bits);
         case Py_LE:
-            return to_py(v1->bits <= v2->bits);
+            return py::new_bool(v1->bits <= v2->bits);
         }
     }>,
     .tp_methods = (
