@@ -4,6 +4,7 @@ from brassboard_seq.action import RampFunction
 from brassboard_seq import rtval, utils
 
 from brassboard_seq_test_utils import *
+from brassboard_seq_seq_utils import *
 
 import pytest
 import numpy as np

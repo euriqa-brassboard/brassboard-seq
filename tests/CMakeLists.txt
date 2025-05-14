@@ -16,6 +16,7 @@ function(test_cxx_mod name)
     SUFFIX "${PYTHON_EXTENSION_SUFFIX}")
 endfunction()
 test_cxx_mod(brassboard_seq_test_utils)
+test_cxx_mod(brassboard_seq_seq_utils)
 test_cxx_mod(brassboard_seq_artiq_backend_utils)
 test_cxx_mod(brassboard_seq_rfsoc_backend_utils)
 
