@@ -2043,7 +2043,7 @@ auto cxx_catch(auto &&cb)
         }
         else if constexpr (is_handle) {
             static_assert(std::is_pointer_v<T>);
-            return (T)cb().get();
+            return (T)cb().ref().rel();
         }
         else if constexpr (!is_void) {
             static_assert(std::is_pointer_v<T> == is_ptr);
