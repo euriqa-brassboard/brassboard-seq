@@ -23,12 +23,13 @@ add_library(brassboard_seq_utils SHARED
   src/utils.cpp
   src/yaml.cpp)
 target_include_directories(brassboard_seq_utils PRIVATE ${Python_INCLUDE_DIRS})
+target_link_libraries(brassboard_seq_utils -fopenmp)
 install(TARGETS brassboard_seq_utils DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 
 function(bb_cxx_mod name)
   add_library("brassboard_seq_${name}_mod" MODULE "${name}.cpp")
   target_include_directories("brassboard_seq_${name}_mod" PRIVATE ${Python_INCLUDE_DIRS})
-  target_link_libraries("brassboard_seq_${name}_mod" brassboard_seq_utils -fopenmp)
+  target_link_libraries("brassboard_seq_${name}_mod" brassboard_seq_utils)
   set_target_properties("brassboard_seq_${name}_mod"
     PROPERTIES POSITION_INDEPENDENT_CODE ON
     LIBRARY_OUTPUT_NAME "${name}"
