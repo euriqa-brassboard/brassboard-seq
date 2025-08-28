@@ -96,7 +96,7 @@ static PyModuleDef rfsoc_module = {
             return to_py(rb->data()->channels);
         }>,
         py::meth_o<"get_compiled_info",[] (auto, py::ptr<RFSOCBackend> rb) {
-            auto self = new_object<"CompiiledInfo">();
+            auto self = new_object<"CompiledInfo">();
             auto &rbd = *rb->data();
             self.set_attr("bool_values", value_pair_list(rbd.bool_values));
             self.set_attr("float_values", value_pair_list(rbd.float_values));
