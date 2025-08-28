@@ -102,6 +102,20 @@ static PyModuleDef rfsoc_module = {
             self.set_attr("float_values", value_pair_list(rbd.float_values));
             self.set_attr("relocations", to_py(rbd.relocations));
             return self;
+        }>,
+        py::meth_o<"bitcast_f64_i64",[] (auto, py::ptr<> _f) {
+            return py::new_int(rfsoc::bitcast_f64_i64(_f.as_float()));
+        }>,
+        py::meth_o<"f64parts",[] (auto, py::ptr<> _f) {
+            rfsoc::F64Parts fp(_f.as_float());
+            return to_py(std::make_pair(fp.exp, fp.frac));
+        }>,
+        py::meth_fast<"encode_pdq_spline",[] (auto, PyObject *const *args, ssize_t nargs) {
+            py::check_num_arg("encode_pdq_spline", nargs, 4, 4);
+            return to_py(rfsoc::encode_pdq_spline(py::ptr(args[0]).template as_int<int64_t>(),
+                                                  py::ptr(args[1]).as_float(),
+                                                  py::ptr(args[2]).as_float(),
+                                                  py::ptr(args[3]).as_float()));
         }>>),
 };
 

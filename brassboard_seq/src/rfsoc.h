@@ -25,6 +25,116 @@
 
 namespace brassboard_seq::rfsoc {
 
+static constexpr inline int64_t bitcast_f64_i64(double f)
+{
+    static_assert(sizeof(double) == 8);
+    union {
+        double f;
+        int64_t i;
+    } u{ .f = f };
+    return u.i;
+}
+
+struct F64Parts {
+    int exp;
+    int64_t frac;
+    constexpr F64Parts(double f)
+    {
+        int64_t fi = bitcast_f64_i64(f);
+        int64_t sign = fi >> 63;
+        exp = int(fi >> 52) & ((1 << 11) - 1);
+        // This does not have any special treatment for 0, subnormal numbers, or nan/inf.
+        // However, we don't need to handle nan/inf in any particular way
+        // and the conversion to spline coefficient will treat small numbers,
+        // including 0 and subnormal numbers, as zero anyway so we don't need to be
+        // accurate here. This is saves an instruction or two.
+        frac = (fi & ((int64_t(1) << 52) - 1)) | (int64_t(1) << 52);
+        frac = (sign + frac) ^ sign;
+    }
+};
+
+static constexpr inline __attribute__((always_inline)) std::pair<std::array<int64_t,4>,int>
+encode_pdq_spline(int64_t isp0, double sp1, double sp2, double sp3)
+{
+    constexpr uint64_t mask = (uint64_t(1) << 40) - 1;
+
+    std::array<int64_t,4> isp;
+    isp[0] = isp0;
+
+    // Cross over to integer domain to figure out the shift value to use.
+    // For each of the f64 parts, the exp is a number in [0, 2047]
+    // and frac is a 54-bit signed integer that is signed extended to 64 bits.
+    F64Parts fparts[] = {sp1, sp2, sp3};
+
+    // First compute the shift for the spline.
+    // Since the spline coefficients for 1st, 2nd and 3rd orders
+    // are only precise to (2^0, 2^-16, 2^-32) respectively, a shift of at most 11
+    // (which provides a precision of (2^-11, 2^-22, 2^-33) precision for the 3 orders)
+    // is sufficient to provide the full precision of the spline engine hardware.
+    int shift_len = 11;
+
+    // The coefficients have been scaled to [-0.5, 0.5] signed,
+    // or equivalently [0, 1] unsigned.
+    // The f64parts for each number contains 54 significant digits.
+    // Bit 0 to bit 53 for each of the `frac` corresponds to
+    // `2^(exp - 1075)` to `2^(exp - 1022)`.
+    // Bit 0 to bit 39 for each of the spline coefficient corresponds to
+    // `2^(-40 - shift_len * order)` to `2^(-1 - shift_len * order)`.
+    // In order for us to not loose the top bits, we need
+    // `(-1 - shift_len * order) >= (exp - 1022)` or
+    // `shift_len <= (1021 - exp) / order`
+    for (int i = 0; i < 3; i++)
+        shift_len = std::min(shift_len, (1021 - fparts[i].exp) / (i + 1));
+    if (shift_len < 0) [[unlikely]] // overflowing value
+        shift_len = 0;
+
+    auto try_shift_len = [&] (bool overflow_check) {
+        // Now we need to round each value and shift them to the right place.
+        // The hardware precision for each order is `2^(-40 - 16 * (order - 1))`
+        // which corresponds to bit `1035 - 16 * (order - 1) - exp` in `frac`.
+        // However, limited by `shift_len`, the percision is also affected by
+        // how we encode the coefficients in the spline which limits it to
+        // `2^(-40 - shift_len * order)` which is bit `1035 - shift_len * order - exp`
+        // in `frac`.
+        for (int i = 0; i < 3; i++) {
+            int order = i + 1;
+            // This is the precision bit for this coefficient.
+            int bit = 1035 - std::min(shift_len * order, 16 * i) - fparts[i].exp;
+            if (bit > 54) {
+                isp[order] = 0;
+            }
+            else {
+                int64_t frac = fparts[i].frac;
+                int shiftbit = 1035 - shift_len * order - fparts[i].exp;
+                assert(shiftbit <= bit);
+                if (shiftbit < 14) [[unlikely]] {
+                    // overflow, do whatever,
+                    isp[order] = 0;
+                }
+                else {
+                    assert(bit > 0);
+                    auto newfrac = frac + (int64_t(1) << (bit - 1));
+                    auto overflow = (shiftbit == 14 && shift_len > 0 &&
+                                     (newfrac & ~frac & (int64_t(1) << 53)));
+                    // Overflow from rounding, try again with a smaller shift
+                    if (overflow_check && overflow) [[unlikely]]
+                        return false;
+                    assert(!overflow);
+                    isp[order] = (newfrac >> shiftbit) & mask;
+                }
+            }
+        }
+        return true;
+    };
+
+    if (!try_shift_len(true)) [[unlikely]] {
+        shift_len -= 1;
+        try_shift_len(false);
+    }
+
+    return { isp, shift_len };
+}
+
 // order of the coefficient is order0, order1, order2, order3
 template<int nbits> static constexpr inline std::pair<std::array<int64_t,4>,int>
 convert_pdq_spline(std::array<double,4> sp, int64_t cycles, double scale)

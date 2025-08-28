@@ -2328,6 +2328,11 @@ template<typename> struct converter {
     {
         return new_nlist(v.size(), [&] (int i) { return to_py(v[i]); });
     }
+    template<typename T,size_t N>
+    static inline auto py(const std::array<T,N> &v)
+    {
+        return new_nlist(v.size(), [&] (int i) { return to_py(v[i]); });
+    }
     template<typename K, typename V>
     static inline auto py(const std::map<K,V> &m)
     {
