@@ -20,7 +20,7 @@ jobs:
         APP_PEM: ${{ secrets.BRASSBOARD_COMMIT_BOT_PEM }}
         APP_ID: ${{ secrets.BRASSBOARD_COMMIT_BOT_ID }}
 
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         token: ${{ steps.get_token.outputs.app_token }}
         fetch-depth: 0
