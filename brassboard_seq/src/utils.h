@@ -153,10 +153,10 @@ enum BBLogLevel {
 };
 extern BBLogLevel bb_logging_level;
 
-#define bb_log(level, ...) do {                 \
-        if (bb_logging_level <= (level)) {      \
-            printf(__VA_ARGS__);                \
-        }                                       \
+#define bb_log(level, ...) do {                         \
+        if (bb_logging_level <= (level)) [[unlikely]] { \
+            printf(__VA_ARGS__);                        \
+        }                                               \
     } while (0)
 #define bb_debug(...) bb_log(BB_LOG_DEBUG, __VA_ARGS__)
 #define bb_info(...) bb_log(BB_LOG_INFO, __VA_ARGS__)
