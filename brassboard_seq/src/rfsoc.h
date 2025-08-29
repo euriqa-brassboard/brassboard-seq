@@ -866,7 +866,7 @@ struct Bits {
     static constexpr int METADATA = 200;
 };
 
-static constexpr inline auto
+static constexpr inline __attribute__((always_inline,flatten)) auto
 pulse(uint64_t metadata, const std::array<int64_t,4> &isp, int64_t cycles)
 {
     assert((isp[0] >> 40) == 0);
@@ -893,19 +893,19 @@ static constexpr auto modtype_mask = JaqalInst::mask(Bits::MODTYPE, Bits::MODTYP
 static constexpr auto channel_mask = JaqalInst::mask(Bits::DMA_MUX, Bits::DMA_MUX + 7);
 static constexpr auto modtype_nmask = ~modtype_mask;
 static constexpr auto channel_nmask = ~channel_mask;
-static constexpr inline auto
+static constexpr inline __attribute__((always_inline,flatten)) auto
 apply_modtype_mask(JaqalInst pulse, ModTypeMask mod_mask)
 {
     return (pulse & modtype_nmask) | JaqalInst(uint8_t(mod_mask)) << Bits::MODTYPE;
 }
-static constexpr inline auto
+static constexpr inline __attribute__((always_inline,flatten)) auto
 apply_channel_mask(JaqalInst pulse, uint8_t chn_mask)
 {
     return (pulse & channel_nmask) | JaqalInst(chn_mask) << Bits::DMA_MUX;
 }
 
-static constexpr inline uint64_t raw_param_metadata(
-    int shift_len, bool waittrig, bool sync, bool enable, bool fb_enable)
+static constexpr inline __attribute__((always_inline,flatten)) uint64_t
+raw_param_metadata(int shift_len, bool waittrig, bool sync, bool enable, bool fb_enable)
 {
     assert(shift_len >= 0 && shift_len < 32);
     uint64_t metadata = uint64_t(shift_len) << (Bits::SPLSHIFT - Bits::METADATA);
@@ -915,7 +915,7 @@ static constexpr inline uint64_t raw_param_metadata(
     metadata |= uint64_t(sync) << (Bits::SYNC_FLAG - Bits::METADATA);
     return metadata;
 }
-static constexpr inline auto
+static constexpr inline __attribute__((always_inline,flatten)) auto
 freq_pulse(cubic_spline sp, int64_t cycles, bool waittrig, bool sync, bool fb_enable)
 {
     assert(cycles >= 4);
@@ -924,7 +924,7 @@ freq_pulse(cubic_spline sp, int64_t cycles, bool waittrig, bool sync, bool fb_en
     auto metadata = raw_param_metadata(shift_len, waittrig, sync, false, fb_enable);
     return pulse(metadata, isp, cycles);
 }
-static constexpr inline auto
+static constexpr inline __attribute__((always_inline,flatten)) auto
 amp_pulse(cubic_spline sp, int64_t cycles, bool waittrig,
           bool sync=false, bool fb_enable=false)
 {
@@ -934,7 +934,7 @@ amp_pulse(cubic_spline sp, int64_t cycles, bool waittrig,
     auto metadata = raw_param_metadata(shift_len, waittrig, sync, false, fb_enable);
     return pulse(metadata, isp, cycles);
 }
-static constexpr inline auto
+static constexpr inline __attribute__((always_inline,flatten)) auto
 phase_pulse(cubic_spline sp, int64_t cycles, bool waittrig,
             bool sync=false, bool fb_enable=false)
 {
@@ -945,9 +945,9 @@ phase_pulse(cubic_spline sp, int64_t cycles, bool waittrig,
     return pulse(metadata, isp, cycles);
 }
 
-static constexpr inline uint64_t raw_frame_metadata(
-    int shift_len, bool waittrig, bool apply_at_end, bool rst_frame,
-    int fwd_frame_mask, int inv_frame_mask)
+static constexpr inline __attribute__((always_inline,flatten)) uint64_t
+raw_frame_metadata(int shift_len, bool waittrig, bool apply_at_end, bool rst_frame,
+                   int fwd_frame_mask, int inv_frame_mask)
 {
     assert(shift_len >= 0 && shift_len < 32);
     uint64_t metadata = uint64_t(shift_len) << (Bits::SPLSHIFT - Bits::METADATA);
@@ -958,7 +958,7 @@ static constexpr inline uint64_t raw_frame_metadata(
     metadata |= uint64_t(inv_frame_mask) << (Bits::INV_FRM - Bits::METADATA);
     return metadata;
 }
-static constexpr inline auto
+static constexpr inline __attribute__((always_inline,flatten)) auto
 frame_pulse(cubic_spline sp, int64_t cycles, bool waittrig, bool apply_at_end,
             bool rst_frame, int fwd_frame_mask, int inv_frame_mask)
 {
@@ -994,14 +994,16 @@ static constexpr int SLUT_MAXCNT = Bits::PACKING_LIMIT / SLUT_ELSZ;
 static constexpr int GLUT_MAXCNT = Bits::PACKING_LIMIT / GLUT_ELSZ;
 static constexpr int GSEQ_MAXCNT = Bits::PACKING_LIMIT / GSEQ_ELSZ;
 
-static constexpr inline JaqalInst stream(JaqalInst pulse)
+static constexpr inline __attribute__((always_inline,flatten))
+JaqalInst stream(JaqalInst pulse)
 {
     pulse |= JaqalInst(uint8_t(SeqMode::STREAM)) << Bits::SEQ_MODE;
     pulse |= JaqalInst(1) << Bits::GSEQ_ENABLE;
     return pulse;
 }
 
-static constexpr inline JaqalInst program_PLUT(JaqalInst pulse, uint16_t addr)
+static constexpr inline __attribute__((always_inline,flatten))
+JaqalInst program_PLUT(JaqalInst pulse, uint16_t addr)
 {
     assert((addr >> PLUTW) == 0);
     pulse |= JaqalInst(uint8_t(ProgMode::PLUT)) << Bits::PROG_MODE;
@@ -1009,7 +1011,7 @@ static constexpr inline JaqalInst program_PLUT(JaqalInst pulse, uint16_t addr)
     return pulse;
 }
 
-static constexpr inline auto
+static constexpr inline __attribute__((always_inline,flatten)) auto
 program_SLUT(uint8_t chn_mask, const uint16_t *saddrs,
              const ModTypeMask *mod_types, const uint16_t *paddrs, int n)
 {
@@ -1028,7 +1030,7 @@ program_SLUT(uint8_t chn_mask, const uint16_t *saddrs,
     return inst;
 }
 
-static constexpr inline auto
+static constexpr inline __attribute__((always_inline,flatten)) auto
 program_GLUT(uint8_t chn_mask, const uint16_t *gaddrs, const uint16_t *starts,
              const uint16_t *ends, int n)
 {
@@ -1048,7 +1050,7 @@ program_GLUT(uint8_t chn_mask, const uint16_t *gaddrs, const uint16_t *starts,
     return inst;
 }
 
-static constexpr inline auto
+static constexpr inline __attribute__((always_inline,flatten)) auto
 sequence(uint8_t chn_mask, SeqMode m, uint16_t *gaddrs, int n)
 {
     JaqalInst inst;
