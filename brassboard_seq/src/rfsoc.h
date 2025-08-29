@@ -136,77 +136,34 @@ encode_pdq_spline(int64_t isp0, double sp1, double sp2, double sp3)
 }
 
 // order of the coefficient is order0, order1, order2, order3
-template<int nbits> static constexpr inline std::pair<std::array<int64_t,4>,int>
+static constexpr inline __attribute__((flatten,always_inline))
+std::pair<std::array<int64_t,4>,int>
 convert_pdq_spline(std::array<double,4> sp, int64_t cycles, double scale)
 {
-    static_assert(nbits < 64);
-    constexpr uint64_t mask = (uint64_t(1) << nbits) - 1;
-    constexpr double bitscale = double(uint64_t(1) << nbits);
+    constexpr uint64_t mask = (uint64_t(1) << 40) - 1;
+    constexpr double bitscale = double(uint64_t(1) << 40);
 
-    std::array<int64_t,4> isp;
     // For the 0-th order, we can just round the number
-    isp[0] = (__builtin_constant_p(sp[0]) && sp[0] == 0) ? 0 :
+    int64_t isp0 = (__builtin_constant_p(sp[0]) && sp[0] == 0) ? 0 :
         round<int64_t>(sp[0] * (scale * bitscale)) & mask;
     if (sp[1] == 0 && sp[2] == 0 && sp[3] == 0)
-        return {{isp[0], 0, 0, 0}, 0};
+        return {{isp0, 0, 0, 0}, 0};
 
+    // The spline engine uses the coefficients in an accumulator fashion.
+    // In particular, the four orders (order0 - order3) are updated on each cycle
+    // using `order{n} <= order{n} + order{n + 1}`
+    // and the `order0` is used as the output of the spline engine.
+    // The following converts the input polynomial coefficients
+    // to the accumulator style coefficient and
+    // normalize all of them so a full scale value corresponds to `1.0`.
     double tstep = 1 / double(cycles);
     double tstep2 = tstep * tstep;
     double tstep3 = tstep2 * tstep;
-    sp[1] = tstep * (sp[1] + sp[2] * tstep + sp[3] * tstep2);
-    sp[2] = 2 * tstep2 * (sp[2] + 3 * sp[3] * tstep);
-    sp[3] = 6 * tstep3 * sp[3];
+    sp[1] = (tstep * (sp[1] + sp[2] * tstep + sp[3] * tstep2)) * scale;
+    sp[2] = (2 * tstep2 * (sp[2] + 3 * sp[3] * tstep)) * scale;
+    sp[3] = (6 * tstep3 * sp[3]) * scale;
 
-    // See below, a threshold of `1 - 2^(-nbits)` should already be sufficient
-    // to make sure the value doesn't round up.
-    // Here we use `1 - 2 * 2^(-nbits)` just to be safe in case
-    // we got the rounding mode wrong or sth...
-    // FIXME: constexpr in C++23
-    double round_thresh = 1 - 2 * std::ldexp(1, -nbits);
-
-    // Now we'll map floating point values [-0.5, 0.5] to [-2^(nbits-1), 2^(nbits-1)]
-
-    int shift_len = 31;
-
-    int _exp[3];
-    // For each higher order coefficients,
-    // we need to figure out how much we can shift the coefficient left by
-    // without overflow. For overflow values, we'll take the modulo
-    // just like the 0-th order.
-    for (int i = 1 ; i < 4; i++) {
-        auto v = sp[i];
-        if (v == 0) {
-            _exp[i - 1] = 0;
-            continue;
-        }
-        sp[i] = std::frexp(v * scale, &_exp[i - 1]);
-        // Although frexp guarantees that `|fr| < 1`,
-        // i.e. mathematically, `|fr| * 2^(nbits-1) < 2^(nbits-1)`,
-        // or that it's smaller than the overflow threshold.
-        // However, what we actually care about is to find the decomposition
-        // so that `round(|fr| * 2^(nbits - 1)) < 2^(nbits - 1)`
-        // to make sure it doesn't overflow during the conversion.
-
-        // Here we catch the unlikely cases where `|fr| < 1`
-        // will overflow during rounding.
-        if (std::abs(sp[i]) > round_thresh) [[unlikely]] {
-            // See above for not about the threshold.
-            // This is about 2x the actual threshold
-            // but the change of sub-optimal shift is still quite small.
-            sp[i] /= 2;
-            _exp[i - 1] += 1;
-        }
-        // Now we can shift this number up by at most `-_exp - 1` bits
-        shift_len = std::min(shift_len, (-_exp[i - 1] - 1) / i);
-    }
-
-    if (shift_len < 0) [[unlikely]]
-        shift_len = 0;
-
-    isp[1] = round<int64_t>(std::ldexp(sp[1], _exp[0] + nbits + shift_len)) & mask;
-    isp[2] = round<int64_t>(std::ldexp(sp[2], _exp[1] + nbits + shift_len * 2)) & mask;
-    isp[3] = round<int64_t>(std::ldexp(sp[3], _exp[2] + nbits + shift_len * 3)) & mask;
-    return { isp, shift_len };
+    return encode_pdq_spline(isp0, sp[1], sp[2], sp[3]);
 }
 
 constexpr static double output_clock = 819.2e6;
@@ -214,23 +171,20 @@ constexpr static double output_clock = 819.2e6;
 static constexpr inline std::pair<std::array<int64_t,4>,int>
 convert_pdq_spline_freq(std::array<double,4> sp, int64_t cycles)
 {
-    return convert_pdq_spline<40>(sp, cycles, 1 / output_clock);
+    return convert_pdq_spline(sp, cycles, 1 / output_clock);
 }
 
 static constexpr inline std::pair<std::array<int64_t,4>,int>
 convert_pdq_spline_amp(std::array<double,4> sp, int64_t cycles)
 {
-    auto [isp, shift_len] = convert_pdq_spline<17>(sp, cycles,
-                                                   0.5 - std::ldexp(1, -17));
-    for (auto &v: isp)
-        v <<= 23;
+    auto [isp, shift_len] = convert_pdq_spline(sp, cycles, 0.5 - 0x1p-17);
     return { isp, shift_len };
 }
 
 static constexpr inline std::pair<std::array<int64_t,4>,int>
 convert_pdq_spline_phase(std::array<double,4> sp, int64_t cycles)
 {
-    return convert_pdq_spline<40>(sp, cycles, 1);
+    return convert_pdq_spline(sp, cycles, 1);
 }
 
 using JaqalInst = Bits<int64_t,4>;

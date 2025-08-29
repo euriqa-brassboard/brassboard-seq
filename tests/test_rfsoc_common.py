@@ -1,6 +1,6 @@
 #
 
-from rfsoc_test_utils import bitcast_f64_i64, f64parts, encode_pdq_spline
+from rfsoc_test_utils import bitcast_f64_i64, f64parts, encode_pdq_spline, check_spline_shift
 
 import pytest
 import random
@@ -65,8 +65,7 @@ def pdq_spline(_isp0, sp1, sp2, sp3):
     isp2 = u40_to_i40(mask_u40(isp2, shift * 2, 16))
     isp3 = u40_to_i40(mask_u40(isp3, shift * 3, 32))
     if sp_inrange(sp1) and sp_inrange(sp2) and sp_inrange(sp3):
-        if shift < 11:
-            assert (abs(isp1) >> 38) or (abs(isp2) >> 37) or (abs(isp3) >> 36)
+        check_spline_shift(shift, isp1, isp2, isp3)
         assert isp1 * 2**(-40 - shift) == pytest.approx(sp1, rel=2**-40, abs=2**-40)
         assert isp2 * 2**(-40 - shift * 2) == pytest.approx(sp2, rel=2**-40,
                                                             abs=2**-(40 + min(shift * 2, 16)))

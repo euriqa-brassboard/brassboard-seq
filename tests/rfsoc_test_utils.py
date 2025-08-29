@@ -149,17 +149,113 @@ def Spline(order0=0.0, order1=0.0, order2=0.0, order3=0.0):
 def Pulse(cycles, spline=Spline(), sync=False, ff=False):
     return dict(cycles=cycles, spline=spline, sync=sync, ff=ff)
 
+def _get_expected(v):
+    try:
+        return v.expected
+    except AttributeError:
+        return v
+
+def combine_err(e1, e2):
+    if e1 is None:
+        return e2
+    elif e2 is None:
+        return e1
+    return e1 + e2
+
+def add_approx(v, abs=None, rel=None):
+    try:
+        v0 = v.expected
+        abs = combine_err(abs, v.abs)
+        rel = combine_err(rel, v.rel)
+        return pytest.approx(v0, abs=abs, rel=rel)
+    except AttributeError:
+        return pytest.approx(v, abs=abs, rel=rel)
+
+def _guess_shift(spl, scale):
+    spl1 = abs(_get_expected(spl[1]) / scale)
+    spl2 = abs(_get_expected(spl[2]) / scale)
+    spl3 = abs(_get_expected(spl[3]) / scale)
+    for shift in range(11, 0, -1):
+        if spl3 * 2**(3 * shift) < 0.5 and spl2 * 2**(2 * shift) < 0.5 and spl1 * 2**shift < 0.5:
+            return shift
+    return 0
+
 def approx_pulses(param, ps):
     if param == 'freq':
         _abs = 0.0015
     elif param == 'amp':
-        _abs = 1.5e-5
+        _abs = 2e-5
     elif param == 'phase' or param == 'frame_rot':
         _abs = 2e-12
     else:
         assert False
+
+    scale = param_scale(param)
     def approx_pulse(p):
         p = copy.copy(p)
-        p['spline'] = pytest.approx(p['spline'], abs=_abs, rel=1e-9)
+        spl = p['spline']
+        __abs = 1e-9
+        __rel = 1e-9
+        try:
+            _spl = spl
+            spl = _spl.expected
+            if _spl.abs is not None:
+                __abs += _spl.abs
+            if _spl.rel is not None:
+                __rel += _spl.rel
+        except AttributeError:
+            pass
+        shift = _guess_shift(spl, scale)
+        spl = copy.copy(spl)
+        spl[0] = add_approx(spl[0], abs=_abs)
+        p['spline'] = approx_spline(param, shift, spl, p['cycles'], True, __abs, __rel)
         return p
     return [approx_pulse(p) for p in ps]
+
+def pad_list(lst, n, v):
+    return lst + [v] * (n - len(lst))
+
+def check_spline_shift(shift, isp1, isp2, isp3, may_overflow=False):
+    if may_overflow and shift == 0 and (isp1 == 0 or isp2 == 0 or isp3 == 0):
+        return
+    if shift < 11:
+        assert (abs(isp1) >> 38) or (abs(isp2) >> 37) or (abs(isp3) >> 36)
+
+def order_precision(order, shift):
+    if order < 2:
+        return 2**-40
+    elif order == 2:
+        return 2**-(40 + min(shift * 2, 16))
+    elif order == 3:
+        return 2**-(40 + min(shift * 3, 32))
+
+def param_scale(param):
+    if param == 'freq':
+        return 819.2e6
+    elif param == 'amp':
+        return 1 - 2**-16
+    else:
+        return 1.0
+
+def flatten_tol(tol):
+    if tol is None:
+        return [0, 0, 0, 0]
+    if hasattr(tol, '__len__'):
+        return pad_list(list(tol), 4, 0)
+    return [tol, tol, tol, tol]
+
+def approx_spline(param, shift, target, cycles, approx, _abs, rel):
+    target = pad_list(list(target), 4, 0)
+    if not approx:
+        return target
+    _abs = flatten_tol(_abs)
+    rel = [r + 2**-40 for r in flatten_tol(rel)]
+    scale = param_scale(param)
+
+    abs_prec = [order_precision(order, shift) * scale for order in range(4)]
+    abs_prec[1] = (abs_prec[1] + abs_prec[2] / 2 + abs_prec[3] / 3) * cycles
+    abs_prec[2] = (abs_prec[2] + abs_prec[3]) / 2 * cycles**2
+    abs_prec[3] = abs_prec[3] / 6 * cycles**3
+
+    return [add_approx(target[order], abs=_abs[order] + abs_prec[order], rel=rel[order])
+            for order in range(4)]

@@ -37,10 +37,19 @@ struct PDQSpline {
         double order_scale = 1 / double(1ll << shift);
         double order_scale2 = order_scale * order_scale;
         std::array<double,4> forders;
+        auto round_order = [&] (int64_t sp, int order) -> int64_t {
+            int fracbit = (order - 1) * 16 - shift * order;
+            if (fracbit >= 0)
+                return sp;
+            if (fracbit <= -64)
+                return 0;
+            auto mask = -(int64_t(1) << -fracbit);
+            return mask & sp;
+        };
         forders[0] = double(orders[0]) * scale;
-        forders[1] = double(orders[1]) * (scale * order_scale);
-        forders[2] = double(orders[2]) * (scale * order_scale2);
-        forders[3] = double(orders[3]) * (scale * order_scale * order_scale2);
+        forders[1] = double(round_order(orders[1], 1)) * (scale * order_scale);
+        forders[2] = double(round_order(orders[2], 2)) * (scale * order_scale2);
+        forders[3] = double(round_order(orders[3], 3)) * (scale * order_scale * order_scale2);
 
         double fcycles = double(cycles);
         double fcycles2 = fcycles * fcycles;
@@ -584,6 +593,7 @@ private:
         case ModType::AMPMOD0:
         case ModType::AMPMOD1:
             spl.scale = 1 / double(((1ll << 16) - 1ll) << 23);
+            spl.orders[0] &= ~((int64_t(1) << 23) - 1);
             param_pulse(cb, inst, chn, mod_type == ModType::AMPMOD1,
                         ParamType::Amp, spl, cycles, tgt);
             return;
@@ -1307,6 +1317,7 @@ struct Executor {
     static cubic_spline amp_spline(PDQSpline spl, uint64_t cycles)
     {
         spl.scale = 1 / double(((1ll << 16) - 1ll) << 23);
+        spl.orders[0] &= ~((int64_t(1) << 23) - 1);
         return spl.get_spline(cycles);
     }
     static cubic_spline phase_spline(PDQSpline spl, uint64_t cycles)

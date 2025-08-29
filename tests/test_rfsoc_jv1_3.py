@@ -2,6 +2,7 @@
 
 from brassboard_seq import rfsoc_backend
 from brassboard_seq.rfsoc_backend import Jaqal_v1_3, JaqalInst_v1_3
+from rfsoc_test_utils import pad_list, check_spline_shift, approx_spline
 
 import pytest
 import re
@@ -129,9 +130,6 @@ class MatchGSEQ:
             assert d['gaddrs'] == self.gaddrs
         return True
 
-def pad_list(lst, n, v):
-    return lst + [v] * (n - len(lst))
-
 class MatchPulse:
     def __init__(self, mode, params, channels=None, addr=None, cycles=None,
                  ispl=None, shift=None,
@@ -189,6 +187,8 @@ class MatchPulse:
 
         spline_mu = d['spline_mu']
         spline_shift = d['spline_shift']
+        check_spline_shift(spline_shift, spline_mu[1], spline_mu[2], spline_mu[3], True)
+
         ispl_str = ''
         found_order = False
         for order in range(3, -1, -1):
@@ -289,10 +289,10 @@ class MatchPulse:
             expected = getattr(self, fld_name)
             if expected is None:
                 return
-            expected = pad_list(list(expected), 4, 0)
-            if self.abs is not None or self.rel is not None:
-                expected = pytest.approx(expected, abs=self.abs, rel=self.rel)
-            assert d[fld_name] == expected
+            approx = self.abs is not None or self.rel is not None
+            assert d[fld_name] == approx_spline(name, d['spline_shift'], expected,
+                                                d['cycles'], approx,
+                                                self.abs, self.rel)
 
         if self.trig is not None:
             assert d['trig'] == self.trig
@@ -709,7 +709,17 @@ def test_freq_spline():
     assert inst == match(cycles=4, shift=0, ispl=(-0x4000000000, 0x4000000000),
                          fspl=(-204.8e6, 819.2e6))
 
+    # Overflow
     inst = freq_pulse((-204.8e6, 819.2e6 * 2, 0, 0), 4)
+    assert inst == match(cycles=4, shift=0, ispl=(-0x4000000000,), fspl=(-204.8e6,))
+    inst = freq_pulse((-204.8e6, -819.2e6 * 2, 0, 0), 4)
+    assert inst == match(cycles=4, shift=0, ispl=(-0x4000000000,), fspl=(-204.8e6,))
+
+    inst = freq_pulse((-204.8e6, 819.2e6 * 2 * (1 - 2**-40), 0, 0), 4)
+    assert inst == match(cycles=4, shift=0, ispl=(-0x4000000000, -0x8000000000),
+                         fspl=(-204.8e6, -1638.4e6))
+
+    inst = freq_pulse((-204.8e6, -819.2e6 * 2 * (1 - 2**-40), 0, 0), 4)
     assert inst == match(cycles=4, shift=0, ispl=(-0x4000000000, -0x8000000000),
                          fspl=(-204.8e6, -1638.4e6))
 
@@ -724,7 +734,7 @@ def test_freq_spline():
 
     inst = freq_pulse((-204.8e6, 8.191999999985098e8, 0, 0), 4)
     assert inst == match(cycles=4, shift=1, ispl=(-0x4000000000, 0x7fffffffff),
-                         fspl=(-204.8e6, 819199999.9985099))
+                         fspl=(-204.8e6, 819199999.9970198))
 
     # Higher orders
     inst = freq_pulse((204.8e6, 0, 819.2e6, 0), 4)
@@ -737,7 +747,7 @@ def test_freq_spline():
 
     inst = freq_pulse((204.8e6, 0, 409.6e6, 0), 4)
     assert inst == match(cycles=4, fspl=(204.8e6, 0, 409.6e6), shift=1,
-                         ispl=(0x4000000000, 0x1000000000, 0x4000000000))
+                         ispl=(0x4000000000, 0x1000000001, 0x4000000000))
 
     inst = freq_pulse((204.8e6, 0, 0, 819.2e6), 4)
     assert inst == match(cycles=4, fspl=(204.8e6, 0, 0, 819.2e6), shift=0,
@@ -745,11 +755,11 @@ def test_freq_spline():
 
     inst = freq_pulse((204.8e6, 0, 0, 409.6e6), 4)
     assert inst == match(cycles=4, fspl=(204.8e6, 0, 0, 409.6e6), shift=1,
-                         ispl=(0x4000000000, 0x400000000, 0x3000000000, 0x6000000000))
+                         ispl=(0x4000000000, 0x400000001, 0x3000000000, 0x6000000000))
 
     inst = freq_pulse((204.8e6, 0, 0, 409.6e6), 4096)
     assert inst == match(cycles=4096, fspl=(204.8e6, 0, 0, 409.6e6), shift=11,
-                         ispl=(0x4000000000, 0x4000, 0xc000000, 0x6000000000))
+                         ispl=(0x4000000000, 0x4400, 0xc000020, 0x6000000001))
 
     for i in range(2000):
         o0 = random.random() * 100e6
@@ -779,12 +789,12 @@ def test_amp_spline():
                          fspl=(-1, 2.0000305180437934))
 
     # Test the exact rounding threshold to make sure we are rounding things correctly.
-    inst = amp_pulse((-1, 2.0000000000000004, 0, 0), 4)
-    assert inst == match(cycles=4, shift=0, ispl=(-0x7fff800000, 0x4000000000),
-                         fspl=(-1, 2.0000305180437934))
+    inst = amp_pulse((-1, 2.000000000003638, 0, 0), 4)
+    assert inst == match(cycles=4, shift=1, ispl=(-0x7fff800000, 0x7fff800002),
+                         fspl=(-1, 2.000000000007276))
 
-    inst = amp_pulse((-1, 2, 0, 0), 4)
-    assert inst == match(cycles=4, shift=1, ispl=(-0x7fff800000, 0x7fff800000),
+    inst = amp_pulse((-1, 2.0000000000036375, 0, 0), 4)
+    assert inst == match(cycles=4, shift=1, ispl=(-0x7fff800000, 0x7fff800001),
                          fspl=(-1, 2))
 
     # Higher orders
@@ -794,11 +804,11 @@ def test_amp_spline():
 
     inst = amp_pulse((-1, 0, 2.0000305180437934, 0), 1024)
     assert inst == match(cycles=1024, fspl=(-1, 0, 2.0000305180437934), shift=8,
-                         ispl=(-0x7fff800000, 0x10000000, 0x2000000000))
+                         ispl=(-0x7fff800000, 0x10000080, 0x2000000000))
 
     inst = amp_pulse((1, 0, -2.0000305180437934, 0), 1024)
     assert inst == match(cycles=1024, fspl=(1, 0, -2.0000305180437934), shift=8,
-                         ispl=(0x7fff800000, -0x10000000, -0x2000000000))
+                         ispl=(0x7fff800000, -0x0fffff80, -0x2000000000))
 
     inst = amp_pulse((-1, 0, 0, 2.0000305180437934), 4)
     assert inst == match(cycles=4, fspl=(-1, 0, 0, 2.0000305180437934), shift=0,
@@ -806,7 +816,7 @@ def test_amp_spline():
 
     inst = amp_pulse((-1, 0, 0, 2.0000305180437934), 2048)
     assert inst == match(cycles=2048, shift=9,
-                         ispl=(-0x7fff800000, 0, 0xc000000, 0x1800000000),
+                         ispl=(-0x7fff800000, 0x10100, 0xc000002, 0x1800000000),
                          fspl=(-1, 0, 0, 2.0000305180437934), abs=5e-7)
 
     for i in range(2000):
@@ -855,20 +865,19 @@ def test_phase_spline(cls):
                              ispl=(-0x4000000000, 0x4000000000))
 
     inst = cls.pulse((-0.25, 2, 0, 0), 4)
-    assert inst == cls.match(cycles=4, fspl=(-0.25, -2), shift=0,
-                             ispl=(-0x4000000000, -0x8000000000))
+    assert inst == cls.match(cycles=4, fspl=(-0.25,), shift=0, ispl=(-0x4000000000,))
 
     inst = cls.pulse((-0.25, 0.999999999999, 0, 0), 4)
     assert inst == cls.match(cycles=4, fspl=(-0.25, 1), shift=0,
                              ispl=(-0x4000000000, 0x4000000000))
 
     # Test the exact rounding threshold to make sure we are rounding things correctly.
-    inst = cls.pulse((-0.25, 0.9999999999981811, 0, 0), 4)
+    inst = cls.pulse((-0.25, 0.999999999998181, 0, 0), 4)
     assert inst == cls.match(cycles=4, fspl=(-0.25, 1), shift=0,
                              ispl=(-0x4000000000, 0x4000000000))
 
-    inst = cls.pulse((-0.25, 0.999999999998181, 0, 0), 4)
-    assert inst == cls.match(cycles=4, fspl=(-0.25, 0.999999999998181), shift=1,
+    inst = cls.pulse((-0.25, 0.9999999999981809, 0, 0), 4)
+    assert inst == cls.match(cycles=4, fspl=(-0.25, 0.999999999996362), shift=1,
                              ispl=(-0x4000000000, 0x7fffffffff))
 
     # Higher orders
@@ -882,7 +891,7 @@ def test_phase_spline(cls):
 
     inst = cls.pulse((0.25, 0, 0.5, 0), 4)
     assert inst == cls.match(cycles=4, fspl=(0.25, 0, 0.5), shift=1,
-                             ispl=(0x4000000000, 0x1000000000, 0x4000000000))
+                             ispl=(0x4000000000, 0x1000000001, 0x4000000000))
 
     inst = cls.pulse((0.25, 0, 0, 1), 4)
     assert inst == cls.match(cycles=4, fspl=(0.25, 0, 0, 1), shift=0,
@@ -891,12 +900,12 @@ def test_phase_spline(cls):
 
     inst = cls.pulse((0.25, 0, 0, 0.5), 4)
     assert inst == cls.match(cycles=4, fspl=(0.25, 0, 0, 0.5), shift=1,
-                             ispl=(0x4000000000, 0x400000000,
+                             ispl=(0x4000000000, 0x400000001,
                                    0x3000000000, 0x6000000000))
 
     inst = cls.pulse((0.25, 0, 0, 0.5), 4096)
     assert inst == cls.match(cycles=4096, fspl=(0.25, 0, 0, 0.5), shift=11,
-                             ispl=(0x4000000000, 0x4000, 0xc000000, 0x6000000000))
+                             ispl=(0x4000000000, 0x4400, 0xc000020, 0x6000000001))
 
     for i in range(2000):
         o0 = random.random() * 0.99 - 0.5

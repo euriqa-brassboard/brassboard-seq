@@ -1,6 +1,7 @@
 #
 
 from brassboard_seq.rfsoc_backend import Jaqal_v1, JaqalInst_v1, JaqalChannelGen_v1
+from rfsoc_test_utils import pad_list, check_spline_shift, approx_spline
 
 import pytest
 import re
@@ -101,9 +102,6 @@ class MatchGSEQ:
             assert d['gaddrs'] == self.gaddrs
         return True
 
-def pad_list(lst, n, v):
-    return lst + [v] * (n - len(lst))
-
 class MatchPulse:
     def __init__(self, param, chn, tone, mode, addr, cycles,
                  ispl, shift, fspl, _rel, _abs, approx):
@@ -155,15 +153,16 @@ class MatchPulse:
         if self.cycles is not None:
             assert d['cycles'] == self.cycles
 
+        spline_shift = d['spline_shift']
+        spline_mu = d['spline_mu']
+        check_spline_shift(spline_shift, spline_mu[1], spline_mu[2], spline_mu[3], True)
+
         assert d['spline'] == pad_list([float(o) for o in m_str[2].split(', ')], 4, 0)
         if self.fspl is not None:
-            expected = pad_list(list(self.fspl), 4, 0)
-            if self.approx:
-                expected = pytest.approx(expected, abs=self.abs, rel=self.rel)
-            assert d['spline'] == expected
+            assert d['spline'] == approx_spline(self.param, spline_shift, self.fspl,
+                                                d['cycles'], self.approx,
+                                                self.abs, self.rel)
 
-        spline_mu = d['spline_mu']
-        spline_shift = d['spline_shift']
         ispl_str = ''
         found_order = False
         for order in range(3, -1, -1):
@@ -641,7 +640,21 @@ def test_freq_spline():
     assert inst == MatchParamPulse('freq', cycles=4, fspl=(-204.8e6, 819.2e6), shift=0,
                                    ispl=(-0x4000000000, 0x4000000000))
 
-    inst = Jaqal_v1.freq_pulse(0, 0, (-204.8e6, 819.2e6 * 2, 0, 0), 4, False, False, False)
+    # Overflow
+    inst = Jaqal_v1.freq_pulse(0, 0, (-204.8e6, 819.2e6 * 2, 0, 0),
+                               4, False, False, False)
+    assert inst == MatchParamPulse('freq', cycles=4, fspl=(-204.8e6,), shift=0,
+                                   ispl=(-0x4000000000,))
+    inst = Jaqal_v1.freq_pulse(0, 0, (-204.8e6, -819.2e6 * 2, 0, 0), 4, False, False, False)
+    assert inst == MatchParamPulse('freq', cycles=4, fspl=(-204.8e6,), shift=0,
+                                   ispl=(-0x4000000000,))
+
+    inst = Jaqal_v1.freq_pulse(0, 0, (-204.8e6, 819.2e6 * 2 * (1 - 2**-40), 0, 0),
+                               4, False, False, False)
+    assert inst == MatchParamPulse('freq', cycles=4, fspl=(-204.8e6, -1638.4e6), shift=0,
+                                   ispl=(-0x4000000000, -0x8000000000))
+
+    inst = Jaqal_v1.freq_pulse(0, 0, (-204.8e6, -819.2e6 * 2 * (1 - 2**-40), 0, 0), 4, False, False, False)
     assert inst == MatchParamPulse('freq', cycles=4, fspl=(-204.8e6, -1638.4e6), shift=0,
                                    ispl=(-0x4000000000, -0x8000000000))
 
@@ -655,7 +668,7 @@ def test_freq_spline():
                                    ispl=(-0x4000000000, 0x4000000000))
 
     inst = Jaqal_v1.freq_pulse(0, 0, (-204.8e6, 8.191999999985098e8, 0, 0), 4, False, False, False)
-    assert inst == MatchParamPulse('freq', cycles=4, fspl=(-204.8e6, 819199999.9985099),
+    assert inst == MatchParamPulse('freq', cycles=4, fspl=(-204.8e6, 819199999.9970198),
                                    shift=1, ispl=(-0x4000000000, 0x7fffffffff))
 
     # Higher orders
@@ -669,7 +682,7 @@ def test_freq_spline():
 
     inst = Jaqal_v1.freq_pulse(0, 0, (204.8e6, 0, 409.6e6, 0), 4, False, False, False)
     assert inst == MatchParamPulse('freq', cycles=4, fspl=(204.8e6, 0, 409.6e6), shift=1,
-                                   ispl=(0x4000000000, 0x1000000000, 0x4000000000))
+                                   ispl=(0x4000000000, 0x1000000001, 0x4000000000))
 
     inst = Jaqal_v1.freq_pulse(0, 0, (204.8e6, 0, 0, 819.2e6), 4, False, False, False)
     assert inst == MatchParamPulse('freq', cycles=4, fspl=(204.8e6, 0, 0, 819.2e6),
@@ -678,14 +691,14 @@ def test_freq_spline():
 
     inst = Jaqal_v1.freq_pulse(0, 0, (204.8e6, 0, 0, 409.6e6), 4, False, False, False)
     assert inst == MatchParamPulse('freq', cycles=4, fspl=(204.8e6, 0, 0, 409.6e6),
-                                   shift=1, ispl=(0x4000000000, 0x400000000,
+                                   shift=1, ispl=(0x4000000000, 0x400000001,
                                                   0x3000000000, 0x6000000000))
 
     inst = Jaqal_v1.freq_pulse(0, 0, (204.8e6, 0, 0, 409.6e6), 4096,
                                False, False, False)
     assert inst == MatchParamPulse('freq', cycles=4096, fspl=(204.8e6, 0, 0, 409.6e6),
                                    shift=11,
-                                   ispl=(0x4000000000, 0x4000, 0xc000000, 0x6000000000))
+                                   ispl=(0x4000000000, 0x4400, 0xc000020, 0x6000000001))
 
     for i in range(2000):
         o0 = random.random() * 100e6
@@ -713,14 +726,14 @@ def test_amp_spline():
                                    shift=0, ispl=(-0x7fff800000, 0x4000000000))
 
     # Test the exact rounding threshold to make sure we are rounding things correctly.
-    inst = Jaqal_v1.amp_pulse(0, 0, (-1, 2.0000000000000004, 0, 0), 4,
+    inst = Jaqal_v1.amp_pulse(0, 0, (-1, 2.000000000003638, 0, 0), 4,
                               False, False, False)
-    assert inst == MatchParamPulse('amp', cycles=4, fspl=(-1, 2.0000305180437934),
-                                   shift=0, ispl=(-0x7fff800000, 0x4000000000))
+    assert inst == MatchParamPulse('amp', cycles=4, fspl=(-1, 2.000000000007276),
+                                   shift=1, ispl=(-0x7fff800000, 0x7fff800002))
 
-    inst = Jaqal_v1.amp_pulse(0, 0, (-1, 2, 0, 0), 4, False, False, False)
+    inst = Jaqal_v1.amp_pulse(0, 0, (-1, 2.0000000000036375, 0, 0), 4, False, False, False)
     assert inst == MatchParamPulse('amp', cycles=4, fspl=(-1, 2), shift=1,
-                                   ispl=(-0x7fff800000, 0x7fff800000))
+                                   ispl=(-0x7fff800000, 0x7fff800001))
 
     # Higher orders
     inst = Jaqal_v1.amp_pulse(0, 0, (-1, 0, 2.0000305180437934, 0), 4,
@@ -732,13 +745,13 @@ def test_amp_spline():
     inst = Jaqal_v1.amp_pulse(0, 0, (-1, 0, 2.0000305180437934, 0), 1024,
                               False, False, False)
     assert inst == MatchParamPulse('amp', cycles=1024, fspl=(-1, 0, 2.0000305180437934),
-                                   shift=8, ispl=(-0x7fff800000, 0x10000000,
+                                   shift=8, ispl=(-0x7fff800000, 0x10000080,
                                                   0x2000000000))
 
     inst = Jaqal_v1.amp_pulse(0, 0, (1, 0, -2.0000305180437934, 0), 1024,
                               False, False, False)
     assert inst == MatchParamPulse('amp', cycles=1024, fspl=(1, 0, -2.0000305180437934),
-                                   shift=8, ispl=(0x7fff800000, -0x10000000,
+                                   shift=8, ispl=(0x7fff800000, -0x0fffff80,
                                                   -0x2000000000))
 
 
@@ -751,7 +764,7 @@ def test_amp_spline():
     inst = Jaqal_v1.amp_pulse(0, 0, (-1, 0, 0, 2.0000305180437934), 2048,
                               False, False, False)
     assert inst == MatchParamPulse('amp', cycles=2048, shift=9,
-                                   ispl=(-0x7fff800000, 0, 0xc000000, 0x1800000000),
+                                   ispl=(-0x7fff800000, 0x10100, 0xc000002, 0x1800000000),
                                    fspl=(-1, 0, 0, 2.0000305180437934), abs=5e-7)
 
     for i in range(2000):
@@ -796,21 +809,21 @@ def test_phase_spline(cls):
                              fspl=(-0.25, 1))
 
     inst = cls.pulse((-0.25, 2, 0, 0), 4)
-    assert inst == cls.match(cycles=4, fspl=(-0.25, -2), shift=0,
-                             ispl=(-0x4000000000, -0x8000000000))
+    assert inst == cls.match(cycles=4, fspl=(-0.25,), shift=0,
+                             ispl=(-0x4000000000,))
 
     inst = cls.pulse((-0.25, 0.999999999999, 0, 0), 4)
     assert inst == cls.match(cycles=4, shift=0, ispl=(-0x4000000000, 0x4000000000),
                              fspl=(-0.25, 1))
 
     # Test the exact rounding threshold to make sure we are rounding things correctly.
-    inst = cls.pulse((-0.25, 0.9999999999981811, 0, 0), 4)
+    inst = cls.pulse((-0.25, 0.999999999998181, 0, 0), 4)
     assert inst == cls.match(cycles=4, shift=0, ispl=(-0x4000000000, 0x4000000000),
                              fspl=(-0.25, 1))
 
-    inst = cls.pulse((-0.25, 0.999999999998181, 0, 0), 4)
+    inst = cls.pulse((-0.25, 0.9999999999981809, 0, 0), 4)
     assert inst == cls.match(cycles=4, shift=1, ispl=(-0x4000000000, 0x7fffffffff),
-                             fspl=(-0.25, 0.999999999998181))
+                             fspl=(-0.25, 0.999999999996362))
 
     # Higher orders
     inst = cls.pulse((0.25, 0, 1, 0), 4)
@@ -823,7 +836,7 @@ def test_phase_spline(cls):
 
     inst = cls.pulse((0.25, 0, 0.5, 0), 4)
     assert inst == cls.match(cycles=4, fspl=(0.25, 0, 0.5), shift=1,
-                             ispl=(0x4000000000, 0x1000000000, 0x4000000000))
+                             ispl=(0x4000000000, 0x1000000001, 0x4000000000))
 
     inst = cls.pulse((0.25, 0, 0, 1), 4)
     assert inst == cls.match(cycles=4, fspl=(0.25, 0, 0, 1), shift=0,
@@ -832,12 +845,12 @@ def test_phase_spline(cls):
 
     inst = cls.pulse((0.25, 0, 0, 0.5), 4)
     assert inst == cls.match(cycles=4, fspl=(0.25, 0, 0, 0.5), shift=1,
-                             ispl=(0x4000000000, 0x400000000,
+                             ispl=(0x4000000000, 0x400000001,
                                    0x3000000000, 0x6000000000))
 
     inst = cls.pulse((0.25, 0, 0, 0.5), 4096)
     assert inst == cls.match(cycles=4096, fspl=(0.25, 0, 0, 0.5), shift=11,
-                             ispl=(0x4000000000, 0x4000, 0xc000000, 0x6000000000))
+                             ispl=(0x4000000000, 0x4400, 0xc000020, 0x6000000001))
 
     for i in range(2000):
         o0 = random.random() * 0.99 - 0.5
