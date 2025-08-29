@@ -574,38 +574,29 @@ private:
         spl.orders[2] = load_s40(40 * 2);
         spl.orders[3] = load_s40(40 * 3);
         int64_t cycles = (inst >> 40 * 4)[0] & ((int64_t(1) << 40) - 1);
-        switch (ModType((inst >> Bits::MODTYPE)[0] & 0x7)) {
+        switch (auto mod_type = ModType((inst >> Bits::MODTYPE)[0] & 0x7)) {
         case ModType::FRQMOD0:
-            spl.scale = output_clock / double(1ll << 40);
-            param_pulse(cb, inst, chn, 0, ParamType::Freq, spl, cycles, tgt);
-            return;
-        case ModType::AMPMOD0:
-            spl.scale = 1 / double(((1ll << 16) - 1ll) << 23);
-            param_pulse(cb, inst, chn, 0, ParamType::Amp, spl, cycles, tgt);
-            return;
-        case ModType::PHSMOD0:
-            spl.scale = 1 / double(1ll << 40);
-            param_pulse(cb, inst, chn, 0, ParamType::Phase, spl, cycles, tgt);
-            return;
         case ModType::FRQMOD1:
             spl.scale = output_clock / double(1ll << 40);
-            param_pulse(cb, inst, chn, 1, ParamType::Freq, spl, cycles, tgt);
+            param_pulse(cb, inst, chn, mod_type == ModType::FRQMOD1,
+                        ParamType::Freq, spl, cycles, tgt);
             return;
+        case ModType::AMPMOD0:
         case ModType::AMPMOD1:
             spl.scale = 1 / double(((1ll << 16) - 1ll) << 23);
-            param_pulse(cb, inst, chn, 1, ParamType::Amp, spl, cycles, tgt);
+            param_pulse(cb, inst, chn, mod_type == ModType::AMPMOD1,
+                        ParamType::Amp, spl, cycles, tgt);
             return;
+        case ModType::PHSMOD0:
         case ModType::PHSMOD1:
             spl.scale = 1 / double(1ll << 40);
-            param_pulse(cb, inst, chn, 1, ParamType::Phase, spl, cycles, tgt);
+            param_pulse(cb, inst, chn, mod_type == ModType::PHSMOD1,
+                        ParamType::Phase, spl, cycles, tgt);
             return;
         case ModType::FRMROT0:
-            spl.scale = 1 / double(1ll << 40);
-            frame_pulse(cb, inst, chn, 0, spl, cycles, tgt);
-            return;
         case ModType::FRMROT1:
             spl.scale = 1 / double(1ll << 40);
-            frame_pulse(cb, inst, chn, 1, spl, cycles, tgt);
+            frame_pulse(cb, inst, chn, mod_type == ModType::FRMROT1, spl, cycles, tgt);
             return;
         }
     }
