@@ -41,8 +41,7 @@ struct PDQSpline {
             int fracbit = (order - 1) * 16 - shift * order;
             if (fracbit >= 0)
                 return sp;
-            if (fracbit <= -64)
-                return 0;
+            assert(fracbit > -64);
             auto mask = -(int64_t(1) << -fracbit);
             return mask & sp;
         };

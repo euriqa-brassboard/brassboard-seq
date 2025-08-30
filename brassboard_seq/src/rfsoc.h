@@ -117,8 +117,10 @@ encode_pdq_spline(int64_t isp0, double sp1, double sp2, double sp3)
                     auto overflow = (shiftbit == 14 && shift_len > 0 &&
                                      (newfrac & ~frac & (int64_t(1) << 53)));
                     // Overflow from rounding, try again with a smaller shift
-                    if (overflow_check && overflow) [[unlikely]]
+                    if (overflow_check && overflow) [[unlikely]] {
+                        shift_len--;
                         return false;
+                    }
                     assert(!overflow);
                     isp[order] = (newfrac >> shiftbit) & mask;
                 }
@@ -127,11 +129,8 @@ encode_pdq_spline(int64_t isp0, double sp1, double sp2, double sp3)
         return true;
     };
 
-    if (!try_shift_len(true)) [[unlikely]] {
-        shift_len -= 1;
+    if (!try_shift_len(true)) [[unlikely]]
         try_shift_len(false);
-    }
-
     return { isp, shift_len };
 }
 
