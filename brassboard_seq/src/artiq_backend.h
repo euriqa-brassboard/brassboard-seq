@@ -83,6 +83,60 @@ struct DDSChannel {
     }
 };
 
+struct StartTrigger {
+    uint32_t target;
+    uint16_t min_time_mu;
+    bool raising_edge;
+    int64_t time_mu;
+};
+
+struct Relocation {
+    // If a particular relocation is not needed for this action,
+    // the corresponding idx would be -1
+    int cond_idx;
+    int time_idx;
+    int val_idx;
+};
+
+struct RTIOAction {
+    uint32_t target;
+    uint32_t value;
+    int64_t time_mu;
+};
+
+struct TimeChecker {
+    TimeChecker()
+        : max_key(0)
+    {}
+    void clear();
+    bool empty()
+    {
+        return counts.empty() && max_key == 0;
+    }
+    bool check_and_add_time(int64_t t_mu);
+    int64_t find_time(int64_t lb_mu, int64_t t_mu, int64_t ub_mu);
+
+    std::unordered_map<int64_t,int> counts;
+    int64_t max_key;
+};
+
+struct RTIOGen {
+    std::vector<RTIOAction> actions;
+    TimeChecker time_checker;
+    void start()
+    {
+        assert(time_checker.empty());
+        assert(actions.empty());
+    }
+    void finish()
+    {
+        time_checker.clear();
+        actions.clear();
+    }
+    int64_t add_action(uint32_t target, uint32_t value, int aid,
+                       int64_t request_time_mu, int64_t lb_mu, bool exact_time);
+};
+
 struct DDSAction {
     int64_t time_mu;
     uint32_t data1;
@@ -114,10 +168,10 @@ struct UrukulBus {
         last_io_update_mu = start_mu;
     }
 
-    void add_dds_action(auto &add_action, DDSAction &action);
-    void add_io_update(auto &add_action, int64_t time_mu, int aid, bool exact_time);
-    void flush_output(auto &add_action, int64_t time_mu, bool force);
-    void add_output(auto &add_action, const ArtiqAction &action, DDSChannel &ddschn);
+    void add_dds_action(RTIOGen &gen, DDSAction &action);
+    void add_io_update(RTIOGen &gen, int64_t time_mu, int aid, bool exact_time);
+    void flush_output(RTIOGen &gen, int64_t time_mu, bool force);
+    void add_output(RTIOGen &gen, const ArtiqAction &action, DDSChannel &ddschn);
 };
 
 struct TTLChannel {
@@ -152,16 +206,9 @@ struct TTLChannel {
         new_val = uint8_t(-1);
     }
     uint8_t ttl_to_mu(bool) const;
-    void flush_output(auto &add_action, int64_t cur_time_mu,
+    void flush_output(RTIOGen &gen, int64_t cur_time_mu,
                       bool exact_time_only, bool force);
-    void add_output(auto &add_action, const ArtiqAction &action);
-};
-
-struct StartTrigger {
-    uint32_t target;
-    uint16_t min_time_mu;
-    bool raising_edge;
-    int64_t time_mu;
+    void add_output(RTIOGen &gen, const ArtiqAction &action);
 };
 
 struct ChannelsInfo {
@@ -205,36 +252,6 @@ struct ChannelsInfo {
                                int64_t delay, rtval_ptr rt_delay);
 };
 
-struct Relocation {
-    // If a particular relocation is not needed for this action,
-    // the corresponding idx would be -1
-    int cond_idx;
-    int time_idx;
-    int val_idx;
-};
-
-struct RTIOAction {
-    uint32_t target;
-    uint32_t value;
-    int64_t time_mu;
-};
-
-struct TimeChecker {
-    TimeChecker()
-        : max_key(0)
-    {}
-    void clear();
-    bool empty()
-    {
-        return counts.empty() && max_key == 0;
-    }
-    bool check_and_add_time(int64_t t_mu);
-    int64_t find_time(int64_t lb_mu, int64_t t_mu, int64_t ub_mu);
-
-    std::unordered_map<int64_t,int> counts;
-    int64_t max_key;
-};
-
 static constexpr int coarse_time_mu = 8;
 
 static inline int64_t seq_time_to_mu(int64_t time)
@@ -264,13 +281,12 @@ struct ArtiqBackend : BackendBase::Base<ArtiqBackend> {
         ChannelsInfo channels;
         std::vector<std::pair<void*,bool>> bool_values;
         std::vector<std::pair<void*,double>> float_values;
-        std::vector<RTIOAction> rtio_actions;
+        RTIOGen rtio_gen;
         std::vector<Relocation> relocations;
         bool eval_status{false};
         bool use_dma;
         bool support_branch;
         int64_t max_delay;
-        TimeChecker time_checker;
         py::list_ref all_outputs;
 
         std::vector<StartTrigger> start_triggers;
@@ -292,10 +308,15 @@ struct ArtiqBackend : BackendBase::Base<ArtiqBackend> {
         }
         void add_start_trigger(py::ptr<> name, py::ptr<> time,
                                py::ptr<> min_time, py::ptr<> raising_edge);
+        int64_t add_action(uint32_t target, uint32_t value, int aid,
+                           int64_t request_time_mu, int64_t lb_mu,
+                           bool exact_time);
     private:
         struct Indexers;
         void process_bseq(py::ptr<SeqCompiler>, CompiledBasicSeq&,
                           py::ptr<Output>, Indexers&);
+        void reloc_action(const ArtiqAction &action,
+                          const std::vector<int64_t> &time_values) const;
         void generate_bseq(py::ptr<SeqCompiler>, CompiledBasicSeq&, py::ptr<Output>);
     };
 
