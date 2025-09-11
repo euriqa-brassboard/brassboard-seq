@@ -370,8 +370,8 @@ static inline rtval_ref new_addsub(TagVal c, rtval_ptr v, bool s)
 
 static inline rtval_ref build_addsub(py::ptr<> v0, py::ptr<> v1, bool issub)
 {
-    assume(v0);
-    assume(v1);
+    assume(bool(v0));
+    assume(bool(v1));
     TagVal nc{};
     rtval_ptr nv0;
     bool ns0 = false;
