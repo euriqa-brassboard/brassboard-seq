@@ -263,7 +263,7 @@ inline void Jaqalv1Gen::end()
     }
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 py::ref<> Jaqalv1Gen::get_prefix(int n) const
 {
     if (n < 0 || n >= 4)
@@ -271,7 +271,7 @@ py::ref<> Jaqalv1Gen::get_prefix(int n) const
     return boards[n].get_prefix();
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 py::ref<> Jaqalv1Gen::get_sequence(int n) const
 {
     if (n < 0 || n >= 4)
@@ -722,7 +722,7 @@ inline void Jaqalv1_3Gen::process_channel(ToneBuffer &tone_buffer, int chn,
                   chninfo.tone == 0 ? Jaqal_v1_3::FRMROT0 : Jaqal_v1_3::FRMROT1);
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 py::ref<> Jaqalv1_3Gen::get_prefix(int n) const
 {
     if (n < 0 || n >= 4)
@@ -730,7 +730,7 @@ py::ref<> Jaqalv1_3Gen::get_prefix(int n) const
     return py::new_bytes();
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 py::ref<> Jaqalv1_3Gen::get_sequence(int n) const
 {
     if (n < 0 || n >= 4)
@@ -780,7 +780,7 @@ inline void Jaqalv1_3Gen::end()
     }
 }
 
-__attribute__((visibility("protected"))) void
+BB_PROTECTED void
 SyncTimeMgr::add_action(std::vector<DDSParamAction> &actions, int64_t start_cycle,
                         int64_t end_cycle, cubic_spline sp,
                         int64_t end_seq_time, int tid, ToneParam param)
@@ -903,7 +903,7 @@ SyncTimeMgr::add_action(std::vector<DDSParamAction> &actions, int64_t start_cycl
     }
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 PyTypeObject RFSOCGenerator::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rfsoc_backend.RFSOCGenerator",

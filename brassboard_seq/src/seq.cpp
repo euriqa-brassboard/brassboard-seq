@@ -269,7 +269,7 @@ inline int SeqInfo::get_channel_id(py::str name)
     return cid;
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 PyTypeObject SeqInfo::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.seq.SeqInfo",
@@ -292,7 +292,7 @@ inline void TimeSeq::show_cond_suffix(py::stringio &io) const
     io << "\n";
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 PyTypeObject TimeSeq::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.seq.TimeSeq",
@@ -401,7 +401,7 @@ inline void TimeStep::show(py::stringio &io, int indent) const
     }
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 PyTypeObject TimeStep::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.seq.TimeStep",
@@ -512,7 +512,7 @@ SubSeq::add_time_step(py::ptr<> cond, py::ptr<EventTime> start_time, py::ptr<> l
     return step;
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 PyTypeObject SubSeq::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.seq.SubSeq",
@@ -550,7 +550,7 @@ inline void ConditionalWrapper::show(py::stringio &io, int indent) const
     seq->show(io, indent + 2);
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 PyTypeObject ConditionalWrapper::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.seq.ConditionalWrapper",
@@ -630,7 +630,7 @@ inline void BasicSeq::show(py::stringio &io, int indent) const
     show_subseqs(io, indent + 2);
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 PyTypeObject BasicSeq::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.seq.BasicSeq",
@@ -704,7 +704,7 @@ inline void Seq::show(py::stringio &io, int indent) const
     }
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 PyTypeObject Seq::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.seq.Seq",

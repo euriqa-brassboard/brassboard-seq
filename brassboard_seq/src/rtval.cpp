@@ -24,21 +24,21 @@
 
 namespace brassboard_seq::rtval {
 
-__attribute__((visibility("protected"))) rtval_ref
+BB_PROTECTED rtval_ref
 new_cb_arg2(ValueType type, py::ptr<> cb_arg2, py::ptr<> ty)
 {
     return RuntimeValue::alloc(type, pytype_to_datatype(ty),
                                py::new_none(), py::new_none(), cb_arg2);
 }
 
-__attribute__((visibility("protected"))) rtval_ref
+BB_PROTECTED rtval_ref
 new_expr1(ValueType type, rtval_ref &&arg0)
 {
     return RuntimeValue::alloc(type, unary_return_type(type, arg0->datatype),
                                std::move(arg0), py::new_none(), py::new_none());
 }
 
-__attribute__((visibility("protected"))) rtval_ref
+BB_PROTECTED rtval_ref
 new_expr2(ValueType type, rtval_ref &&arg0, rtval_ref &&arg1)
 {
     return RuntimeValue::alloc(type,
@@ -46,7 +46,7 @@ new_expr2(ValueType type, rtval_ref &&arg0, rtval_ref &&arg1)
                                std::move(arg0), std::move(arg1), py::new_none());
 }
 
-__attribute__((visibility("protected"))) rtval_ref
+BB_PROTECTED rtval_ref
 new_const(TagVal v)
 {
     auto self = RuntimeValue::alloc(Const, v.type, py::new_none(),
@@ -84,7 +84,7 @@ static inline rtval_ref wrap_rtval(py::ptr<> v)
     return new_const(TagVal::from_py(v));
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 rtval_ref new_select(rtval_ptr arg0, py::ptr<> arg1, py::ptr<> arg2)
 {
     auto rtarg1 = wrap_rtval(arg1);
@@ -180,7 +180,7 @@ static bool _rt_same_value(rtval_ptr v1, rtval_ptr v2)
     }
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 bool same_value(py::ptr<> v1, py::ptr<> v2) try {
     if (!is_rtval(v1)) {
         if (!is_rtval(v2)) {
@@ -211,7 +211,7 @@ void init()
 using extern_cb_t = TagVal(ExternCallback*);
 using extern_age_cb_t = TagVal(ExternCallback*, unsigned);
 
-__attribute__((flatten,visibility("protected")))
+BB_PROTECTED __attribute__((flatten))
 void rt_eval_cache(rtval_ptr self, unsigned age)
 {
     if (self->age == age)
@@ -342,7 +342,7 @@ static inline bool is_numpy_int(PyObject *value)
     return PyArray_IsZeroDim(value) && PyArray_ISINTEGER((PyArrayObject*)value);
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 TagVal TagVal::from_py(py::ptr<> value)
 {
     if (value == Py_True)
@@ -827,7 +827,7 @@ static auto rtvalue_as_number = PyNumberMethods{
     .nb_true_divide = py::binfunc<[] (auto v1, auto v2) {
         return new_expr2_wrap1(Div, v1, v2); }>,
 };
-__attribute__((visibility("protected")))
+BB_PROTECTED
 PyTypeObject RuntimeValue::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rtval.RuntimeValue",
@@ -858,7 +858,7 @@ PyTypeObject RuntimeValue::Type = {
                    py::meth_noargs<"__round__",rtvalue_round>>),
 };
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 PyTypeObject ExternCallback::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rtval.ExternCallback",
@@ -1052,7 +1052,7 @@ static inline int get_label_offset(ValueType op, DataType t1, DataType t2)
     return interp_label_offsets[get_label_id(op, t1, t2)];
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 void InterpFunction::set_value(rtval_ptr value, std::vector<DataType> &args)
 {
     int nargs = args.size();
@@ -1234,7 +1234,7 @@ InterpFunction::visit_value(RuntimeValue *value, Builder &builder)
     }
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 void InterpFunction::eval_all(unsigned age)
 {
     for (size_t i = 0; i < rt_vals.size(); i++) {
@@ -1249,7 +1249,7 @@ void InterpFunction::eval_all(unsigned age)
     }
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 TagVal InterpFunction::call()
 {
     auto [err, val] = interpret_func(code.data(), data.data(), errors.data());

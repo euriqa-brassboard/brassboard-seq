@@ -31,7 +31,7 @@ PyMethodDef methods[] = {
         return py::newref(val);
     }>, {}};
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 rtval::rtval_ref round_time_rt(rtval::rtval_ptr v)
 {
     static RuntimeValue *rt_scale = rtval::new_const(time_scale).rel();
@@ -157,7 +157,7 @@ inline void TimeManager::visit_time(EventTime *t, auto &visited)
     event_times.append(t);
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 time_ref TimeManager::new_rt(time_ptr prev, rtval::rtval_ptr offset,
                              py::ptr<> cond, time_ptr wait_for)
 {
@@ -180,7 +180,7 @@ time_ref TimeManager::new_rt(time_ptr prev, rtval::rtval_ptr offset,
     return tp;
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 void TimeManager::finalize()
 {
     if (status->finalized)
@@ -259,7 +259,7 @@ void TimeManager::finalize()
     }
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 int64_t TimeManager::compute_all_times(unsigned age)
 {
     if (!status->finalized)
@@ -273,7 +273,7 @@ int64_t TimeManager::compute_all_times(unsigned age)
     return max_time;
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 py::ref<TimeManager> TimeManager::alloc()
 {
     auto self = py::generic_alloc<TimeManager>();
@@ -286,7 +286,7 @@ py::ref<TimeManager> TimeManager::alloc()
     return self;
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 PyTypeObject TimeManager::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.event_time.TimeManager",
@@ -479,7 +479,7 @@ static auto EventTime_as_number = PyNumberMethods{
     }>,
 };
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 PyTypeObject EventTime::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.event_time.EventTime",

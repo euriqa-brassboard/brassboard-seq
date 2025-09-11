@@ -407,7 +407,7 @@ PyTypeObject BackendBase::Type = {
     .tp_flags = Py_TPFLAGS_DEFAULT
 };
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 PyTypeObject SeqCompiler::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.backend.SeqCompiler",

@@ -1189,7 +1189,7 @@ void ArtiqBackend::Data::add_start_trigger(py::ptr<> name, py::ptr<> time,
                           raising_edge.as_bool());
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 PyTypeObject ArtiqBackend::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.artiq_backend.ArtiqBackend",

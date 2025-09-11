@@ -26,7 +26,7 @@
 
 namespace brassboard_seq {
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 BBLogLevel bb_logging_level = [] {
     if (auto env = getenv("BB_LOG")) {
         if (strcasecmp(env, "debug") == 0) {
@@ -39,7 +39,7 @@ BBLogLevel bb_logging_level = [] {
     return BB_LOG_INFO;
 }();
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 PyMethodDef utils_methods[] = {
     py::meth_o<"set_log_level",[] (auto, py::ptr<> _level) {
         auto level = py::arg_cast<py::str>(_level, "level");
@@ -57,26 +57,26 @@ PyMethodDef utils_methods[] = {
 namespace py {
 
 #if PY_VERSION_HEX >= 0x030d0000
-__attribute__((visibility("protected")))
+BB_PROTECTED
 tuple empty_tuple(Py_GetConstant(Py_CONSTANT_EMPTY_TUPLE));
-__attribute__((visibility("protected")))
+BB_PROTECTED
 bytes empty_bytes(Py_GetConstant(Py_CONSTANT_EMPTY_BYTES));
 #else
-__attribute__((visibility("protected")))
+BB_PROTECTED
 tuple empty_tuple(new_tuple(0).rel());
-__attribute__((visibility("protected")))
+BB_PROTECTED
 bytes empty_bytes(new_bytes(nullptr, 0).rel());
 #endif
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 float_ float_m1(throw_if_not(PyFloat_FromDouble(-1)));
-__attribute__((visibility("protected")))
+BB_PROTECTED
 float_ float_m0_5(throw_if_not(PyFloat_FromDouble(-0.5)));
-__attribute__((visibility("protected")))
+BB_PROTECTED
 float_ float_0(throw_if_not(PyFloat_FromDouble(0)));
-__attribute__((visibility("protected")))
+BB_PROTECTED
 float_ float_0_5(throw_if_not(PyFloat_FromDouble(0.5)));
-__attribute__((visibility("protected")))
+BB_PROTECTED
 float_ float_1(throw_if_not(PyFloat_FromDouble(1)));
 
 const std::array<int_,_int_cache_max * 2> _int_cache = [] {
@@ -99,7 +99,7 @@ static dict_ref _dict_deepcopy(dict d)
     return res;
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 ref<> dict_deepcopy(ptr<> d)
 {
     if (!d.isa<dict>())
@@ -159,19 +159,19 @@ inline void stringio::write_kind(const void *data, int kind, ssize_t len)
     m_pos += len;
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 void stringio::write(str s)
 {
     write_kind(PyUnicode_DATA(s.get()), PyUnicode_KIND(s.get()), s.size());
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 void stringio::write_ascii(const char *s, ssize_t len)
 {
     write_kind(s, PyUnicode_1BYTE_KIND, len);
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 void stringio::write_rep_ascii(int nrep, const char *s, ssize_t len)
 {
     static_assert(PyUnicode_1BYTE_KIND == 1);
@@ -191,7 +191,7 @@ void stringio::write_rep_ascii(int nrep, const char *s, ssize_t len)
     m_pos += len * nrep;
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 std::pair<int,void*> stringio::reserve_buffer(int kind, ssize_t len)
 {
     check_size(m_pos + len, kind);
@@ -200,7 +200,7 @@ std::pair<int,void*> stringio::reserve_buffer(int kind, ssize_t len)
     return {m_kind, ptr};
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 str_ref stringio::getvalue()
 {
     if (!m_pos)
@@ -208,7 +208,7 @@ str_ref stringio::getvalue()
     return str_ref::checked(PyUnicode_FromKindAndData(m_kind, m_buff.get(), m_pos));
 }
 
-[[noreturn]] __attribute__((visibility("protected")))
+[[noreturn]] BB_PROTECTED
 void num_arg_error(const char *func_name, ssize_t nfound,
                    ssize_t nmin, ssize_t nmax)
 {
@@ -232,7 +232,7 @@ void num_arg_error(const char *func_name, ssize_t nfound,
                     (nexpected == 1) ? "" : "s", nfound);
 }
 
-[[noreturn]] __attribute__((visibility("protected")))
+[[noreturn]] BB_PROTECTED
 void unexpected_kwarg_error(const char *func_name, py::str name)
 {
     py_throw_format(PyExc_TypeError, "%s got an unexpected keyword argument '%U'",
@@ -359,13 +359,13 @@ static inline auto get_global_backtrace(uintptr_t key)
     return py::ref();
 }
 
-[[noreturn]] __attribute__((visibility("protected")))
+[[noreturn]] BB_PROTECTED
 void throw0()
 {
     throw 0;
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 void bb_reraise(uintptr_t key)
 {
     PyObject *exc, *type, *old_tb;
@@ -374,14 +374,14 @@ void bb_reraise(uintptr_t key)
                                                get_global_backtrace(key)).rel());
 }
 
-[[noreturn]] __attribute__((visibility("protected")))
+[[noreturn]] BB_PROTECTED
 void bb_rethrow(uintptr_t key)
 {
     bb_reraise(key);
     throw0();
 }
 
-[[noreturn]] __attribute__((visibility("protected")))
+[[noreturn]] BB_PROTECTED
 void _bb_throw_format(PyObject *exc, uintptr_t key,
                       const char *format, ...)
 {
@@ -393,7 +393,7 @@ void _bb_throw_format(PyObject *exc, uintptr_t key,
     bb_rethrow(key);
 }
 
-[[noreturn]] __attribute__((visibility("protected")))
+[[noreturn]] BB_PROTECTED
 void _py_throw_format(PyObject *exc, const char *format, ...)
 {
     // This is slightly less efficient but much simpler to implement.
@@ -404,7 +404,7 @@ void _py_throw_format(PyObject *exc, const char *format, ...)
     throw0();
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 void handle_cxx_exception()
 {
     if (PyErr_Occurred())
@@ -846,7 +846,7 @@ static void _get_suffix_array(std::span<int> SA, std::span<int> S,
     sort_suffix(S, SA, ws, lms_cnt);
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 void get_height_array(std::span<int> height, std::span<int> S,
                       std::span<int> SA, std::span<int> RK)
 {

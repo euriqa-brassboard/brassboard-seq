@@ -20,7 +20,7 @@
 
 namespace brassboard_seq::action {
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 void Action::print(py::stringio &io)
 {
     io.write_ascii(is_pulse ? "Pulse(" : "Set(");
@@ -42,7 +42,7 @@ void Action::print(py::stringio &io)
     io.write_ascii(")");
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 PyTypeObject RampFunctionBase::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.action.RampFunctionBase",
@@ -80,7 +80,7 @@ rtval::TagVal SeqCubicSpline::Data::runtime_eval(double t) noexcept
     return rtval::TagVal(sp.order0 + (sp.order1 + (sp.order2 + sp.order3 * t) * t) * t);
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 PyTypeObject SeqCubicSpline::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.action.SeqCubicSpline",

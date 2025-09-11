@@ -46,7 +46,7 @@ static inline int64_t cycle_to_seq_time(int64_t cycle)
     return time_whole + time_frac;
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 void ChannelsInfo::ensure_unused_tones(bool all)
 {
     // For now, do not generate RFSoC data if there's no output.
@@ -81,7 +81,7 @@ static int parse_pos_int(const std::string_view &s, py::tuple path, int max)
     return n;
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 void ChannelsInfo::collect_channel(py::ptr<seq::Seq> seq, py::str prefix)
 {
     // Channel name format: <prefix>/dds<chn>/<tone>/<param>
@@ -630,7 +630,7 @@ void RFSOCBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned ag
     bb_debug("rfsoc_runtime_finalize: finish\n");
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 PyTypeObject RFSOCBackend::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rfsoc_backend.RFSOCBackend",

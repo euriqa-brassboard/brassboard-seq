@@ -170,7 +170,7 @@ static constexpr auto parampack_str = py::unifunc<[] (py::ptr<ParamPack> self) {
     return yaml::sprint(field);
 }>;
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 py::ref<ParamPack> ParamPack::new_empty()
 {
     auto self = parampack_alloc();
@@ -205,7 +205,7 @@ static auto ParamPack_as_mapping = PyMappingMethods{
         return res;
     }>,
 };
-__attribute__((visibility("protected")))
+BB_PROTECTED
 PyTypeObject ParamPack::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.rtval.ParamPack",

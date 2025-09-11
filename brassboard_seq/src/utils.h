@@ -73,10 +73,36 @@
 #  define BB_CPU_PPC32 1
 #endif
 
+#define BB_OS_FREEBSD 0
+#define BB_OS_LINUX 0
+#define BB_OS_WINDOWS 0
+#define BB_OS_DARWIN 0
+
+#if defined(__FreeBSD__)
+#  undef BB_OS_FREEBSD
+#  define BB_OS_FREEBSD 1
+#elif defined(__linux__)
+#  undef BB_OS_LINUX
+#  define BB_OS_LINUX 1
+#elif defined(_WIN32) || defined(_WIN64)
+#  undef BB_OS_WINDOWS
+#  define BB_OS_WINDOWS 1
+#elif defined(__APPLE__) && defined(__MACH__)
+#  undef BB_OS_DARWIN
+#  define BB_OS_DARWIN 1
+#endif
+
 #if BB_CPU_X86 || BB_CPU_X86_64
 #  include <immintrin.h>
 #elif BB_CPU_AARCH64
 #  include <arm_neon.h>
+#endif
+
+#if BB_OS_LINUX || BB_OS_FREEBSD
+// ELF
+#  define BB_PROTECTED __attribute__((visibility("protected")))
+#else
+#  define BB_PROTECTED __attribute__((visibility("default")))
 #endif
 
 namespace brassboard_seq {

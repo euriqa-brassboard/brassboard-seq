@@ -20,13 +20,13 @@
 
 namespace brassboard_seq::config {
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 py::str_ref channel_name_from_path(py::ptr<> path)
 {
     return "/"_py.join(path);
 }
 
-[[noreturn]] __attribute__((visibility("protected")))
+[[noreturn]] BB_PROTECTED
 void raise_invalid_channel(py::tuple path)
 {
     py_throw_format(PyExc_ValueError, "Invalid channel name %U",
@@ -73,13 +73,13 @@ inline py::tuple_ref Config::_translate_channel(py::tuple path)
     return path.ref();
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 py::tuple_ref Config::translate_channel(py::str name)
 {
     return _translate_channel(split_string_tuple(name));
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 py::ref<Config> Config::alloc(PyTypeObject *t)
 {
     auto self = py::generic_alloc<Config>(t);
@@ -89,7 +89,7 @@ py::ref<Config> Config::alloc(PyTypeObject *t)
     return self;
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 PyTypeObject Config::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
     .tp_name = "brassboard_seq.config.Config",

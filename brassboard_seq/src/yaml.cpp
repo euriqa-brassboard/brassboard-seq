@@ -332,13 +332,13 @@ static void print_generic(py::stringio &io, py::ptr<> obj, int indent, int cur_i
     return print_scalar(io, obj, indent, cur_indent);
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 void print(py::stringio &io, py::ptr<> obj, int indent)
 {
     print_generic(io, obj, indent, indent);
 }
 
-__attribute__((visibility("protected")))
+BB_PROTECTED
 py::str_ref sprint(py::ptr<> obj, int indent)
 {
     py::stringio io;
