@@ -403,16 +403,16 @@ public:
     {
         return _ptr() != nullptr;
     }
-    constexpr auto operator->() const
+    constexpr auto operator->() const noexcept
     {
         return _ptr();
     }
     template<template<typename> class H2, typename T2>
-    bool operator==(const common<H2,T2> &other) const
+    constexpr bool operator==(const common<H2,T2> &other) const noexcept
     {
         return (void*)_ptr() == (void*)other._ptr();
     }
-    bool operator==(auto *ptr) const
+    constexpr bool operator==(auto *ptr) const noexcept
     {
         return (void*)_ptr() == (void*)ptr;
     }
