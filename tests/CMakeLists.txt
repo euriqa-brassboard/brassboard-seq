@@ -8,7 +8,7 @@ add_definitions(-UNDEBUG)
 function(test_cxx_mod name)
   add_library("test_${name}_mod" MODULE "${name}.cpp")
   target_include_directories("test_${name}_mod" PRIVATE ${Python_INCLUDE_DIRS})
-  target_link_libraries("test_${name}_mod" brassboard_seq_utils)
+  target_link_libraries("test_${name}_mod" brassboard_seq_utils Python::Module)
   set_target_properties("test_${name}_mod"
     PROPERTIES POSITION_INDEPENDENT_CODE ON
     LIBRARY_OUTPUT_NAME "${name}"
