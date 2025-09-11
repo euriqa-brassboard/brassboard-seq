@@ -37,7 +37,7 @@ def get_sys_info():
         except AttributeError:
             magic_tag = ''
     print("magic_tag:%s" % magic_tag)
-    import importlib
+    import importlib.machinery
     print('extension_suffix:%s' % importlib.machinery.EXTENSION_SUFFIXES[0])
     return 0
 
