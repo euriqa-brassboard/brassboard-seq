@@ -2,7 +2,9 @@
 
 include_directories(${Python_NumPy_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_definitions(-fopenmp)
+if(HAS_OPENMP)
+  add_definitions(-fopenmp -DHAS_OPENMP)
+endif()
 
 add_library(brassboard_seq_utils SHARED
   src/action.cpp
@@ -23,7 +25,9 @@ add_library(brassboard_seq_utils SHARED
   src/utils.cpp
   src/yaml.cpp)
 target_include_directories(brassboard_seq_utils PRIVATE ${Python_INCLUDE_DIRS})
-target_link_libraries(brassboard_seq_utils -fopenmp)
+if(HAS_OPENMP)
+  target_link_libraries(brassboard_seq_utils -fopenmp)
+endif()
 install(TARGETS brassboard_seq_utils DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 
 function(bb_cxx_mod name)

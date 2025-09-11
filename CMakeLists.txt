@@ -14,10 +14,13 @@ set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}"
 
 include(GNUInstallDirs)
 include(PythonMacros)
+include(CheckCXXCompilerFlag)
 
 option(ENABLE_TESTING "Enable building and running testing" On)
 add_definitions(-DPY_SSIZE_T_CLEAN -DNPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION
   -Wno-missing-field-initializers)
+
+check_cxx_compiler_flag(-fopenmp HAS_OPENMP)
 
 add_subdirectory(brassboard_seq)
 if(ENABLE_TESTING)

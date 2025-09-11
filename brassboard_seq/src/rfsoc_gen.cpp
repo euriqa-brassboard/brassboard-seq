@@ -253,9 +253,11 @@ inline void Jaqalv1Gen::start()
 __attribute__((visibility("internal")))
 inline void Jaqalv1Gen::end()
 {
+#ifdef HAS_OPENMP
 #pragma omp parallel
 #pragma omp single
 #pragma omp taskloop
+#endif
     for (auto &board: boards) {
         board.end();
     }
@@ -429,7 +431,9 @@ inline py::ref<> Jaqalv1Gen::BoardGen::get_sequence() const
 __attribute__((visibility("internal")))
 inline void Jaqalv1Gen::BoardGen::end()
 {
+#ifdef HAS_OPENMP
 #pragma omp taskloop
+#endif
     for (auto &channel_gen: channels) {
         channel_gen.end();
     }
@@ -764,9 +768,11 @@ inline void Jaqalv1_3Gen::start()
 __attribute__((visibility("internal")))
 inline void Jaqalv1_3Gen::end()
 {
+#ifdef HAS_OPENMP
 #pragma omp parallel
 #pragma omp single
 #pragma omp taskloop
+#endif
     for (auto &insts: board_insts) {
         std::ranges::stable_sort(insts, [] (auto &a, auto &b) {
             return a.time < b.time;
