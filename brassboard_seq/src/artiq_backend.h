@@ -241,8 +241,8 @@ struct ChannelsInfo {
                           py::dict device_delay);
     void add_channel(py::ptr<> dev, int64_t delay, rtval_ptr rt_delay,
                      int idx, py::tuple path);
-    int add_bus_channel(int bus_channel, uint32_t io_update_target,
-                        uint8_t ref_period_mu);
+    int add_urukul_bus_channel(int bus_channel, uint32_t io_update_target,
+                               uint8_t ref_period_mu);
     void add_ttl_channel(int seqchn, uint32_t target, bool iscounter, int64_t delay,
                          rtval_ptr rt_delay);
     int get_dds_channel_id(uint32_t bus_id, double ftw_per_hz, uint8_t chip_select,

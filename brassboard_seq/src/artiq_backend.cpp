@@ -166,8 +166,8 @@ inline void ChannelsInfo::add_channel(py::ptr<> dev, int64_t delay, rtval_ptr rt
             // the same io_update channel and can only be programmed one at a time.
             auto io_tgt = dev.attr("cpld"_py).attr("io_update"_py)
                 .attr("target_o"_py).as_int();
-            bus_id = add_bus_channel(bus_channel, io_tgt,
-                                     bus.attr("ref_period_mu"_py).as_int());
+            bus_id = add_urukul_bus_channel(bus_channel, io_tgt,
+                                            bus.attr("ref_period_mu"_py).as_int());
         }
         add_dds_param_channel(idx, bus_id, dev.attr("ftw_per_hz"_py).as_float(),
                               dev.attr("chip_select"_py).as_int(), dds_param_type,
@@ -189,8 +189,8 @@ inline void ChannelsInfo::add_channel(py::ptr<> dev, int64_t delay, rtval_ptr rt
 }
 
 __attribute__((visibility("internal")))
-inline int ChannelsInfo::add_bus_channel(int bus_channel, uint32_t io_update_target,
-                                         uint8_t ref_period_mu)
+inline int ChannelsInfo::add_urukul_bus_channel(int bus_channel, uint32_t io_update_target,
+                                                uint8_t ref_period_mu)
 {
     auto bus_id = (int)urukul_busses.size();
     urukul_busses.push_back({
