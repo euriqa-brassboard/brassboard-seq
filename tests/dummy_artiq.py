@@ -17,6 +17,8 @@ environment = new_module(language, 'environment')
 
 coredevice = new_module(artiq, 'coredevice')
 
+ad53xx = new_module(coredevice, 'ad53xx')
+
 ad9910 = new_module(coredevice, 'ad9910')
 ad9910._AD9910_REG_CFR1 = 0x00
 ad9910._AD9910_REG_CFR2 = 0x01
@@ -74,6 +76,7 @@ dax = new_module(None, 'dax')
 sim = new_module(dax, 'sim')
 sim_coredevice = new_module(sim, 'coredevice')
 
+sim_ad53xx = new_module(sim_coredevice, 'ad53xx')
 sim_ad9910 = new_module(sim_coredevice, 'ad9910')
 sim_edge_counter = new_module(sim_coredevice, 'edge_counter')
 sim_ttl = new_module(sim_coredevice, 'ttl')
@@ -86,6 +89,14 @@ class SPIBus:
 class CPLD:
     def __init__(self, io_update):
         self.io_update = io_update
+
+class AD53xx:
+    def __init__(self, bus, ldac):
+        self.bus = bus
+        bus.xfer_duration_mu = ((24 + 1) * 4 + 1) * bus.ref_period_mu
+        self.ldac = ldac
+        self.vref = 5.0
+        self.offset_dacs = 8192
 
 class AD9910:
     def __init__(self, sw, bus, cpld, chip_select):
@@ -158,7 +169,10 @@ class HasEnvironment:
                 bus, cpld = bus_cpld
             sw = TTLOut(self.__next_id())
             return AD9910(sw, bus, cpld, cs)
-        elif name.startswith('ttl'):
+        zm = re.match('zotino(\\d+)', name)
+        if zm is not None:
+            return AD53xx(SPIBus(self.__next_id()), TTLOut(self.__next_id()))
+        if name.startswith('ttl'):
             if name.endswith('_counter'):
                 return EdgeCounter(self.__next_id())
             return TTLOut(self.__next_id())
@@ -198,12 +212,14 @@ class DummyDaxSystem(HasEnvironment):
         return self._dataset_sys.get(key, default)
 
 ad9910.AD9910 = AD9910
+ad53xx.AD53xx = AD53xx
 edge_counter.EdgeCounter = EdgeCounter
 ttl.TTLOut = TTLOut
 environment.HasEnvironment = HasEnvironment
 environment.NoDefault = NoDefault
 
 sim_ad9910.AD9910 = AD9910
+sim_ad53xx.AD53xx = AD53xx
 sim_edge_counter.EdgeCounter = EdgeCounter
 sim_ttl.TTLOut = TTLOut
 
@@ -212,6 +228,7 @@ def inject(dax=True):
     sys.modules['artiq.language'] = language
     sys.modules['artiq.language.environment'] = environment
     sys.modules['artiq.coredevice'] = coredevice
+    sys.modules['artiq.coredevice.ad53xx'] = ad53xx
     sys.modules['artiq.coredevice.ad9910'] = ad9910
     sys.modules['artiq.coredevice.edge_counter'] = edge_counter
     sys.modules['artiq.coredevice.spi2'] = spi2
@@ -222,6 +239,7 @@ def inject(dax=True):
         sys.modules['dax'] = dax
         sys.modules['dax.sim'] = sim
         sys.modules['dax.sim.coredevice'] = sim_coredevice
+        sys.modules['dax.sim.coredevice.ad53xx'] = sim_ad53xx
         sys.modules['dax.sim.coredevice.ad9910'] = sim_ad9910
         sys.modules['dax.sim.coredevice.edge_counter'] = sim_edge_counter
         sys.modules['dax.sim.coredevice.ttl'] = sim_ttl

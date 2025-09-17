@@ -35,6 +35,7 @@ namespace {
 
 struct ArtiqInfo {
     py::ptr<> env_get_device;
+    py::ptr<> AD53xx;
     py::ptr<> AD9910;
     py::ptr<> EdgeCounter;
     py::ptr<> TTLOut;
@@ -53,12 +54,14 @@ struct ArtiqInfo {
     {
         auto env = py::import_module("artiq.language.environment");
 
+        auto ad53xx = py::import_module("artiq.coredevice.ad53xx");
         auto ad9910 = py::import_module("artiq.coredevice.ad9910");
         auto edge_counter = py::import_module("artiq.coredevice.edge_counter");
         auto spi2 = py::import_module("artiq.coredevice.spi2");
         auto ttl = py::import_module("artiq.coredevice.ttl");
         auto urukul = py::import_module("artiq.coredevice.urukul");
 
+        auto sim_ad53xx = py::try_import_module("dax.sim.coredevice.ad53xx");
         auto sim_ad9910 = py::try_import_module("dax.sim.coredevice.ad9910");
         auto sim_edge_counter = py::try_import_module("dax.sim.coredevice.edge_counter");
         auto sim_ttl = py::try_import_module("dax.sim.coredevice.ttl");
@@ -70,6 +73,7 @@ struct ArtiqInfo {
                 dev = py::new_tuple(std::move(dev), sim_mod.attr(name));
             return dev;
         };
+        AD53xx = find_dev(ad53xx, sim_ad53xx, "AD53xx").rel();
         AD9910 = find_dev(ad9910, sim_ad9910, "AD9910").rel();
         EdgeCounter = find_dev(edge_counter, sim_edge_counter, "EdgeCounter").rel();
         TTLOut = find_dev(ttl, sim_ttl, "TTLOut").rel();
