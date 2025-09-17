@@ -27,7 +27,7 @@ struct py::converter<UrukulBus> {
     static auto py(const UrukulBus &bus)
     {
         auto self = new_object<"UrukulBus">();
-        self.set_attr("channel", to_py(bus.channel));
+        self.set_attr("channel", to_py(bus.data_target >> 8));
         self.set_attr("addr_target", to_py(bus.addr_target));
         self.set_attr("data_target", to_py(bus.data_target));
         self.set_attr("io_update_target", to_py(bus.io_update_target));

@@ -194,7 +194,6 @@ inline int ChannelsInfo::add_urukul_bus_channel(int bus_channel, uint32_t io_upd
 {
     auto bus_id = (int)urukul_busses.size();
     urukul_busses.push_back({
-            uint32_t(bus_channel),
             uint32_t((bus_channel << 8) | info().SPI_CONFIG_ADDR),
             uint32_t((bus_channel << 8) | info().SPI_DATA_ADDR),
             // Here we assume that the CPLD (and it's io_update channel)
@@ -276,7 +275,7 @@ void UrukulBus::add_dds_action(RTIOGen &gen, DDSAction &action)
     bb_debug("add_dds_action: aid=%d, bus@%" PRId64 ", io_upd@%" PRId64 ", "
              "data1=%x, data2=%x, chn=%d, cs=%d\n",
              action.aid, last_bus_mu, last_io_update_mu,
-             action.data1, action.data2, channel, ddschn->chip_select);
+             action.data1, action.data2, data_target >> 8, ddschn->chip_select);
 
     auto config_and_write = [&] (uint32_t flags, uint32_t length,
                                  uint32_t data, int64_t lb_mu1, int64_t lb_mu2) {
@@ -312,7 +311,7 @@ void UrukulBus::add_io_update(RTIOGen &gen, int64_t time_mu,
     time_mu = (time_mu + coarse_time_mu / 2) & ~int64_t(coarse_time_mu - 1);
     bb_debug("add_io_update: aid=%d, bus@%" PRId64 ", io_upd@%" PRId64 ", "
              "time=%" PRId64 ", exact_time=%d, chn=%d\n",
-             aid, last_bus_mu, last_io_update_mu, time_mu, exact_time, channel);
+             aid, last_bus_mu, last_io_update_mu, time_mu, exact_time, data_target >> 8);
     auto t1 = gen.add_action(io_update_target, 1, aid, time_mu,
                              std::max(last_bus_mu, last_io_update_mu), exact_time);
     auto t2 = gen.add_action(io_update_target, 0, aid, t1 + coarse_time_mu,
@@ -326,7 +325,7 @@ inline void UrukulBus::flush_output(RTIOGen &gen, int64_t time_mu, bool force)
     if (!dds_actions.empty())
         bb_debug("flush_dds: bus@%" PRId64 ", io_upd@%" PRId64 ", "
                  "time=%" PRId64 ", chn=%d, nactions=%zd, force=%d\n",
-                 last_bus_mu, last_io_update_mu, time_mu, channel,
+                 last_bus_mu, last_io_update_mu, time_mu, data_target >> 8,
                  dds_actions.size(), (int)force);
     bool need_io_update = false;
     int aid = -1;
@@ -372,7 +371,7 @@ inline void UrukulBus::add_output(RTIOGen &gen, const ArtiqAction &action,
 {
     bb_debug("add_dds: time=%" PRId64 ", exact_time=%d, chn=%d, nactions=%zd, "
              "type=%s, value=%x\n",
-             action.time_mu, action.exact_time, channel, dds_actions.size(),
+             action.time_mu, action.exact_time, data_target >> 8, dds_actions.size(),
              (action.type == DDSFreq ? "ddsfreq" :
               (action.type == DDSAmp ? "ddsamp" : "ddsphase")), action.value);
     for (auto it = dds_actions.begin(), end = dds_actions.end(); it != end; ++it) {

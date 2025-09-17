@@ -147,7 +147,6 @@ struct DDSAction {
 };
 
 struct UrukulBus {
-    uint32_t channel;
     uint32_t addr_target;
     uint32_t data_target;
     uint32_t io_update_target;
