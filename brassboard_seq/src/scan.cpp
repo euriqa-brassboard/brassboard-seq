@@ -137,7 +137,7 @@ struct Scan1D : PyObject {
         call_constructor(&self->params, py::dict_deepcopy(params));
         return self;
     }
-    py::dict_ref dump()
+    py::dict_ref dump() const
     {
         auto res = py::new_dict();
         res.set("size"_py, to_py(size));
@@ -191,11 +191,11 @@ struct ScanND : PyObject {
     py::dict_ref fixed;
     py::list_ref vars;
 
-    bool is_default()
+    bool is_default() const
     {
         return baseidx == -1 && fixed.size() == 0 && vars.size() == 0;
     }
-    bool contains_path(py::tuple path)
+    bool contains_path(py::tuple path) const
     {
         if (check_field(fixed, path))
             return true;
@@ -207,7 +207,7 @@ struct ScanND : PyObject {
         return false;
     }
 
-    py::ref<ScanND> copy()
+    py::ref<ScanND> copy() const
     {
         auto self = py::generic_alloc<ScanND>();
         self->baseidx = baseidx;
@@ -217,7 +217,7 @@ struct ScanND : PyObject {
         }));
         return self;
     }
-    py::dict_ref dump(bool dumpbase)
+    py::dict_ref dump(bool dumpbase) const
     {
         auto res = py::new_dict();
         if (dumpbase)
@@ -228,14 +228,14 @@ struct ScanND : PyObject {
         }));
         return res;
     }
-    int size()
+    int size() const
     {
         int res = 1;
         for (auto [i, var]: py::list_iter<Scan1D>(vars))
             res *= var->size == 0 ? 1 : var->size;
         return res;
     }
-    py::dict_ref getseq(int seqidx)
+    py::dict_ref getseq(int seqidx) const
     {
         int orig_idx = seqidx;
         auto seq = py::dict_deepcopy(fixed);
@@ -254,7 +254,7 @@ struct ScanND : PyObject {
                             orig_idx);
         return seq;
     }
-    void show(py::stringio &io, int indent, py::tuple path)
+    void show(py::stringio &io, int indent, py::tuple path) const
     {
         bool empty = true;
         if (baseidx != -1) {
@@ -292,7 +292,7 @@ struct ScanND : PyObject {
             io << "<empty>\n";
         }
     }
-    void check_noconflict(py::tuple path, int scandim)
+    void check_noconflict(py::tuple path, int scandim) const
     {
         if (scandim != -1 && check_field(fixed, path))
             py_throw_format(PyExc_ValueError, "Cannot scan a fixed parameter.");
