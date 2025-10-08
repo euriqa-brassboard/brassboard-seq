@@ -126,6 +126,156 @@ static inline auto load_cast(py::ptr<> obj, const char *name)
                     "wrong %s type %S.", name, obj.type());
 }
 
+struct UseVar : PyObject {
+    int8_t def;
+    std::vector<int8_t> dims;
+    py::dict_ref field;
+
+    static py::ref<UseVar> alloc()
+    {
+        auto self = py::generic_alloc<UseVar>();
+        // self->def = 0;
+        call_constructor(&self->dims);
+        call_constructor(&self->field, py::new_dict());
+        return self;
+    }
+    bool empty() const
+    {
+        return def == 0 && dims.empty() && field.size() == 0;
+    }
+    py::ref<UseVar> copy() const
+    {
+        auto self = py::generic_alloc<UseVar>();
+        self->def = def;
+        call_constructor(&self->dims, dims);
+        call_constructor(&self->field, py::new_dict());
+        py::dict new_field = self->field;
+        for (auto [k, v]: py::dict_iter<UseVar>(field))
+            new_field.set(k, v->copy());
+        return self;
+    }
+    static py::ref<UseVar> load(py::dict data)
+    {
+        auto self = py::generic_alloc<UseVar>();
+        if (auto def = data.try_get("def"_py))
+            self->def = def.as_int();
+        call_constructor(&self->dims);
+        if (auto dims = data.try_get("dims"_py)) {
+            for (auto [i, v]: py::list_iter(load_cast<py::list>(dims, "dims"))) {
+                self->dims.push_back(v.as_int());
+            }
+        }
+        call_constructor(&self->field, py::new_dict());
+        py::dict new_field = self->field;
+        if (auto field = data.try_get("field"_py)) {
+            for (auto [k, v]: py::dict_iter(load_cast<py::dict>(field, "field"))) {
+                new_field.set(k, UseVar::load(load_cast<py::dict>(v, "field value")));
+            }
+        }
+        return self;
+    }
+    py::dict_ref dump() const
+    {
+        auto res = py::new_dict();
+        if (def)
+            res.set("def"_py, to_py(def));
+        if (!dims.empty())
+            res.set("dims"_py, to_py(dims));
+        if (field.size() != 0) {
+            auto field_dict = py::new_dict();
+            for (auto [k, v]: py::dict_iter<UseVar>(field))
+                field_dict.set(k, v->dump());
+            res.set("field"_py, std::move(field_dict));
+        }
+        return res;
+    }
+
+    void update(UseVar *update)
+    {
+        if (update->def != 0)
+            def = update->def;
+        int update_ndims = update->dims.size();
+        if (update_ndims > dims.size())
+            dims.resize(update_ndims, 0);
+        for (int i = 0; i < update_ndims; i++) {
+            if (auto d = update->dims[i]) {
+                dims[i] = d;
+            }
+        }
+        for (auto [fld, val]: py::dict_iter<UseVar>(update->field)) {
+            if (auto old_field = field.try_get<UseVar>(fld)) {
+                old_field->update(val);
+            }
+            else {
+                field.set(fld, val->copy());
+            }
+        }
+    }
+
+    int8_t check_single(int dim) const
+    {
+        if (dim < dims.size() && dims[dim])
+            return dims[dim];
+        return def;
+    }
+
+    int8_t check(py::tuple path, int dim) const
+    {
+        auto pathlen = path.size();
+        auto usevar = this;
+        auto res = check_single(dim);
+        for (int i = 0; i < pathlen; i++) {
+            usevar = usevar->field.try_get(path.get(i));
+            if (!usevar)
+                break;
+            if (auto sub_res = usevar->check_single(dim)) {
+                res = sub_res;
+            }
+        }
+        return res;
+    }
+
+    void set(bool use, int dim)
+    {
+        int8_t val = use ? 1 : -1;
+        if (dim < 0) {
+            def = val;
+        }
+        else {
+            if (dim >= dims.size())
+                dims.resize(dim + 1, 0);
+            dims[dim] = val;
+        }
+    }
+
+    void set_sub(bool use, int dim, py::tuple path, int npath, int pathi=0)
+    {
+        if (pathi >= npath) {
+            set(use, dim);
+            return;
+        }
+        auto fld = path.get(pathi);
+        auto sub_usevar = field.try_get<UseVar>(fld);
+        if (!sub_usevar) {
+            auto new_usevar = alloc();
+            sub_usevar = py::ptr(new_usevar);
+            field.set(fld, std::move(new_usevar));
+        }
+        sub_usevar->set_sub(use, dim, path, npath, pathi + 1);
+    }
+
+    static PyTypeObject Type;
+};
+
+PyTypeObject UseVar::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.scan.UseVar",
+    .tp_basicsize = sizeof(UseVar) + sizeof(void*),
+    .tp_dealloc = py::tp_cxx_dealloc<false,UseVar>,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_clear = py::tp_field_clear<UseVar,&UseVar::field>,
+};
+
 struct Scan1D : PyObject {
     int size;
     py::dict_ref params;
@@ -253,6 +403,37 @@ struct ScanND : PyObject {
             py_throw_format(PyExc_IndexError, "Sequence index out of bound: %d.",
                             orig_idx);
         return seq;
+    }
+    py::tuple_ref getseq_withvar(int seqidx, const std::vector<bool> &usevar, int id0) const
+    {
+        int orig_idx = seqidx;
+        auto seq = py::dict_deepcopy(fixed);
+        auto seqvars = py::new_list(0);
+        int id = id0;
+        int scale = 1;
+        for (auto [i, var]: py::list_iter<Scan1D>(vars)) {
+            auto varsz = var->size;
+            if (varsz == 0)
+                continue;
+            auto subidx = seqidx % varsz;
+            seqidx = (seqidx - subidx) / varsz;
+            if (!usevar[i]) {
+                foreach_nondict(var->params, [&] (py::list v, py::tuple path) {
+                    recursive_assign(seq, path, v.get(subidx));
+                });
+                id = id + scale * subidx;
+            }
+            else {
+                foreach_nondict(var->params, [&] (py::list v, py::tuple path) {
+                    seqvars.append(py::new_tuple(path, v.get(subidx)));
+                });
+            }
+            scale = scale * varsz;
+        }
+        if (seqidx != 0)
+            py_throw_format(PyExc_IndexError, "Sequence index out of bound: %d.",
+                            orig_idx);
+        return py::new_tuple(to_py(id), std::move(seq), std::move(seqvars));
     }
     void show(py::stringio &io, int indent, py::tuple path) const
     {
@@ -441,6 +622,10 @@ struct ScanGroup : PyObject {
     py::ref<ScanND> base;
     py::list_ref scans;
     py::list_ref scanscache;
+    py::ref<UseVar> usevar_base;
+    py::list_ref usevar_scans;
+    std::vector<std::vector<bool>> usevar_cache;
+
     bool new_empty_called;
 
     void add_empty(int n=1)
@@ -461,6 +646,7 @@ struct ScanGroup : PyObject {
         else {
             scanscache.set(idx, py::new_none());
         }
+        usevar_cache.clear();
     }
     py::ptr<ScanND> getfullscan(int idx, bool allow_base)
     {
@@ -515,11 +701,49 @@ struct ScanGroup : PyObject {
         scan->baseidx = -1;
         scans.append(std::move(scan));
         scanscache.append(py::new_none());
+        usevar_cache.clear();
     }
     void add_cat_scan(py::ptr<> scan);
     void set_fixed_param(py::ptr<ScanND> scan, py::tuple path, int idx, py::ptr<> v);
     void set_scan_param(py::ptr<ScanND> scan, py::tuple path, int idx,
                         int scandim, py::ptr<> v);
+
+    py::ref<UseVar> getfull_usevar(int idx) const
+    {
+        if (idx == -1)
+            return usevar_base->copy();
+        auto base = getfull_usevar(scans.get<ScanND>(idx)->baseidx);
+        if (idx < usevar_scans.size())
+            base->update(usevar_scans.get<UseVar>(idx));
+        return base;
+    }
+
+    const std::vector<bool> &computed_usevar(int idx)
+    {
+        if (!usevar_cache.empty())
+            return usevar_cache[idx];
+        auto nscans = scans.size();
+        for (int scani = 0; scani < nscans; scani++) {
+            auto scan = getfullscan(scani, false);
+            auto usevar = getfull_usevar(scani);
+            auto ndims = scan->vars.size();
+            std::vector<bool> computed(ndims, false);
+            for (int i = 0; i < ndims; i++) {
+                auto var = scan->vars.get<Scan1D>(i);
+                if (var->size == 0)
+                    continue;
+                bool val = true;
+                foreach_nondict(var->params, [&] (auto, py::tuple path) {
+                    if (val) {
+                        val = usevar->check(path, i) == 1;
+                    }
+                });
+                computed[i] = val;
+            }
+            usevar_cache.push_back(std::move(computed));
+        }
+        return usevar_cache[idx];
+    }
 
     static py::ref<ScanGroup> load_v1(py::dict data)
     {
@@ -548,6 +772,22 @@ struct ScanGroup : PyObject {
         call_constructor(&self->scanscache, py::new_nlist(nscans, [&] (auto i) {
             return py::new_none();
         }));
+        if (auto usevar_base = data.try_get("use_var_base"_py)) {
+            call_constructor(&self->usevar_base, UseVar::load(usevar_base));
+        }
+        else {
+            call_constructor(&self->usevar_base, UseVar::alloc());
+        }
+        if (auto _usevar_scans = data.try_get("use_var_scans"_py)) {
+            auto usevar_scans = load_cast<py::list>(_usevar_scans, "use_var_scans");
+            call_constructor(&self->usevar_scans, py::new_nlist(usevar_scans.size(), [&] (auto i) {
+                return UseVar::load(usevar_scans.get(i));
+            }));
+        }
+        else {
+            call_constructor(&self->usevar_scans, py::new_list(0));
+        }
+        call_constructor(&self->usevar_cache);
         return self;
     }
     static py::str_ref py_str(py::ptr<ScanGroup> self)
@@ -573,6 +813,9 @@ struct ScanGroup : PyObject {
         call_constructor(&self->base, ScanND::alloc());
         call_constructor(&self->scans, py::new_list(0));
         call_constructor(&self->scanscache, py::new_list(0));
+        call_constructor(&self->usevar_base, UseVar::alloc());
+        call_constructor(&self->usevar_scans, py::new_list(0));
+        call_constructor(&self->usevar_cache);
         // self->new_empty_called = false;
         self->add_cat_scan(scan1);
         self->add_cat_scan(scan2);
@@ -607,25 +850,43 @@ struct ScanWrapper : PyObject {
         py::check_num_arg("ScanWrapper", nargs, 1, 2);
         py::tuple path = self->path;
         int pathlen = path.size();
-        if (pathlen < 2 || path.get<py::str>(pathlen - 1).compare_ascii("scan") != 0)
-            py_throw_format(PyExc_SyntaxError, "Invalid scan syntax");
-        int idx;
-        py::ptr<> v;
-        if (nargs == 1) {
-            idx = 0;
-            v = args[0];
-        }
-        else {
+
+        auto parse_args = [&] (int defidx) -> std::pair<int,py::ptr<>> {
+            if (nargs == 1)
+                return {defidx, args[0]};
             assert(nargs == 2);
-            idx = py::arg_cast<py::int_>(args[0], "scanidx").as_int();
+            int idx = py::arg_cast<py::int_>(args[0], "scandim").as_int();
             if (idx < 0)
                 py_throw_format(PyExc_IndexError,
                                 "Scan dimension must not be negative: %d.", idx);
-            v = args[1];
+            return {idx, args[1]};
+        };
+
+        if (pathlen >= 1 && path.get<py::str>(pathlen - 1).compare_ascii("usevar") == 0) {
+            self->sg->usevar_cache.clear();
+            auto [dim, v] = parse_args(-1);
+            auto use = v.as_bool();
+            py::ptr<UseVar> usevar;
+            if (self->idx == -1) {
+                usevar = self->sg->usevar_base;
+            }
+            else {
+                py::ptr usevar_scans = self->sg->usevar_scans;
+                for (int i = 0, n = self->idx - usevar_scans.size() + 1; i < n; i++)
+                    usevar_scans.append(UseVar::alloc());
+                usevar = usevar_scans.get<UseVar>(self->idx);
+            }
+            usevar->set_sub(use, dim, path, pathlen - 1);
+            return;
         }
+
+        if (pathlen < 2 || path.get<py::str>(pathlen - 1).compare_ascii("scan") != 0)
+            py_throw_format(PyExc_SyntaxError, "Invalid scan syntax");
+
+        auto [dim, v] = parse_args(0);
         self->sg->set_scan_param(self->scan, py::new_ntuple(pathlen - 1, [&] (int i) {
             return path.get(i);
-        }), self->idx, idx, v);
+        }), self->idx, dim, v);
     }
     static py::str_ref py_str(py::ptr<ScanWrapper> self)
     {
@@ -1101,12 +1362,39 @@ For sequence running/saving/loading:
             }
             py_throw_format(PyExc_IndexError, "Sequence index out of bound: %d.", orig_n);
         }>,
+        py::meth_o<"getseq_withvar",[] (py::ptr<ScanGroup> self, py::ptr<> _n) {
+            auto n = py::arg_cast<py::int_>(_n, "n").as_int();
+            int nscans = self->scans.size();
+            int orig_n = n;
+            int count = 0;
+            for (int scani = 0; scani < nscans; scani++) {
+                auto scan = self->getfullscan(scani, false);
+                auto ss = scan->size();
+                if (n < ss) {
+                    auto &usevar = self->computed_usevar(scani);
+                    return scan->getseq_withvar(n, usevar, count);
+                }
+                n -= ss;
+                count += ss;
+            }
+            py_throw_format(PyExc_IndexError, "Sequence index out of bound: %d.", orig_n);
+        }>,
         py::meth_fast<"getseq_in_scan",[] (py::ptr<ScanGroup> self, PyObject *const *args,
                                            Py_ssize_t nargs) {
             py::check_num_arg("ScanGroup.getseq_in_scan", nargs, 2, 2);
             auto scanidx = py::arg_cast<py::int_>(args[0], "scanidx").as_int();
             auto seqidx = py::arg_cast<py::int_>(args[1], "seqidx").as_int();
             return self->getfullscan(scanidx, false)->getseq(seqidx);
+        }>,
+        py::meth_fast<"getseq_in_scan_withvar",[] (py::ptr<ScanGroup> self,
+                                                   PyObject *const *args,
+                                                   Py_ssize_t nargs) {
+            py::check_num_arg("ScanGroup.getseq_in_scan_withvar", nargs, 2, 2);
+            auto scanidx = py::arg_cast<py::int_>(args[0], "scanidx").as_int();
+            auto seqidx = py::arg_cast<py::int_>(args[1], "seqidx").as_int();
+            auto scan = self->getfullscan(scanidx, false);
+            auto &usevar = self->computed_usevar(scanidx);
+            return scan->getseq_withvar(seqidx, usevar, 0);
         }>,
         py::meth_o<"get_single_axis",[] (py::ptr<ScanGroup> self, py::ptr<> _scanidx) {
             auto scanidx = py::arg_cast<py::int_>(_scanidx, "scanidx").as_int();
@@ -1156,6 +1444,19 @@ For sequence running/saving/loading:
             auto var = vars.get<Scan1D>(dim);
             return py::new_tuple(var->params, to_py(var->size));
         }>,
+        py::meth_fast<"usevar",[] (py::ptr<ScanGroup> self, PyObject *const *args,
+                                   Py_ssize_t nargs) {
+            py::check_num_arg("ScanGroup.usevar", nargs, 1, 2);
+            int dim = -1;
+            auto use = py::ptr(args[0]).as_bool();
+            if (nargs >= 2)
+                dim = py::arg_cast<py::int_>(args[1], "dim").as_int();
+            self->usevar_base->set(use, dim);
+            self->usevar_cache.clear();
+        }>,
+        py::meth_noargs<"usevar_default",[] (py::ptr<ScanGroup> self) {
+            return to_py(self->usevar_base->def);
+        }>,
         py::meth_noargs<"dump",[] (py::ptr<ScanGroup> self) {
             auto res = py::new_dict();
             res.set("version"_py, py::int_cached(1));
@@ -1163,6 +1464,13 @@ For sequence running/saving/loading:
             res.set("scans"_py, py::new_nlist(self->scans.size(), [&] (int i) {
                 return self->scans.get<ScanND>(i)->dump(true);
             }));
+            if (!self->usevar_base->empty())
+                res.set("use_var_base", self->usevar_base->dump());
+            if (auto nusevar_scans = self->usevar_scans.size()) {
+                res.set("use_var_scans"_py, py::new_nlist(nusevar_scans, [&] (int i) {
+                    return self->usevar_scans.get<UseVar>(i)->dump();
+                }));
+            }
             return res;
         }>,
         py::meth_o<"load",[] (auto, py::ptr<> _obj) {
@@ -1183,6 +1491,9 @@ For sequence running/saving/loading:
         call_constructor(&self->base, ScanND::alloc());
         call_constructor(&self->scans, py::new_list(ScanND::alloc()));
         call_constructor(&self->scanscache, py::new_list(py::new_none()));
+        call_constructor(&self->usevar_base, UseVar::alloc());
+        call_constructor(&self->usevar_scans, py::new_list(0));
+        call_constructor(&self->usevar_cache);
         return self;
     }>,
 };
@@ -1196,6 +1507,7 @@ void init()
 {
     _import_array();
     init_parampack();
+    throw_if(PyType_Ready(&UseVar::Type) < 0);
     throw_if(PyType_Ready(&Scan1D::Type) < 0);
     throw_if(PyType_Ready(&ScanND::Type) < 0);
     throw_if(PyType_Ready(&ScanWrapper::Type) < 0);

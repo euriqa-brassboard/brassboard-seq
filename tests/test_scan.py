@@ -196,6 +196,20 @@ def test_getitem():
     assert p[:] == {"a": 2, "b": {"c": 3}}
     assert d2["b"]["c"] == 2
 
+def sort_vars(args):
+    (id, seq, vars) = args
+    return id, seq, sorted(vars)
+
+def getseq_novar(sg, idx):
+    seq = sg.getseq(idx)
+    assert sg.getseq_withvar(idx) == (idx, seq, [])
+    return seq
+
+def getseq_in_scan_novar(sg, scanidx, idx):
+    seq = sg.getseq_in_scan(scanidx, idx)
+    assert sg.getseq_in_scan_withvar(scanidx, idx) == (idx, seq, [])
+    return seq
+
 def test_scan():
     sg = scan.ScanGroup()
     assert str(sg) == "ScanGroup\n"
@@ -258,8 +272,8 @@ def test_scan():
     assert sg.axisnum(0, -1) == 0
     assert sg.axisnum(0, 1) == 0
     assert sg.nseq() == 1
-    assert sg.getseq_in_scan(0, 0) == {}
-    assert sg.getseq(0) == {}
+    assert getseq_in_scan_novar(sg, 0, 0) == {}
+    assert getseq_novar(sg, 0) == {}
     with pytest.raises(IndexError, match="Sequence index out of bound: -1"):
         sg.getseq(-1)
     with pytest.raises(IndexError, match="Sequence index out of bound: 1"):
@@ -272,6 +286,18 @@ def test_scan():
         sg.getseq_in_scan(-1, 0)
     with pytest.raises(IndexError, match="Scan group index out of bound: 1"):
         sg.getseq_in_scan(1, 0)
+    with pytest.raises(IndexError, match="Sequence index out of bound: -1"):
+        sg.getseq_withvar(-1)
+    with pytest.raises(IndexError, match="Sequence index out of bound: 1"):
+        sg.getseq_withvar(1)
+    with pytest.raises(IndexError, match="Sequence index out of bound: -1"):
+        sg.getseq_in_scan_withvar(0, -1)
+    with pytest.raises(IndexError, match="Sequence index out of bound: 1"):
+        sg.getseq_in_scan_withvar(0, 1)
+    with pytest.raises(IndexError, match="Scan group index out of bound: -1"):
+        sg.getseq_in_scan_withvar(-1, 0)
+    with pytest.raises(IndexError, match="Scan group index out of bound: 1"):
+        sg.getseq_in_scan_withvar(1, 0)
 
     with pytest.raises(AttributeError,
                        match="'brassboard_seq.scan.ScanWrapper' object has no attribute '_a'"):
@@ -281,6 +307,8 @@ def test_scan():
                        match="'brassboard_seq.scan.ScanWrapper' object has no attribute '_b'"):
         sg[:]._b = 2
 
+    with pytest.raises(SyntaxError, match="Invalid scan syntax"):
+        sg[0]([1, 2, 3])
     with pytest.raises(SyntaxError, match="Invalid scan syntax"):
         sg[0].scan[0] = [1, 2]
     with pytest.raises(SyntaxError, match="Invalid scan syntax"):
@@ -384,14 +412,14 @@ def test_scan():
     assert sg.axisnum(1, -1) == 0
     assert sg.axisnum(1, 1) == 0
     assert sg.nseq() == 4
-    assert sg.getseq_in_scan(0, 0) == dict(a=1)
-    assert sg.getseq_in_scan(1, 0) == dict(a=1, b=3)
-    assert sg.getseq_in_scan(1, 1) == dict(a=2, b=4)
-    assert sg.getseq_in_scan(1, 2) == dict(a=3, b=5)
-    assert sg.getseq(0) == dict(a=1)
-    assert sg.getseq(1) == dict(a=1, b=3)
-    assert sg.getseq(2) == dict(a=2, b=4)
-    assert sg.getseq(3) == dict(a=3, b=5)
+    assert getseq_in_scan_novar(sg, 0, 0) == dict(a=1)
+    assert getseq_in_scan_novar(sg, 1, 0) == dict(a=1, b=3)
+    assert getseq_in_scan_novar(sg, 1, 1) == dict(a=2, b=4)
+    assert getseq_in_scan_novar(sg, 1, 2) == dict(a=3, b=5)
+    assert getseq_novar(sg, 0) == dict(a=1)
+    assert getseq_novar(sg, 1) == dict(a=1, b=3)
+    assert getseq_novar(sg, 2) == dict(a=2, b=4)
+    assert getseq_novar(sg, 3) == dict(a=3, b=5)
 
     assert sg.get_fixed(0) == dict(a=1)
     assert sg.get_fixed(1) == {}
@@ -485,14 +513,14 @@ def test_scan():
     Scan dimension 0: (size 3)
        b: [3, 4, 5]
 """
-    assert sg.getseq_in_scan(0, 0) == dict(a=1)
-    assert sg.getseq_in_scan(1, 0) == dict(a=1, b=3)
-    assert sg.getseq_in_scan(1, 1) == dict(a=1, b=4)
-    assert sg.getseq_in_scan(1, 2) == dict(a=1, b=5)
-    assert sg.getseq(0) == dict(a=1)
-    assert sg.getseq(1) == dict(a=1, b=3)
-    assert sg.getseq(2) == dict(a=1, b=4)
-    assert sg.getseq(3) == dict(a=1, b=5)
+    assert getseq_in_scan_novar(sg, 0, 0) == dict(a=1)
+    assert getseq_in_scan_novar(sg, 1, 0) == dict(a=1, b=3)
+    assert getseq_in_scan_novar(sg, 1, 1) == dict(a=1, b=4)
+    assert getseq_in_scan_novar(sg, 1, 2) == dict(a=1, b=5)
+    assert getseq_novar(sg, 0) == dict(a=1)
+    assert getseq_novar(sg, 1) == dict(a=1, b=3)
+    assert getseq_novar(sg, 2) == dict(a=1, b=4)
+    assert getseq_novar(sg, 3) == dict(a=1, b=5)
 
     assert str(sg2[0] + sg[1]) == """ScanGroup
   Scan 0:
@@ -622,16 +650,16 @@ def test_scan():
     assert sg.get_single_axis(0) == (None, ())
 
     assert sg.nseq() == 10
-    assert sg.getseq(0) == dict(a=dict(c=1, d=1, e=0.4, g=1))
-    assert sg.getseq(1) == dict(a=dict(c=1, d=2, e=0.5, g=1))
-    assert sg.getseq(2) == dict(a=dict(c=1, d=1, e=0.4, g=2))
-    assert sg.getseq(3) == dict(a=dict(c=1, d=2, e=0.5, g=2))
-    assert sg.getseq(4) == dict(a=dict(c=1, d=1, e=0.4, g=3))
-    assert sg.getseq(5) == dict(a=dict(c=1, d=2, e=0.5, g=3))
-    assert sg.getseq(6) == dict(a=dict(c=1, d=1, e=0.4, g=4))
-    assert sg.getseq(7) == dict(a=dict(c=1, d=2, e=0.5, g=4))
-    assert sg.getseq(8) == dict(a=dict(c=1, d=1, e=0.4, g=5))
-    assert sg.getseq(9) == dict(a=dict(c=1, d=2, e=0.5, g=5))
+    assert getseq_novar(sg, 0) == dict(a=dict(c=1, d=1, e=0.4, g=1))
+    assert getseq_novar(sg, 1) == dict(a=dict(c=1, d=2, e=0.5, g=1))
+    assert getseq_novar(sg, 2) == dict(a=dict(c=1, d=1, e=0.4, g=2))
+    assert getseq_novar(sg, 3) == dict(a=dict(c=1, d=2, e=0.5, g=2))
+    assert getseq_novar(sg, 4) == dict(a=dict(c=1, d=1, e=0.4, g=3))
+    assert getseq_novar(sg, 5) == dict(a=dict(c=1, d=2, e=0.5, g=3))
+    assert getseq_novar(sg, 6) == dict(a=dict(c=1, d=1, e=0.4, g=4))
+    assert getseq_novar(sg, 7) == dict(a=dict(c=1, d=2, e=0.5, g=4))
+    assert getseq_novar(sg, 8) == dict(a=dict(c=1, d=1, e=0.4, g=5))
+    assert getseq_novar(sg, 9) == dict(a=dict(c=1, d=2, e=0.5, g=5))
 
     sg2 = scan.ScanGroup.load(sg.dump())
     assert sg2.dump() == sg.dump()
@@ -712,7 +740,7 @@ def test_scan():
     sg[:].a.b = 1
     sg[0].a.b.scan[0] = 2
     assert sg.nseq() == 1
-    assert sg.getseq(0) == dict(a=dict(b=2))
+    assert getseq_novar(sg, 0) == dict(a=dict(b=2))
 
     with pytest.raises(TypeError,
                        match="Scan parameter cannot be a dict."):
@@ -788,11 +816,11 @@ def test_scan():
     with pytest.raises(ValueError, match="Cannot scan a fixed parameter."):
         sg[0].y.z.scan([1, 2, 3])
 
-    assert sg.getseq(0) == dict(x=dict(y=False), a=dict(x=2, y=3, b=1),
-                                y=dict(z=2, k=[0.1, 2.3], x=[0.1, 2.3]))
+    assert getseq_novar(sg, 0) == dict(x=dict(y=False), a=dict(x=2, y=3, b=1),
+                                       y=dict(z=2, k=[0.1, 2.3], x=[0.1, 2.3]))
     sg[:].y.z.x = 2
-    assert sg.getseq(0) == dict(x=dict(y=False), a=dict(x=2, y=3, b=1),
-                                y=dict(z=2, k=[0.1, 2.3], x=[0.1, 2.3]))
+    assert getseq_novar(sg, 0) == dict(x=dict(y=False), a=dict(x=2, y=3, b=1),
+                                       y=dict(z=2, k=[0.1, 2.3], x=[0.1, 2.3]))
     sg[0].y.a.scan([1, 2, 3])
     with pytest.raises(ValueError, match="Cannot fix a scanned parameter."):
         sg[0].y.a = 2
@@ -852,12 +880,12 @@ def test_scan():
        a.c: [2, 3, 8]
 """
     assert sg.nseq() == 6
-    assert sg.getseq(0) == dict(a=dict(b=1, c=2), d=0)
-    assert sg.getseq(1) == dict(a=dict(b=1, c=3), d=0)
-    assert sg.getseq(2) == dict(a=dict(b=1, c=8), d=0)
-    assert sg.getseq(3) == dict(a=dict(b=1, c=2), d=0, c=2)
-    assert sg.getseq(4) == dict(a=dict(b=1, c=3), d=0, c=2)
-    assert sg.getseq(5) == dict(a=dict(b=1, c=8), d=0, c=2)
+    assert getseq_novar(sg, 0) == dict(a=dict(b=1, c=2), d=0)
+    assert getseq_novar(sg, 1) == dict(a=dict(b=1, c=3), d=0)
+    assert getseq_novar(sg, 2) == dict(a=dict(b=1, c=8), d=0)
+    assert getseq_novar(sg, 3) == dict(a=dict(b=1, c=2), d=0, c=2)
+    assert getseq_novar(sg, 4) == dict(a=dict(b=1, c=3), d=0, c=2)
+    assert getseq_novar(sg, 5) == dict(a=dict(b=1, c=8), d=0, c=2)
 
     sg[3] = sg[1]
     assert str(sg) == """ScanGroup
@@ -1007,22 +1035,426 @@ def test_scan():
     sg = scan.ScanGroup()
     sg[:].a.b = 1
     sg[0].a.b.c.d = 2
-    assert sg.getseq(0) == dict(a=dict(b=dict(c=dict(d=2))))
+    assert getseq_novar(sg, 0) == dict(a=dict(b=dict(c=dict(d=2))))
 
     sg = scan.ScanGroup()
     sg[:].a.b = 1
     sg[0].a.b.c.d.scan([1, 2, 3, 4, 5])
-    assert sg.getseq(0) == dict(a=dict(b=dict(c=dict(d=1))))
-    assert sg.getseq(1) == dict(a=dict(b=dict(c=dict(d=2))))
-    assert sg.getseq(2) == dict(a=dict(b=dict(c=dict(d=3))))
-    assert sg.getseq(3) == dict(a=dict(b=dict(c=dict(d=4))))
-    assert sg.getseq(4) == dict(a=dict(b=dict(c=dict(d=5))))
+    assert getseq_novar(sg, 0) == dict(a=dict(b=dict(c=dict(d=1))))
+    assert getseq_novar(sg, 1) == dict(a=dict(b=dict(c=dict(d=2))))
+    assert getseq_novar(sg, 2) == dict(a=dict(b=dict(c=dict(d=3))))
+    assert getseq_novar(sg, 3) == dict(a=dict(b=dict(c=dict(d=4))))
+    assert getseq_novar(sg, 4) == dict(a=dict(b=dict(c=dict(d=5))))
 
     sg = scan.ScanGroup()
     sg[:].a.b.scan([2, 3])
     sg[0].a.b.c.d.scan([1, 2, 3, 4, 5])
-    assert sg.getseq(0) == dict(a=dict(b=dict(c=dict(d=1))))
-    assert sg.getseq(1) == dict(a=dict(b=dict(c=dict(d=2))))
-    assert sg.getseq(2) == dict(a=dict(b=dict(c=dict(d=3))))
-    assert sg.getseq(3) == dict(a=dict(b=dict(c=dict(d=4))))
-    assert sg.getseq(4) == dict(a=dict(b=dict(c=dict(d=5))))
+    assert getseq_novar(sg, 0) == dict(a=dict(b=dict(c=dict(d=1))))
+    assert getseq_novar(sg, 1) == dict(a=dict(b=dict(c=dict(d=2))))
+    assert getseq_novar(sg, 2) == dict(a=dict(b=dict(c=dict(d=3))))
+    assert getseq_novar(sg, 3) == dict(a=dict(b=dict(c=dict(d=4))))
+    assert getseq_novar(sg, 4) == dict(a=dict(b=dict(c=dict(d=5))))
+
+    def check_serialize(sg, d):
+        d1 = sg.dump()
+        assert d1 == d
+        sg2 = scan.ScanGroup.load(d1)
+        assert sg2.dump() == d1
+        assert str(sg2) == str(sg)
+        def deco(f):
+            f(sg)
+            f(sg2)
+        return deco
+
+    sg = scan.ScanGroup()
+    assert sg.usevar_default() == 0
+    sg.usevar(False)
+    assert sg.usevar_default() == -1
+    sg.usevar(True)
+    assert sg.usevar_default() == 1
+    sg[:].a.b.scan([2, 3])
+    @check_serialize(
+        sg, dict(version=1,
+                 base=dict(params={}, vars=[dict(size=2, params=dict(a=dict(b=[2, 3])))]),
+                 scans=[dict(baseidx=0, params={}, vars=[])],
+                 use_var_base={"def": 1}))
+    def test_func(sg):
+        assert sg.nseq() == 2
+        assert sg.getseq(0) == dict(a=dict(b=2))
+        assert sg.getseq(1) == dict(a=dict(b=3))
+        assert sort_vars(sg.getseq_withvar(0)) == (0, {}, [(('a', 'b'), 2)])
+        assert sort_vars(sg.getseq_withvar(1)) == (0, {}, [(('a', 'b'), 3)])
+    sg[:].b.d.scan([10, 1])
+    @check_serialize(
+        sg, dict(version=1,
+                 base=dict(params={}, vars=[dict(size=2, params=dict(a=dict(b=[2, 3]),
+                                                                     b=dict(d=[10, 1])))]),
+                 scans=[dict(baseidx=0, params={}, vars=[])],
+                 use_var_base={"def": 1}))
+    def test_func(sg):
+        assert sg.getseq(0) == dict(a=dict(b=2), b=dict(d=10))
+        assert sg.getseq(1) == dict(a=dict(b=3), b=dict(d=1))
+        assert sort_vars(sg.getseq_withvar(0)) == (0, {}, [(('a', 'b'), 2),
+                                                           (('b', 'd'), 10)])
+        assert sort_vars(sg.getseq_withvar(1)) == (0, {}, [(('a', 'b'), 3),
+                                                           (('b', 'd'), 1)])
+    sg[0].b.e.usevar(False)
+    @check_serialize(
+        sg, dict(version=1,
+                 base=dict(params={}, vars=[dict(size=2, params=dict(a=dict(b=[2, 3]),
+                                                                     b=dict(d=[10, 1])))]),
+                 scans=[dict(baseidx=0, params={}, vars=[])],
+                 use_var_base={"def": 1},
+                 use_var_scans=[{"field": dict(b={"field": dict(e={"def": -1})})}]))
+    def test_func(sg):
+        assert sg.getseq(0) == dict(a=dict(b=2), b=dict(d=10))
+        assert sg.getseq(1) == dict(a=dict(b=3), b=dict(d=1))
+        assert sort_vars(sg.getseq_withvar(0)) == (0, {}, [(('a', 'b'), 2),
+                                                           (('b', 'd'), 10)])
+        assert sort_vars(sg.getseq_withvar(1)) == (0, {}, [(('a', 'b'), 3),
+                                                           (('b', 'd'), 1)])
+    sg[:].b.e.f.scan([False, True])
+    @check_serialize(
+        sg, dict(version=1,
+                 base=dict(params={},
+                           vars=[dict(size=2,
+                                      params=dict(a=dict(b=[2, 3]),
+                                                  b=dict(d=[10, 1],
+                                                         e=dict(f=[False, True]))))]),
+                 scans=[dict(baseidx=0, params={}, vars=[])],
+                 use_var_base={"def": 1},
+                 use_var_scans=[{"field": dict(b={"field": dict(e={"def": -1})})}]))
+    def test_func(sg):
+        assert sg.getseq(0) == dict(a=dict(b=2), b=dict(d=10, e=dict(f=False)))
+        assert sg.getseq(1) == dict(a=dict(b=3), b=dict(d=1, e=dict(f=True)))
+        assert sg.getseq_withvar(0) == (0, dict(a=dict(b=2),
+                                                b=dict(d=10, e=dict(f=False))), [])
+        assert sg.getseq_withvar(1) == (1, dict(a=dict(b=3),
+                                                b=dict(d=1, e=dict(f=True))), [])
+    sg[0].b.e.usevar(0, True)
+    @check_serialize(
+        sg, dict(version=1,
+                 base=dict(params={},
+                           vars=[dict(size=2,
+                                      params=dict(a=dict(b=[2, 3]),
+                                                  b=dict(d=[10, 1],
+                                                         e=dict(f=[False, True]))))]),
+                 scans=[dict(baseidx=0, params={}, vars=[])],
+                 use_var_base={"def": 1},
+                 use_var_scans=[{"field": dict(b={"field": dict(e={"dims": [1],
+                                                                   "def": -1})})}]))
+    def test_func(sg):
+        assert sg.getseq(0) == dict(a=dict(b=2), b=dict(d=10, e=dict(f=False)))
+        assert sg.getseq(1) == dict(a=dict(b=3), b=dict(d=1, e=dict(f=True)))
+        assert sort_vars(sg.getseq_withvar(0)) == (0, {}, [(('a', 'b'), 2),
+                                                           (('b', 'd'), 10),
+                                                           (('b', 'e', 'f'), False)])
+        assert sort_vars(sg.getseq_withvar(1)) == (0, {}, [(('a', 'b'), 3),
+                                                           (('b', 'd'), 1),
+                                                           (('b', 'e', 'f'), True)])
+    sg[0].b.e.f.scan(1, [False, True])
+    @check_serialize(
+        sg, dict(version=1,
+                 base=dict(params={},
+                           vars=[dict(size=2,
+                                      params=dict(a=dict(b=[2, 3]),
+                                                  b=dict(d=[10, 1],
+                                                         e=dict(f=[False, True]))))]),
+                 scans=[dict(baseidx=0, params={},
+                             vars=[dict(size=0, params={}),
+                                   dict(size=2,
+                                        params=dict(b=dict(e=dict(f=[False, True]))))])],
+                 use_var_base={"def": 1},
+                 use_var_scans=[{"field": dict(b={"field": dict(e={"dims": [1],
+                                                                   "def": -1})})}]))
+    def test_func(sg):
+        assert sg.nseq() == 4
+        assert sg.getseq(0) == dict(a=dict(b=2), b=dict(d=10, e=dict(f=False)))
+        assert sg.getseq(1) == dict(a=dict(b=3), b=dict(d=1, e=dict(f=False)))
+        assert sg.getseq(2) == dict(a=dict(b=2), b=dict(d=10, e=dict(f=True)))
+        assert sg.getseq(3) == dict(a=dict(b=3), b=dict(d=1, e=dict(f=True)))
+        assert sort_vars(sg.getseq_withvar(0)) == (0, dict(b=dict(e=dict(f=False))),
+                                                   [(('a', 'b'), 2), (('b', 'd'), 10)])
+        assert sort_vars(sg.getseq_withvar(1)) == (0, dict(b=dict(e=dict(f=False))),
+                                                   [(('a', 'b'), 3), (('b', 'd'), 1)])
+        assert sort_vars(sg.getseq_withvar(2)) == (2, dict(b=dict(e=dict(f=True))),
+                                                   [(('a', 'b'), 2), (('b', 'd'), 10)])
+        assert sort_vars(sg.getseq_withvar(3)) == (2, dict(b=dict(e=dict(f=True))),
+                                                   [(('a', 'b'), 3), (('b', 'd'), 1)])
+    sg[0].b.e.usevar(1, True)
+    @check_serialize(
+        sg, dict(version=1,
+                 base=dict(params={},
+                           vars=[dict(size=2,
+                                      params=dict(a=dict(b=[2, 3]),
+                                                  b=dict(d=[10, 1],
+                                                         e=dict(f=[False, True]))))]),
+                 scans=[dict(baseidx=0, params={},
+                             vars=[dict(size=0, params={}),
+                                   dict(size=2,
+                                        params=dict(b=dict(e=dict(f=[False, True]))))])],
+                 use_var_base={"def": 1},
+                 use_var_scans=[{"field": dict(b={"field": dict(e={"dims": [1, 1],
+                                                                   "def": -1})})}]))
+    def test_func(sg):
+        assert sg.getseq(0) == dict(a=dict(b=2), b=dict(d=10, e=dict(f=False)))
+        assert sg.getseq(1) == dict(a=dict(b=3), b=dict(d=1, e=dict(f=False)))
+        assert sg.getseq(2) == dict(a=dict(b=2), b=dict(d=10, e=dict(f=True)))
+        assert sg.getseq(3) == dict(a=dict(b=3), b=dict(d=1, e=dict(f=True)))
+        assert sort_vars(sg.getseq_withvar(0)) == (0, {}, [(('a', 'b'), 2),
+                                                           (('b', 'd'), 10),
+                                                           (('b', 'e', 'f'), False)])
+        assert sort_vars(sg.getseq_withvar(1)) == (0, {}, [(('a', 'b'), 3),
+                                                           (('b', 'd'), 1),
+                                                           (('b', 'e', 'f'), False)])
+        assert sort_vars(sg.getseq_withvar(2)) == (0, {}, [(('a', 'b'), 2),
+                                                           (('b', 'd'), 10),
+                                                           (('b', 'e', 'f'), True)])
+        assert sort_vars(sg.getseq_withvar(3)) == (0, {}, [(('a', 'b'), 3),
+                                                           (('b', 'd'), 1),
+                                                           (('b', 'e', 'f'), True)])
+    sg[0].a.usevar(False)
+    @check_serialize(
+        sg, dict(version=1,
+                 base=dict(params={},
+                           vars=[dict(size=2,
+                                      params=dict(a=dict(b=[2, 3]),
+                                                  b=dict(d=[10, 1],
+                                                         e=dict(f=[False, True]))))]),
+                 scans=[dict(baseidx=0, params={},
+                             vars=[dict(size=0, params={}),
+                                   dict(size=2,
+                                        params=dict(b=dict(e=dict(f=[False, True]))))])],
+                 use_var_base={"def": 1},
+                 use_var_scans=[{"field": dict(a={"def": -1},
+                                               b={"field": dict(e={"dims": [1, 1],
+                                                                   "def": -1})})}]))
+    def test_func(sg):
+        assert sg.getseq(0) == dict(a=dict(b=2), b=dict(d=10, e=dict(f=False)))
+        assert sg.getseq(1) == dict(a=dict(b=3), b=dict(d=1, e=dict(f=False)))
+        assert sg.getseq(2) == dict(a=dict(b=2), b=dict(d=10, e=dict(f=True)))
+        assert sg.getseq(3) == dict(a=dict(b=3), b=dict(d=1, e=dict(f=True)))
+        assert sort_vars(sg.getseq_withvar(0)) == (0, dict(a=dict(b=2), b=dict(d=10)),
+                                                   [(('b', 'e', 'f'), False)])
+        assert sort_vars(sg.getseq_withvar(1)) == (1, dict(a=dict(b=3), b=dict(d=1)),
+                                                   [(('b', 'e', 'f'), False)])
+        assert sort_vars(sg.getseq_withvar(2)) == (0, dict(a=dict(b=2), b=dict(d=10)),
+                                                   [(('b', 'e', 'f'), True)])
+        assert sort_vars(sg.getseq_withvar(3)) == (1, dict(a=dict(b=3), b=dict(d=1)),
+                                                   [(('b', 'e', 'f'), True)])
+
+    sg = scan.ScanGroup()
+    sg[0].a.b.scan(1, [1, 2, 3])
+    sg[:].usevar(1, True)
+    assert sg.usevar_default() == 0
+    @check_serialize(
+        sg, dict(version=1, base=dict(params={}, vars=[]),
+                 scans=[dict(baseidx=0, params={},
+                             vars=[dict(size=0, params={}),
+                                   dict(size=3,
+                                        params=dict(a=dict(b=[1, 2, 3])))])],
+                 use_var_base={"dims": [0, 1]}))
+    def test_func(sg):
+        assert sg.nseq() == 3
+        assert sg.getseq(0) == dict(a=dict(b=1))
+        assert sg.getseq(1) == dict(a=dict(b=2))
+        assert sg.getseq(2) == dict(a=dict(b=3))
+        assert sort_vars(sg.getseq_withvar(0)) == (0, {}, [(('a', 'b'), 1)])
+        assert sort_vars(sg.getseq_withvar(1)) == (0, {}, [(('a', 'b'), 2)])
+        assert sort_vars(sg.getseq_withvar(2)) == (0, {}, [(('a', 'b'), 3)])
+
+    sg = scan.ScanGroup()
+    sg[0].a.b.scan(1, [1, 2, 3])
+    sg.usevar(1, True)
+    assert sg.usevar_default() == 0
+    @check_serialize(
+        sg, dict(version=1, base=dict(params={}, vars=[]),
+                 scans=[dict(baseidx=0, params={},
+                             vars=[dict(size=0, params={}),
+                                   dict(size=3,
+                                        params=dict(a=dict(b=[1, 2, 3])))])],
+                 use_var_base={"dims": [0, 1]}))
+    def test_func(sg):
+        assert sg.nseq() == 3
+        assert sg.getseq(0) == dict(a=dict(b=1))
+        assert sg.getseq(1) == dict(a=dict(b=2))
+        assert sg.getseq(2) == dict(a=dict(b=3))
+        assert sort_vars(sg.getseq_withvar(0)) == (0, {}, [(('a', 'b'), 1)])
+        assert sort_vars(sg.getseq_withvar(1)) == (0, {}, [(('a', 'b'), 2)])
+        assert sort_vars(sg.getseq_withvar(2)) == (0, {}, [(('a', 'b'), 3)])
+
+    sg = scan.ScanGroup()
+    sg[0].a.b.scan(1, [1, 2, 3])
+    sg[:].a.usevar(1, True)
+    sg[0].usevar(1, False)
+    assert sg.usevar_default() == 0
+    @check_serialize(
+        sg, dict(version=1, base=dict(params={}, vars=[]),
+                 scans=[dict(baseidx=0, params={},
+                             vars=[dict(size=0, params={}),
+                                   dict(size=3,
+                                        params=dict(a=dict(b=[1, 2, 3])))])],
+                 use_var_base={"field": dict(a={"dims": [0, 1]})},
+                 use_var_scans=[{"dims": [0, -1]}]))
+    def test_func(sg):
+        assert sg.nseq() == 3
+        assert sg.getseq(0) == dict(a=dict(b=1))
+        assert sg.getseq(1) == dict(a=dict(b=2))
+        assert sg.getseq(2) == dict(a=dict(b=3))
+        assert sort_vars(sg.getseq_withvar(0)) == (0, {}, [(('a', 'b'), 1)])
+        assert sort_vars(sg.getseq_withvar(1)) == (0, {}, [(('a', 'b'), 2)])
+        assert sort_vars(sg.getseq_withvar(2)) == (0, {}, [(('a', 'b'), 3)])
+
+    sg = scan.ScanGroup()
+    sg[0].a.b.scan(1, [1, 2, 3])
+    sg[:].usevar(1, False)
+    sg[0].usevar(1, True)
+    assert sg.usevar_default() == 0
+    @check_serialize(
+        sg, dict(version=1, base=dict(params={}, vars=[]),
+                 scans=[dict(baseidx=0, params={},
+                             vars=[dict(size=0, params={}),
+                                   dict(size=3,
+                                        params=dict(a=dict(b=[1, 2, 3])))])],
+                 use_var_base={"dims": [0, -1]},
+                 use_var_scans=[{"dims": [0, 1]}]))
+    def test_func(sg):
+        assert sg.nseq() == 3
+        assert sg.getseq(0) == dict(a=dict(b=1))
+        assert sg.getseq(1) == dict(a=dict(b=2))
+        assert sg.getseq(2) == dict(a=dict(b=3))
+        assert sort_vars(sg.getseq_withvar(0)) == (0, {}, [(('a', 'b'), 1)])
+        assert sort_vars(sg.getseq_withvar(1)) == (0, {}, [(('a', 'b'), 2)])
+        assert sort_vars(sg.getseq_withvar(2)) == (0, {}, [(('a', 'b'), 3)])
+
+    sg = scan.ScanGroup()
+    sg[0].a.b.scan(1, [1, 2, 3])
+    sg[:].usevar(False)
+    sg[0].usevar(True)
+    assert sg.usevar_default() == -1
+    @check_serialize(
+        sg, dict(version=1, base=dict(params={}, vars=[]),
+                 scans=[dict(baseidx=0, params={},
+                             vars=[dict(size=0, params={}),
+                                   dict(size=3,
+                                        params=dict(a=dict(b=[1, 2, 3])))])],
+                 use_var_base={"def": -1},
+                 use_var_scans=[{"def": 1}]))
+    def test_func(sg):
+        assert sg.nseq() == 3
+        assert sg.getseq(0) == dict(a=dict(b=1))
+        assert sg.getseq(1) == dict(a=dict(b=2))
+        assert sg.getseq(2) == dict(a=dict(b=3))
+        assert sort_vars(sg.getseq_withvar(0)) == (0, {}, [(('a', 'b'), 1)])
+        assert sort_vars(sg.getseq_withvar(1)) == (0, {}, [(('a', 'b'), 2)])
+        assert sort_vars(sg.getseq_withvar(2)) == (0, {}, [(('a', 'b'), 3)])
+
+    sg = scan.ScanGroup()
+    sg[0].a.b.scan(1, [1, 2, 3])
+    sg[:].a.b.usevar(1, False)
+    sg[0].a.b.usevar(1, True)
+    assert sg.usevar_default() == 0
+    @check_serialize(
+        sg, dict(version=1, base=dict(params={}, vars=[]),
+                 scans=[dict(baseidx=0, params={},
+                             vars=[dict(size=0, params={}),
+                                   dict(size=3,
+                                        params=dict(a=dict(b=[1, 2, 3])))])],
+                 use_var_base={'field': dict(a={'field': dict(b={"dims": [0, -1]})})},
+                 use_var_scans=[{'field': dict(a={'field': dict(b={"dims": [0, 1]})})}]))
+    def test_func(sg):
+        assert sg.nseq() == 3
+        assert sg.getseq(0) == dict(a=dict(b=1))
+        assert sg.getseq(1) == dict(a=dict(b=2))
+        assert sg.getseq(2) == dict(a=dict(b=3))
+        assert sort_vars(sg.getseq_withvar(0)) == (0, {}, [(('a', 'b'), 1)])
+        assert sort_vars(sg.getseq_withvar(1)) == (0, {}, [(('a', 'b'), 2)])
+        assert sort_vars(sg.getseq_withvar(2)) == (0, {}, [(('a', 'b'), 3)])
+
+    sg = scan.ScanGroup()
+    sg[0].a.b.scan(1, [1, 2, 3])
+    sg[:].a.b.usevar(False)
+    sg[0].a.b.usevar(True)
+    assert sg.usevar_default() == 0
+    @check_serialize(
+        sg, dict(version=1, base=dict(params={}, vars=[]),
+                 scans=[dict(baseidx=0, params={},
+                             vars=[dict(size=0, params={}),
+                                   dict(size=3,
+                                        params=dict(a=dict(b=[1, 2, 3])))])],
+                 use_var_base={'field': dict(a={'field': dict(b={"def": -1})})},
+                 use_var_scans=[{'field': dict(a={'field': dict(b={"def": 1})})}]))
+    def test_func(sg):
+        assert sg.nseq() == 3
+        assert sg.getseq(0) == dict(a=dict(b=1))
+        assert sg.getseq(1) == dict(a=dict(b=2))
+        assert sg.getseq(2) == dict(a=dict(b=3))
+        assert sort_vars(sg.getseq_withvar(0)) == (0, {}, [(('a', 'b'), 1)])
+        assert sort_vars(sg.getseq_withvar(1)) == (0, {}, [(('a', 'b'), 2)])
+        assert sort_vars(sg.getseq_withvar(2)) == (0, {}, [(('a', 'b'), 3)])
+
+    sg = scan.ScanGroup()
+    sg[0].a.b.scan(1, [1, 2, 3])
+    sg[:].a.b.usevar(1, True)
+    sg[0].a.b.usevar(False)
+    assert sg.usevar_default() == 0
+    @check_serialize(
+        sg, dict(version=1, base=dict(params={}, vars=[]),
+                 scans=[dict(baseidx=0, params={},
+                             vars=[dict(size=0, params={}),
+                                   dict(size=3,
+                                        params=dict(a=dict(b=[1, 2, 3])))])],
+                 use_var_base={'field': dict(a={'field': dict(b={"dims": [0, 1]})})},
+                 use_var_scans=[{'field': dict(a={'field': dict(b={"def": -1})})}]))
+    def test_func(sg):
+        assert sg.nseq() == 3
+        assert sg.getseq(0) == dict(a=dict(b=1))
+        assert sg.getseq(1) == dict(a=dict(b=2))
+        assert sg.getseq(2) == dict(a=dict(b=3))
+        assert sort_vars(sg.getseq_withvar(0)) == (0, {}, [(('a', 'b'), 1)])
+        assert sort_vars(sg.getseq_withvar(1)) == (0, {}, [(('a', 'b'), 2)])
+        assert sort_vars(sg.getseq_withvar(2)) == (0, {}, [(('a', 'b'), 3)])
+
+    sg = scan.ScanGroup()
+    sg[0].a.b.scan(1, [1, 2, 3])
+    sg[:].a.b.usevar(1, True)
+    sg[0].a.b.usevar(0, False)
+    assert sg.usevar_default() == 0
+    @check_serialize(
+        sg, dict(version=1, base=dict(params={}, vars=[]),
+                 scans=[dict(baseidx=0, params={},
+                             vars=[dict(size=0, params={}),
+                                   dict(size=3,
+                                        params=dict(a=dict(b=[1, 2, 3])))])],
+                 use_var_base={'field': dict(a={'field': dict(b={"dims": [0, 1]})})},
+                 use_var_scans=[{'field': dict(a={'field': dict(b={"dims": [-1]})})}]))
+    def test_func(sg):
+        assert sg.nseq() == 3
+        assert sg.getseq(0) == dict(a=dict(b=1))
+        assert sg.getseq(1) == dict(a=dict(b=2))
+        assert sg.getseq(2) == dict(a=dict(b=3))
+        assert sort_vars(sg.getseq_withvar(0)) == (0, {}, [(('a', 'b'), 1)])
+        assert sort_vars(sg.getseq_withvar(1)) == (0, {}, [(('a', 'b'), 2)])
+        assert sort_vars(sg.getseq_withvar(2)) == (0, {}, [(('a', 'b'), 3)])
+
+    sg = scan.ScanGroup()
+    sg[0].a.b.scan(1, [1, 2, 3])
+    sg[:].a.b.usevar(0, False)
+    sg[0].a.b.usevar(1, True)
+    assert sg.usevar_default() == 0
+    @check_serialize(
+        sg, dict(version=1, base=dict(params={}, vars=[]),
+                 scans=[dict(baseidx=0, params={},
+                             vars=[dict(size=0, params={}),
+                                   dict(size=3,
+                                        params=dict(a=dict(b=[1, 2, 3])))])],
+                 use_var_base={'field': dict(a={'field': dict(b={"dims": [-1]})})},
+                 use_var_scans=[{'field': dict(a={'field': dict(b={"dims": [0, 1]})})}]))
+    def test_func(sg):
+        assert sg.nseq() == 3
+        assert sg.getseq(0) == dict(a=dict(b=1))
+        assert sg.getseq(1) == dict(a=dict(b=2))
+        assert sg.getseq(2) == dict(a=dict(b=3))
+        assert sort_vars(sg.getseq_withvar(0)) == (0, {}, [(('a', 'b'), 1)])
+        assert sort_vars(sg.getseq_withvar(1)) == (0, {}, [(('a', 'b'), 2)])
+        assert sort_vars(sg.getseq_withvar(2)) == (0, {}, [(('a', 'b'), 3)])
