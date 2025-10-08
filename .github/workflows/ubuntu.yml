@@ -3,7 +3,6 @@ name: Build and Test
 on:
   workflow_dispatch:
   push:
-    branches-ignore: [ deploy ]
   pull_request:
     branches: [ master ]
 
