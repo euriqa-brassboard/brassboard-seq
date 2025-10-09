@@ -2606,3 +2606,25 @@ def test_rt_value():
     sys.get_dataset = lambda *args, **kwargs: 1
     v = dummy_artiq.DummyDaxSystem.rt_dataset(sys, 'abc')
     assert str(v) == f'<dataset abc for {sys.get_dataset}>'
+
+def test_seq_var():
+    sys = dummy_artiq.DummyDaxSystem()
+    v1 = sys.seq_variable()
+    v2 = sys.seq_variable(2.3)
+    assert v1.eval(0) == 0.0
+    assert v2.eval(0) == 2.3
+    assert v1.value == 0.0
+    assert v2.value == 2.3
+    assert str(v1) == repr(v1) == "var(0.0)"
+    assert str(v2) == repr(v2) == "var(2.3)"
+
+    v1.value = 1.1
+    v2.value = -2.0
+    assert str(v1) == repr(v1) == "var(1.1)"
+    assert str(v2) == repr(v2) == "var(-2.0)"
+    assert v1.eval(0) == 0.0
+    assert v2.eval(0) == 2.3
+    assert v1.value == 1.1
+    assert v2.value == -2.0
+    assert v1.eval(1) == 1.1
+    assert v2.eval(1) == -2.0

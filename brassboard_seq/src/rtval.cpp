@@ -827,6 +827,7 @@ static auto rtvalue_as_number = PyNumberMethods{
     .nb_true_divide = py::binfunc<[] (auto v1, auto v2) {
         return new_expr2_wrap1(Div, v1, v2); }>,
 };
+
 BB_PROTECTED
 PyTypeObject RuntimeValue::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
@@ -836,6 +837,25 @@ PyTypeObject RuntimeValue::Type = {
     .tp_repr = rtvalue_str,
     .tp_as_number = &rtvalue_as_number,
     .tp_str = rtvalue_str,
+    .tp_getattro = py::binfunc<[] (rtval_ptr self, py::str name) -> py::ref<> {
+        py::ref res(PyObject_GenericGetAttr(self, name));
+        if (res || !PyErr_ExceptionMatches(PyExc_AttributeError))
+            return res;
+        if (self->type_ == Extern || self->type_ == ExternAge) {
+            PyErr_Clear();
+            return self->cb_arg2.attr(name);
+        }
+        return res;
+    }>,
+    .tp_setattro = py::itrifunc<[] (rtval_ptr self, py::str name, py::ptr<> value) {
+        if (self->type_ == Extern || self->type_ == ExternAge) {
+            self->cb_arg2.set_attr(name, value);
+            return 0;
+        }
+        // Assume that there isn't any useful default setattr
+        // to call so only use it as the fallback to generate the attribute error
+        return PyObject_GenericSetAttr(self, name, value);
+    }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = py::tp_field_traverse<RuntimeValue,&RuntimeValue::arg0,
     &RuntimeValue::arg1,&RuntimeValue::cb_arg2>,

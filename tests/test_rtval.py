@@ -39,6 +39,10 @@ def test_rtval():
         rtval.RuntimeValue()
 
     v1 = test_utils.new_extern(lambda: 1)
+    with pytest.raises(AttributeError):
+        v1.xyz
+    with pytest.raises(AttributeError):
+        v1.xyz = 2
     s1 = str(v1)
     v2 = test_utils.new_extern_age(lambda age: 2)
     s2 = str(v2)
