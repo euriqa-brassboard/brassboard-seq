@@ -46,6 +46,10 @@ def test_rtval():
     s1 = str(v1)
     v2 = test_utils.new_extern_age(lambda age: 2)
     s2 = str(v2)
+    with pytest.raises(AttributeError):
+        v2.xyz
+    with pytest.raises(AttributeError):
+        v2.xyz = 2
 
     with pytest.raises(TypeError, match="Cannot convert runtime value to boolean"):
         bool(v1)
@@ -73,6 +77,10 @@ def test_rtval():
 
     c1 = test_utils.new_const(1.2)
     c2 = test_utils.new_const(2.3)
+    with pytest.raises(AttributeError):
+        c1.xyz
+    with pytest.raises(AttributeError):
+        c1.xyz = 2
     assert str(c1) == '1.2'
     assert str(c2) == '2.3'
     c3 = c1 + c2
@@ -158,6 +166,10 @@ def test_rtval():
     assert str(av1) == f'abs({s1})'
     assert abs(av1) is av1
     assert np.abs(av1) is av1
+    with pytest.raises(AttributeError):
+        av1.xyz
+    with pytest.raises(AttributeError):
+        av1.xyz = 2
 
     cv1 = math.ceil(v1)
     assert str(cv1) == f'ceil({s1})'

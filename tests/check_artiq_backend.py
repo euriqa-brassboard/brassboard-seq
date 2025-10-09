@@ -2611,6 +2611,10 @@ def test_seq_var():
     sys = dummy_artiq.DummyDaxSystem()
     v1 = sys.seq_variable()
     v2 = sys.seq_variable(2.3)
+    with pytest.raises(AttributeError):
+        v1.xyz
+    with pytest.raises(AttributeError):
+        v1.xyz = 2
     assert v1.eval(0) == 0.0
     assert v2.eval(0) == 2.3
     assert v1.value == 0.0
