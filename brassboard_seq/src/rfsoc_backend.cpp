@@ -46,7 +46,7 @@ static inline int64_t cycle_to_seq_time(int64_t cycle)
     return time_whole + time_frac;
 }
 
-BB_PROTECTED
+__attribute__((visibility("internal")))
 void ChannelsInfo::ensure_unused_tones(bool all)
 {
     // For now, do not generate RFSoC data if there's no output.
