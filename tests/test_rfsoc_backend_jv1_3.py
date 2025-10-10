@@ -2298,11 +2298,6 @@ def test_use_all_channels(max_bt):
     comp.finalize()
 
     comp.runtime_finalize(1)
-    unused = {
-        'freq': [Pulse(2056)],
-        'amp': [Pulse(2056)],
-        'phase': [Pulse(2056)]
-    }
     test_env.check_output({})
 
 @test_utils.with_seq_params
