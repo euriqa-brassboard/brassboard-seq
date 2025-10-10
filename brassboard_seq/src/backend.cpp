@@ -446,6 +446,9 @@ PyTypeObject SeqCompiler::Type = {
     .tp_new = py::tp_new<[] (PyTypeObject *t, auto...) {
         auto self = py::generic_alloc<SeqCompiler>(t);
         call_constructor(&self->seq, py::new_none());
+        call_constructor(&self->basic_cseqs);
+        call_constructor(&self->chn_action_alloc);
+        call_constructor(&self->all_chn_actions);
         call_constructor(&self->backends, py::new_dict());
         return self;
     }>,
