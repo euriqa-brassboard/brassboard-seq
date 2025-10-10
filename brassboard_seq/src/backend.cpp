@@ -314,9 +314,10 @@ static inline auto action_get_condval(auto action, unsigned age)
 }
 
 __attribute__((visibility("internal")))
-inline void SeqCompiler::eval_chn_actions(unsigned age)
+inline void SeqCompiler::eval_chn_actions(unsigned age, bool isfirst)
 {
     int ncbseq = basic_cseqs.size();
+    channel_changed.assign(nchn, isfirst);
     py::ptr basic_seqs = seq->basic_seqs;
     for (int cbseq_id = 0; cbseq_id < ncbseq; cbseq_id++) {
         auto &cbseq = basic_cseqs[cbseq_id];
@@ -330,6 +331,7 @@ inline void SeqCompiler::eval_chn_actions(unsigned age)
         py::ptr time_mgr = bseq->seqinfo->time_mgr;
         for (int chn = 0; chn < nchn; chn++) {
             auto chn_actions = get_action_list(chn, bseq_id);
+            bool changed = channel_changed[chn];
             bool first = true;
             for (auto chn_action: chn_actions) {
                 auto &actions = chn_action->actions;
@@ -337,40 +339,54 @@ inline void SeqCompiler::eval_chn_actions(unsigned age)
                 int64_t prev_time = 0;
                 for (auto action: actions) {
                     bool cond_val = action_get_condval(action, age);
-                    action->cond_val = cond_val;
+                    changed |= tracked_assign(action->cond_val, cond_val);
                     if (!cond_val)
                         continue;
                     py::ptr action_value = action->value;
                     auto isramp = action::isramp(action_value);
+                    auto tracked_eval = [&] (rtval_ptr val) {
+                        auto oldval = val->cache_val;
+                        rt_eval_throw(val, age, action_key(action->aid));
+                        changed |= !rtval::same_genval(val->datatype, oldval,
+                                                       val->cache_val);
+                    };
                     if (isramp) {
                         auto rampf = (action::RampFunctionBase*)action_value;
                         try {
-                            rampf->set_runtime_params(age);
+                            changed |= rampf->set_runtime_params(age);
                         }
                         catch (...) {
                             bb_rethrow(action_key(action->aid));
                         }
                     }
                     else if (is_rtval(action_value)) {
-                        rt_eval_throw(action_value, age, action_key(action->aid));
+                        tracked_eval(action_value);
                     }
                     // No need to evaluate action.length since the `compute_all_times`
                     // above should've done it already.
                     py::ptr action_end_val = action->end_val;
                     if (action_end_val != action_value && is_rtval(action_end_val))
-                        rt_eval_throw(action_end_val, age, action_key(action->aid));
+                        tracked_eval(action_end_val);
                     // Currently all versions of channel action should share
                     // the same time points. We only need to check the time ordering once.
                     if (!check_time)
                         continue;
                     auto start_time = time_mgr->time_values[action->tid];
+                    changed |= time_mgr->time_status[action->tid] == 2;
                     auto end_time = time_mgr->time_values[action->end_tid];
                     if (prev_time > start_time || start_time > end_time)
                         bb_throw_format(PyExc_ValueError, action_key(action->aid),
                                         "Action time order violation");
-                    prev_time = (isramp || action->is_pulse) ? end_time : start_time;
+                    if (isramp || action->is_pulse) {
+                        prev_time = end_time;
+                        changed |= time_mgr->time_status[action->end_tid] == 2;
+                    }
+                    else {
+                        prev_time = start_time;
+                    }
                 }
             }
+            channel_changed[chn] = changed;
         }
     }
 }
@@ -380,6 +396,8 @@ inline void SeqCompiler::runtime_finalize(py::ptr<> _age)
 {
     unsigned age = _age.as_int();
     py::ptr ginfo = seq->seqinfo;
+    bool isfirst = !compiled;
+    compiled = false;
     auto bt_guard = set_global_tracker(&ginfo->cinfo->bt_tracker);
     for (auto [bseq_id, bseq]: py::list_iter<BasicSeq>(seq->basic_seqs)) {
         assert(basic_cseqs[bseq_id].bseq_id == bseq_id);
@@ -393,10 +411,10 @@ inline void SeqCompiler::runtime_finalize(py::ptr<> _age)
             bb_throw_format(PyExc_AssertionError, assert_key(assert_id), "%U", a.get(1));
         }
     }
-    eval_chn_actions(age);
-    for (auto [name, backend]: py::dict_iter<BackendBase>(backends)) {
+    eval_chn_actions(age, isfirst);
+    for (auto [name, backend]: py::dict_iter<BackendBase>(backends))
         backend->data()->runtime_finalize(this, age);
-    }
+    compiled = true;
 }
 
 __attribute__((visibility("hidden")))
@@ -446,6 +464,8 @@ PyTypeObject SeqCompiler::Type = {
     .tp_new = py::tp_new<[] (PyTypeObject *t, auto...) {
         auto self = py::generic_alloc<SeqCompiler>(t);
         call_constructor(&self->seq, py::new_none());
+        // self->compiled = false;
+        call_constructor(&self->channel_changed);
         call_constructor(&self->basic_cseqs);
         call_constructor(&self->chn_action_alloc);
         call_constructor(&self->all_chn_actions);

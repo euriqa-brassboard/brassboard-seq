@@ -65,7 +65,7 @@ struct RampFunctionBase : py::VBase<RampFunctionBase> {
         // Also note that this API mutates the object and currently means
         // we cannot compute multiple ramps concurrently.
         virtual py::ref<> spline_segments(double length, double oldval) = 0;
-        virtual void set_runtime_params(unsigned age) = 0;
+        virtual bool set_runtime_params(unsigned age) = 0;
         virtual rtval::TagVal runtime_eval(double t) noexcept = 0;
     };
     template<typename T>
@@ -87,9 +87,9 @@ struct RampFunctionBase : py::VBase<RampFunctionBase> {
     {
         return data()->spline_segments(length, oldval);
     }
-    void set_runtime_params(unsigned age)
+    bool set_runtime_params(unsigned age)
     {
-        data()->set_runtime_params(age);
+        return data()->set_runtime_params(age);
     }
     rtval::TagVal runtime_eval(double t) noexcept
     {
@@ -120,7 +120,7 @@ struct SeqCubicSpline : RampFunctionBase::Base<SeqCubicSpline> {
 
         py::ref<> eval_end(py::ptr<> length, py::ptr<> oldval) override;
         py::ref<> spline_segments(double length, double oldval) override;
-        void set_runtime_params(unsigned age) override;
+        bool set_runtime_params(unsigned age) override;
         rtval::TagVal runtime_eval(double t) noexcept override;
     };
 

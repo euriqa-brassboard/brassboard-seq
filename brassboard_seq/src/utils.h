@@ -254,6 +254,14 @@ static inline void call_destructor(T *x)
     x->~T();
 }
 
+static bool tracked_assign(auto &tgt, auto v)
+{
+    if (tgt == v)
+        return false;
+    tgt = v;
+    return true;
+}
+
 namespace py {
 
 struct _common {};

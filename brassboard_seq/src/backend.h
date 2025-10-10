@@ -47,6 +47,8 @@ struct SeqCompiler : PyObject {
     py::ref<seq::Seq> seq;
     int nchn;
     int nbseq;
+    bool compiled;
+    std::vector<bool> channel_changed;
     std::vector<CompiledBasicSeq> basic_cseqs;
     PermAllocator<ChannelAction,16> chn_action_alloc;
     std::vector<std::vector<ChannelAction*>> all_chn_actions;
@@ -59,7 +61,7 @@ struct SeqCompiler : PyObject {
     // Use std::vector<uint8_t> to pass in the status rather than std::vector<bool>
     // to avoid dealing with the special std::vector<bool> (i.e. bit array) interface.
     void populate_bseq_values(CompiledBasicSeq &cbseq, std::vector<uint8_t> &chn_status);
-    void eval_chn_actions(unsigned age);
+    void eval_chn_actions(unsigned age, bool isfirst);
     std::vector<ChannelAction*> &get_action_list(int chn, int bseq_id)
     {
         return all_chn_actions[chn + bseq_id * nchn];

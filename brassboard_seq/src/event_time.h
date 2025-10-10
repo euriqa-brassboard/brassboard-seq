@@ -175,6 +175,11 @@ struct TimeManager : PyObject {
     std::shared_ptr<TimeManagerStatus> status;
     py::list_ref event_times;
     std::vector<int64_t> time_values;
+    // status:
+    //   0: unevaluated
+    //   1: evaluated but status/unchanged
+    //   2: evaluated and changed
+    std::vector<int8_t> time_status;
 
     void finalize();
     int64_t compute_all_times(unsigned age);
@@ -224,7 +229,8 @@ struct EventTime : PyObject {
     }
 
     static PyTypeObject Type;
-    int64_t get_value(int base_id, unsigned age, std::vector<int64_t> &cache);
+    int64_t get_value(int base_id, unsigned age, std::vector<int64_t> &cache,
+                      std::vector<int8_t> &status);
 private:
     void update_chain_pos(EventTime *prev, int nchains);
     friend struct TimeManager;

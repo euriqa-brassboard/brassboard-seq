@@ -1255,8 +1255,9 @@ InterpFunction::visit_value(RuntimeValue *value, Builder &builder)
 }
 
 BB_PROTECTED
-void InterpFunction::eval_all(unsigned age)
+bool InterpFunction::eval_all(unsigned age)
 {
+    bool changed = false;
     for (size_t i = 0; i < rt_vals.size(); i++) {
         auto rt_val = (RuntimeValue*)rt_vals[i];
         if (!rt_val) {
@@ -1264,9 +1265,12 @@ void InterpFunction::eval_all(unsigned age)
             continue;
         }
         rt_eval_cache(rt_val, age);
-        data[i] = rt_val->cache_val;
-        errors[i] = rt_val->cache_err;
+        changed |= tracked_assign(errors[i], rt_val->cache_err);
+        auto newval = rt_val->cache_val;
+        changed |= !same_genval(rt_val->datatype, data[i], newval);
+        data[i] = newval;
     }
+    return changed;
 }
 
 BB_PROTECTED

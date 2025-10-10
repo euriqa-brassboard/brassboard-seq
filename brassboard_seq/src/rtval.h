@@ -1039,6 +1039,18 @@ static inline __attribute__((always_inline)) TagVal rtval_cache(rtval_ptr rtval)
     return cache;
 }
 
+static constexpr bool same_genval(DataType type, GenVal v1, GenVal v2)
+{
+    switch (type) {
+    default:
+    case DataType::Bool:
+        return v1.b_val == v2.b_val;
+    case DataType::Float64: // No need to separate out these two cases
+    case DataType::Int64:
+        return v1.i64_val == v2.i64_val;
+    }
+}
+
 bool same_value(py::ptr<> v1, py::ptr<> v2);
 
 void rt_eval_cache(rtval_ptr self, unsigned age);
@@ -1106,7 +1118,7 @@ struct InterpFunction {
     void set_value(rtval_ptr value, std::vector<DataType> &args);
     Builder::ValueInfo &visit_value(RuntimeValue *value, Builder &builder);
 
-    void eval_all(unsigned age);
+    bool eval_all(unsigned age);
     TagVal call();
 };
 

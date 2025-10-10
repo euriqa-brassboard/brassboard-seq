@@ -266,10 +266,11 @@ int64_t TimeManager::compute_all_times(unsigned age)
         py_throw_format(PyExc_RuntimeError, "Event times not finalized");
     int64_t max_time = 0;
     int ntimes = event_times.size();
-    time_values.resize(ntimes);
-    std::ranges::fill(time_values, -1);
+    time_values.resize(ntimes, 0);
+    time_status.resize(ntimes);
+    std::ranges::fill(time_status, 0);
     for (auto [i, t]: py::list_iter<EventTime>(event_times))
-        max_time = std::max(max_time, t->get_value(-1, age, time_values));
+        max_time = std::max(max_time, t->get_value(-1, age, time_values, time_status));
     return max_time;
 }
 
@@ -283,6 +284,7 @@ py::ref<TimeManager> TimeManager::alloc()
     status->ntimes = 0;
     call_constructor(&self->status, status);
     call_constructor(&self->time_values);
+    call_constructor(&self->time_status);
     return self;
 }
 
@@ -362,9 +364,10 @@ struct EventTimeDiff : rtval::ExternCallback {
         self->in_eval = true;
         ScopeExit reset_eval([&] { self->in_eval = false; });
         int base_id = eventtime_find_base_id(t1, t2, age);
-        std::vector<int64_t> cache(t1->manager_status->ntimes, -1);
-        return double(t1->get_value(base_id, age, cache) -
-                      t2->get_value(base_id, age, cache)) / time_scale;
+        std::vector<int64_t> cache(t1->manager_status->ntimes, 0);
+        std::vector<int8_t> status(t1->manager_status->ntimes, 0);
+        return double(t1->get_value(base_id, age, cache, status) -
+                      t2->get_value(base_id, age, cache, status)) / time_scale;
     }
 
     static PyTypeObject Type;
@@ -391,15 +394,16 @@ PyTypeObject EventTimeDiff::Type = {
 // we can compute the diff without computing the base time,
 // while if the base time is known, we can use the static values in the computation
 __attribute__((visibility("internal")))
-inline int64_t EventTime::get_value(int base_id, unsigned age, std::vector<int64_t> &cache)
+inline int64_t EventTime::get_value(int base_id, unsigned age, std::vector<int64_t> &cache,
+                                    std::vector<int8_t> &status)
 {
     auto tid = data.id;
     if (tid == base_id)
         return data.is_static() ? data._get_static() : 0;
     assert(tid > base_id);
-    auto value = cache[tid];
-    if (value >= 0)
-        return value;
+    auto old_value = cache[tid];
+    if (status[tid])
+        return old_value;
     // The time manager should've been finalized and
     // no time should be floating anymore
     assert(!data.floating);
@@ -410,12 +414,13 @@ inline int64_t EventTime::get_value(int base_id, unsigned age, std::vector<int64
         // compute the offset from the base time.
         auto static_value = data._get_static();
         cache[tid] = static_value;
+        status[tid] = 1;
         return static_value;
     }
 
     int64_t prev_val = 0;
     if (prev != Py_None)
-        prev_val = prev->get_value(base_id, age, cache);
+        prev_val = prev->get_value(base_id, age, cache, status);
 
     auto cond_val = get_cond_val(cond, age);
     int64_t offset = 0;
@@ -434,6 +439,7 @@ inline int64_t EventTime::get_value(int base_id, unsigned age, std::vector<int64
         }
     }
 
+    int64_t value;
     if (wait_for == Py_None) {
         // When wait_for is None, the offset is added to the previous time
         value = prev_val + offset;
@@ -445,11 +451,18 @@ inline int64_t EventTime::get_value(int base_id, unsigned age, std::vector<int64
         // When a base_id is supplied, the wait_for event time may not share
         // this base if the condition isn't true.
         if (cond_val) {
-            value = std::max(value, wait_for->get_value(base_id, age, cache) + offset);
+            value = std::max(value, wait_for->get_value(base_id, age, cache,
+                                                        status) + offset);
         }
     }
 
-    cache[tid] = value;
+    if (value != old_value) {
+        status[tid] = 2;
+        cache[tid] = value;
+    }
+    else {
+        status[tid] = 1;
+    }
     return value;
 }
 

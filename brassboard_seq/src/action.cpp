@@ -65,12 +65,12 @@ py::ref<> SeqCubicSpline::Data::spline_segments(double length, double oldval)
 }
 
 __attribute__((visibility("internal")))
-void SeqCubicSpline::Data::set_runtime_params(unsigned age)
+bool SeqCubicSpline::Data::set_runtime_params(unsigned age)
 {
-    sp.order0 = rtval::get_value_f64(order0, age);
-    sp.order1 = rtval::get_value_f64(order1, age);
-    sp.order2 = rtval::get_value_f64(order2, age);
-    sp.order3 = rtval::get_value_f64(order3, age);
+    auto changed = tracked_assign(sp.order0, rtval::get_value_f64(order0, age));
+    changed |= tracked_assign(sp.order1, rtval::get_value_f64(order1, age));
+    changed |= tracked_assign(sp.order2, rtval::get_value_f64(order2, age));
+    return changed | tracked_assign(sp.order3, rtval::get_value_f64(order3, age));
 }
 
 __attribute__((visibility("internal")))
@@ -176,13 +176,13 @@ struct RampFunction : RampFunctionBase::Base<RampFunction> {
                 return py::new_none();
             return _spline_segments(py_self(), to_py(length), to_py(oldval));
         }
-        void set_runtime_params(unsigned age) override
+        bool set_runtime_params(unsigned age) override
         {
             if (!fvalue)
                 py_throw_format(PyExc_RuntimeError, "RampFunction.__init__ not called");
-            if (interp_func) {
-                interp_func->eval_all(age);
-            }
+            if (interp_func)
+                return interp_func->eval_all(age);
+            return false;
         }
         rtval::TagVal runtime_eval(double t) noexcept override
         {
@@ -247,10 +247,10 @@ struct Blackman : RampFunctionBase::Base<Blackman> {
             f_t_scale = length == 0 ? 0.0 : (M_PI * 2 / length);
             return py::new_none();
         }
-        void set_runtime_params(unsigned age) override
+        bool set_runtime_params(unsigned age) override
         {
-            f_amp = rtval::get_value_f64(amp, age);
-            f_offset = rtval::get_value_f64(offset, age);
+            auto changed = tracked_assign(f_amp, rtval::get_value_f64(amp, age));
+            return changed | tracked_assign(f_offset, rtval::get_value_f64(offset, age));
         }
         rtval::TagVal runtime_eval(double t) noexcept override
         {
@@ -313,10 +313,10 @@ struct BlackmanSquare : RampFunctionBase::Base<BlackmanSquare> {
             f_t_scale = length == 0 ? 0.0 : (M_PI * 2 / length);
             return py::new_none();
         }
-        void set_runtime_params(unsigned age) override
+        bool set_runtime_params(unsigned age) override
         {
-            f_amp = rtval::get_value_f64(amp, age);
-            f_offset = rtval::get_value_f64(offset, age);
+            auto changed = tracked_assign(f_amp, rtval::get_value_f64(amp, age));
+            return changed | tracked_assign(f_offset, rtval::get_value_f64(offset, age));
         }
         rtval::TagVal runtime_eval(double t) noexcept override
         {
@@ -380,10 +380,10 @@ struct LinearRamp : RampFunctionBase::Base<LinearRamp> {
             f_inv_length = 1 / length;
             return py::new_tuple();
         }
-        void set_runtime_params(unsigned age) override
+        bool set_runtime_params(unsigned age) override
         {
-            f_start = rtval::get_value_f64(start, age);
-            f_end = rtval::get_value_f64(end, age);
+            auto changed = tracked_assign(f_start, rtval::get_value_f64(start, age));
+            return changed | tracked_assign(f_end, rtval::get_value_f64(end, age));
         }
         rtval::TagVal runtime_eval(double t) noexcept override
         {
