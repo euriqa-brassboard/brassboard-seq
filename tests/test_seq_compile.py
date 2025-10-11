@@ -96,6 +96,7 @@ def test_cond_order1(max_bt):
     assert action1.get_cond_val() is True
     assert action2.get_cond_val() is True
     total_time, times = test_utils.compiler_get_all_times(comp, 0)
+    assert test_utils.compiler_get_channel_changed(comp) == [True]
 
     assert times == [0,
                      100_000_000_000,
@@ -109,6 +110,7 @@ def test_cond_order1(max_bt):
     assert action1.get_cond_val() is c1val
     assert action2.get_cond_val() is True
     total_time, times = test_utils.compiler_get_all_times(comp, 0)
+    assert test_utils.compiler_get_channel_changed(comp) == [True]
 
     assert times == [0,
                      100_000_000_000,
@@ -122,6 +124,7 @@ def test_cond_order1(max_bt):
     assert action1.get_cond_val() is c1val
     assert action2.get_cond_val() is True
     total_time, times = test_utils.compiler_get_all_times(comp, 0)
+    assert test_utils.compiler_get_channel_changed(comp) == [True]
 
     assert times == [0,
                      100_000_000_000,
@@ -211,6 +214,7 @@ def test_cond_order2(max_bt):
     assert action1.get_cond_val() is True
     assert action2.get_cond_val() is True
     total_time, times = test_utils.compiler_get_all_times(comp, 0)
+    assert test_utils.compiler_get_channel_changed(comp) == [True]
 
     assert times == [0,
                      100_000_000_000,
@@ -225,6 +229,7 @@ def test_cond_order2(max_bt):
     assert action1.get_cond_val() is c1val
     assert action2.get_cond_val() is True
     total_time, times = test_utils.compiler_get_all_times(comp, 0)
+    assert test_utils.compiler_get_channel_changed(comp) == [True]
 
     assert times == [0,
                      100_000_000_000,
@@ -239,6 +244,7 @@ def test_cond_order2(max_bt):
     assert action1.get_cond_val() is c1val
     assert action2.get_cond_val() is True
     total_time, times = test_utils.compiler_get_all_times(comp, 0)
+    assert test_utils.compiler_get_channel_changed(comp) == [True]
 
     assert times == [0,
                      100_000_000_000,
@@ -429,6 +435,7 @@ def test_order_error3(max_bt):
     assert action1.get_cond_val() is True
     assert action2.get_cond_val() is True
     total_time, times = test_utils.compiler_get_all_times(comp, 0)
+    assert test_utils.compiler_get_channel_changed(comp) == [True]
 
     assert times == [0,
                      100_000_000_000,
@@ -585,6 +592,7 @@ def test_ramp_order1(max_bt):
     assert action2.get_cond_val() is True
     assert action3.get_cond_val() is True
     total_time, times = test_utils.compiler_get_all_times(comp, 0)
+    assert test_utils.compiler_get_channel_changed(comp) == [True]
 
     assert times == [0,
                      0,
@@ -600,6 +608,7 @@ def test_ramp_order1(max_bt):
     assert action2.get_cond_val() is True
     assert action3.get_cond_val() is True
     total_time, times = test_utils.compiler_get_all_times(comp, 0)
+    assert test_utils.compiler_get_channel_changed(comp) == [True]
 
     assert times == [0,
                      0,
@@ -623,6 +632,7 @@ def test_rt_assert(max_bt):
 
     comp.finalize()
     comp.runtime_finalize(1)
+    assert test_utils.compiler_get_channel_changed(comp) == []
 
     c1val = False
     with pytest.raises(AssertionError, match="Some message") as exc:
@@ -631,6 +641,7 @@ def test_rt_assert(max_bt):
 
     c1val = True
     comp.runtime_finalize(3)
+    assert test_utils.compiler_get_channel_changed(comp) == []
 
     comp = test_env.new_comp(max_bt)
     s = comp.seq
@@ -673,6 +684,7 @@ def test_cond_ramp_error(max_bt):
       .pulse('artiq/urukul0_ch1/amp', test_utils.DivLengthFunction())
     comp.finalize()
     comp.runtime_finalize(1)
+    assert test_utils.compiler_get_channel_changed(comp) == [True, True]
 
     comp = test_env.new_comp(max_bt)
     s = comp.seq
@@ -683,6 +695,7 @@ def test_cond_ramp_error(max_bt):
       .pulse('artiq/urukul1_ch1/amp', action.BlackmanSquare(1))
     comp.finalize()
     comp.runtime_finalize(1)
+    assert test_utils.compiler_get_channel_changed(comp) == [True, True, True, True]
 
     comp = test_env.new_comp(max_bt)
     s = comp.seq
@@ -693,6 +706,7 @@ def test_cond_ramp_error(max_bt):
       .pulse('artiq/urukul1_ch1/amp', action.BlackmanSquare(1))
     comp.finalize()
     comp.runtime_finalize(1)
+    assert test_utils.compiler_get_channel_changed(comp) == [True, True, True, True]
 
 class MissingInit(action.RampFunction):
     def __init__(self):
@@ -783,6 +797,7 @@ def test_bseq_empty(max_bt):
     assert test_utils.compiler_get_all_times(comp, 1) == (0, [0])
     assert test_utils.compiler_get_all_times(comp, 2) == (0, [0])
     assert test_utils.compiler_get_all_times(comp, 3) == (0, [0])
+    assert test_utils.compiler_get_channel_changed(comp) == []
 
 @test_utils.with_seq_params
 def test_bseq_split(max_bt):
@@ -839,6 +854,7 @@ def test_bseq_split(max_bt):
     assert test_utils.compiler_get_all_times(comp, 3) == (0, [0])
     assert actions0[0][0].get_cond_val() is True
     assert actions1[0][0].get_cond_val() is True
+    assert test_utils.compiler_get_channel_changed(comp) == [True]
 
     comp = test_env.new_comp(max_bt)
     s = comp.seq
@@ -899,6 +915,7 @@ def test_bseq_split(max_bt):
     assert actions1[0][0].get_cond_val() is True
     assert actions2[0][0].get_cond_val() is True
     assert actions3[0][0].get_cond_val() is True
+    assert test_utils.compiler_get_channel_changed(comp) == [True]
 
     comp = test_env.new_comp(max_bt)
     s = comp.seq
@@ -964,6 +981,7 @@ def test_bseq_split(max_bt):
     assert actions1[0][0].get_cond_val() is True
     assert actions2[0][0].get_cond_val() is True
     assert actions3[0][0].get_cond_val() is True
+    assert test_utils.compiler_get_channel_changed(comp) == [True]
 
     comp = test_env.new_comp(max_bt)
     s = comp.seq
@@ -1036,6 +1054,7 @@ def test_bseq_split(max_bt):
     assert actions2[0][1].get_cond_val() is True
     assert actions3[0][0].get_cond_val() is True
     assert actions3[0][1].get_cond_val() is True
+    assert test_utils.compiler_get_channel_changed(comp) == [True]
 
     comp = test_env.new_comp(max_bt)
     s = comp.seq
@@ -1119,3 +1138,4 @@ def test_bseq_split(max_bt):
     assert actions2[0][1].get_cond_val() is True
     assert actions3[0][0].get_cond_val() is True
     assert actions3[0][1].get_cond_val() is True
+    assert test_utils.compiler_get_channel_changed(comp) == [True]

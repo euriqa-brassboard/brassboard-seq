@@ -302,6 +302,9 @@ static PyModuleDef test_module = {
                 });
             });
         }>,
+        py::meth_o<"compiler_get_channel_changed",[] (auto, py::ptr<backend::SeqCompiler> comp) {
+            return to_py(comp->channel_changed);
+        }>,
         py::meth_fast<"compiler_get_bseq_id",[] (auto, PyObject *const *args,
                                                  Py_ssize_t nargs) {
             py::check_num_arg("compiler_get_bseq_id", nargs, 2, 2);
