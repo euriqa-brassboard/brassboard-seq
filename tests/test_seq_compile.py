@@ -1139,3 +1139,63 @@ def test_bseq_split(max_bt):
     assert actions3[0][0].get_cond_val() is True
     assert actions3[0][1].get_cond_val() is True
     assert test_utils.compiler_get_channel_changed(comp) == [True]
+
+@test_utils.with_seq_params
+def test_channel_change(max_bt):
+    t0 = rtval.seq_variable(0.1)
+    t1 = rtval.seq_variable(0.1)
+    t2 = rtval.seq_variable(0.1)
+    v1 = rtval.seq_variable(0.1)
+    v2 = rtval.seq_variable(0.1)
+    v3 = rtval.seq_variable(0.1)
+    v4 = rtval.seq_variable(0.1)
+
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
+    s.wait(t0)
+    s.add_step(t1) \
+      .set('artiq/urukul0_ch0/amp', action.Blackman(v1)) \
+      .pulse('artiq/urukul0_ch1/amp', action.Blackman(v2))
+    s.add_step(t2) \
+      .set('artiq/urukul1_ch0/amp', v3) \
+      .pulse('artiq/urukul1_ch1/amp', v4)
+    comp.finalize()
+
+    comp.runtime_finalize(1)
+    assert test_utils.compiler_get_channel_changed(comp) == [True, True, True, True]
+
+    comp.runtime_finalize(2)
+    assert test_utils.compiler_get_channel_changed(comp) == [False, False, False, False]
+
+    t0.value = 0.2
+    comp.runtime_finalize(3)
+    assert test_utils.compiler_get_channel_changed(comp) == [True, True, True, True]
+
+    t0.value = 0.1
+    t1.value = 0.2
+    comp.runtime_finalize(4)
+    assert test_utils.compiler_get_channel_changed(comp) == [True, True, False, False]
+
+    t1.value = 0.1
+    comp.runtime_finalize(5)
+    assert test_utils.compiler_get_channel_changed(comp) == [True, True, True, True]
+
+    t2.value = 0.2
+    comp.runtime_finalize(6)
+    assert test_utils.compiler_get_channel_changed(comp) == [False, False, False, True]
+
+    v1.value = 0.2
+    comp.runtime_finalize(7)
+    assert test_utils.compiler_get_channel_changed(comp) == [True, False, False, False]
+
+    v2.value = 0.2
+    comp.runtime_finalize(8)
+    assert test_utils.compiler_get_channel_changed(comp) == [False, True, False, False]
+
+    v3.value = 0.2
+    comp.runtime_finalize(9)
+    assert test_utils.compiler_get_channel_changed(comp) == [False, False, True, False]
+
+    v4.value = 0.2
+    comp.runtime_finalize(10)
+    assert test_utils.compiler_get_channel_changed(comp) == [False, False, False, True]
