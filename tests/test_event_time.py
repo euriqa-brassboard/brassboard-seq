@@ -68,6 +68,7 @@ def test_event_time1():
         test_utils.time_manager_compute_all_times(mgr, 1)
 
     test_utils.time_manager_finalize(mgr)
+    assert test_utils.time_manager_get_time_status(mgr) == []
     assert test_utils.time_manager_nchain(mgr) == 2
     assert test_utils.event_time_get_static(t0) == 0
     assert test_utils.event_time_get_static(t1) == 1000
@@ -110,9 +111,16 @@ def test_event_time1():
     assert test_utils.event_time_is_ordered(t5, t6) == 'OrderBefore'
     assert test_utils.event_time_is_ordered(t3, t6) == 'NoOrder'
 
+    assert test_utils.time_manager_get_time_status(mgr) == []
     max_time, time_values = test_utils.time_manager_compute_all_times(mgr, 1)
     assert time_values == [0, 1000, 1000, 2000, 1000, 1000, 3401_000]
     assert max_time == 3401_000
+    assert test_utils.time_manager_get_time_status(mgr) == [1, 1, 1, 1, 1, 1, 1]
+
+    max_time, time_values = test_utils.time_manager_compute_all_times(mgr, 2)
+    assert time_values == [0, 1000, 1000, 2000, 1000, 1000, 3401_000]
+    assert max_time == 3401_000
+    assert test_utils.time_manager_get_time_status(mgr) == [1, 1, 1, 1, 1, 1, 1]
 
     mgr = test_utils.new_time_manager()
     t0 = test_utils.time_manager_new_time(mgr, None, 0, False, True, None)
@@ -227,6 +235,12 @@ def test_event_time1_rt():
     max_time, time_values = test_utils.time_manager_compute_all_times(mgr, 1)
     assert time_values == [0, 1000, 1000, 2000, 1000, 1000, 3401_000]
     assert max_time == 3401_000
+    assert test_utils.time_manager_get_time_status(mgr) == [1, 2, 2, 2, 2, 2, 2]
+
+    max_time, time_values = test_utils.time_manager_compute_all_times(mgr, 2)
+    assert time_values == [0, 1000, 1000, 2000, 1000, 1000, 3401_000]
+    assert max_time == 3401_000
+    assert test_utils.time_manager_get_time_status(mgr) == [1, 1, 1, 1, 1, 1, 1]
 
 def test_event_time_static0():
     mgr = test_utils.new_time_manager()
@@ -255,6 +269,7 @@ def test_event_time_static0():
     max_time, time_values = test_utils.time_manager_compute_all_times(mgr, 1)
     assert time_values == [0, 0]
     assert max_time == 0
+    assert test_utils.time_manager_get_time_status(mgr) == [1, 1]
 
     mgr = test_utils.new_time_manager()
     t0 = test_utils.time_manager_new_time(mgr, None, 0, False, True, None)
@@ -282,6 +297,7 @@ def test_event_time_static0():
     max_time, time_values = test_utils.time_manager_compute_all_times(mgr, 1)
     assert time_values == [0, 0]
     assert max_time == 0
+    assert test_utils.time_manager_get_time_status(mgr) == [1, 1]
 
 def test_event_time2():
     mgr = test_utils.new_time_manager()
@@ -346,12 +362,14 @@ def test_event_time3():
     max_time, time_values = test_utils.time_manager_compute_all_times(mgr, 1)
     assert time_values == [0, 10_000_000_000, 1_210_000_000_000, 2_210_000_000_000]
     assert max_time == 2_210_000_000_000
+    assert test_utils.time_manager_get_time_status(mgr) == [1, 1, 1, 2]
 
     actual_value = 2.0
 
     max_time, time_values = test_utils.time_manager_compute_all_times(mgr, 2)
     assert time_values == [0, 10_000_000_000, 1_210_000_000_000, 3_210_000_000_000]
     assert max_time == 3_210_000_000_000
+    assert test_utils.time_manager_get_time_status(mgr) == [1, 1, 1, 2]
 
 def test_event_time3_rt():
     mgr = test_utils.new_time_manager()
@@ -408,12 +426,14 @@ def test_event_time3_rt():
     max_time, time_values = test_utils.time_manager_compute_all_times(mgr, 1)
     assert time_values == [0, 10_000_000_000, 1_210_000_000_000, 2_210_000_000_000]
     assert max_time == 2_210_000_000_000
+    assert test_utils.time_manager_get_time_status(mgr) == [1, 2, 2, 2]
 
     actual_value = 2.0
 
     max_time, time_values = test_utils.time_manager_compute_all_times(mgr, 2)
     assert time_values == [0, 10_000_000_000, 1_210_000_000_000, 3_210_000_000_000]
     assert max_time == 3_210_000_000_000
+    assert test_utils.time_manager_get_time_status(mgr) == [1, 1, 1, 2]
 
 def test_event_time4():
     mgr = test_utils.new_time_manager()
@@ -459,6 +479,7 @@ def test_event_time4():
     max_time, time_values = test_utils.time_manager_compute_all_times(mgr, 1)
     assert time_values == [0, 10_000_000_000, 500_000_000_000, 520_000_000_000]
     assert max_time == 520_000_000_000
+    assert test_utils.time_manager_get_time_status(mgr) == [1, 1, 1, 1]
 
 def test_event_time4_rt():
     mgr = test_utils.new_time_manager()
@@ -505,6 +526,7 @@ def test_event_time4_rt():
     max_time, time_values = test_utils.time_manager_compute_all_times(mgr, 1)
     assert time_values == [0, 10_000_000_000, 500_000_000_000, 520_000_000_000]
     assert max_time == 520_000_000_000
+    assert test_utils.time_manager_get_time_status(mgr) == [1, 1, 2, 2]
 
 def test_event_time5():
     mgr = test_utils.new_time_manager()
@@ -550,6 +572,7 @@ def test_event_time5():
     max_time, time_values = test_utils.time_manager_compute_all_times(mgr, 1)
     assert time_values == [0, 10_000_000_000, 500_000_000_000, 500_000_000_000]
     assert max_time == 500_000_000_000
+    assert test_utils.time_manager_get_time_status(mgr) == [1, 1, 1, 1]
 
 def test_event_time5_rt():
     mgr = test_utils.new_time_manager()
@@ -596,6 +619,7 @@ def test_event_time5_rt():
     max_time, time_values = test_utils.time_manager_compute_all_times(mgr, 1)
     assert time_values == [0, 10_000_000_000, 500_000_000_000, 500_000_000_000]
     assert max_time == 500_000_000_000
+    assert test_utils.time_manager_get_time_status(mgr) == [1, 2, 1, 2]
 
 def test_time_diff():
     mgr = test_utils.new_time_manager()
@@ -662,6 +686,7 @@ def test_time_diff4():
     max_time, time_values = test_utils.time_manager_compute_all_times(mgr, 2)
     assert time_values == [0, 1000, 2000]
     assert max_time == 2000
+    assert test_utils.time_manager_get_time_status(mgr) == [1, 2, 2]
 
 def test_time_diff5():
     mgr = test_utils.new_time_manager()
@@ -682,6 +707,7 @@ def test_time_diff5():
     max_time, time_values = test_utils.time_manager_compute_all_times(mgr, 2)
     assert time_values == [0, 1000, 2000, 2000]
     assert max_time == 2000
+    assert test_utils.time_manager_get_time_status(mgr) == [1, 2, 2, 2]
 
 def test_time_diff6():
     mgr = test_utils.new_time_manager()
@@ -700,6 +726,7 @@ def test_time_diff6():
     max_time, time_values = test_utils.time_manager_compute_all_times(mgr, 2)
     assert time_values == [0, 1000, 2000, 30000]
     assert max_time == 30000
+    assert test_utils.time_manager_get_time_status(mgr) == [1, 1, 1, 1]
 
 def test_time_diff7():
     mgr = test_utils.new_time_manager()
@@ -717,3 +744,4 @@ def test_time_diff7():
     max_time, time_values = test_utils.time_manager_compute_all_times(mgr, 2)
     assert time_values == [0, 1000, 2000]
     assert max_time == 2000
+    assert test_utils.time_manager_get_time_status(mgr) == [1, 1, 1]

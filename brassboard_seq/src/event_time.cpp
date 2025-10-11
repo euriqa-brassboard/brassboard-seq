@@ -269,8 +269,15 @@ int64_t TimeManager::compute_all_times(unsigned age)
     time_values.resize(ntimes, 0);
     time_status.resize(ntimes);
     std::ranges::fill(time_status, 0);
-    for (auto [i, t]: py::list_iter<EventTime>(event_times))
-        max_time = std::max(max_time, t->get_value(-1, age, time_values, time_status));
+    try {
+        for (auto [i, t]: py::list_iter<EventTime>(event_times))
+            max_time = std::max(max_time, t->get_value(-1, age, time_values, time_status));
+    }
+    catch (...) {
+        // Clear cache so that the time_status can be valid next time.
+        std::ranges::fill(time_values, 0);
+        throw;
+    }
     return max_time;
 }
 

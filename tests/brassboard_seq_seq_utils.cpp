@@ -213,6 +213,9 @@ static PyModuleDef test_module = {
             auto max_time = self->compute_all_times(py::ptr(args[1]).as_int());
             return py::new_tuple(to_py(max_time), to_py(self->time_values));
         }>,
+        py::meth_o<"time_manager_get_time_status",[] (auto, py::ptr<event_time::TimeManager> self) {
+            return to_py(self->time_status);
+        }>,
         py::meth_o<"time_manager_nchain",[] (auto, py::ptr<event_time::TimeManager> self) {
             py::ptr times = self->event_times;
             if (times.size() == 0)
