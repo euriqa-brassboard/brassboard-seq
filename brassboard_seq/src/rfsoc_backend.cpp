@@ -47,7 +47,7 @@ static inline int64_t cycle_to_seq_time(int64_t cycle)
 }
 
 __attribute__((visibility("internal")))
-void ChannelsInfo::ensure_unused_tones(bool all)
+inline void ChannelsInfo::ensure_unused_tones(bool all)
 {
     // For now, do not generate RFSoC data if there's no output.
     // This may be a problem if some of the sequences in a scan contains RFSoC outputs
@@ -92,7 +92,7 @@ static int parse_pos_int(const std::string_view &s, py::tuple path, int max)
     return n;
 }
 
-BB_PROTECTED
+__attribute__((visibility("internal")))
 void ChannelsInfo::collect_channel(py::ptr<seq::Seq> seq, py::str prefix)
 {
     // Channel name format: <prefix>/dds<chn>/<tone>/<param>
@@ -137,7 +137,7 @@ void ChannelsInfo::collect_channel(py::ptr<seq::Seq> seq, py::str prefix)
 }
 
 __attribute__((visibility("internal")))
-bool RFSOCBackend::Data::set_dds_delay(int dds, double delay)
+inline bool RFSOCBackend::Data::set_dds_delay(int dds, double delay)
 {
     if (delay < 0)
         py_throw_format(PyExc_ValueError, "DDS time offset %S cannot be negative.",

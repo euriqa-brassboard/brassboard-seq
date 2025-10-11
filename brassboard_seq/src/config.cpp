@@ -20,13 +20,13 @@
 
 namespace brassboard_seq::config {
 
-BB_PROTECTED
+__attribute__((visibility("internal")))
 py::str_ref channel_name_from_path(py::ptr<> path)
 {
     return "/"_py.join(path);
 }
 
-[[noreturn]] BB_PROTECTED
+[[noreturn]] __attribute__((visibility("internal")))
 void raise_invalid_channel(py::tuple path)
 {
     py_throw_format(PyExc_ValueError, "Invalid channel name %U",
@@ -73,7 +73,7 @@ inline py::tuple_ref Config::_translate_channel(py::tuple path)
     return path.ref();
 }
 
-BB_PROTECTED
+__attribute__((visibility("internal")))
 py::tuple_ref Config::translate_channel(py::str name)
 {
     return _translate_channel(split_string_tuple(name));

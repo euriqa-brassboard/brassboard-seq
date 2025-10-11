@@ -84,7 +84,7 @@ static inline rtval_ref wrap_rtval(py::ptr<> v)
     return new_const(TagVal::from_py(v));
 }
 
-BB_PROTECTED
+__attribute__((visibility("internal")))
 rtval_ref new_select(rtval_ptr arg0, py::ptr<> arg1, py::ptr<> arg2)
 {
     auto rtarg1 = wrap_rtval(arg1);
@@ -1021,7 +1021,7 @@ static inline int get_label_offset(ValueType op, DataType t1, DataType t2)
     return interp_label_offsets[get_label_id(op, t1, t2)];
 }
 
-BB_PROTECTED
+__attribute__((visibility("internal")))
 void InterpFunction::set_value(rtval_ptr value, std::vector<DataType> &args)
 {
     int nargs = args.size();
@@ -1203,7 +1203,7 @@ InterpFunction::visit_value(RuntimeValue *value, Builder &builder)
     }
 }
 
-BB_PROTECTED
+__attribute__((visibility("internal")))
 bool InterpFunction::eval_all(unsigned age)
 {
     bool changed = false;
@@ -1222,7 +1222,7 @@ bool InterpFunction::eval_all(unsigned age)
     return changed;
 }
 
-BB_PROTECTED
+__attribute__((visibility("internal")))
 TagVal InterpFunction::call()
 {
     auto [err, val] = interpret_func(code.data(), data.data(), errors.data());

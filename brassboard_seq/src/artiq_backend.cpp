@@ -284,7 +284,7 @@ inline void ChannelsInfo::collect_channels(py::str prefix, py::ptr<> sys,
 }
 
 __attribute__((visibility("internal")))
-void UrukulBus::add_dds_action(RTIOGen &gen, DDSAction &action)
+inline void UrukulBus::add_dds_action(RTIOGen &gen, DDSAction &action)
 {
     auto div = info().URUKUL_SPIT_DDS_WR;
     auto ddschn = action.ddschn;
@@ -320,8 +320,8 @@ void UrukulBus::add_dds_action(RTIOGen &gen, DDSAction &action)
 }
 
 __attribute__((visibility("internal")))
-void UrukulBus::add_io_update(RTIOGen &gen, int64_t time_mu,
-                              int aid, bool exact_time)
+inline void UrukulBus::add_io_update(RTIOGen &gen, int64_t time_mu,
+                                     int aid, bool exact_time)
 {
     // Round to the nearest 8 cycles.
     time_mu = (time_mu + coarse_time_mu / 2) & ~int64_t(coarse_time_mu - 1);
@@ -586,8 +586,8 @@ struct __attribute__((visibility("internal"))) ArtiqBackend::Data::Indexers {
 };
 
 __attribute__((visibility("internal")))
-auto ArtiqBackend::Output::alloc(int bseq_id, py::ref<> rtios, bool may_term,
-                                 std::vector<int> next_cbseq) -> py::ref<Output>
+inline auto ArtiqBackend::Output::alloc(int bseq_id, py::ref<> rtios, bool may_term,
+                                        std::vector<int> next_cbseq) -> py::ref<Output>
 {
     auto self = py::generic_alloc<Output>();
     self->bseq_id = bseq_id;
@@ -632,8 +632,9 @@ inline ArtiqBackend::Data::Data(py::ptr<> sys, py::ref<> all_outputs, bool use_d
 }
 
 __attribute__((visibility("internal")))
-void ArtiqBackend::Data::process_bseq(py::ptr<SeqCompiler> comp, CompiledBasicSeq &cbseq,
-                                      py::ptr<Output> output, Indexers &idr)
+inline void ArtiqBackend::Data::process_bseq(py::ptr<SeqCompiler> comp,
+                                             CompiledBasicSeq &cbseq,
+                                             py::ptr<Output> output, Indexers &idr)
 {
     auto &artiq_actions = output->actions;
     int bseq_id = cbseq.bseq_id;
@@ -846,8 +847,8 @@ static inline int64_t convert_device_delay(double fdelay)
 }
 
 __attribute__((visibility("internal")))
-void ArtiqBackend::Data::reloc_action(const ArtiqAction &action,
-                                      const std::vector<int64_t> &time_values) const
+inline void ArtiqBackend::Data::reloc_action(const ArtiqAction &action,
+                                             const std::vector<int64_t> &time_values) const
 {
     auto reloc = relocations[action.reloc_id];
     if (reloc.cond_idx != -1)
@@ -879,9 +880,9 @@ void ArtiqBackend::Data::reloc_action(const ArtiqAction &action,
 }
 
 __attribute__((visibility("internal")))
-int64_t RTIOGen::add_action(uint32_t target, uint32_t value, int aid,
-                            int64_t request_time_mu, int64_t lb_mu,
-                            bool exact_time)
+inline int64_t RTIOGen::add_action(uint32_t target, uint32_t value, int aid,
+                                   int64_t request_time_mu, int64_t lb_mu,
+                                   bool exact_time)
 {
     if (exact_time) {
         if (request_time_mu < lb_mu) {
@@ -916,8 +917,9 @@ int64_t RTIOGen::add_action(uint32_t target, uint32_t value, int aid,
 }
 
 __attribute__((visibility("internal")))
-void ArtiqBackend::Data::generate_bseq(py::ptr<SeqCompiler> comp,
-                                       CompiledBasicSeq &cbseq, py::ptr<Output> output)
+inline void ArtiqBackend::Data::generate_bseq(py::ptr<SeqCompiler> comp,
+                                              CompiledBasicSeq &cbseq,
+                                              py::ptr<Output> output)
 {
     int bseq_id = output->bseq_id;
     py::ptr bseq = comp->seq->basic_seqs.get<seq::BasicSeq>(bseq_id);
@@ -1204,8 +1206,9 @@ void ArtiqBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned ag
 }
 
 __attribute__((visibility("internal")))
-void ArtiqBackend::Data::add_start_trigger(py::ptr<> name, py::ptr<> time,
-                                           py::ptr<> min_time, py::ptr<> raising_edge)
+inline void ArtiqBackend::Data::add_start_trigger(py::ptr<> name, py::ptr<> time,
+                                                  py::ptr<> min_time,
+                                                  py::ptr<> raising_edge)
 {
     auto dev = info().get_device(sys, name);
     if (!dev.isinstance(info().TTLOut))

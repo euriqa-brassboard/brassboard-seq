@@ -170,7 +170,7 @@ static constexpr auto parampack_str = py::unifunc<[] (py::ptr<ParamPack> self) {
     return yaml::sprint(field);
 }>;
 
-BB_PROTECTED
+__attribute__((visibility("internal")))
 py::ref<ParamPack> ParamPack::new_empty()
 {
     auto self = parampack_alloc();

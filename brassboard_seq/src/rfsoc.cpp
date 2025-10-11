@@ -178,7 +178,7 @@ struct PyJaqalBase {
 
 namespace Jaqal_v1 {
 
-BB_PROTECTED
+__attribute__((visibility("internal")))
 void ChannelGen::end()
 {
     // Keep the pulses that are added together together by using stable sort.
