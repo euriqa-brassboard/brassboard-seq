@@ -71,6 +71,17 @@ void ChannelsInfo::ensure_unused_tones(bool all)
     }
 }
 
+__attribute__((visibility("internal")))
+inline bool ChannelsInfo::channel_changed(const std::vector<bool> &changed) const
+{
+    for (auto [seqchn, _]: chn_map) {
+        if (changed[seqchn]) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static int parse_pos_int(const std::string_view &s, py::tuple path, int max)
 {
     if (!std::ranges::all_of(s, [] (auto c) { return std::isdigit(c); }))
@@ -126,7 +137,7 @@ void ChannelsInfo::collect_channel(py::ptr<seq::Seq> seq, py::str prefix)
 }
 
 __attribute__((visibility("internal")))
-void RFSOCBackend::Data::set_dds_delay(int dds, double delay)
+bool RFSOCBackend::Data::set_dds_delay(int dds, double delay)
 {
     if (delay < 0)
         py_throw_format(PyExc_ValueError, "DDS time offset %S cannot be negative.",
@@ -134,7 +145,7 @@ void RFSOCBackend::Data::set_dds_delay(int dds, double delay)
     if (delay > 0.1)
         py_throw_format(PyExc_ValueError, "DDS time offset %S cannot be more than 100ms.",
                         to_py(delay));
-    channels.set_dds_delay(dds, event_time::round_time_f64(delay));
+    return channels.set_dds_delay(dds, event_time::round_time_f64(delay));
 }
 
 static inline bool parse_action_kws(py::dict kws, int aid)
@@ -331,12 +342,21 @@ void generate_splines(auto &eval_cb, auto &add_sample, double len, double thresh
 }
 
 __attribute__((visibility("internal")))
-void RFSOCBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned age)
+void RFSOCBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned age,
+                                          bool isfirst)
 {
     bb_debug("rfsoc_runtime_finalize: start\n");
+    bool changed = isfirst;
     for (auto [dds, delay]: py::dict_iter<RuntimeValue>(rt_dds_delay)) {
         rt_eval_throw(delay, age);
-        set_dds_delay(dds.as_int(), rtval_cache(delay).get<double>());
+        changed |= set_dds_delay(dds.as_int(), rtval_cache(delay).get<double>());
+    }
+    if (!changed)
+        changed = channels.channel_changed(comp->channel_changed);
+
+    if (!changed) {
+        bb_debug("rfsoc_runtime_finalize: no change, skipped\n");
+        return;
     }
 
     for (size_t i = 0, nreloc = bool_values.size(); i < nreloc; i++) {

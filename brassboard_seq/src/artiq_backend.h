@@ -249,6 +249,7 @@ struct ChannelsInfo {
     void add_dds_param_channel(int seqchn, uint32_t bus_id, double ftw_per_hz,
                                uint8_t chip_select, ChannelType param,
                                int64_t delay, rtval_ptr rt_delay);
+    bool channel_changed(const std::vector<bool> &changed) const;
 };
 
 static constexpr int coarse_time_mu = 8;
@@ -294,7 +295,7 @@ struct ArtiqBackend : BackendBase::Base<ArtiqBackend> {
         Data(py::ptr<> sys, py::ref<> all_outputs, bool use_dma, bool support_branch);
 
         void finalize(py::ptr<SeqCompiler>) override;
-        void runtime_finalize(py::ptr<SeqCompiler>, unsigned) override;
+        void runtime_finalize(py::ptr<SeqCompiler>, unsigned, bool) override;
         void add_start_trigger_ttl(uint32_t tgt, int64_t time,
                                    int min_time, bool raising_edge)
         {

@@ -413,7 +413,7 @@ inline void SeqCompiler::runtime_finalize(py::ptr<> _age)
     }
     eval_chn_actions(age, isfirst);
     for (auto [name, backend]: py::dict_iter<BackendBase>(backends))
-        backend->data()->runtime_finalize(this, age);
+        backend->data()->runtime_finalize(this, age, isfirst);
     compiled = true;
 }
 

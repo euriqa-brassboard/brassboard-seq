@@ -91,7 +91,7 @@ public:
     struct Data {
         py::str_ref prefix;
         virtual void finalize(py::ptr<SeqCompiler>) {}
-        virtual void runtime_finalize(py::ptr<SeqCompiler>, unsigned) {}
+        virtual void runtime_finalize(py::ptr<SeqCompiler>, unsigned, bool) {}
     };
     template<typename T>
     struct Base : py::VBase<BackendBase>::Base<T> {

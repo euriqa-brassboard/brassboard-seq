@@ -78,11 +78,12 @@ struct ChannelsInfo {
     std::map<int, int64_t> dds_delay;
 
     void collect_channel(py::ptr<seq::Seq> seq, py::str prefix);
-    void set_dds_delay(int dds, int64_t delay)
+    bool set_dds_delay(int dds, int64_t delay)
     {
-        dds_delay[dds] = delay;
+        return tracked_assign(dds_delay[dds], delay);
     }
     void ensure_unused_tones(bool all);
+    bool channel_changed(const std::vector<bool> &changed) const;
 };
 
 struct RFSOCBackend : BackendBase::Base<RFSOCBackend> {
@@ -104,8 +105,8 @@ struct RFSOCBackend : BackendBase::Base<RFSOCBackend> {
         }
 
         void finalize(py::ptr<SeqCompiler>) override;
-        void runtime_finalize(py::ptr<SeqCompiler>, unsigned) override;
-        void set_dds_delay(int dds, double delay);
+        void runtime_finalize(py::ptr<SeqCompiler>, unsigned, bool) override;
+        bool set_dds_delay(int dds, double delay);
     };
 
     using fields = field_pack<BackendBase::fields,&Data::generator,&Data::rt_dds_delay>;

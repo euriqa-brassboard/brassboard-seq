@@ -245,6 +245,22 @@ inline void ChannelsInfo::add_dds_param_channel(int seqchn, uint32_t bus_id,
 }
 
 __attribute__((visibility("internal")))
+inline bool ChannelsInfo::channel_changed(const std::vector<bool> &changed) const
+{
+    for (auto [seqchn, _]: ttl_chn_map) {
+        if (changed[seqchn]) {
+            return true;
+        }
+    }
+    for (auto [seqchn, _]: dds_param_chn_map) {
+        if (changed[seqchn]) {
+            return true;
+        }
+    }
+    return false;
+}
+
+__attribute__((visibility("internal")))
 inline void ChannelsInfo::collect_channels(py::str prefix, py::ptr<> sys,
                                            py::ptr<seq::Seq> seq, py::dict device_delay)
 {
@@ -1144,9 +1160,33 @@ void ArtiqBackend::Data::generate_bseq(py::ptr<SeqCompiler> comp,
 }
 
 __attribute__((visibility("internal")))
-void ArtiqBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned age)
+void ArtiqBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned age,
+                                          bool isfirst)
 {
     bb_debug("artiq_runtime_finalize: start\n");
+    bool changed = isfirst;
+    max_delay = 0;
+    auto relocate_delay = [&] (int64_t &delay, rtval_ptr rt_delay) {
+        if (!rt_delay)
+            return;
+        rtval::rt_eval_throw(rt_delay, age);
+        changed |= tracked_assign(
+            delay, convert_device_delay(rtval::rtval_cache(rt_delay).get<double>()));
+        max_delay = std::max(max_delay, delay);
+    };
+    for (auto &ttlchn: channels.ttlchns)
+        relocate_delay(ttlchn.delay, ttlchn.rt_delay);
+    for (auto &ddschn: channels.ddschns)
+        relocate_delay(ddschn.delay, ddschn.rt_delay);
+
+    if (!changed)
+        changed = channels.channel_changed(comp->channel_changed);
+
+    if (!changed) {
+        bb_debug("artiq_runtime_finalize: no change, skipped\n");
+        return;
+    }
+
     for (size_t i = 0, nreloc = bool_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = bool_values[i];
         val = !rtval::rtval_cache(rtval).is_zero();
@@ -1155,18 +1195,6 @@ void ArtiqBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned ag
         auto &[rtval, val] = float_values[i];
         val = rtval::rtval_cache(rtval).get<double>();
     }
-    max_delay = 0;
-    auto relocate_delay = [&] (int64_t &delay, rtval_ptr rt_delay) {
-        if (!rt_delay)
-            return;
-        rtval::rt_eval_throw(rt_delay, age);
-        delay = convert_device_delay(rtval::rtval_cache(rt_delay).get<double>());
-        max_delay = std::max(max_delay, delay);
-    };
-    for (auto &ttlchn: channels.ttlchns)
-        relocate_delay(ttlchn.delay, ttlchn.rt_delay);
-    for (auto &ddschn: channels.ddschns)
-        relocate_delay(ddschn.delay, ddschn.rt_delay);
 
     eval_status = !eval_status;
     for (auto [cbseq_id, output]: py::list_iter<Output>(all_outputs))
