@@ -1122,6 +1122,8 @@ struct InterpFunction {
     TagVal call();
 };
 
+rtval_ref seq_variable_meth(void*, PyObject *const *args, Py_ssize_t nargs);
+
 void init();
 
 }

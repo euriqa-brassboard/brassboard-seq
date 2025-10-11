@@ -200,14 +200,6 @@ catch (...) {
     return false;
 }
 
-__attribute__((visibility("hidden")))
-void init()
-{
-    _import_array();
-    throw_if(PyType_Ready(&RuntimeValue::Type) < 0);
-    throw_if(PyType_Ready(&ExternCallback::Type) < 0);
-}
-
 using extern_cb_t = TagVal(ExternCallback*);
 using extern_age_cb_t = TagVal(ExternCallback*, unsigned);
 
@@ -887,49 +879,6 @@ PyTypeObject ExternCallback::Type = {
     .tp_flags = Py_TPFLAGS_DEFAULT,
 };
 
-PyMethodDef methods[] = {
-    py::meth_fast<"get_value",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
-        py::check_num_arg("get_value", nargs, 2, 2);
-        auto pyage = py::arg_cast<py::int_>(args[1], "age");
-        if (is_rtval(args[0])) {
-            rt_eval_cache(args[0], pyage.as_int());
-            return rtval_cache(args[0]).to_py();
-        }
-        return py::ptr(args[0]).ref();
-    }>,
-    py::meth_o<"inv",[] (auto, py::ptr<> v) -> py::ref<> {
-        if (v == Py_True)
-            return py::new_false();
-        if (v == Py_False)
-            return py::new_true();
-        if (auto rv = py::cast<RuntimeValue>(v)) {
-            if (rv->type_ == Not)
-                return rt_convert_bool(rv->arg0);
-            return new_expr1(Not, rv);
-        }
-        return py::new_bool(!v.as_bool());
-    }>,
-    py::meth_o<"convert_bool",[] (auto, py::ptr<> v) -> py::ref<> {
-        if (auto rv = py::cast<RuntimeValue>(v))
-            return rt_convert_bool(rv);
-        return py::new_bool(v.as_bool());
-    }>,
-    py::meth_fast<"ifelse",[] (auto, PyObject *const *args, Py_ssize_t nargs) -> py::ref<> {
-        py::check_num_arg("ifelse", nargs, 3, 3);
-        auto b = py::ptr(args[0]);
-        auto v1 = py::ptr(args[1]);
-        auto v2 = py::ptr(args[2]);
-        if (same_value(v1, v2))
-            return v1.ref();
-        if (auto rb = py::cast<RuntimeValue>(b))
-            return new_select(rb, v1, v2);
-        return (b.as_bool() ? v1 : v2).ref();
-    }>,
-    py::meth_fast<"same_value",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
-        py::check_num_arg("same_value", nargs, 2, 2);
-        return py::new_bool(same_value(args[0], args[1]));
-    }>, {}};
-
 static __attribute__((flatten, noinline))
 std::pair<EvalError,GenVal> interpret_func(const int *code, GenVal *data,
                                            EvalError *errors)
@@ -1282,6 +1231,120 @@ TagVal InterpFunction::call()
     res.err = err;
     res.val = val;
     return res;
+}
+
+namespace {
+
+struct SeqVariable : ExternCallback {
+    TagVal value;
+
+    static TagVal callback(SeqVariable *self)
+    {
+        return self->value;
+    }
+
+    static inline py::ref<SeqVariable> alloc(TagVal init)
+    {
+        auto self = py::generic_alloc<SeqVariable>();
+        self->fptr = (void*)callback;
+        call_constructor(&self->value, init);
+        return self;
+    }
+    static PyTypeObject Type;
+};
+
+PyTypeObject SeqVariable::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.artiq_backend.SeqVariable",
+    .tp_basicsize = sizeof(SeqVariable),
+    .tp_dealloc = py::tp_cxx_dealloc<false,SeqVariable>,
+    .tp_str = py::unifunc<[] (py::ptr<SeqVariable> self) {
+        return py::str_format("var(%S)", self->value.to_py());
+    }>,
+    .tp_getattro = py::binfunc<[] (py::ptr<SeqVariable> self,
+                                   py::str name) -> py::ref<> {
+        if (name.compare_ascii("value") == 0)
+            return self->value.to_py();
+        return py::ref(PyObject_GenericGetAttr(self, name));
+    }>,
+    .tp_setattro = py::itrifunc<[] (py::ptr<SeqVariable> self, py::str name,
+                                    py::ptr<> value) {
+        if (name.compare_ascii("value") == 0) {
+            self->value = TagVal::from_py(value);
+            return 0;
+        }
+        return PyObject_GenericSetAttr(self, name, value);
+    }>,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_clear = py::tp_field_clear<SeqVariable>,
+    .tp_base = &ExternCallback::Type,
+};
+
+}
+
+__attribute__((visibility("hidden")))
+rtval_ref seq_variable_meth(void*, PyObject *const *args, Py_ssize_t nargs)
+{
+    py::check_num_arg("seq_variable", nargs, 0, 1);
+    TagVal init(0.0);
+    if (nargs >= 1)
+        init = TagVal::from_py(args[0]);
+    auto rtcb = SeqVariable::alloc(init);
+    return new_extern(std::move(rtcb), &PyFloat_Type);
+}
+
+PyMethodDef methods[] = {
+    py::meth_fast<"get_value",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
+        py::check_num_arg("get_value", nargs, 2, 2);
+        auto pyage = py::arg_cast<py::int_>(args[1], "age");
+        if (is_rtval(args[0])) {
+            rt_eval_cache(args[0], pyage.as_int());
+            return rtval_cache(args[0]).to_py();
+        }
+        return py::ptr(args[0]).ref();
+    }>,
+    py::meth_o<"inv",[] (auto, py::ptr<> v) -> py::ref<> {
+        if (v == Py_True)
+            return py::new_false();
+        if (v == Py_False)
+            return py::new_true();
+        if (auto rv = py::cast<RuntimeValue>(v)) {
+            if (rv->type_ == Not)
+                return rt_convert_bool(rv->arg0);
+            return new_expr1(Not, rv);
+        }
+        return py::new_bool(!v.as_bool());
+    }>,
+    py::meth_o<"convert_bool",[] (auto, py::ptr<> v) -> py::ref<> {
+        if (auto rv = py::cast<RuntimeValue>(v))
+            return rt_convert_bool(rv);
+        return py::new_bool(v.as_bool());
+    }>,
+    py::meth_fast<"ifelse",[] (auto, PyObject *const *args, Py_ssize_t nargs) -> py::ref<> {
+        py::check_num_arg("ifelse", nargs, 3, 3);
+        auto b = py::ptr(args[0]);
+        auto v1 = py::ptr(args[1]);
+        auto v2 = py::ptr(args[2]);
+        if (same_value(v1, v2))
+            return v1.ref();
+        if (auto rb = py::cast<RuntimeValue>(b))
+            return new_select(rb, v1, v2);
+        return (b.as_bool() ? v1 : v2).ref();
+    }>,
+    py::meth_fast<"same_value",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
+        py::check_num_arg("same_value", nargs, 2, 2);
+        return py::new_bool(same_value(args[0], args[1]));
+    }>,
+    py::meth_fast<"seq_variable",rtval::seq_variable_meth>,
+    {}};
+
+__attribute__((visibility("hidden")))
+void init()
+{
+    _import_array();
+    throw_if(PyType_Ready(&RuntimeValue::Type) < 0);
+    throw_if(PyType_Ready(&ExternCallback::Type) < 0);
+    throw_if(PyType_Ready(&SeqVariable::Type) < 0);
 }
 
 }

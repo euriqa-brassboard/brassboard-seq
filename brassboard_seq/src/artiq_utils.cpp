@@ -101,51 +101,6 @@ PyTypeObject DatasetCallback::Type = {
     .tp_base = &ExternCallback::Type,
 };
 
-struct SeqVariable : rtval::ExternCallback {
-    rtval::TagVal value;
-
-    static rtval::TagVal callback(SeqVariable *self)
-    {
-        return self->value;
-    }
-
-    static inline py::ref<SeqVariable> alloc(rtval::TagVal init)
-    {
-        auto self = py::generic_alloc<SeqVariable>();
-        self->fptr = (void*)callback;
-        call_constructor(&self->value, init);
-        return self;
-    }
-    static PyTypeObject Type;
-};
-
-PyTypeObject SeqVariable::Type = {
-    .ob_base = PyVarObject_HEAD_INIT(0, 0)
-    .tp_name = "brassboard_seq.artiq_backend.SeqVariable",
-    .tp_basicsize = sizeof(SeqVariable),
-    .tp_dealloc = py::tp_cxx_dealloc<false,SeqVariable>,
-    .tp_str = py::unifunc<[] (py::ptr<SeqVariable> self) {
-        return py::str_format("var(%S)", self->value.to_py());
-    }>,
-    .tp_getattro = py::binfunc<[] (py::ptr<SeqVariable> self,
-                                   py::str name) -> py::ref<> {
-        if (name.compare_ascii("value") == 0)
-            return self->value.to_py();
-        return py::ref(PyObject_GenericGetAttr(self, name));
-    }>,
-    .tp_setattro = py::itrifunc<[] (py::ptr<SeqVariable> self, py::str name,
-                                    py::ptr<> value) {
-        if (name.compare_ascii("value") == 0) {
-            self->value = rtval::TagVal::from_py(value);
-            return 0;
-        }
-        return PyObject_GenericSetAttr(self, name, value);
-    }>,
-    .tp_flags = Py_TPFLAGS_DEFAULT,
-    .tp_clear = py::tp_field_clear<SeqVariable>,
-    .tp_base = &ExternCallback::Type,
-};
-
 static inline py::ref<> check_bb_rt_values(py::ptr<> self)
 {
     auto vals = self.try_attr("_bb_rt_values"_py);
@@ -219,14 +174,7 @@ static PyMethodDef env_methods[] = {
         py::arg_cast<py::dict>(vals, "_bb_rt_values").set(cb, rtcb);
         return rtval::new_extern(std::move(rtcb), &PyFloat_Type);
     }>,
-    py::meth_fast<"seq_variable",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
-        py::check_num_arg("seq_variable", nargs, 0, 1);
-        rtval::TagVal init(0.0);
-        if (nargs >= 1)
-            init = rtval::TagVal::from_py(args[0]);
-        auto rtcb = SeqVariable::alloc(init);
-        return rtval::new_extern(std::move(rtcb), &PyFloat_Type);
-    }>,
+    py::meth_fast<"seq_variable",rtval::seq_variable_meth,"",METH_STATIC>,
     py::meth_fastkw<"rt_dataset",_rt_dataset<false>>,
     py::meth_fastkw<"rt_dataset_sys",_rt_dataset<true>>
 };
@@ -246,7 +194,6 @@ void init()
 {
     throw_if(PyType_Ready(&EvalOnceCallback::Type) < 0);
     throw_if(PyType_Ready(&DatasetCallback::Type) < 0);
-    throw_if(PyType_Ready(&SeqVariable::Type) < 0);
 }
 
 }
