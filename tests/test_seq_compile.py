@@ -1199,3 +1199,10 @@ def test_channel_change(max_bt):
     v4.value = 0.2
     comp.runtime_finalize(10)
     assert test_utils.compiler_get_channel_changed(comp) == [False, False, False, True]
+
+    comp.runtime_finalize(11)
+    assert test_utils.compiler_get_channel_changed(comp) == [False, False, False, False]
+
+    comp.force_recompile = True
+    comp.runtime_finalize(12)
+    assert test_utils.compiler_get_channel_changed(comp) == [True, True, True, True]

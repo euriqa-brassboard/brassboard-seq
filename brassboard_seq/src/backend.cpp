@@ -396,7 +396,7 @@ inline void SeqCompiler::runtime_finalize(py::ptr<> _age)
 {
     unsigned age = _age.as_int();
     py::ptr ginfo = seq->seqinfo;
-    bool isfirst = !compiled;
+    bool isfirst = force_recompile || !compiled;
     compiled = false;
     auto bt_guard = set_global_tracker(&ginfo->cinfo->bt_tracker);
     for (auto [bseq_id, bseq]: py::list_iter<BasicSeq>(seq->basic_seqs)) {
@@ -451,7 +451,8 @@ PyTypeObject SeqCompiler::Type = {
             self->runtime_finalize(pyage);
         }>>),
     .tp_members = (py::mem_table<
-                   py::mem_def<"seq",T_OBJECT_EX,&SeqCompiler::seq,READONLY>>),
+                   py::mem_def<"seq",T_OBJECT_EX,&SeqCompiler::seq,READONLY>,
+                   py::mem_def<"force_recompile",T_BOOL,&SeqCompiler::force_recompile,0>>),
     .tp_init = py::itrifunc<[] (py::ptr<SeqCompiler> self, py::tuple args, py::dict kws) {
         py::check_num_arg("SeqCompiler.__init__", args ? args.size() : 0, 1, 1);
         if (kws) {

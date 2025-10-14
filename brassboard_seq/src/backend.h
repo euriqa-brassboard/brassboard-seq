@@ -48,6 +48,7 @@ struct SeqCompiler : PyObject {
     int nchn;
     int nbseq;
     bool compiled;
+    bool force_recompile;
     std::vector<bool> channel_changed;
     std::vector<CompiledBasicSeq> basic_cseqs;
     PermAllocator<ChannelAction,16> chn_action_alloc;
