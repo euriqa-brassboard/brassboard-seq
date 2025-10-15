@@ -656,16 +656,21 @@ inline void ArtiqBackend::Data::process_bseq(py::ptr<SeqCompiler> comp,
         auto event_time = event_times.get<EventTime>(tid);
         if (event_time->data.is_static()) {
             rtval_ptr rt_delay;
-            int64_t delay;
-            if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
-                auto &ddschn = channels.ddschns[chn_idx];
-                delay = ddschn.delay;
-                rt_delay = ddschn.rt_delay;
-            }
-            else {
-                auto &ttlchn = channels.ttlchns[chn_idx];
-                delay = ttlchn.delay;
-                rt_delay = ttlchn.rt_delay;
+            int64_t delay = 0;
+            auto get_delays = [&] (auto &chn) {
+                delay = chn.delay;
+                rt_delay = chn.rt_delay;
+            };
+            switch (type) {
+            case DDSFreq:
+            case DDSAmp:
+            case DDSPhase:
+                get_delays(channels.ddschns[chn_idx]);
+                break;
+            case TTLOut:
+            case CounterEnable:
+                get_delays(channels.ttlchns[chn_idx]);
+                break;
             }
             if (rt_delay) {
                 // We need to fill in the time at runtime
@@ -684,26 +689,36 @@ inline void ArtiqBackend::Data::process_bseq(py::ptr<SeqCompiler> comp,
         }
         if (rtval::is_rtval(value)) {
             needs_reloc = true;
-            if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
+            switch (type) {
+            case DDSFreq:
+            case DDSAmp:
+            case DDSPhase:
                 reloc.val_idx = idr.float_values.get_id(value);
-            }
-            else if (type == CounterEnable) {
+                break;
+            case CounterEnable:
                 // We aren't really relying on this in the backend
                 // but requiring this makes it easier to infer the number of
                 // results generated from a sequence.
                 bb_throw_format(PyExc_ValueError, action_key(aid),
                                 "Counter value must be static.");
-            }
-            else {
+            case TTLOut:
                 reloc.val_idx = idr.bool_values.get_id(value);
+                break;
             }
-        }
-        else if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
-            artiq_action.value = channels.dds_to_mu(type, chn_idx,
-                                                    value.as_float(action_key(aid)));
         }
         else {
-            artiq_action.value = value.as_bool(action_key(aid));
+            switch (type) {
+            case DDSFreq:
+            case DDSAmp:
+            case DDSPhase:
+                artiq_action.value = channels.dds_to_mu(type, chn_idx,
+                                                        value.as_float(action_key(aid)));
+                break;
+            case CounterEnable:
+            case TTLOut:
+                artiq_action.value = value.as_bool(action_key(aid));
+                break;
+            }
         }
         if (needs_reloc) {
             artiq_action.reloc_id = (int)relocations.size();
@@ -854,22 +869,32 @@ inline void ArtiqBackend::Data::reloc_action(const ArtiqAction &action,
     auto type = action.type;
     auto chn_idx = action.chn_idx;
     if (reloc.time_idx != -1) {
-        int64_t delay;
-        if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
+        int64_t delay = 0;
+        switch (type) {
+        case DDSFreq:
+        case DDSAmp:
+        case DDSPhase:
             delay = channels.ddschns[chn_idx].delay;
-        }
-        else {
+            break;
+        case CounterEnable:
+        case TTLOut:
             delay = channels.ttlchns[chn_idx].delay;
+            break;
         }
         action.time_mu = seq_time_to_mu(time_values[reloc.time_idx] + delay);
     }
     if (reloc.val_idx != -1) {
-        if (type == DDSFreq || type == DDSAmp || type == DDSPhase) {
+        switch (type) {
+        case DDSFreq:
+        case DDSAmp:
+        case DDSPhase:
             action.value = channels.dds_to_mu(type, chn_idx,
                                               float_values[reloc.val_idx].second);
-        }
-        else {
+            break;
+        case CounterEnable:
+        case TTLOut:
             action.value = bool_values[reloc.val_idx].second;
+            break;
         }
     }
 }
