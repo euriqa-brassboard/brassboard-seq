@@ -1152,13 +1152,16 @@ def test_channel_change(max_bt):
 
     comp = test_env.new_comp(max_bt)
     s = comp.seq
-    s.wait(t0)
-    s.add_step(t1) \
-      .set('artiq/urukul0_ch0/amp', action.Blackman(v1)) \
-      .pulse('artiq/urukul0_ch1/amp', action.Blackman(v2))
-    s.add_step(t2) \
-      .set('artiq/urukul1_ch0/amp', v3) \
-      .pulse('artiq/urukul1_ch1/amp', v4)
+    @s.add_background
+    def f(s):
+        s.wait(t0)
+        s.add_step(t1) \
+          .set('artiq/urukul0_ch0/amp', action.Blackman(v1)) \
+          .pulse('artiq/urukul0_ch1/amp', action.Blackman(v2))
+        s.add_step(t2) \
+          .set('artiq/urukul1_ch0/amp', v3) \
+          .pulse('artiq/urukul1_ch1/amp', v4)
+    s.wait(2) # Allow changing t1 and t2 without changing total sequence length
     comp.finalize()
 
     comp.runtime_finalize(1)
@@ -1184,25 +1187,32 @@ def test_channel_change(max_bt):
     comp.runtime_finalize(6)
     assert test_utils.compiler_get_channel_changed(comp) == [False, False, False, True]
 
-    v1.value = 0.2
+    # Total time change invalidates all channels
+    t2.value = 3
     comp.runtime_finalize(7)
+    assert test_utils.compiler_get_channel_changed(comp) == [True, True, True, True]
+
+    v1.value = 0.2
+    comp.runtime_finalize(8)
     assert test_utils.compiler_get_channel_changed(comp) == [True, False, False, False]
 
     v2.value = 0.2
-    comp.runtime_finalize(8)
+    comp.runtime_finalize(9)
     assert test_utils.compiler_get_channel_changed(comp) == [False, True, False, False]
 
+    # Plain value change tracking is up to the backend
     v3.value = 0.2
-    comp.runtime_finalize(9)
-    assert test_utils.compiler_get_channel_changed(comp) == [False, False, True, False]
-
-    v4.value = 0.2
     comp.runtime_finalize(10)
-    assert test_utils.compiler_get_channel_changed(comp) == [False, False, False, True]
+    assert test_utils.compiler_get_channel_changed(comp) == [False, False, False, False]
 
+    # Plain value change tracking is up to the backend
+    v4.value = 0.2
     comp.runtime_finalize(11)
     assert test_utils.compiler_get_channel_changed(comp) == [False, False, False, False]
 
-    comp.force_recompile = True
     comp.runtime_finalize(12)
+    assert test_utils.compiler_get_channel_changed(comp) == [False, False, False, False]
+
+    comp.force_recompile = True
+    comp.runtime_finalize(13)
     assert test_utils.compiler_get_channel_changed(comp) == [True, True, True, True]

@@ -2523,3 +2523,298 @@ def test_long_wait(max_bt):
                     Pulse(948488372229), Pulse(948488372229)]
         },
     })
+
+@test_utils.with_seq_params
+def test_dyn_wait(max_bt):
+    comp = test_env.new_comp(max_bt)
+    t = rtval.seq_variable(10e-6)
+    s = comp.seq
+    s.add_step(t) \
+      .set('rfsoc/dds0/1/freq', 100e6) \
+      .set('rfsoc/dds0/1/amp', 0.2)
+    comp.finalize()
+
+    comp.runtime_finalize(1)
+    test_env.check_output({
+        0: {
+          'freq': [Pulse(4104)],
+          'amp': [Pulse(4104)],
+          'phase': [Pulse(4104)]
+        },
+        1: {
+          'freq': [Pulse(4104, Spline(100e6))],
+          'amp': [Pulse(4104, Spline(0.2))],
+          'phase': [Pulse(4104)]
+        },
+    })
+
+    comp.runtime_finalize(2)
+    test_env.check_output({
+        0: {
+          'freq': [Pulse(4104)],
+          'amp': [Pulse(4104)],
+          'phase': [Pulse(4104)]
+        },
+        1: {
+          'freq': [Pulse(4104, Spline(100e6))],
+          'amp': [Pulse(4104, Spline(0.2))],
+          'phase': [Pulse(4104)]
+        },
+    })
+
+    t.value = 100e-6
+
+    comp.runtime_finalize(3)
+    test_env.check_output({
+        0: {
+          'freq': [Pulse(40968)],
+          'amp': [Pulse(40968)],
+          'phase': [Pulse(40968)]
+        },
+        1: {
+          'freq': [Pulse(40968, Spline(100e6))],
+          'amp': [Pulse(40968, Spline(0.2))],
+          'phase': [Pulse(40968)]
+        },
+    })
+
+@test_utils.with_seq_params
+def test_dyn_shared_val(max_bt):
+    comp = test_env.new_comp(max_bt)
+    v = rtval.seq_variable(0.1)
+    s = comp.seq
+    s.set('artiq/ttl0', v)
+    s.wait(10e-6)
+    s.set('rfsoc/dds0/1/amp', v)
+    comp.finalize()
+
+    comp.runtime_finalize(1)
+    test_env.check_output({
+        0: {
+          'freq': [Pulse(4104)],
+          'amp': [Pulse(4104)],
+          'phase': [Pulse(4104)]
+        },
+        1: {
+          'freq': [Pulse(4096), Pulse(8)],
+          'amp': [Pulse(4096), Pulse(8, Spline(0.1))],
+          'phase': [Pulse(4096), Pulse(8)]
+        },
+    })
+
+    comp.runtime_finalize(2)
+    test_env.check_output({
+        0: {
+          'freq': [Pulse(4104)],
+          'amp': [Pulse(4104)],
+          'phase': [Pulse(4104)]
+        },
+        1: {
+          'freq': [Pulse(4096), Pulse(8)],
+          'amp': [Pulse(4096), Pulse(8, Spline(0.1))],
+          'phase': [Pulse(4096), Pulse(8)]
+        },
+    })
+
+    v.value = 0.2
+    comp.runtime_finalize(3)
+    test_env.check_output({
+        0: {
+          'freq': [Pulse(4104)],
+          'amp': [Pulse(4104)],
+          'phase': [Pulse(4104)]
+        },
+        1: {
+          'freq': [Pulse(4096), Pulse(8)],
+          'amp': [Pulse(4096), Pulse(8, Spline(0.2))],
+          'phase': [Pulse(4096), Pulse(8)]
+        },
+    })
+
+@test_utils.with_seq_params
+def test_dyn_shared_ramp(max_bt):
+    comp = test_env.new_comp(max_bt)
+
+    v1 = rtval.seq_variable(0.1)
+    v2 = rtval.seq_variable(0.1)
+
+    s = comp.seq
+    ramp1 = test_utils.LinearRampNoSeg(v1, 0.2)
+    ramp2 = SeqCubicSpline(0.2, v2, 0.9, 0.3)
+    s.add_step(5e-3) \
+      .pulse('artiq/analog0', ramp1) \
+      .pulse('artiq/analog1', ramp2)
+    s.add_step(5e-3) \
+      .pulse('rfsoc/dds0/1/phase', ramp1) \
+      .pulse('rfsoc/dds0/0/phase', ramp2)
+    comp.finalize()
+
+    comp.runtime_finalize(1)
+    test_env.check_output({
+        0: {
+          'freq': [Pulse(2048000), Pulse(2048000), Pulse(8)],
+          'amp': [Pulse(2048000), Pulse(2048000), Pulse(8)],
+          'phase': [Pulse(2048000), Pulse(2048000, Spline(0.2, 0.1, 0.9, 0.3)),
+                    Pulse(8)]
+        },
+        1: {
+          'freq': [Pulse(2048000), Pulse(1024000), Pulse(1024000), Pulse(8)],
+          'amp': [Pulse(2048000), Pulse(1024000), Pulse(1024000), Pulse(8)],
+          'phase': [Pulse(2048000),
+                    Pulse(1024000, Spline(0.1, 0.05)),
+                    Pulse(1024000, Spline(0.15, 0.05)),
+                    Pulse(8)]
+        },
+    })
+
+    comp.runtime_finalize(2)
+    test_env.check_output({
+        0: {
+          'freq': [Pulse(2048000), Pulse(2048000), Pulse(8)],
+          'amp': [Pulse(2048000), Pulse(2048000), Pulse(8)],
+          'phase': [Pulse(2048000), Pulse(2048000, Spline(0.2, 0.1, 0.9, 0.3)),
+                    Pulse(8)]
+        },
+        1: {
+          'freq': [Pulse(2048000), Pulse(1024000), Pulse(1024000), Pulse(8)],
+          'amp': [Pulse(2048000), Pulse(1024000), Pulse(1024000), Pulse(8)],
+          'phase': [Pulse(2048000),
+                    Pulse(1024000, Spline(0.1, 0.05)),
+                    Pulse(1024000, Spline(0.15, 0.05)),
+                    Pulse(8)]
+        },
+    })
+
+    v1.value = 0.3
+    comp.runtime_finalize(3)
+    test_env.check_output({
+        0: {
+          'freq': [Pulse(2048000), Pulse(2048000), Pulse(8)],
+          'amp': [Pulse(2048000), Pulse(2048000), Pulse(8)],
+          'phase': [Pulse(2048000), Pulse(2048000, Spline(0.2, 0.1, 0.9, 0.3)),
+                    Pulse(8)]
+        },
+        1: {
+          'freq': [Pulse(2048000), Pulse(1024000), Pulse(1024000), Pulse(8)],
+          'amp': [Pulse(2048000), Pulse(1024000), Pulse(1024000), Pulse(8)],
+          'phase': [Pulse(2048000),
+                    Pulse(1024000, Spline(0.3, -0.05)),
+                    Pulse(1024000, Spline(0.25, -0.05)),
+                    Pulse(8)]
+        },
+    })
+
+    v2.value = 0.5
+    comp.runtime_finalize(4)
+    test_env.check_output({
+        0: {
+          'freq': [Pulse(2048000), Pulse(2048000), Pulse(8)],
+          'amp': [Pulse(2048000), Pulse(2048000), Pulse(8)],
+          'phase': [Pulse(2048000), Pulse(2048000, Spline(0.2, 0.5, 0.9, 0.3)),
+                    Pulse(8)]
+        },
+        1: {
+          'freq': [Pulse(2048000), Pulse(1024000), Pulse(1024000), Pulse(8)],
+          'amp': [Pulse(2048000), Pulse(1024000), Pulse(1024000), Pulse(8)],
+          'phase': [Pulse(2048000),
+                    Pulse(1024000, Spline(0.3, -0.05)),
+                    Pulse(1024000, Spline(0.25, -0.05)),
+                    Pulse(8)]
+        },
+    })
+
+@test_utils.with_seq_params
+def test_dyn_dds_delay(max_bt):
+    comp = test_env.new_comp(max_bt)
+    t = rtval.seq_variable(1e-3)
+    s = comp.seq
+    comp.rb.set_dds_delay(1, t)
+    s.add_step(1e-3) \
+      .pulse('rfsoc/dds0/0/amp', 0.1) \
+      .set('rfsoc/dds1/1/freq', 100e6)
+    comp.finalize()
+
+    comp.runtime_finalize(1)
+    channels = comp.get_channel_info()
+    assert channels.dds_delay == {
+        1: 1000_000_000
+    }
+    test_env.check_output({
+        0: {
+          'freq': [Pulse(409600), Pulse(409608)],
+          'amp': [Pulse(409600, Spline(0.1)), Pulse(409608)],
+          'phase': [Pulse(409600), Pulse(409608)]
+        },
+        1: {
+          'freq': [Pulse(819208)],
+          'amp': [Pulse(819208)],
+          'phase': [Pulse(819208)]
+        },
+        2: {
+          'freq': [Pulse(819208)],
+          'amp': [Pulse(819208)],
+          'phase': [Pulse(819208)]
+        },
+        3: {
+          'freq': [Pulse(409600), Pulse(409608, Spline(100e6))],
+          'amp': [Pulse(409600), Pulse(409608)],
+          'phase': [Pulse(409600), Pulse(409608)]
+        },
+    })
+
+    comp.runtime_finalize(2)
+    channels = comp.get_channel_info()
+    assert channels.dds_delay == {
+        1: 1000_000_000
+    }
+    test_env.check_output({
+        0: {
+          'freq': [Pulse(409600), Pulse(409608)],
+          'amp': [Pulse(409600, Spline(0.1)), Pulse(409608)],
+          'phase': [Pulse(409600), Pulse(409608)]
+        },
+        1: {
+          'freq': [Pulse(819208)],
+          'amp': [Pulse(819208)],
+          'phase': [Pulse(819208)]
+        },
+        2: {
+          'freq': [Pulse(819208)],
+          'amp': [Pulse(819208)],
+          'phase': [Pulse(819208)]
+        },
+        3: {
+          'freq': [Pulse(409600), Pulse(409608, Spline(100e6))],
+          'amp': [Pulse(409600), Pulse(409608)],
+          'phase': [Pulse(409600), Pulse(409608)]
+        },
+    })
+
+    t.value = 0.5e-3
+    comp.runtime_finalize(3)
+    channels = comp.get_channel_info()
+    assert channels.dds_delay == {
+        1: 500_000_000
+    }
+    test_env.check_output({
+        0: {
+          'freq': [Pulse(409600), Pulse(204808)],
+          'amp': [Pulse(409600, Spline(0.1)), Pulse(204808)],
+          'phase': [Pulse(409600), Pulse(204808)]
+        },
+        1: {
+          'freq': [Pulse(614408)],
+          'amp': [Pulse(614408)],
+          'phase': [Pulse(614408)]
+        },
+        2: {
+          'freq': [Pulse(614408)],
+          'amp': [Pulse(614408)],
+          'phase': [Pulse(614408)]
+        },
+        3: {
+          'freq': [Pulse(204800), Pulse(409608, Spline(100e6))],
+          'amp': [Pulse(204800), Pulse(409608)],
+          'phase': [Pulse(204800), Pulse(409608)]
+        },
+    })

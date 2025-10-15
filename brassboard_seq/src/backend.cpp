@@ -19,6 +19,7 @@
 #include "backend.h"
 
 #include <algorithm>
+#include <unordered_map>
 #include <vector>
 
 namespace brassboard_seq::backend {
@@ -316,6 +317,7 @@ static inline auto action_get_condval(auto action, unsigned age)
 __attribute__((visibility("internal")))
 inline void SeqCompiler::eval_chn_actions(unsigned age, bool isfirst)
 {
+    std::unordered_map<action::RampFunctionBase*,bool> ramp_changed;
     int ncbseq = basic_cseqs.size();
     channel_changed.assign(nchn, isfirst);
     py::ptr basic_seqs = seq->basic_seqs;
@@ -339,34 +341,37 @@ inline void SeqCompiler::eval_chn_actions(unsigned age, bool isfirst)
                 int64_t prev_time = 0;
                 for (auto action: actions) {
                     bool cond_val = action_get_condval(action, age);
-                    changed |= tracked_assign(action->cond_val, cond_val);
+                    action->cond_val = cond_val;
                     if (!cond_val)
                         continue;
                     py::ptr action_value = action->value;
                     auto isramp = action::isramp(action_value);
-                    auto tracked_eval = [&] (rtval_ptr val) {
-                        auto oldval = val->cache_val;
-                        rt_eval_throw(val, age, action_key(action->aid));
-                        changed |= !rtval::same_genval(val->datatype, oldval,
-                                                       val->cache_val);
-                    };
                     if (isramp) {
                         auto rampf = (action::RampFunctionBase*)action_value;
-                        try {
-                            changed |= rampf->set_runtime_params(age);
+                        auto [it, inserted] = ramp_changed.try_emplace(action_value, false);
+                        if (inserted) {
+                            bool c = false;
+                            try {
+                                c = rampf->set_runtime_params(age);
+                            }
+                            catch (...) {
+                                bb_rethrow(action_key(action->aid));
+                            }
+                            changed |= c;
+                            it->second = c;
                         }
-                        catch (...) {
-                            bb_rethrow(action_key(action->aid));
+                        else {
+                            changed |= it->second;
                         }
                     }
                     else if (is_rtval(action_value)) {
-                        tracked_eval(action_value);
+                        rt_eval_throw(action_value, age, action_key(action->aid));
                     }
                     // No need to evaluate action.length since the `compute_all_times`
                     // above should've done it already.
                     py::ptr action_end_val = action->end_val;
                     if (action_end_val != action_value && is_rtval(action_end_val))
-                        tracked_eval(action_end_val);
+                        rt_eval_throw(action_end_val, age, action_key(action->aid));
                     // Currently all versions of channel action should share
                     // the same time points. We only need to check the time ordering once.
                     if (!check_time)
@@ -401,8 +406,9 @@ inline void SeqCompiler::runtime_finalize(py::ptr<> _age)
     auto bt_guard = set_global_tracker(&ginfo->cinfo->bt_tracker);
     for (auto [bseq_id, bseq]: py::list_iter<BasicSeq>(seq->basic_seqs)) {
         assert(basic_cseqs[bseq_id].bseq_id == bseq_id);
-        basic_cseqs[bseq_id].total_time =
-            bseq->seqinfo->time_mgr->compute_all_times(age);
+        // Assume all backends cares about the total time for now.
+        isfirst |= tracked_assign(basic_cseqs[bseq_id].total_time,
+                                  bseq->seqinfo->time_mgr->compute_all_times(age));
     }
     for (auto [assert_id, a]: py::list_iter<py::tuple>(ginfo->assertions)) {
         auto c = a.get(0);

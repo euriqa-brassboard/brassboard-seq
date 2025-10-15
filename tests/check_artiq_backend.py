@@ -2493,6 +2493,125 @@ def test_branch_dds(max_bt):
     comp.runtime_finalize(8)
     test_env.check_unchanged(comp)
 
+@with_artiq_params
+def test_dyn_wait(max_bt):
+    comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
+    t = rtval.seq_variable(10e-6)
+    s = comp.seq
+    s.wait(t)
+    comp.finalize()
+
+    comp.runtime_finalize(1)
+    test_env.check_list(comp, [
+        -13000,
+    ])
+
+    comp.runtime_finalize(2)
+    test_env.check_list(comp, [
+        -13000,
+    ])
+
+    t.value = 100e-6
+
+    comp.runtime_finalize(3)
+    test_env.check_list(comp, [
+        -103000,
+    ])
+
+@with_artiq_params
+def test_dyn_shared_val(max_bt):
+    comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
+    v = rtval.seq_variable(True)
+    s = comp.seq
+    s.set('rfsoc/ch1/0/freq', v)
+    s.wait(1e-6)
+    s.set('artiq/ttl0', v)
+    comp.finalize()
+
+    comp.runtime_finalize(1)
+    channels = comp.get_channel_info()
+    ttlchns = channels.ttlchns
+
+    test_env.check_list(comp, [
+        -4000, ttlchns[0].target, 1
+    ])
+
+    comp.runtime_finalize(2)
+    test_env.check_list(comp, [
+        -4000, ttlchns[0].target, 1
+    ])
+
+    v.value = False
+
+    comp.runtime_finalize(3)
+    test_env.check_list(comp, [
+        -4000, ttlchns[0].target, 0
+    ])
+
+@with_artiq_params
+def test_dyn_device_delay(max_bt):
+    comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
+    s = comp.seq
+    t = rtval.seq_variable(1e-3)
+    comp.ab.set_device_delay("ttl0", t)
+
+    s.add_step(5e-3) \
+      .pulse('artiq/ttl0', True) \
+      .pulse('artiq/ttl1', True)
+    comp.finalize()
+
+    channels = comp.get_channel_info()
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+
+    comp.runtime_finalize(1)
+    test_env.check_list(comp, [
+        -3000,
+        # Beginning of sequence
+        ttl_tgts[1], 1,
+        -1_000_000,
+        # ttl0 delayed on @ 1 ms
+        ttl_tgts[0], 1,
+        # end of step
+        -4_000_000,
+        ttl_tgts[1], 0,
+        -1_000_000,
+        # ttl0 delayed off @ 6 ms
+        ttl_tgts[0], 0,
+    ])
+
+    comp.runtime_finalize(2)
+    test_env.check_list(comp, [
+        -3000,
+        # Beginning of sequence
+        ttl_tgts[1], 1,
+        -1_000_000,
+        # ttl0 delayed on @ 1 ms
+        ttl_tgts[0], 1,
+        # end of step
+        -4_000_000,
+        ttl_tgts[1], 0,
+        -1_000_000,
+        # ttl0 delayed off @ 6 ms
+        ttl_tgts[0], 0,
+    ])
+
+    t.value = 0.5e-3
+    comp.runtime_finalize(3)
+    test_env.check_list(comp, [
+        -3000,
+        # Beginning of sequence
+        ttl_tgts[1], 1,
+        -500_000,
+        # ttl0 delayed on @ 0.5 ms
+        ttl_tgts[0], 1,
+        # end of step
+        -4_500_000,
+        ttl_tgts[1], 0,
+        -500_000,
+        # ttl0 delayed off @ 5.5 ms
+        ttl_tgts[0], 0,
+    ])
+
 class DummySystem:
     pass
 

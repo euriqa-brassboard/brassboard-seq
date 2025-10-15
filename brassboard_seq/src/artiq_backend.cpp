@@ -1181,21 +1181,21 @@ void ArtiqBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned ag
     for (auto &ddschn: channels.ddschns)
         relocate_delay(ddschn.delay, ddschn.rt_delay);
 
+    for (size_t i = 0, nreloc = bool_values.size(); i < nreloc; i++) {
+        auto &[rtval, val] = bool_values[i];
+        changed |= tracked_assign(val, !rtval::rtval_cache(rtval).is_zero());
+    }
+    for (size_t i = 0, nreloc = float_values.size(); i < nreloc; i++) {
+        auto &[rtval, val] = float_values[i];
+        changed |= tracked_assign(val, rtval::rtval_cache(rtval).get<double>());
+    }
+
     if (!changed)
         changed = channels.channel_changed(comp->channel_changed);
 
     if (!changed) {
         bb_debug("artiq_runtime_finalize: no change, skipped\n");
         return;
-    }
-
-    for (size_t i = 0, nreloc = bool_values.size(); i < nreloc; i++) {
-        auto &[rtval, val] = bool_values[i];
-        val = !rtval::rtval_cache(rtval).is_zero();
-    }
-    for (size_t i = 0, nreloc = float_values.size(); i < nreloc; i++) {
-        auto &[rtval, val] = float_values[i];
-        val = rtval::rtval_cache(rtval).get<double>();
     }
 
     eval_status = !eval_status;

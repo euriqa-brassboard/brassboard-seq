@@ -351,6 +351,15 @@ void RFSOCBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned ag
         rt_eval_throw(delay, age);
         changed |= set_dds_delay(dds.as_int(), rtval_cache(delay).get<double>());
     }
+    for (size_t i = 0, nreloc = bool_values.size(); i < nreloc; i++) {
+        auto &[rtval, val] = bool_values[i];
+        changed |= tracked_assign(val, !rtval::rtval_cache(rtval).is_zero());
+    }
+    for (size_t i = 0, nreloc = float_values.size(); i < nreloc; i++) {
+        auto &[rtval, val] = float_values[i];
+        changed |= tracked_assign(val, rtval::rtval_cache(rtval).get<double>());
+    }
+
     if (!changed)
         changed = channels.channel_changed(comp->channel_changed);
 
@@ -359,14 +368,6 @@ void RFSOCBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned ag
         return;
     }
 
-    for (size_t i = 0, nreloc = bool_values.size(); i < nreloc; i++) {
-        auto &[rtval, val] = bool_values[i];
-        val = !rtval::rtval_cache(rtval).is_zero();
-    }
-    for (size_t i = 0, nreloc = float_values.size(); i < nreloc; i++) {
-        auto &[rtval, val] = float_values[i];
-        val = rtval::rtval_cache(rtval).get<double>();
-    }
     auto &time_values = comp->seq->seqinfo->time_mgr->time_values;
     auto reloc_action = [this, &time_values] (const RFSOCAction &action,
                                               ToneParam param) {
