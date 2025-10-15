@@ -158,7 +158,7 @@ inline void ChannelsInfo::add_channel(py::ptr<> dev, int64_t delay, rtval_ptr rt
         }
         auto bus = dev.attr("bus"_py);
         auto bus_channel = bus.attr("channel"_py).as_int();
-        auto bus_id = find_bus_id(bus_channel);
+        auto bus_id = find_urukul_bus_id(bus_channel);
         if (bus_id == -1) {
             // Here we assume that the CPLD (and it's io_update channel)
             // and the SPI bus has a one-to-one mapping.
@@ -203,7 +203,7 @@ inline int ChannelsInfo::add_urukul_bus_channel(int bus_channel, uint32_t io_upd
             io_update_target,
             ref_period_mu,
         });
-    bus_chn_map[bus_channel] = bus_id;
+    urukul_bus_chn_map[bus_channel] = bus_id;
     return bus_id;
 }
 

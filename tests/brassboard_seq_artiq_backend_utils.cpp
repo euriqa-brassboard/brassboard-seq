@@ -84,7 +84,7 @@ struct py::converter<ChannelsInfo> {
         self.set_attr("urukul_busses", to_py(info.urukul_busses));
         self.set_attr("ttlchns", to_py(info.ttlchns));
         self.set_attr("ddschns", to_py(info.ddschns));
-        self.set_attr("bus_chn_map", to_py(info.bus_chn_map));
+        self.set_attr("urukul_bus_chn_map", to_py(info.urukul_bus_chn_map));
         self.set_attr("ttl_chn_map", to_py(info.ttl_chn_map));
         self.set_attr("dds_param_chn_map", to_py(info.dds_param_chn_map));
         return self;

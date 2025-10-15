@@ -216,7 +216,7 @@ struct ChannelsInfo {
     std::vector<DDSChannel> ddschns;
 
     // From bus channel to urukul bus index
-    std::map<int,int> bus_chn_map;
+    std::map<int,int> urukul_bus_chn_map;
     // From sequence channel id to ttl channel index
     std::map<int,int> ttl_chn_map;
     // From (bus_id, chip select) to dds channel index
@@ -228,10 +228,10 @@ struct ChannelsInfo {
     ChannelsInfo(const ChannelsInfo&) = delete;
     ChannelsInfo(ChannelsInfo&&) = delete;
 
-    int find_bus_id(int bus_channel) const
+    int find_urukul_bus_id(int bus_channel) const
     {
-        auto it = bus_chn_map.find(bus_channel);
-        if (it == bus_chn_map.end())
+        auto it = urukul_bus_chn_map.find(bus_channel);
+        if (it == urukul_bus_chn_map.end())
             return -1;
         return it->second;
     }
