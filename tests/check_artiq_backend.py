@@ -47,9 +47,11 @@ class CompiledInfoChecker:
                     ttlid = self.channels.ttl_chn_map[chn]
                     ttlchn = self.channels.ttlchns[ttlid]
                     key = (ttlid, 'counter' if ttlchn.iscounter else 'ttl')
-                else:
-                    assert chn in self.channels.dds_param_chn_map
+                elif chn in self.channels.dds_param_chn_map:
                     key = self.channels.dds_param_chn_map[chn]
+                else:
+                    assert chn in self.channels.dac_output_chn_map
+                    key = (self.channels.dac_output_chn_map[chn], 'dac')
                 all_starts[key] = (start_value, [False])
             for sv in self.compiled_info.start_values[cbseq_id]:
                 value, used = all_starts[(sv.chn_idx, sv.type)]
@@ -69,6 +71,8 @@ class CompiledInfoChecker:
                         assert value == bool(sv.value)
                     elif sv.type == 'counter':
                         assert value == bool(sv.value)
+                    elif sv.type == 'dac':
+                        assert dac_to_mu(value) == sv.value
                     elif sv.type == 'ddsfreq':
                         assert dds_freq_to_mu(value) == sv.value
                     elif sv.type == 'ddsamp':
@@ -136,12 +140,16 @@ class CompiledInfoChecker:
                     assert artiq_action.type == 'counter'
                 else:
                     assert artiq_action.type == 'ttl'
-            else:
+            elif chn in self.channels.dds_param_chn_map:
                 is_ttl = False
-                assert chn in self.channels.dds_param_chn_map
                 ddsid, chntype = self.channels.dds_param_chn_map[chn]
                 assert artiq_action.type == chntype
                 assert artiq_action.chn_idx == ddsid
+            else:
+                is_ttl = False
+                dacid = self.channels.dac_output_chn_map[chn]
+                assert artiq_action.type == 'dac'
+                assert artiq_action.chn_idx == dacid
             # Check value
             if val_idx >= 0:
                 assert isinstance(value, rtval.RuntimeValue)
@@ -157,6 +165,8 @@ class CompiledInfoChecker:
                     assert value == bool(artiq_action.value)
                 elif artiq_action.type == 'counter':
                     assert value == bool(artiq_action.value)
+                elif artiq_action.type == 'dac':
+                    assert dac_to_mu(value) == artiq_action.value
                 elif artiq_action.type == 'ddsfreq':
                     assert dds_freq_to_mu(value) == artiq_action.value
                 elif artiq_action.type == 'ddsamp':
@@ -184,16 +194,29 @@ class Compiler(backend.SeqCompiler):
         ttl_tgts = set(ttl.target for ttl in channels.ttlchns)
         assert len(ttl_tgts) == len(channels.ttlchns)
         assert len(ttl_tgts) == len(channels.ttl_chn_map)
-        bus_chns = set(bus.channel for bus in channels.urukul_busses)
-        assert len(bus_chns) == len(channels.urukul_busses)
-        bus_ids = set(dds.bus_id for dds in channels.ddschns)
-        assert bus_ids == set(range(len(bus_chns)))
-        all_chip_selects = {i: set() for i in range(len(bus_chns))}
+
+        urukul_bus_chns = set(bus.channel for bus in channels.urukul_busses)
+        assert len(urukul_bus_chns) == len(channels.urukul_busses)
+        urukul_bus_ids = set(dds.bus_id for dds in channels.ddschns)
+        assert urukul_bus_ids == set(range(len(urukul_bus_chns)))
+        all_chip_selects = {i: set() for i in range(len(urukul_bus_chns))}
         for dds in channels.ddschns:
             chip_selects = all_chip_selects[dds.bus_id]
             assert dds.chip_select not in chip_selects
             chip_selects.add(dds.chip_select)
         assert sum(len(cs) for cs in all_chip_selects.values()) == len(channels.ddschns)
+
+        dac_bus_chns = set(bus.channel for bus in channels.dac_busses)
+        assert len(dac_bus_chns) == len(channels.dac_busses)
+        dac_bus_ids = set(dac.bus_id for dac in channels.dacchns)
+        assert dac_bus_ids == set(range(len(dac_bus_chns)))
+        all_dac_channels = {i: set() for i in range(len(dac_bus_chns))}
+        for dac in channels.dacchns:
+            dac_channels = all_dac_channels[dac.bus_id]
+            assert dac.channel not in dac_channels
+            dac_channels.add(dac.channel)
+        assert sum(len(chn) for chn in all_dac_channels.values()) == len(channels.dacchns)
+
         return channels
 
     def get_compiled_info(self):
@@ -223,6 +246,8 @@ class Env:
                 i += 1
             else:
                 assert r != 0x80000000
+                if res[i + 1] < 0:
+                    res[i + 1] += 0x100000000
                 i += 2
         assert total_mu == output.total_time_mu
         return res
@@ -318,6 +343,17 @@ test_env = Env()
 def seq_time_to_mu(time):
     return (time + 500) // 1000
 
+def dac_to_mu(v):
+    v = round(v * 16384 / 5.0 + 8192 * 4)
+    if v < 0:
+        return 0
+    if v > 0xffff:
+        return 0xffff
+    return v
+
+def dac_data(chn, v):
+    return ((3 << 22) | (chn + 8) << 16 | (v & 0xffff)) << 8
+
 def dds_amp_to_mu(amp):
     v = int(amp * 0x3fff + 0.5)
     if v < 0:
@@ -359,6 +395,8 @@ dds_conf_addr_len = dds_config_len + dds_addr_len
 dds_conf_data_len = dds_config_len + dds_data_len
 dds_total_len = dds_conf_addr_len + dds_conf_data_len * 2
 dds_headless_len = dds_conf_addr_len + dds_conf_data_len * 2 - dds_config_len
+
+dac_data_len = ((24 + 1) * 4 + 1) * 8
 
 def with_dma_param(f, require_branch):
     import inspect
@@ -511,6 +549,9 @@ def test_channels(max_bt):
     assert s.get_channel_id('artiq/urukul3_ch1/phase') == 6
     assert s.get_channel_id('artiq/urukul3_ch2/sw') == 7
     assert s.get_channel_id('artiq/urukul0_ch0/sw') == 8
+    assert s.get_channel_id('artiq/zotino0/ch0') == 9
+    assert s.get_channel_id('artiq/zotino0/ch10') == 10
+    assert s.get_channel_id('artiq/zotino1/ch3') == 11
     comp.finalize()
     channels = comp.get_channel_info()
     assert channels.ttl_chn_map == {0: 0, 1: 1, 2: 2, 7: 3, 8: 4}
@@ -518,6 +559,10 @@ def test_channels(max_bt):
     assert not channels.ttlchns[1].iscounter
     assert channels.ttlchns[2].iscounter
     assert channels.dds_param_chn_map == {4: (0, 'ddsfreq'), 5: (0, 'ddsamp'), 6: (1, 'ddsphase')}
+    assert channels.dac_output_chn_map == {9: 0, 10: 1, 11: 2}
+    assert channels.dacchns[0].bus_id == 0
+    assert channels.dacchns[1].bus_id == 0
+    assert channels.dacchns[2].bus_id == 1
     compiled_info = comp.get_compiled_info()
     assert not compiled_info.all_actions[0]
     assert not compiled_info.bool_values
@@ -529,19 +574,27 @@ def test_channels(max_bt):
     assert s.get_channel_id('artiq/ttl0') == 0
     assert s.get_channel_id('artiq/urukul3_ch0/freq') == 1
     assert s.get_channel_id('artiq/ttl1') == 2
-    assert s.get_channel_id('artiq/urukul3_ch0/amp') == 3
-    assert s.get_channel_id('artiq/ttl10_counter') == 4
-    assert s.get_channel_id('artiq/urukul3_ch1/phase') == 5
-    assert s.get_channel_id('rfsoc/ch1/0/freq') == 6
-    assert s.get_channel_id('artiq/urukul3_ch2/sw') == 7
-    assert s.get_channel_id('artiq/urukul0_ch0/sw') == 8
+    assert s.get_channel_id('artiq/zotino0/ch0') == 3
+    assert s.get_channel_id('artiq/urukul3_ch0/amp') == 4
+    assert s.get_channel_id('artiq/ttl10_counter') == 5
+    assert s.get_channel_id('artiq/urukul3_ch1/phase') == 6
+    assert s.get_channel_id('artiq/zotino1/ch10') == 7
+    assert s.get_channel_id('rfsoc/ch1/0/freq') == 8
+    assert s.get_channel_id('artiq/urukul3_ch2/sw') == 9
+    assert s.get_channel_id('artiq/zotino1/ch3') == 10
+    assert s.get_channel_id('artiq/urukul0_ch0/sw') == 11
+
     comp.finalize()
     channels = comp.get_channel_info()
-    assert channels.ttl_chn_map == {0: 0, 2: 1, 4: 2, 7: 3, 8: 4}
+    assert channels.ttl_chn_map == {0: 0, 2: 1, 5: 2, 9: 3, 11: 4}
     assert not channels.ttlchns[0].iscounter
     assert not channels.ttlchns[1].iscounter
     assert channels.ttlchns[2].iscounter
-    assert channels.dds_param_chn_map == {1: (0, 'ddsfreq'), 3: (0, 'ddsamp'), 5: (1, 'ddsphase')}
+    assert channels.dds_param_chn_map == {1: (0, 'ddsfreq'), 4: (0, 'ddsamp'), 6: (1, 'ddsphase')}
+    assert channels.dac_output_chn_map == {3: 0, 7: 1, 10: 2}
+    assert channels.dacchns[0].bus_id == 0
+    assert channels.dacchns[1].bus_id == 1
+    assert channels.dacchns[2].bus_id == 1
     compiled_info = comp.get_compiled_info()
     assert not compiled_info.all_actions[0]
     assert not compiled_info.bool_values
@@ -570,6 +623,30 @@ def test_channels(max_bt):
     s = comp.seq
     s.get_channel_id('artiq/ttl0_counter/a')
     with pytest.raises(ValueError, match="Invalid channel name artiq/ttl0_counter/a"):
+        comp.finalize()
+
+    comp = test_env.new_comp(max_bt, dummy_artiq.HasEnvironment())
+    s = comp.seq
+    s.get_channel_id('artiq/zotino0/ch0/a')
+    with pytest.raises(ValueError, match="Invalid channel name artiq/zotino0/ch0/a"):
+        comp.finalize()
+
+    comp = test_env.new_comp(max_bt, dummy_artiq.HasEnvironment())
+    s = comp.seq
+    s.get_channel_id('artiq/zotino0/a0')
+    with pytest.raises(ValueError, match="Invalid channel name artiq/zotino0/a0"):
+        comp.finalize()
+
+    comp = test_env.new_comp(max_bt, dummy_artiq.HasEnvironment())
+    s = comp.seq
+    s.get_channel_id('artiq/zotino0/ch0aaa')
+    with pytest.raises(ValueError, match="Invalid channel name artiq/zotino0/ch0aaa"):
+        comp.finalize()
+
+    comp = test_env.new_comp(max_bt, dummy_artiq.HasEnvironment())
+    s = comp.seq
+    s.get_channel_id('artiq/zotino0/ch40')
+    with pytest.raises(ValueError, match="Invalid channel name artiq/zotino0/ch40"):
         comp.finalize()
 
     comp = test_env.new_comp(max_bt, dummy_artiq.HasEnvironment())
@@ -855,6 +932,95 @@ def test_dds(max_bt):
     test_env.check_unchanged(comp)
 
 @with_artiq_params
+def test_dac(max_bt):
+    v = rtval.seq_variable(7.2)
+    v2 = rtval.seq_variable(2.5)
+    comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
+    s = comp.seq
+    @s.add_step
+    def step(s):
+        s.add_step(0.01) \
+         .set('artiq/ttl0', True) \
+         .pulse('artiq/zotino0/ch1', v2) \
+         .set('artiq/zotino0/ch2', v2 - 1) \
+         .set('artiq/zotino1/ch0', v, exact_time=True)
+        s.wait(0.001)
+        s.add_step(0.01) \
+         .set('artiq/ttl0', False, exact_time=False) \
+         .pulse('artiq/zotino0/ch1', v2 + 2) \
+         .pulse('artiq/zotino0/ch2', v / 2) \
+         .set('artiq/zotino2/ch3', v + 0.1)
+        s.wait(0.001)
+        s.add_step(0.01) \
+         .pulse('artiq/zotino0/ch1', 0.1) \
+         .set('artiq/zotino0/ch2', 2)
+    s.conditional(False).add_step(0.1).set('artiq/zotino1/ch0', 0.1)
+    comp.finalize()
+    compiled_info = comp.get_compiled_info()
+    assert len(compiled_info.all_actions[0]) == 14
+
+    channels = comp.get_channel_info()
+    dac_tgts = [bus.data_target for bus in channels.dac_busses]
+    ldac_tgts = [bus.ldac_target for bus in channels.dac_busses]
+    dac_chns = [dac.channel for dac in channels.dacchns]
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+
+    comp.runtime_finalize(1)
+
+    test_env.check_list(comp, [
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(2.5)),
+        dac_tgts[1], dac_data(dac_chns[2], dac_to_mu(7.2)),
+        dac_tgts[2], dac_data(dac_chns[3], dac_to_mu(7.3)), -dac_data_len,
+        dac_tgts[0], dac_data(dac_chns[1], dac_to_mu(1.5)), -(3000 - dac_data_len),
+        # Beginning of sequence
+        ttl_tgts[0], 1,
+        ldac_tgts[1], 1,
+        -16,
+        ldac_tgts[1], 0,
+        (3000 + 16 - 2 * dac_data_len - 1504),
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0)),
+        -(10_000_000 + 1480 - 2 * dac_data_len),
+        # End of first step.
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(4.5)), -dac_data_len,
+        dac_tgts[0], dac_data(dac_chns[1], dac_to_mu(3.6)),
+        -(1000_000 - 16 - dac_data_len),
+        # End of wait/start of second step
+        ttl_tgts[0], 0,
+        ldac_tgts[0], 1,
+        ldac_tgts[2], 1,
+        -16,
+        ldac_tgts[0], 0,
+        ldac_tgts[2], 0,
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0)), -dac_data_len,
+        dac_tgts[0], dac_data(dac_chns[1], dac_to_mu(1.5)),
+        -(10_000_000 - 16 - dac_data_len),
+        # End of second step
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0.1)), -dac_data_len,
+        dac_tgts[0], dac_data(dac_chns[1], dac_to_mu(2)),
+        -(1_000_000 - 16 - dac_data_len),
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0)),
+        -(10_000_000 - 16),
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+    ])
+
+    comp.runtime_finalize(2)
+    test_env.check_unchanged(comp)
+
+@with_artiq_params
 def test_ramp(max_bt):
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
@@ -885,6 +1051,16 @@ def test_ramp(max_bt):
     with pytest.raises(ValueError, match="DDS Channel cannot be ramped") as exc:
         comp.finalize()
     test_utils.check_bt(exc, max_bt, 'as8df9sdf8')
+
+    comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
+    s = comp.seq
+    def jasd98asdf():
+        s.add_step(0.01) \
+         .set('artiq/zotino0/ch2', test_utils.StaticFunction())
+    jasd98asdf()
+    with pytest.raises(ValueError, match="DAC Channel cannot be ramped") as exc:
+        comp.finalize()
+    test_utils.check_bt(exc, max_bt, 'jasd98asdf')
 
 @with_artiq_params
 def test_start_trigger(max_bt):
@@ -962,6 +1138,8 @@ def test_start_trigger_error(max_bt):
         comp.ab.add_start_trigger('ttl0_counter', 0, 8e-9, True)
     with pytest.raises(ValueError, match="Invalid start trigger device: urukul1_ch0"):
         comp.ab.add_start_trigger('urukul1_ch0', 0, 8e-9, True)
+    with pytest.raises(ValueError, match="Invalid start trigger device: zotino0"):
+        comp.ab.add_start_trigger('zotino0', 0, 8e-9, True)
 
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
@@ -1434,6 +1612,161 @@ def test_dds_exact_time(max_bt):
     ])
 
 @with_artiq_params
+def test_dac_merge_value(max_bt):
+    v1 = rtval.seq_variable(1e-6)
+    comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
+    s = comp.seq
+    s.set(f'artiq/zotino0/ch0', 0.1)
+    s.wait(0.1e-3)
+    s.set(f'artiq/zotino0/ch0', 0.2)
+    s.wait(v1)
+    s.set(f'artiq/zotino0/ch0', 0.1)
+    comp.finalize()
+
+    channels = comp.get_channel_info()
+    dac_tgts = [bus.data_target for bus in channels.dac_busses]
+    ldac_tgts = [bus.ldac_target for bus in channels.dac_busses]
+    dac_chns = [dac.channel for dac in channels.dacchns]
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+
+    comp.runtime_finalize(1)
+    test_env.check_list(comp, [
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0.1)),
+        -3000,
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+        -(100_000 + 1000 - 16)
+    ])
+
+    v1.value = 5e-6
+    comp.runtime_finalize(2)
+    test_env.check_list(comp, [
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0.1)),
+        -3000,
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0.2)),
+        -(100_000 - 16),
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0.1)),
+        -(5_000 - 16),
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+    ])
+
+@with_artiq_params
+def test_dac_exact_time(max_bt):
+    comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
+    s = comp.seq
+    for i in range(7):
+        s.set(f'artiq/zotino{i}/ch{i % 4}', 0.1 + i / 2, exact_time=True)
+    comp.finalize()
+
+    channels = comp.get_channel_info()
+    dac_tgts = [bus.data_target for bus in channels.dac_busses]
+    ldac_tgts = [bus.ldac_target for bus in channels.dac_busses]
+    dac_chns = [dac.channel for dac in channels.dacchns]
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+
+    comp.runtime_finalize(1)
+    test_env.check_list(comp, [
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0.1)),
+        dac_tgts[1], dac_data(dac_chns[1], dac_to_mu(0.6)),
+        dac_tgts[2], dac_data(dac_chns[2], dac_to_mu(1.1)),
+        dac_tgts[3], dac_data(dac_chns[3], dac_to_mu(1.6)),
+        dac_tgts[4], dac_data(dac_chns[4], dac_to_mu(2.1)),
+        dac_tgts[5], dac_data(dac_chns[5], dac_to_mu(2.6)),
+        dac_tgts[6], dac_data(dac_chns[6], dac_to_mu(3.1)),
+        -3000,
+        ldac_tgts[0], 1,
+        ldac_tgts[1], 1,
+        ldac_tgts[2], 1,
+        ldac_tgts[3], 1,
+        ldac_tgts[4], 1,
+        ldac_tgts[5], 1,
+        ldac_tgts[6], 1,
+        -16,
+        ldac_tgts[0], 0,
+        ldac_tgts[1], 0,
+        ldac_tgts[2], 0,
+        ldac_tgts[3], 0,
+        ldac_tgts[4], 0,
+        ldac_tgts[5], 0,
+        ldac_tgts[6], 0,
+    ])
+
+    comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
+    s = comp.seq
+    for i in range(7):
+        s.set(f'artiq/zotino{i}/ch{i % 4}', 0.1, exact_time=True)
+    s.wait(2.5e-6)
+    for i in range(7):
+        s.set(f'artiq/zotino{i}/ch{i % 4}', 0.2, exact_time=True)
+    comp.finalize()
+
+    channels = comp.get_channel_info()
+    dac_tgts = [bus.data_target for bus in channels.dac_busses]
+    ldac_tgts = [bus.ldac_target for bus in channels.dac_busses]
+    dac_chns = [dac.channel for dac in channels.dacchns]
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+
+    comp.runtime_finalize(1)
+    test_env.check_list(comp, [
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0.1)),
+        dac_tgts[1], dac_data(dac_chns[1], dac_to_mu(0.1)),
+        dac_tgts[2], dac_data(dac_chns[2], dac_to_mu(0.1)),
+        dac_tgts[3], dac_data(dac_chns[3], dac_to_mu(0.1)),
+        dac_tgts[4], dac_data(dac_chns[4], dac_to_mu(0.1)),
+        dac_tgts[5], dac_data(dac_chns[5], dac_to_mu(0.1)),
+        dac_tgts[6], dac_data(dac_chns[6], dac_to_mu(0.1)),
+        -3000,
+        ldac_tgts[0], 1,
+        ldac_tgts[1], 1,
+        ldac_tgts[2], 1,
+        ldac_tgts[3], 1,
+        ldac_tgts[4], 1,
+        ldac_tgts[5], 1,
+        ldac_tgts[6], 1,
+        -16,
+        ldac_tgts[0], 0,
+        ldac_tgts[1], 0,
+        ldac_tgts[2], 0,
+        ldac_tgts[3], 0,
+        ldac_tgts[4], 0,
+        ldac_tgts[5], 0,
+        ldac_tgts[6], 0,
+        -8,
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0.2)),
+        dac_tgts[1], dac_data(dac_chns[1], dac_to_mu(0.2)),
+        dac_tgts[2], dac_data(dac_chns[2], dac_to_mu(0.2)),
+        dac_tgts[3], dac_data(dac_chns[3], dac_to_mu(0.2)),
+        dac_tgts[4], dac_data(dac_chns[4], dac_to_mu(0.2)),
+        dac_tgts[5], dac_data(dac_chns[5], dac_to_mu(0.2)),
+        dac_tgts[6], dac_data(dac_chns[6], dac_to_mu(0.2)),
+        -(2504 - 16 - 8),
+        ldac_tgts[0], 1,
+        ldac_tgts[1], 1,
+        ldac_tgts[2], 1,
+        ldac_tgts[3], 1,
+        ldac_tgts[4], 1,
+        ldac_tgts[5], 1,
+        ldac_tgts[6], 1,
+        -16,
+        ldac_tgts[0], 0,
+        ldac_tgts[1], 0,
+        ldac_tgts[2], 0,
+        ldac_tgts[3], 0,
+        ldac_tgts[4], 0,
+        ldac_tgts[5], 0,
+        ldac_tgts[6], 0,
+    ])
+
+@with_artiq_params
 def test_exact_time_error(max_bt):
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
@@ -1476,6 +1809,32 @@ def test_exact_time_error(max_bt):
         comp.runtime_finalize(1)
     test_utils.check_bt(exc, max_bt, 'ajsdj7jf8asdf')
 
+    comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
+    s = comp.seq
+    for i in range(7):
+        s.set(f'artiq/zotino{i}/ch2', True, exact_time=True)
+    def jkajs8fas9d():
+        s.set('artiq/zotino7/ch2', True, exact_time=True)
+    jkajs8fas9d()
+    comp.finalize()
+
+    with pytest.raises(ValueError, match="Too many outputs at the same time") as exc:
+        comp.runtime_finalize(1)
+    test_utils.check_bt(exc, max_bt, 'jkajs8fas9d')
+
+    comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
+    s = comp.seq
+    s.set(f'artiq/zotino0/ch0', True, exact_time=True)
+    s.wait(0.1e-6)
+    def jka98sdf():
+        s.set(f'artiq/zotino0/ch1', True, exact_time=True)
+    jka98sdf()
+    comp.finalize()
+
+    with pytest.raises(ValueError, match="Exact time output cannot satisfy lower time bound") as exc:
+        comp.runtime_finalize(1)
+    test_utils.check_bt(exc, max_bt, 'jka98sdf')
+
 @with_artiq_params
 def test_inexact_time_error(max_bt):
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
@@ -1505,6 +1864,20 @@ def test_inexact_time_error(max_bt):
     with pytest.raises(ValueError, match="Cannot find appropriate output time within bound") as exc:
         comp.runtime_finalize(1)
     test_utils.check_bt(exc, max_bt, 'asd7923j9fd7')
+
+    comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
+    s = comp.seq
+    def jkoi8f9j23():
+        for t in range(20):
+            step = s.add_step(0.5e-6)
+            for i in range(40):
+                step.set(f'artiq/zotino0/ch{i}', t * 0.001)
+    jkoi8f9j23()
+    comp.finalize()
+
+    with pytest.raises(ValueError, match="Cannot find appropriate output time within bound") as exc:
+        comp.runtime_finalize(1)
+    test_utils.check_bt(exc, max_bt, 'jkoi8f9j23')
 
 @with_artiq_params
 def test_long_wait(max_bt):
@@ -1903,6 +2276,15 @@ def test_device_delay_rt_error(max_bt):
 
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
+    comp.ab.set_device_delay("zotino0/ch2", test_utils.new_extern(lambda: 1.2))
+    s.set('artiq/zotino0/ch2', 3.4)
+    comp.finalize()
+    with pytest.raises(ValueError,
+                       match="Device time offset 1.2 cannot be more than 100ms."):
+        comp.runtime_finalize(1)
+
+    comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
+    s = comp.seq
     comp.ab.set_device_delay("ttl0", test_utils.new_extern(lambda: []))
     s.set('artiq/ttl0', True)
     comp.finalize()
@@ -1935,14 +2317,19 @@ def test_device_delay(max_bt, use_rt):
     with pytest.raises(ValueError,
                        match="Device time offset 1.0 cannot be more than 100ms."):
         comp.ab.set_device_delay("urukul0_ch1", 1)
+    with pytest.raises(ValueError,
+                       match="Device time offset 0.5 cannot be more than 100ms."):
+        comp.ab.set_device_delay("zotino1/ch0", 0.5)
 
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
     comp.ab.set_device_delay("ttl1", wrap_value(1e-3))
     comp.ab.set_device_delay("ttl2_counter", wrap_value(2e-3))
     comp.ab.set_device_delay("urukul0_ch0", wrap_value(3e-3))
+    comp.ab.set_device_delay("zotino0", wrap_value(4e-3))
+    comp.ab.set_device_delay("zotino1/ch2", wrap_value(5e-3))
 
-    s.add_step(test_utils.new_extern(lambda: 5e-3)) \
+    s.add_step(test_utils.new_extern(lambda: 7e-3)) \
       .pulse('artiq/ttl1', True) \
       .pulse('artiq/ttl0', True) \
       .pulse('artiq/ttl2_counter', True) \
@@ -1950,7 +2337,10 @@ def test_device_delay(max_bt, use_rt):
       .pulse('artiq/urukul0_ch0/sw', True) \
       .pulse('artiq/urukul1_ch0/sw', True) \
       .pulse('artiq/urukul0_ch0/amp', 0.2) \
-      .pulse('artiq/urukul0_ch1/amp', 0.3)
+      .pulse('artiq/urukul0_ch1/amp', 0.3) \
+      .pulse('artiq/zotino0/ch1', 2.3) \
+      .pulse('artiq/zotino1/ch0', 4.5) \
+      .pulse('artiq/zotino1/ch2', 6.7)
     comp.finalize()
 
     channels = comp.get_channel_info()
@@ -1958,11 +2348,16 @@ def test_device_delay(max_bt, use_rt):
     data_tgts = [bus.data_target for bus in channels.urukul_busses]
     upd_tgts = [bus.io_update_target for bus in channels.urukul_busses]
     css = [dds.chip_select for dds in channels.ddschns]
+    dac_tgts = [bus.data_target for bus in channels.dac_busses]
+    ldac_tgts = [bus.ldac_target for bus in channels.dac_busses]
+    dac_chns = [dac.channel for dac in channels.dacchns]
     ttl_tgts = [ttl.target for ttl in channels.ttlchns]
 
     comp.runtime_finalize(1)
     test_env.check_list(comp, [
         addr_tgts[0], dds_config_addr(css[1]),
+        dac_tgts[1], dac_data(dac_chns[1], dac_to_mu(4.5)),
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(2.3)),
         -dds_config_len,
         data_tgts[0], dds_data_addr,
         -dds_addr_len,
@@ -1981,10 +2376,14 @@ def test_device_delay(max_bt, use_rt):
         ttl_tgts[1], 1,
         ttl_tgts[5], 1,
         upd_tgts[0], 1,
+        ldac_tgts[1], 1,
         -8,
         upd_tgts[0], 0,
         data_tgts[0], dds_data_addr,
-        -dds_addr_len,
+        -8,
+        ldac_tgts[1], 0,
+        dac_tgts[1], dac_data(dac_chns[2], dac_to_mu(6.7)),
+        -(dds_addr_len - 8),
         addr_tgts[0], dds_config_data1(css[0]),
         -dds_config_len,
         data_tgts[0], dds_data1(0.2, 0),
@@ -2017,16 +2416,32 @@ def test_device_delay(max_bt, use_rt):
         data_tgts[0], dds_data2(0),
         -dds_data_len,
         addr_tgts[0], dds_config_addr(css[0]),
-        -(2_000_000 - dds_headless_len - 8),
+        -(1_000_000 - dds_headless_len - 8),
+        # zotino0/ch1 delayed on @ 4 ms
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0)),
+        -(1_000_000 - 16),
+        # zotino1/ch2 delayed on @ 5 ms
+        ldac_tgts[1], 1,
+        -16,
+        ldac_tgts[1], 0,
+        dac_tgts[1], dac_data(dac_chns[1], dac_to_mu(0)),
+        -(2_000_000 - 16),
         # end of step
         ttl_tgts[3], 4,
         ttl_tgts[1], 0,
         ttl_tgts[5], 0,
         upd_tgts[0], 1,
+        ldac_tgts[1], 1,
         -8,
         upd_tgts[0], 0,
         data_tgts[0], dds_data_addr,
-        -dds_addr_len,
+        -8,
+        ldac_tgts[1], 0,
+        dac_tgts[1], dac_data(dac_chns[2], dac_to_mu(0)),
+        -(dds_addr_len - 8),
         addr_tgts[0], dds_config_data1(css[0]),
         -dds_config_len,
         data_tgts[0], dds_data1(0, 0),
@@ -2035,17 +2450,25 @@ def test_device_delay(max_bt, use_rt):
         -dds_config_len,
         data_tgts[0], dds_data2(0),
         -(1_000_000 - dds_headless_len + dds_data_len - 8),
-        # ttl0 delayed off @ 6 ms
+        # ttl0 delayed off @ 8 ms
         ttl_tgts[0], 0,
         -1_000_000,
-        # ttl2_counter delayed off @ 7 ms
+        # ttl2_counter delayed off @ 9 ms
         ttl_tgts[2], 4,
         -1_000_000,
-        # urukul0_ch0/sw and urukul0_ch0/amp delayed off @ 8 ms
+        # urukul0_ch0/sw and urukul0_ch0/amp delayed off @ 10 ms
         ttl_tgts[4], 0,
         upd_tgts[0], 1,
         -8,
         upd_tgts[0], 0,
+        -(1_000_000 - 8),
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+        -(1_000_000 - 16),
+        ldac_tgts[1], 1,
+        -16,
+        ldac_tgts[1], 0,
     ])
 
 def test_empty_branch_backend():
@@ -2276,12 +2699,12 @@ def test_branch_dds(max_bt):
         upd_tgts[0], 0]])
 
     comp.runtime_finalize(2)
+    test_env.check_unchanged(comp)
 
     amp1 = 0.2
     phase1 = 0.7
     freq1 = 120e6
     amp2 = 0.4
-    test_env.check_unchanged(comp)
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
     s.add_step(0.1) \
@@ -2493,6 +2916,239 @@ def test_branch_dds(max_bt):
     comp.runtime_finalize(8)
     test_env.check_unchanged(comp)
 
+@with_artiq_br_params
+def test_branch_dac(max_bt):
+    comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
+    s = comp.seq
+    s.add_step(0.1) \
+         .pulse('artiq/zotino0/ch0', 0.2) \
+         .set('artiq/zotino0/ch1', 1.2) \
+         .set('artiq/zotino1/ch0', 2.4)
+    bs1 = s.new_basic_seq()
+    s.add_branch(bs1)
+    bs1.add_step(0.2).pulse('artiq/zotino0/ch0', 0.8)
+
+    comp.finalize()
+    assert len(comp.ab.output) == 2
+    assert comp.ab.output[0].bseq_id == 0
+    assert not comp.ab.output[0].may_term
+    assert comp.ab.output[0].next == [1]
+    assert comp.ab.output[1].bseq_id == 1
+    assert comp.ab.output[1].may_term
+    assert comp.ab.output[1].next == []
+    channels = comp.get_channel_info()
+    dac_tgts = [bus.data_target for bus in channels.dac_busses]
+    ldac_tgts = [bus.ldac_target for bus in channels.dac_busses]
+    dac_chns = [dac.channel for dac in channels.dacchns]
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+
+    comp.runtime_finalize(1)
+    assert comp.ab.output[0].total_time_mu == 100_003_016
+    assert comp.ab.output[1].total_time_mu == 200_003_016
+    test_env.check_lists(comp, [[
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0.2)),
+        dac_tgts[1], dac_data(dac_chns[2], dac_to_mu(2.4)),
+        -dac_data_len,
+        dac_tgts[0], dac_data(dac_chns[1], dac_to_mu(1.2)),
+        -(3000 - dac_data_len),
+        ldac_tgts[1], 1,
+        -16,
+        ldac_tgts[1], 0,
+        (3000 + 16 - 2 * dac_data_len - 1504),
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0)),
+        -(100_000_000 + 1480 - 2 * dac_data_len),
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+    ], [
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0.8)),
+        -3000,
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0)),
+        -(200_000_000 - 16),
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+    ]])
+
+    comp.runtime_finalize(2)
+    test_env.check_unchanged(comp)
+
+    v1 = rtval.seq_variable(0.2)
+    v2 = rtval.seq_variable(0.4)
+    v3 = rtval.seq_variable(0.6)
+    v4 = rtval.seq_variable(0.8)
+    comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
+    s = comp.seq
+    s.add_step(0.1) \
+         .pulse('artiq/zotino0/ch0', v1) \
+         .set('artiq/zotino0/ch1', v2) \
+         .set('artiq/zotino1/ch0', v3)
+    bs1 = s.new_basic_seq()
+    s.add_branch(bs1)
+    bs1.add_step(0.2).pulse('artiq/zotino0/ch0', v4)
+
+    comp.finalize()
+    assert len(comp.ab.output) == 2
+    assert comp.ab.output[0].bseq_id == 0
+    assert not comp.ab.output[0].may_term
+    assert comp.ab.output[0].next == [1]
+    assert comp.ab.output[1].bseq_id == 1
+    assert comp.ab.output[1].may_term
+    assert comp.ab.output[1].next == []
+    channels = comp.get_channel_info()
+    dac_tgts = [bus.data_target for bus in channels.dac_busses]
+    ldac_tgts = [bus.ldac_target for bus in channels.dac_busses]
+    dac_chns = [dac.channel for dac in channels.dacchns]
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+
+    comp.runtime_finalize(1)
+    assert comp.ab.output[0].total_time_mu == 100_003_016
+    assert comp.ab.output[1].total_time_mu == 200_003_016
+    test_env.check_lists(comp, [[
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0.2)),
+        dac_tgts[1], dac_data(dac_chns[2], dac_to_mu(0.6)),
+        -dac_data_len,
+        dac_tgts[0], dac_data(dac_chns[1], dac_to_mu(0.4)),
+        -(3000 - dac_data_len),
+        ldac_tgts[1], 1,
+        -16,
+        ldac_tgts[1], 0,
+        (3000 + 16 - 2 * dac_data_len - 1504),
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0)),
+        -(100_000_000 + 1480 - 2 * dac_data_len),
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+    ], [
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0.8)),
+        -3000,
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0)),
+        -(200_000_000 - 16),
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+    ]])
+
+    comp.runtime_finalize(2)
+    test_env.check_unchanged(comp)
+
+    v2.value = 4
+    comp.runtime_finalize(3)
+    assert comp.ab.output[0].total_time_mu == 100_003_016
+    assert comp.ab.output[1].total_time_mu == 200_003_016
+    test_env.check_lists(comp, [[
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0.2)),
+        dac_tgts[1], dac_data(dac_chns[2], dac_to_mu(0.6)),
+        -dac_data_len,
+        dac_tgts[0], dac_data(dac_chns[1], dac_to_mu(4)),
+        -(3000 - dac_data_len),
+        ldac_tgts[1], 1,
+        -16,
+        ldac_tgts[1], 0,
+        (3000 + 16 - 2 * dac_data_len - 1504),
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0)),
+        -(100_000_000 + 1480 - 2 * dac_data_len),
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+    ], [
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0.8)),
+        -3000,
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0)),
+        -(200_000_000 - 16),
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+    ]])
+
+    comp.runtime_finalize(4)
+    test_env.check_unchanged(comp)
+
+    v3.value = 6
+    comp.runtime_finalize(5)
+    assert comp.ab.output[0].total_time_mu == 100_003_016
+    assert comp.ab.output[1].total_time_mu == 200_003_016
+    test_env.check_lists(comp, [[
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0.2)),
+        dac_tgts[1], dac_data(dac_chns[2], dac_to_mu(6)),
+        -dac_data_len,
+        dac_tgts[0], dac_data(dac_chns[1], dac_to_mu(4)),
+        -(3000 - dac_data_len),
+        ldac_tgts[1], 1,
+        -16,
+        ldac_tgts[1], 0,
+        (3000 + 16 - 2 * dac_data_len - 1504),
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0)),
+        -(100_000_000 + 1480 - 2 * dac_data_len),
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+    ], [
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0.8)),
+        -3000,
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0)),
+        -(200_000_000 - 16),
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+    ]])
+
+    comp.runtime_finalize(6)
+    test_env.check_unchanged(comp)
+
+    v4.value = 0
+    comp.runtime_finalize(7)
+    assert comp.ab.output[0].total_time_mu == 100_003_016
+    assert comp.ab.output[1].total_time_mu == 200_003_000
+    test_env.check_lists(comp, [[
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0.2)),
+        dac_tgts[1], dac_data(dac_chns[2], dac_to_mu(6)),
+        -dac_data_len,
+        dac_tgts[0], dac_data(dac_chns[1], dac_to_mu(4)),
+        -(3000 - dac_data_len),
+        ldac_tgts[1], 1,
+        -16,
+        ldac_tgts[1], 0,
+        (3000 + 16 - 2 * dac_data_len - 1504),
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(0)),
+        -(100_000_000 + 1480 - 2 * dac_data_len),
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+    ], [
+        -200_003_000,
+    ]])
+
+    comp.runtime_finalize(8)
+    test_env.check_unchanged(comp)
+
 @with_artiq_params
 def test_dyn_wait(max_bt):
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
@@ -2517,6 +3173,150 @@ def test_dyn_wait(max_bt):
     test_env.check_list(comp, [
         -103000,
     ])
+
+@with_artiq_params
+def test_dyn_time(max_bt):
+    comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
+    t1 = rtval.seq_variable(1e-3)
+    t2 = rtval.seq_variable(1e-3)
+    t3 = rtval.seq_variable(1e-3)
+    s = comp.seq
+    @s.add_background
+    def step1(s):
+        s.wait(t1)
+        s.set('artiq/ttl0', True)
+    @s.add_background
+    def step2(s):
+        s.wait(t2)
+        s.set('artiq/urukul0_ch0/amp', 1.0)
+    @s.add_background
+    def step3(s):
+        s.wait(t3)
+        s.set('artiq/zotino0/ch0', 2.0)
+    s.wait(10e-3) # So that total time remains unchanged
+    comp.finalize()
+
+    comp.runtime_finalize(1)
+    channels = comp.get_channel_info()
+    assert test_utils.compiler_get_channel_changed(comp) == [True, True, True]
+    addr_tgts = [bus.addr_target for bus in channels.urukul_busses]
+    data_tgts = [bus.data_target for bus in channels.urukul_busses]
+    upd_tgts = [bus.io_update_target for bus in channels.urukul_busses]
+    css = [dds.chip_select for dds in channels.ddschns]
+    dac_tgts = [bus.data_target for bus in channels.dac_busses]
+    ldac_tgts = [bus.ldac_target for bus in channels.dac_busses]
+    dac_chns = [dac.channel for dac in channels.dacchns]
+    ttl_tgts = [ttl.target for ttl in channels.ttlchns]
+
+    test_env.check_list(comp, [
+        addr_tgts[0], dds_config_addr(css[0]),
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(2.0)),
+        -dds_config_len,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(1.0, 0.0), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(0),
+        -(1_000_000 + 3000 - dds_total_len + dds_data_len),
+        ttl_tgts[0], 1,
+        upd_tgts[0], 1,
+        ldac_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        -8,
+        ldac_tgts[0], 0,
+        -(9_000_000 - 16)
+    ])
+
+    comp.runtime_finalize(2)
+    assert test_utils.compiler_get_channel_changed(comp) == [False, False, False]
+    test_env.check_unchanged(comp)
+
+    t1.value = 2e-3
+    comp.runtime_finalize(3)
+    assert test_utils.compiler_get_channel_changed(comp) == [True, False, False]
+
+    test_env.check_list(comp, [
+        addr_tgts[0], dds_config_addr(css[0]),
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(2.0)),
+        -dds_config_len,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(1.0, 0.0), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(0),
+        -(1_000_000 + 3000 - dds_total_len + dds_data_len),
+        upd_tgts[0], 1,
+        ldac_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        -8,
+        ldac_tgts[0], 0,
+        -(1_000_000 - 16),
+        ttl_tgts[0], 1,
+        -8_000_000
+    ])
+
+    comp.runtime_finalize(4)
+    assert test_utils.compiler_get_channel_changed(comp) == [False, False, False]
+    test_env.check_unchanged(comp)
+
+    t2.value = 2e-3
+    comp.runtime_finalize(5)
+    assert test_utils.compiler_get_channel_changed(comp) == [False, True, False]
+
+    test_env.check_list(comp, [
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(2.0)),
+        addr_tgts[0], dds_config_addr(css[0]),
+        -dds_config_len,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(1.0, 0.0), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(0),
+        -(1_000_000 + 3000 - dds_total_len + dds_data_len),
+        ldac_tgts[0], 1,
+        -16,
+        ldac_tgts[0], 0,
+        -(1_000_000 - 16),
+        ttl_tgts[0], 1,
+        upd_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        -(8_000_000 - 8)
+    ])
+
+    comp.runtime_finalize(6)
+    assert test_utils.compiler_get_channel_changed(comp) == [False, False, False]
+    test_env.check_unchanged(comp)
+
+    t3.value = 2e-3
+    comp.runtime_finalize(7)
+    assert test_utils.compiler_get_channel_changed(comp) == [False, False, True]
+
+    test_env.check_list(comp, [
+        addr_tgts[0], dds_config_addr(css[0]),
+        dac_tgts[0], dac_data(dac_chns[0], dac_to_mu(2.0)),
+        -dds_config_len,
+        data_tgts[0], dds_data_addr, -dds_addr_len,
+        addr_tgts[0], dds_config_data1(css[0]), -dds_config_len,
+        data_tgts[0], dds_data1(1.0, 0.0), -dds_data_len,
+        addr_tgts[0], dds_config_data2(css[0]), -dds_config_len,
+        data_tgts[0], dds_data2(0),
+        -(2_000_000 + 3000 - dds_total_len + dds_data_len),
+        ttl_tgts[0], 1,
+        upd_tgts[0], 1,
+        ldac_tgts[0], 1,
+        -8,
+        upd_tgts[0], 0,
+        -8,
+        ldac_tgts[0], 0,
+        -(8_000_000 - 16)
+    ])
+
+    comp.runtime_finalize(8)
+    assert test_utils.compiler_get_channel_changed(comp) == [False, False, False]
+    test_env.check_unchanged(comp)
 
 @with_artiq_params
 def test_dyn_shared_val(max_bt):

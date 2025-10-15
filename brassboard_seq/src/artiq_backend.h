@@ -39,6 +39,7 @@ enum ChannelType : uint8_t {
     DDSPhase,
     TTLOut,
     CounterEnable,
+    DAC,
 };
 
 struct ArtiqAction {
@@ -80,6 +81,21 @@ struct DDSChannel {
         had_output = false;
         data1 = 0;
         data2 = 0;
+    }
+};
+
+struct DACChannel {
+    uint32_t bus_id;
+    uint8_t channel;
+    bool had_output{false};
+    uint32_t data{0};
+    int64_t delay;
+    rtval_ptr rt_delay;
+
+    void reset()
+    {
+        had_output = false;
+        data = 0;
     }
 };
 
@@ -173,6 +189,41 @@ struct UrukulBus {
     void add_output(RTIOGen &gen, const ArtiqAction &action, DDSChannel &ddschn);
 };
 
+struct DACAction {
+    int64_t time_mu;
+    uint32_t data;
+    bool exact_time;
+    int aid;
+    DACChannel *dacchn;
+};
+
+struct DACBus {
+    double vref;
+    uint32_t data_target;
+    uint32_t ldac_target;
+    uint16_t offset_dacs;
+    uint16_t xfer_duration_mu;
+    uint8_t ref_period_mu;
+
+    // These are assumed to be 8 cycles aligned.
+    int64_t last_mu{};
+
+    std::vector<DACAction> dac_actions{};
+
+    // We keep dac actions around that are within this time frame.
+    static constexpr int max_action_shift = 2500;
+
+    void reset(int64_t start_mu)
+    {
+        last_mu = start_mu;
+    }
+
+    void add_dac_action(RTIOGen &gen, DACAction &action);
+    void add_load_dac(RTIOGen &gen, int64_t time_mu, int aid, bool exact_time);
+    void flush_output(RTIOGen &gen, int64_t time_mu, bool force);
+    void add_output(RTIOGen &gen, const ArtiqAction &action, DACChannel &dacchn);
+};
+
 struct TTLChannel {
     uint32_t target;
     bool iscounter;
@@ -212,17 +263,23 @@ struct TTLChannel {
 
 struct ChannelsInfo {
     std::vector<UrukulBus> urukul_busses;
+    std::vector<DACBus> dac_busses;
     std::vector<TTLChannel> ttlchns;
     std::vector<DDSChannel> ddschns;
+    std::vector<DACChannel> dacchns;
 
     // From bus channel to urukul bus index
     std::map<int,int> urukul_bus_chn_map;
+    // From bus channel to dac bus index
+    std::map<int,int> dac_bus_chn_map;
     // From sequence channel id to ttl channel index
     std::map<int,int> ttl_chn_map;
     // From (bus_id, chip select) to dds channel index
     std::map<std::pair<int,int>,int> dds_chn_map;
     // From sequence channel id to dds channel index + channel type
     std::map<int,std::pair<int,ChannelType>> dds_param_chn_map;
+    // From sequence channel id to dac channel index
+    std::map<int,int> dac_output_chn_map;
 
     ChannelsInfo() = default;
     ChannelsInfo(const ChannelsInfo&) = delete;
@@ -235,11 +292,18 @@ struct ChannelsInfo {
             return -1;
         return it->second;
     }
+    int find_dac_bus_id(int bus_channel) const
+    {
+        auto it = dac_bus_chn_map.find(bus_channel);
+        if (it == dac_bus_chn_map.end())
+            return -1;
+        return it->second;
+    }
     uint32_t dds_to_mu(ChannelType type, int dds_idx, double v) const;
+    uint16_t dac_to_mu(int dac_idx, double v) const;
     void collect_channels(py::str prefix, py::ptr<> sys, py::ptr<seq::Seq> seq,
                           py::dict device_delay);
-    void add_channel(py::ptr<> dev, int64_t delay, rtval_ptr rt_delay,
-                     int idx, py::tuple path);
+    void add_channel(py::ptr<> dev, int idx, py::tuple path, py::dict device_delay);
     int add_urukul_bus_channel(int bus_channel, uint32_t io_update_target,
                                uint8_t ref_period_mu);
     void add_ttl_channel(int seqchn, uint32_t target, bool iscounter, int64_t delay,
@@ -247,6 +311,11 @@ struct ChannelsInfo {
     void add_dds_param_channel(int seqchn, uint32_t bus_id, double ftw_per_hz,
                                uint8_t chip_select, ChannelType param,
                                int64_t delay, rtval_ptr rt_delay);
+    int add_dac_bus_channel(int bus_channel, uint32_t ldac_target,
+                            uint16_t xfer_duration_mu, uint8_t ref_period_mu,
+                            double vref, uint16_t offset_dacs);
+    void add_dac_channel(int seqchn, uint32_t bus_id, uint8_t channel,
+                         int64_t delay, rtval_ptr rt_delay);
     bool channel_changed(const std::vector<bool> &changed) const;
 };
 

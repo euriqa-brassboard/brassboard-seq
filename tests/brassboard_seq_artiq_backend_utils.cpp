@@ -37,6 +37,22 @@ struct py::converter<UrukulBus> {
 };
 
 template<>
+struct py::converter<DACBus> {
+    static auto py(const DACBus &bus)
+    {
+        auto self = new_object<"DACBus">();
+        self.set_attr("channel", to_py(bus.data_target >> 8));
+        self.set_attr("data_target", to_py(bus.data_target));
+        self.set_attr("ldac_target", to_py(bus.ldac_target));
+        self.set_attr("offset_dacs", to_py(bus.offset_dacs));
+        self.set_attr("xfer_duration_mu", to_py(bus.xfer_duration_mu));
+        self.set_attr("ref_period_mu", to_py(bus.ref_period_mu));
+        self.set_attr("vref", to_py(bus.vref));
+        return self;
+    }
+};
+
+template<>
 struct py::converter<DDSChannel> {
     static auto py(const DDSChannel &dds)
     {
@@ -44,6 +60,18 @@ struct py::converter<DDSChannel> {
         self.set_attr("ftw_per_hz", to_py(dds.ftw_per_hz));
         self.set_attr("bus_id", to_py(dds.bus_id));
         self.set_attr("chip_select", to_py(dds.chip_select));
+        self.set_attr("delay", to_py(dds.delay));
+        return self;
+    }
+};
+
+template<>
+struct py::converter<DACChannel> {
+    static auto py(const DACChannel &dds)
+    {
+        auto self = new_object<"DACChannel">();
+        self.set_attr("bus_id", to_py(dds.bus_id));
+        self.set_attr("channel", to_py(dds.channel));
         self.set_attr("delay", to_py(dds.delay));
         return self;
     }
@@ -72,6 +100,7 @@ struct py::converter<ChannelType> {
         case DDSPhase: return "ddsphase"_py;
         case TTLOut: return "ttl"_py;
         case CounterEnable: return "counter"_py;
+        case DAC: return "dac"_py;
         }
     }
 };
@@ -82,11 +111,15 @@ struct py::converter<ChannelsInfo> {
     {
         auto self = new_object<"ChannelsInfo">();
         self.set_attr("urukul_busses", to_py(info.urukul_busses));
+        self.set_attr("dac_busses", to_py(info.dac_busses));
         self.set_attr("ttlchns", to_py(info.ttlchns));
         self.set_attr("ddschns", to_py(info.ddschns));
+        self.set_attr("dacchns", to_py(info.dacchns));
         self.set_attr("urukul_bus_chn_map", to_py(info.urukul_bus_chn_map));
+        self.set_attr("dac_bus_chn_map", to_py(info.dac_bus_chn_map));
         self.set_attr("ttl_chn_map", to_py(info.ttl_chn_map));
         self.set_attr("dds_param_chn_map", to_py(info.dds_param_chn_map));
+        self.set_attr("dac_output_chn_map", to_py(info.dac_output_chn_map));
         return self;
     }
 };

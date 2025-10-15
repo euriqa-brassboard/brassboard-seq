@@ -130,12 +130,69 @@ inline uint32_t ChannelsInfo::dds_to_mu(ChannelType type, int dds_idx, double v)
 }
 
 __attribute__((visibility("internal")))
-inline void ChannelsInfo::add_channel(py::ptr<> dev, int64_t delay, rtval_ptr rt_delay,
-                                      int idx, py::tuple path)
+inline uint16_t ChannelsInfo::dac_to_mu(int dac_idx, double v) const
 {
-    if (dev.isinstance(info().AD9910)) {
+    auto bus = dac_busses[dacchns[dac_idx].bus_id];
+    return (uint16_t)std::clamp(int(v * (16384 / bus.vref) + bus.offset_dacs * 4 + 0.5),
+                                0, 0xffff);
+}
+
+static int parse_pos_int(const std::string_view &s, py::tuple path, int max)
+{
+    if (!std::ranges::all_of(s, [] (auto c) { return std::isdigit(c); }))
+        config::raise_invalid_channel(path);
+    int n;
+    if (std::from_chars(s.data(), s.data() + s.size(), n).ec != std::errc{} || n > max)
+        config::raise_invalid_channel(path);
+    return n;
+}
+
+static inline std::pair<int64_t,rtval_ptr> parse_delay(py::ptr<> py_delay)
+{
+    if (!py_delay)
+        return {0, rtval_ptr()};
+    if (auto rt_delay = py::cast<RuntimeValue>(py_delay))
+        return {0, rt_delay};
+    return {py_delay.as_int<int64_t>(), rtval_ptr()};
+}
+
+__attribute__((visibility("internal")))
+inline void ChannelsInfo::add_channel(py::ptr<> dev, int idx, py::tuple path,
+                                      py::dict device_delay)
+{
+    auto devname = path.get<py::str>(1);
+    if (dev.isinstance(info().AD53xx)) {
         if (path.size() > 3)
             config::raise_invalid_channel(path);
+        auto chnpath = path.get<py::str>(2).utf8_view();
+        if (!chnpath.starts_with("ch"))
+            config::raise_invalid_channel(path);
+        auto chnname = "/"_py.join(py::new_tuple(devname, path.get(2)));
+        auto py_delay = device_delay.try_get(chnname);
+        if (!py_delay)
+            py_delay = device_delay.try_get(devname);
+        auto [delay, rt_delay] = parse_delay(py_delay);
+        chnpath.remove_prefix(2);
+        // Maximum supported number of channel for ad53xx is 40
+        // (based on the programming interface)
+        auto chn = parse_pos_int(chnpath, path, 39);
+        auto bus = dev.attr("bus"_py);
+        auto bus_channel = bus.attr("channel"_py).as_int();
+        auto bus_id = find_dac_bus_id(bus_channel);
+        if (bus_id == -1) {
+            auto ldac_target = dev.attr("ldac"_py).attr("target_o"_py).as_int();
+            bus_id = add_dac_bus_channel(bus_channel, ldac_target,
+                                         bus.attr("xfer_duration_mu"_py).as_int(),
+                                         bus.attr("ref_period_mu"_py).as_int(),
+                                         dev.attr("vref"_py).as_float(),
+                                         dev.attr("offset_dacs").as_int());
+        }
+        add_dac_channel(idx, bus_id, chn, delay, rt_delay);
+    }
+    else if (dev.isinstance(info().AD9910)) {
+        if (path.size() > 3)
+            config::raise_invalid_channel(path);
+        auto [delay, rt_delay] = parse_delay(device_delay.try_get(devname));
         auto path2 = path.get<py::str>(2);
         ChannelType dds_param_type;
         if (path2.compare_ascii("sw") == 0) {
@@ -178,11 +235,13 @@ inline void ChannelsInfo::add_channel(py::ptr<> dev, int64_t delay, rtval_ptr rt
                               delay, rt_delay);
     }
     else if (dev.isinstance(info().TTLOut)) {
+        auto [delay, rt_delay] = parse_delay(device_delay.try_get(devname));
         if (path.size() > 2)
             config::raise_invalid_channel(path);
         add_ttl_channel(idx, dev.attr("target_o"_py).as_int(), false, delay, rt_delay);
     }
     else if (dev.isinstance(info().EdgeCounter)) {
+        auto [delay, rt_delay] = parse_delay(device_delay.try_get(devname));
         if (path.size() > 2)
             config::raise_invalid_channel(path);
         add_ttl_channel(idx, dev.attr("channel"_py).as_int() << 8, true, delay, rt_delay);
@@ -243,6 +302,36 @@ inline void ChannelsInfo::add_dds_param_channel(int seqchn, uint32_t bus_id,
 }
 
 __attribute__((visibility("internal")))
+inline int ChannelsInfo::add_dac_bus_channel(int bus_channel, uint32_t ldac_target,
+                                             uint16_t xfer_duration_mu,
+                                             uint8_t ref_period_mu,
+                                             double vref, uint16_t offset_dacs)
+{
+    auto bus_id = (int)dac_busses.size();
+    dac_busses.push_back({
+            vref,
+            uint32_t((bus_channel << 8) | info().SPI_DATA_ADDR),
+            ldac_target,
+            offset_dacs,
+            xfer_duration_mu,
+            ref_period_mu,
+        });
+    dac_bus_chn_map[bus_channel] = bus_id;
+    return bus_id;
+}
+
+__attribute__((visibility("internal")))
+inline void ChannelsInfo::add_dac_channel(int seqchn, uint32_t bus_id, uint8_t channel,
+                                          int64_t delay, rtval_ptr rt_delay)
+{
+    assert(dac_output_chn_map.count(seqchn) == 0);
+    auto dac_id = (int)dacchns.size();
+    dacchns.push_back({ .bus_id = bus_id, .channel = channel,
+            .delay = delay, .rt_delay = rt_delay });
+    dac_output_chn_map[seqchn] = dac_id;
+}
+
+__attribute__((visibility("internal")))
 inline bool ChannelsInfo::channel_changed(const std::vector<bool> &changed) const
 {
     for (auto [seqchn, _]: ttl_chn_map) {
@@ -251,6 +340,11 @@ inline bool ChannelsInfo::channel_changed(const std::vector<bool> &changed) cons
         }
     }
     for (auto [seqchn, _]: dds_param_chn_map) {
+        if (changed[seqchn]) {
+            return true;
+        }
+    }
+    for (auto [seqchn, _]: dac_output_chn_map) {
         if (changed[seqchn]) {
             return true;
         }
@@ -268,15 +362,7 @@ inline void ChannelsInfo::collect_channels(py::str prefix, py::ptr<> sys,
         if (path.size() < 2)
             config::raise_invalid_channel(path);
         auto devname = path.get<py::str>(1);
-        int64_t delay = 0;
-        rtval_ptr rt_delay;
-        if (auto py_delay = device_delay.try_get(devname)) {
-            rt_delay = py::cast<RuntimeValue>(py_delay);
-            if (!rt_delay) {
-                delay = py_delay.as_int<int64_t>();
-            }
-        }
-        add_channel(info().get_device(sys, devname), delay, rt_delay, idx, path);
+        add_channel(info().get_device(sys, devname), idx, path, device_delay);
     }
     dds_chn_map.clear(); // Not needed after channel collection
 }
@@ -447,6 +533,124 @@ inline void UrukulBus::add_output(RTIOGen &gen, const ArtiqAction &action,
              data1, data2);
     dds_actions.push_back({action.time_mu, data1, data2, action.exact_time,
             action.aid, &ddschn});
+}
+
+__attribute__((visibility("internal")))
+inline void DACBus::add_dac_action(RTIOGen &gen, DACAction &action)
+{
+    auto dacchn = action.dacchn;
+    bb_debug("add_dac_action: aid=%d, last@%" PRId64 ", "
+             "data=%x, chn=%d, output=%d\n",
+             action.aid, last_mu, action.data, data_target >> 8, dacchn->channel);
+    auto data = uint32_t((3 << 22) | ((dacchn->channel + 8) << 16) |
+                         (action.data & 0xffff)) << 8;
+    last_mu = (gen.add_action(data_target, data, action.aid, last_mu, last_mu, false) +
+               xfer_duration_mu);
+    dacchn->data = action.data;
+    dacchn->had_output = true;
+}
+
+__attribute__((visibility("internal")))
+inline void DACBus::add_load_dac(RTIOGen &gen, int64_t time_mu, int aid, bool exact_time)
+{
+    bb_debug("add_load_dac: aid=%d, last@%" PRId64 ", "
+             "time=%" PRId64 ", exact_time=%d, chn=%d\n",
+             aid, last_mu, time_mu, exact_time, data_target >> 8);
+    // Align the 1500ns delay to 8ns boundary.
+    auto t1 = gen.add_action(ldac_target, 1, aid, time_mu, last_mu + 1504, exact_time);
+    last_mu = gen.add_action(ldac_target, 0, aid, t1 + ref_period_mu * 2,
+                             t1 + ref_period_mu * 2, false);
+}
+
+__attribute__((visibility("internal")))
+inline void DACBus::flush_output(RTIOGen &gen, int64_t time_mu, bool force)
+{
+    if (dac_actions.empty())
+        return;
+    bb_debug("flush_dac: last@%" PRId64 ", time=%" PRId64 ", "
+             "chn=%d, nactions=%zd, force=%d\n",
+             last_mu, time_mu, data_target >> 8, dac_actions.size(), (int)force);
+    bool need_ldac = false;
+    int aid = -1;
+    int64_t update_time_mu = 0;
+    do {
+        auto &action = dac_actions.front();
+        if (!force && action.time_mu + max_action_shift >= time_mu)
+            break;
+        add_dac_action(gen, action);
+        need_ldac = !action.exact_time;
+        if (action.exact_time) {
+            add_load_dac(gen, action.time_mu, action.aid, true);
+        }
+        else {
+            aid = action.aid;
+            update_time_mu = action.time_mu;
+        }
+        dac_actions.erase(dac_actions.begin());
+    } while (!dac_actions.empty());
+    if (need_ldac) {
+        add_load_dac(gen, update_time_mu, aid, false);
+    }
+}
+
+__attribute__((visibility("internal")))
+inline void DACBus::add_output(RTIOGen &gen, const ArtiqAction &action, DACChannel &dacchn)
+{
+    bb_debug("add_dac: time=%" PRId64 ", exact_time=%d, chn=%d, nactions=%zd, "
+             "value=%x\n", action.time_mu, action.exact_time, data_target >> 8,
+             dac_actions.size(), action.value);
+    for (auto it = dac_actions.begin(), end = dac_actions.end(); it != end; ++it) {
+        auto &dac_action = *it;
+        if (dac_action.dacchn == &dacchn) {
+            if (action.exact_time && dac_action.exact_time &&
+                action.time_mu != dac_action.time_mu) {
+                // Flush output and add a new one afterwards
+                bb_debug("add_dac: found pending exact action at time=%" PRId64 ", "
+                         "flusing\n", dac_action.time_mu);
+                auto last = it + 1;
+                for (auto it2 = dac_actions.begin(); it2 != last; ++it2) {
+                    auto &dac_action2 = *it2;
+                    add_dac_action(gen, dac_action2);
+                    if (action.exact_time) {
+                        add_load_dac(gen, dac_action2.time_mu, dac_action2.aid, true);
+                    }
+                }
+                dac_actions.erase(dac_actions.begin(), last);
+                break;
+            }
+            dac_action.data = action.value;
+            if (dacchn.had_output && dac_action.data == dacchn.data) {
+                bb_debug("add_dac: new values the same as the old values "
+                         "(data=%x), erasing\n", dac_action.data);
+                // No-op, pop the action
+                dac_actions.erase(it);
+                return;
+            }
+            // Data already updated, we are done if the new action is not exact time.
+            if (action.exact_time) {
+                bb_debug("add_dac: Moving pending non-exact time action to new time "
+                         "(data=%x)\n", dac_action.data);
+                // Move action to the end
+                auto new_action = dac_action;
+                new_action.exact_time = true;
+                new_action.time_mu = action.time_mu;
+                new_action.aid = action.aid;
+                dac_actions.erase(it);
+                dac_actions.push_back(new_action);
+            }
+            return;
+        }
+    }
+    // New action
+    uint32_t data = action.value;
+    if (dacchn.had_output && data == dacchn.data) {
+        bb_debug("add_dac: new values the same as the old values "
+                 "(data=%x), skipping\n", data);
+        return;
+    }
+    bb_debug("add_dac: adding pending dac action (data=%x), skipping\n", data);
+    dac_actions.push_back({action.time_mu, data, action.exact_time,
+            action.aid, &dacchn});
 }
 
 __attribute__((visibility("internal")))
@@ -671,6 +875,9 @@ inline void ArtiqBackend::Data::process_bseq(py::ptr<SeqCompiler> comp,
             case DDSPhase:
                 get_delays(channels.ddschns[chn_idx]);
                 break;
+            case DAC:
+                get_delays(channels.dacchns[chn_idx]);
+                break;
             case TTLOut:
             case CounterEnable:
                 get_delays(channels.ttlchns[chn_idx]);
@@ -697,6 +904,7 @@ inline void ArtiqBackend::Data::process_bseq(py::ptr<SeqCompiler> comp,
             case DDSFreq:
             case DDSAmp:
             case DDSPhase:
+            case DAC:
                 reloc.val_idx = idr.float_values.get_id(value);
                 break;
             case CounterEnable:
@@ -716,6 +924,10 @@ inline void ArtiqBackend::Data::process_bseq(py::ptr<SeqCompiler> comp,
             case DDSAmp:
             case DDSPhase:
                 artiq_action.value = channels.dds_to_mu(type, chn_idx,
+                                                        value.as_float(action_key(aid)));
+                break;
+            case DAC:
+                artiq_action.value = channels.dac_to_mu(chn_idx,
                                                         value.as_float(action_key(aid)));
                 break;
             case CounterEnable:
@@ -816,6 +1028,34 @@ inline void ArtiqBackend::Data::process_bseq(py::ptr<SeqCompiler> comp,
             add_artiq_action(action, type, dds_idx);
         }
     }
+
+    for (auto [chn, dac_idx]: channels.dac_output_chn_map) {
+        auto chn_action = cbseq.chn_actions[chn];
+        if (!is_entry) {
+            StartValue start_value{ .type = DAC, .chn_idx = dac_idx };
+            if (rtval::is_rtval(chn_action->start_value)) {
+                start_value.val_id =
+                    idr.float_values.get_id(chn_action->start_value.get());
+            }
+            else {
+                start_value.val_id = -1;
+                start_value.value =
+                    channels.dac_to_mu(dac_idx, chn_action->start_value.as_float());
+            }
+            output->start_values.push_back(start_value);
+        }
+        for (auto action: chn_action->actions) {
+            if (action->kws)
+                bb_throw_format(PyExc_ValueError, action_key(action->aid),
+                                "Invalid output keyword argument %S", action->kws);
+            if (action::isramp(action->value))
+                bb_throw_format(PyExc_ValueError, action_key(action->aid),
+                                "DAC Channel cannot be ramped");
+            if (action->cond == Py_False)
+                continue;
+            add_artiq_action(action, DAC, dac_idx);
+        }
+    }
 }
 
 __attribute__((visibility("internal")))
@@ -880,6 +1120,9 @@ inline void ArtiqBackend::Data::reloc_action(const ArtiqAction &action,
         case DDSPhase:
             delay = channels.ddschns[chn_idx].delay;
             break;
+        case DAC:
+            delay = channels.dacchns[chn_idx].delay;
+            break;
         case CounterEnable:
         case TTLOut:
             delay = channels.ttlchns[chn_idx].delay;
@@ -894,6 +1137,9 @@ inline void ArtiqBackend::Data::reloc_action(const ArtiqAction &action,
         case DDSPhase:
             action.value = channels.dds_to_mu(type, chn_idx,
                                               float_values[reloc.val_idx].second);
+            break;
+        case DAC:
+            action.value = channels.dac_to_mu(chn_idx, float_values[reloc.val_idx].second);
             break;
         case CounterEnable:
         case TTLOut:
@@ -1024,10 +1270,14 @@ inline void ArtiqBackend::Data::generate_bseq(py::ptr<SeqCompiler> comp,
 
     for (auto &bus: channels.urukul_busses)
         bus.reset(start_mu);
+    for (auto &bus: channels.dac_busses)
+        bus.reset(start_mu);
     for (auto &ttlchn: channels.ttlchns)
         ttlchn.reset(start_mu);
     for (auto &ddschn: channels.ddschns)
         ddschn.reset();
+    for (auto &dacchn: channels.dacchns)
+        dacchn.reset();
     for (const auto &start_value: output->start_values) {
         switch (start_value.type) {
         case DDSFreq:
@@ -1039,6 +1289,15 @@ inline void ArtiqBackend::Data::generate_bseq(py::ptr<SeqCompiler> comp,
             auto &ddschn = channels.ddschns[start_value.chn_idx];
             ddschn.had_output = true;
             update_dds_data(ddschn.data1, ddschn.data2, start_value.type, value);
+            break;
+        }
+        case DAC: {
+            auto value = start_value.val_id == -1 ? start_value.value :
+                channels.dac_to_mu(start_value.chn_idx,
+                                   float_values[start_value.val_id].second);
+            auto &dacchn = channels.dacchns[start_value.chn_idx];
+            dacchn.had_output = true;
+            dacchn.data = value;
             break;
         }
         case TTLOut:
@@ -1065,13 +1324,21 @@ inline void ArtiqBackend::Data::generate_bseq(py::ptr<SeqCompiler> comp,
             ttlchn.flush_output(rtio_gen, time_mu, false, false);
         for (auto &bus: channels.urukul_busses)
             bus.flush_output(rtio_gen, time_mu, false);
+        for (auto &bus: channels.dac_busses)
+            bus.flush_output(rtio_gen, time_mu, false);
 
         switch (artiq_action.type) {
         case DDSFreq:
         case DDSAmp:
         case DDSPhase: {
             auto &ddschn = channels.ddschns[artiq_action.chn_idx];
-            channels.urukul_busses[ddschn.bus_id].add_output(rtio_gen, artiq_action, ddschn);
+            channels.urukul_busses[ddschn.bus_id].add_output(rtio_gen, artiq_action,
+                                                             ddschn);
+            break;
+        }
+        case DAC: {
+            auto &dacchn = channels.dacchns[artiq_action.chn_idx];
+            channels.dac_busses[dacchn.bus_id].add_output(rtio_gen, artiq_action, dacchn);
             break;
         }
         case TTLOut:
@@ -1085,6 +1352,8 @@ inline void ArtiqBackend::Data::generate_bseq(py::ptr<SeqCompiler> comp,
     for (auto &ttlchn: channels.ttlchns)
         ttlchn.flush_output(rtio_gen, 0, false, true);
     for (auto &bus: channels.urukul_busses)
+        bus.flush_output(rtio_gen, 0, true);
+    for (auto &bus: channels.dac_busses)
         bus.flush_output(rtio_gen, 0, true);
 
     std::ranges::stable_sort(rtio_gen.actions, [] (auto &a1, auto &a2) {
@@ -1204,6 +1473,8 @@ void ArtiqBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned ag
         relocate_delay(ttlchn.delay, ttlchn.rt_delay);
     for (auto &ddschn: channels.ddschns)
         relocate_delay(ddschn.delay, ddschn.rt_delay);
+    for (auto &dacchn: channels.dacchns)
+        relocate_delay(dacchn.delay, dacchn.rt_delay);
 
     for (size_t i = 0, nreloc = bool_values.size(); i < nreloc; i++) {
         auto &[rtval, val] = bool_values[i];
