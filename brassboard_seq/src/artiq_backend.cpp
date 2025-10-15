@@ -218,30 +218,24 @@ inline void ChannelsInfo::add_ttl_channel(int seqchn, uint32_t target, bool isco
 }
 
 __attribute__((visibility("internal")))
-inline int ChannelsInfo::get_dds_channel_id(uint32_t bus_id, double ftw_per_hz,
-                                            uint8_t chip_select, int64_t delay,
-                                            rtval_ptr rt_delay)
-{
-    std::pair<int,int> key{bus_id, chip_select};
-    auto it = dds_chn_map.find(key);
-    if (it != dds_chn_map.end())
-        return it->second;
-    auto dds_id = (int)ddschns.size();
-    ddschns.push_back({ .ftw_per_hz = ftw_per_hz, .bus_id = bus_id,
-            .chip_select = chip_select, .delay = delay, .rt_delay = rt_delay });
-    dds_chn_map[key] = dds_id;
-    return dds_id;
-}
-
-__attribute__((visibility("internal")))
 inline void ChannelsInfo::add_dds_param_channel(int seqchn, uint32_t bus_id,
                                                 double ftw_per_hz, uint8_t chip_select,
                                                 ChannelType param, int64_t delay,
                                                 rtval_ptr rt_delay)
 {
     assert(dds_param_chn_map.count(seqchn) == 0);
-    dds_param_chn_map[seqchn] = {get_dds_channel_id(bus_id, ftw_per_hz, chip_select,
-                                                    delay, rt_delay), param};
+    std::pair<int,int> key{bus_id, chip_select};
+    auto it = dds_chn_map.find(key);
+    if (it != dds_chn_map.end()) {
+        dds_param_chn_map[seqchn] = {it->second, param};
+    }
+    else {
+        auto dds_id = (int)ddschns.size();
+        ddschns.push_back({ .ftw_per_hz = ftw_per_hz, .bus_id = bus_id,
+                .chip_select = chip_select, .delay = delay, .rt_delay = rt_delay });
+        dds_chn_map[key] = dds_id;
+        dds_param_chn_map[seqchn] = {dds_id, param};
+    }
 }
 
 __attribute__((visibility("internal")))
@@ -338,29 +332,30 @@ inline void UrukulBus::add_io_update(RTIOGen &gen, int64_t time_mu,
 __attribute__((visibility("internal")))
 inline void UrukulBus::flush_output(RTIOGen &gen, int64_t time_mu, bool force)
 {
-    if (!dds_actions.empty())
-        bb_debug("flush_dds: bus@%" PRId64 ", io_upd@%" PRId64 ", "
-                 "time=%" PRId64 ", chn=%d, nactions=%zd, force=%d\n",
-                 last_bus_mu, last_io_update_mu, time_mu, data_target >> 8,
-                 dds_actions.size(), (int)force);
+    if (dds_actions.empty())
+        return;
+    bb_debug("flush_dds: bus@%" PRId64 ", io_upd@%" PRId64 ", "
+             "time=%" PRId64 ", chn=%d, nactions=%zd, force=%d\n",
+             last_bus_mu, last_io_update_mu, time_mu, data_target >> 8,
+             dds_actions.size(), (int)force);
     bool need_io_update = false;
     int aid = -1;
     int64_t update_time_mu = 0;
-    while (!dds_actions.empty()) {
+    do {
         auto &action = dds_actions.front();
         if (!force && action.time_mu + max_action_shift >= time_mu)
             break;
         add_dds_action(gen, action);
+        need_io_update = !action.exact_time;
         if (action.exact_time) {
             add_io_update(gen, action.time_mu, action.aid, true);
         }
         else {
-            need_io_update = true;
             aid = action.aid;
             update_time_mu = action.time_mu;
         }
         dds_actions.erase(dds_actions.begin());
-    }
+    } while (!dds_actions.empty());
     if (need_io_update) {
         add_io_update(gen, update_time_mu, aid, false);
     }

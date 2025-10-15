@@ -244,8 +244,6 @@ struct ChannelsInfo {
                                uint8_t ref_period_mu);
     void add_ttl_channel(int seqchn, uint32_t target, bool iscounter, int64_t delay,
                          rtval_ptr rt_delay);
-    int get_dds_channel_id(uint32_t bus_id, double ftw_per_hz, uint8_t chip_select,
-                           int64_t delay, rtval_ptr rt_delay);
     void add_dds_param_channel(int seqchn, uint32_t bus_id, double ftw_per_hz,
                                uint8_t chip_select, ChannelType param,
                                int64_t delay, rtval_ptr rt_delay);
