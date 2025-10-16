@@ -451,7 +451,7 @@ def test_rtprop():
     assert isinstance(C.p1, rtval.RTProp)
     assert isinstance(C.p2, rtval.RTProp)
 
-    v3 = test_utils.new_extern(lambda: 3.5)
+    v3 = rtval.seq_variable(3.5)
     c2.p1 = v3
     assert c2.p1 is v3
     assert C.p1.get_state(c1) == 1.2
@@ -476,7 +476,7 @@ def test_rtprop():
 
     c1 = C()
 
-    v4 = test_utils.new_extern(lambda: 1.25)
+    v4 = rtval.seq_variable(1.25)
     c1.p1 = 2.3
     c1.p2 = v4
     assert c1.p1 == 2.3

@@ -479,8 +479,8 @@ def test_val_error(max_bt):
     s = comp.seq
     s.set('artiq/ttl0', True)
     s.add_step(0.01) \
-      .pulse('artiq/urukul0_ch2/freq', test_utils.new_extern(lambda: 1.23)) \
-      .pulse('artiq/ttl2', test_utils.new_extern(lambda: True))
+      .pulse('artiq/urukul0_ch2/freq', rtval.seq_variable(1.23)) \
+      .pulse('artiq/ttl2', rtval.seq_variable(True))
     # This causes a error to be thrown when converting to boolean
     def ajquo1827uhfasd():
         s.set('artiq/ttl0', test_utils.new_extern(lambda: np.array([1, 2])))
@@ -494,8 +494,8 @@ def test_val_error(max_bt):
     s = comp.seq
     s.set('artiq/ttl0', True)
     s.add_step(0.01) \
-      .pulse('artiq/urukul0_ch2/freq', test_utils.new_extern(lambda: 1.23)) \
-      .pulse('artiq/ttl2', test_utils.new_extern(lambda: True))
+      .pulse('artiq/urukul0_ch2/freq', rtval.seq_variable(1.23)) \
+      .pulse('artiq/ttl2', rtval.seq_variable(True))
     # This causes a error to be thrown when converting to float
     def jausasdjklfa834fs():
         s.set('artiq/urukul3_ch0/amp', test_utils.new_extern(lambda: [1, 2]))
@@ -512,8 +512,8 @@ def test_val_error(max_bt):
     s = comp.seq
     s.set('artiq/ttl0', True)
     s.add_step(0.01) \
-      .pulse('artiq/urukul0_ch2/freq', test_utils.new_extern(lambda: 1.23)) \
-      .pulse('artiq/ttl2', test_utils.new_extern(lambda: True))
+      .pulse('artiq/urukul0_ch2/freq', rtval.seq_variable(1.23)) \
+      .pulse('artiq/ttl2', rtval.seq_variable(True))
     def ajsdf78ah4has9d():
         s.set('artiq/ttl0', test_utils.new_extern(error_callback))
     ajsdf78ah4has9d()
@@ -526,8 +526,8 @@ def test_val_error(max_bt):
     s = comp.seq
     s.set('artiq/ttl0', True)
     s.add_step(0.01) \
-      .pulse('artiq/urukul0_ch2/freq', test_utils.new_extern(lambda: 1.23)) \
-      .pulse('artiq/ttl2', test_utils.new_extern(lambda: True))
+      .pulse('artiq/urukul0_ch2/freq', rtval.seq_variable(1.23)) \
+      .pulse('artiq/ttl2', rtval.seq_variable(True))
     def jas830bnsod8q():
         s.set('artiq/urukul3_ch0/amp', test_utils.new_extern(error_callback))
     jas830bnsod8q()
@@ -700,8 +700,8 @@ def test_action_kws(max_bt):
 
 @with_artiq_params
 def test_ttl(max_bt):
-    v = test_utils.new_extern(lambda: True)
-    v2 = test_utils.new_extern(lambda: 0.2)
+    v = rtval.seq_variable(True)
+    v2 = rtval.seq_variable(0.2)
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
     @s.add_step
@@ -746,7 +746,7 @@ def test_ttl(max_bt):
 
 @with_artiq_params
 def test_counter(max_bt):
-    v = test_utils.new_extern(lambda: True)
+    v = rtval.seq_variable(True)
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
     @s.add_step
@@ -822,8 +822,8 @@ def test_counter(max_bt):
 
 @with_artiq_params
 def test_dds(max_bt):
-    v = test_utils.new_extern(lambda: 123e6)
-    v2 = test_utils.new_extern(lambda: 0.1)
+    v = rtval.seq_variable(123e6)
+    v2 = rtval.seq_variable(0.1)
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
     @s.add_step
@@ -1290,8 +1290,7 @@ def test_ttl_exact_time(max_bt):
 
 @with_artiq_params
 def test_dds_merge_value(max_bt):
-    v1 = 1e-6
-    rv1 = test_utils.new_extern(lambda: v1)
+    rv1 = rtval.seq_variable(1e-6)
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
     s.set(f'artiq/urukul0_ch0/amp', 0.1)
@@ -1329,7 +1328,7 @@ def test_dds_merge_value(max_bt):
         -(101_000 - 8),
     ])
 
-    v1 = 5e-6
+    rv1.value = 5e-6
     comp.runtime_finalize(2)
     test_env.check_list(comp, [
         addr_tgts[0], dds_config_addr(css[0]),
@@ -1898,15 +1897,11 @@ def test_long_wait(max_bt):
 
 @with_artiq_params
 def test_dyn_seq1(max_bt):
-    c1 = True
-    rc1 = test_utils.new_extern(lambda: c1)
-    c2 = True
-    rc2 = test_utils.new_extern(lambda: c2)
+    rc1 = rtval.seq_variable(True)
+    rc2 = rtval.seq_variable(True)
 
-    v1 = 0.1
-    rv1 = test_utils.new_extern(lambda: v1)
-    v2 = 0.2
-    rv2 = test_utils.new_extern(lambda: v2)
+    rv1 = rtval.seq_variable(0.1)
+    rv2 = rtval.seq_variable(0.2)
 
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
@@ -1936,10 +1931,10 @@ def test_dyn_seq1(max_bt):
         ttl_tgts[0], 0,
     ])
 
-    c1 = False
-    c2 = True
-    v1 = 0.1
-    v2 = 0.2
+    rc1.value = False
+    rc2.value = True
+    rv1.value = 0.1
+    rv2.value = 0.2
     comp.runtime_finalize(2)
     test_env.check_list(comp, [
         -3000,
@@ -1952,10 +1947,10 @@ def test_dyn_seq1(max_bt):
         ttl_tgts[0], 0,
     ])
 
-    c1 = True
-    c2 = False
-    v1 = 0.1
-    v2 = 0.2
+    rc1.value = True
+    rc2.value = False
+    rv1.value = 0.1
+    rv2.value = 0.2
     comp.runtime_finalize(3)
     test_env.check_list(comp, [
         -3000,
@@ -1968,10 +1963,10 @@ def test_dyn_seq1(max_bt):
         ttl_tgts[0], 0,
     ])
 
-    c1 = False
-    c2 = False
-    v1 = 0.1
-    v2 = 0.2
+    rc1.value = False
+    rc2.value = False
+    rv1.value = 0.1
+    rv2.value = 0.2
     comp.runtime_finalize(4)
     test_env.check_list(comp, [
         -3000,
@@ -1982,10 +1977,10 @@ def test_dyn_seq1(max_bt):
         ttl_tgts[0], 0,
     ])
 
-    c1 = True
-    c2 = True
-    v1 = 0.0
-    v2 = 0.2
+    rc1.value = True
+    rc2.value = True
+    rv1.value = 0.0
+    rv2.value = 0.2
     comp.runtime_finalize(5)
     test_env.check_list(comp, [
         -3000,
@@ -1994,10 +1989,10 @@ def test_dyn_seq1(max_bt):
         -201_000_000,
     ])
 
-    c1 = False
-    c2 = True
-    v1 = 0.0
-    v2 = 0.2
+    rc1.value = False
+    rc2.value = True
+    rv1.value = 0.0
+    rv2.value = 0.2
     comp.runtime_finalize(6)
     test_env.check_list(comp, [
         -3000,
@@ -2005,10 +2000,10 @@ def test_dyn_seq1(max_bt):
         -200_000_000,
     ])
 
-    c1 = True
-    c2 = False
-    v1 = 0.0
-    v2 = 0.2
+    rc1.value = True
+    rc2.value = False
+    rv1.value = 0.0
+    rv2.value = 0.2
     comp.runtime_finalize(7)
     test_env.check_list(comp, [
         -3000,
@@ -2017,10 +2012,10 @@ def test_dyn_seq1(max_bt):
         -201_000_000,
     ])
 
-    c1 = False
-    c2 = False
-    v1 = 0.0
-    v2 = 0.2
+    rc1.value = False
+    rc2.value = False
+    rv1.value = 0.0
+    rv2.value = 0.2
     comp.runtime_finalize(8)
     test_env.check_list(comp, [
         -3000,
@@ -2028,10 +2023,10 @@ def test_dyn_seq1(max_bt):
         -200_000_000,
     ])
 
-    c1 = True
-    c2 = True
-    v1 = 0.1
-    v2 = 0.0
+    rc1.value = True
+    rc2.value = True
+    rv1.value = 0.1
+    rv2.value = 0.0
     comp.runtime_finalize(9)
     test_env.check_list(comp, [
         -3000,
@@ -2045,10 +2040,10 @@ def test_dyn_seq1(max_bt):
         ttl_tgts[0], 0,
     ])
 
-    c1 = False
-    c2 = True
-    v1 = 0.1
-    v2 = 0.0
+    rc1.value = False
+    rc2.value = True
+    rv1.value = 0.1
+    rv2.value = 0.0
     comp.runtime_finalize(10)
     test_env.check_list(comp, [
         -3000,
@@ -2057,10 +2052,10 @@ def test_dyn_seq1(max_bt):
         ttl_tgts[0], 0,
     ])
 
-    c1 = True
-    c2 = False
-    v1 = 0.1
-    v2 = 0.0
+    rc1.value = True
+    rc2.value = False
+    rv1.value = 0.1
+    rv2.value = 0.0
     comp.runtime_finalize(11)
     test_env.check_list(comp, [
         -3000,
@@ -2073,10 +2068,10 @@ def test_dyn_seq1(max_bt):
         ttl_tgts[0], 0,
     ])
 
-    c1 = False
-    c2 = False
-    v1 = 0.1
-    v2 = 0.0
+    rc1.value = False
+    rc2.value = False
+    rv1.value = 0.1
+    rv2.value = 0.0
     comp.runtime_finalize(12)
     test_env.check_list(comp, [
         -3000,
@@ -2087,10 +2082,10 @@ def test_dyn_seq1(max_bt):
         ttl_tgts[0], 0,
     ])
 
-    c1 = True
-    c2 = True
-    v1 = 0.0
-    v2 = 0.0
+    rc1.value = True
+    rc2.value = True
+    rv1.value = 0.0
+    rv2.value = 0.0
     comp.runtime_finalize(13)
     test_env.check_list(comp, [
         -3000,
@@ -2099,20 +2094,20 @@ def test_dyn_seq1(max_bt):
         -1_000_000,
     ])
 
-    c1 = False
-    c2 = True
-    v1 = 0.0
-    v2 = 0.0
+    rc1.value = False
+    rc2.value = True
+    rv1.value = 0.0
+    rv2.value = 0.0
     comp.runtime_finalize(14)
     test_env.check_list(comp, [
         -3000,
         ttl_tgts[0], 0,
     ])
 
-    c1 = True
-    c2 = False
-    v1 = 0.0
-    v2 = 0.0
+    rc1.value = True
+    rc2.value = False
+    rv1.value = 0.0
+    rv2.value = 0.0
     comp.runtime_finalize(15)
     test_env.check_list(comp, [
         -3000,
@@ -2121,10 +2116,10 @@ def test_dyn_seq1(max_bt):
         -1_000_000,
     ])
 
-    c1 = False
-    c2 = False
-    v1 = 0.0
-    v2 = 0.0
+    rc1.value = False
+    rc2.value = False
+    rv1.value = 0.0
+    rv2.value = 0.0
     comp.runtime_finalize(16)
     test_env.check_list(comp, [
         -3000,
@@ -2133,12 +2128,9 @@ def test_dyn_seq1(max_bt):
 
 @with_artiq_params
 def test_single(max_bt):
-    b1 = True
-    b2 = True
-    v1 = 0.001
-    rb1 = test_utils.new_extern(lambda: b1)
-    rb2 = test_utils.new_extern(lambda: b2)
-    rv1 = test_utils.new_extern(lambda: v1)
+    rb1 = rtval.seq_variable(True)
+    rb2 = rtval.seq_variable(True)
+    rv1 = rtval.seq_variable(0.001)
 
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
@@ -2155,60 +2147,60 @@ def test_single(max_bt):
         ttl_tgts[0], 1,
     ])
 
-    v1 = 0.001
-    b1 = True
-    b2 = False
+    rv1.value = 0.001
+    rb1.value = True
+    rb2.value = False
     comp.runtime_finalize(2)
     test_env.check_list(comp, [
         -1_003_000,
         ttl_tgts[0], 0,
     ])
 
-    v1 = 0.001
-    b1 = False
-    b2 = True
+    rv1.value = 0.001
+    rb1.value = False
+    rb2.value = True
     comp.runtime_finalize(3)
     test_env.check_list(comp, [
         -1_003_000,
     ])
 
-    v1 = 0.001
-    b1 = False
-    b2 = False
+    rv1.value = 0.001
+    rb1.value = False
+    rb2.value = False
     comp.runtime_finalize(4)
     test_env.check_list(comp, [
         -1_003_000,
     ])
 
-    v1 = 0.01
-    b1 = True
-    b2 = True
+    rv1.value = 0.01
+    rb1.value = True
+    rb2.value = True
     comp.runtime_finalize(5)
     test_env.check_list(comp, [
         -10_003_000,
         ttl_tgts[0], 1,
     ])
 
-    v1 = 0.01
-    b1 = True
-    b2 = False
+    rv1.value = 0.01
+    rb1.value = True
+    rb2.value = False
     comp.runtime_finalize(6)
     test_env.check_list(comp, [
         -10_003_000,
         ttl_tgts[0], 0,
     ])
 
-    v1 = 0.01
-    b1 = False
-    b2 = True
+    rv1.value = 0.01
+    rb1.value = False
+    rb2.value = True
     comp.runtime_finalize(7)
     test_env.check_list(comp, [
         -10_003_000,
     ])
 
-    v1 = 0.01
-    b1 = False
-    b2 = False
+    rv1.value = 0.01
+    rb1.value = False
+    rb2.value = False
     comp.runtime_finalize(8)
     test_env.check_list(comp, [
         -10_003_000,
@@ -2258,7 +2250,7 @@ def test_same_time_output(max_bt):
 def test_device_delay_rt_error(max_bt):
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
-    comp.ab.set_device_delay("ttl0", test_utils.new_extern(lambda: -0.001))
+    comp.ab.set_device_delay("ttl0", rtval.seq_variable(-0.001))
     s.set('artiq/ttl0', True)
     comp.finalize()
     with pytest.raises(ValueError,
@@ -2267,7 +2259,7 @@ def test_device_delay_rt_error(max_bt):
 
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
-    comp.ab.set_device_delay("urukul0_ch2", test_utils.new_extern(lambda: 1.2))
+    comp.ab.set_device_delay("urukul0_ch2", rtval.seq_variable(1.2))
     s.set('artiq/urukul0_ch2/amp', True)
     comp.finalize()
     with pytest.raises(ValueError,
@@ -2276,7 +2268,7 @@ def test_device_delay_rt_error(max_bt):
 
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
-    comp.ab.set_device_delay("zotino0/ch2", test_utils.new_extern(lambda: 1.2))
+    comp.ab.set_device_delay("zotino0/ch2", rtval.seq_variable(1.2))
     s.set('artiq/zotino0/ch2', 3.4)
     comp.finalize()
     with pytest.raises(ValueError,
@@ -2307,7 +2299,7 @@ def test_device_delay_rt_error(max_bt):
 def test_device_delay(max_bt, use_rt):
     def wrap_value(v):
         if use_rt:
-            return test_utils.new_extern(lambda: v)
+            return rtval.seq_variable(v)
         return v
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
@@ -2329,7 +2321,7 @@ def test_device_delay(max_bt, use_rt):
     comp.ab.set_device_delay("zotino0", wrap_value(4e-3))
     comp.ab.set_device_delay("zotino1/ch2", wrap_value(5e-3))
 
-    s.add_step(test_utils.new_extern(lambda: 7e-3)) \
+    s.add_step(rtval.seq_variable(7e-3)) \
       .pulse('artiq/ttl1', True) \
       .pulse('artiq/ttl0', True) \
       .pulse('artiq/ttl2_counter', True) \
@@ -2539,14 +2531,14 @@ def test_branch_ttl(max_bt):
     comp.runtime_finalize(2)
     test_env.check_unchanged(comp)
 
-    b1 = True
-    b2 = False
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
+    rb1 = rtval.seq_variable(True)
+    rb2 = rtval.seq_variable(False)
     s = comp.seq
-    s.add_step(0.1).set('artiq/ttl0', test_utils.new_extern(lambda: b1))
+    s.add_step(0.1).set('artiq/ttl0', rb1)
     bs1 = s.new_basic_seq()
     s.add_branch(bs1)
-    bs1.add_step(0.2).pulse('artiq/ttl0', test_utils.new_extern(lambda: b2))
+    bs1.add_step(0.2).pulse('artiq/ttl0', rb2)
 
     comp.finalize()
     assert len(comp.ab.output) == 2
@@ -2575,8 +2567,8 @@ def test_branch_ttl(max_bt):
     comp.runtime_finalize(2)
     test_env.check_unchanged(comp)
 
-    b1 = False
-    b2 = False
+    rb1.value = False
+    rb2.value = False
     comp.runtime_finalize(3)
     assert comp.ab.output[0].total_time_mu == 100_003_000
     assert comp.ab.output[1].total_time_mu == 200_003_000
@@ -2590,8 +2582,8 @@ def test_branch_ttl(max_bt):
     comp.runtime_finalize(4)
     test_env.check_unchanged(comp)
 
-    b1 = False
-    b2 = True
+    rb1.value = False
+    rb2.value = True
     comp.runtime_finalize(5)
     assert comp.ab.output[0].total_time_mu == 100_003_000
     assert comp.ab.output[1].total_time_mu == 200_003_000
@@ -2608,8 +2600,8 @@ def test_branch_ttl(max_bt):
     comp.runtime_finalize(6)
     test_env.check_unchanged(comp)
 
-    b1 = True
-    b2 = True
+    rb1.value = True
+    rb2.value = True
     comp.runtime_finalize(7)
     assert comp.ab.output[0].total_time_mu == 100_003_000
     assert comp.ab.output[1].total_time_mu == 200_003_000
@@ -2701,19 +2693,19 @@ def test_branch_dds(max_bt):
     comp.runtime_finalize(2)
     test_env.check_unchanged(comp)
 
-    amp1 = 0.2
-    phase1 = 0.7
-    freq1 = 120e6
-    amp2 = 0.4
+    amp1 = rtval.seq_variable(0.2)
+    phase1 = rtval.seq_variable(0.7)
+    freq1 = rtval.seq_variable(120e6)
+    amp2 = rtval.seq_variable(0.4)
     comp = test_env.new_comp(max_bt, dummy_artiq.DummyDaxSystem())
     s = comp.seq
     s.add_step(0.1) \
-         .pulse('artiq/urukul0_ch0/amp', test_utils.new_extern(lambda: amp1)) \
-         .set('artiq/urukul0_ch0/phase', test_utils.new_extern(lambda: phase1)) \
-         .set('artiq/urukul0_ch0/freq', test_utils.new_extern(lambda: freq1))
+         .pulse('artiq/urukul0_ch0/amp', amp1) \
+         .set('artiq/urukul0_ch0/phase', phase1) \
+         .set('artiq/urukul0_ch0/freq', freq1)
     bs1 = s.new_basic_seq()
     s.add_branch(bs1)
-    bs1.add_step(0.2).pulse('artiq/urukul0_ch0/amp', test_utils.new_extern(lambda: amp2))
+    bs1.add_step(0.2).pulse('artiq/urukul0_ch0/amp', amp2)
 
     comp.finalize()
     assert len(comp.ab.output) == 2
@@ -2781,7 +2773,7 @@ def test_branch_dds(max_bt):
     comp.runtime_finalize(2)
     test_env.check_unchanged(comp)
 
-    freq1 = 100e6
+    freq1.value = 100e6
     comp.runtime_finalize(3)
     assert comp.ab.output[0].total_time_mu == 100_003_008
     assert comp.ab.output[1].total_time_mu == 200_003_008
@@ -2833,7 +2825,7 @@ def test_branch_dds(max_bt):
     comp.runtime_finalize(4)
     test_env.check_unchanged(comp)
 
-    phase1 = 0.3
+    phase1.value = 0.3
     comp.runtime_finalize(5)
     assert comp.ab.output[0].total_time_mu == 100_003_008
     assert comp.ab.output[1].total_time_mu == 200_003_008
@@ -2885,7 +2877,7 @@ def test_branch_dds(max_bt):
     comp.runtime_finalize(6)
     test_env.check_unchanged(comp)
 
-    amp2 = 0
+    amp2.value = 0
     comp.runtime_finalize(7)
     assert comp.ab.output[0].total_time_mu == 100_003_008
     assert comp.ab.output[1].total_time_mu == 200_003_000

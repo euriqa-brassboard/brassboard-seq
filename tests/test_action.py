@@ -26,9 +26,9 @@ def test_action():
     check_action_str(a3, "Pulse(2.3, cond=False, exact_time=True)")
 
 def test_ramp_eval():
-    rt = test_utils.new_extern(lambda: 1)
-    rlen = test_utils.new_extern(lambda: 2)
-    rold = test_utils.new_extern(lambda: -0.2)
+    rt = rtval.seq_variable(1)
+    rlen = rtval.seq_variable(2)
+    rold = rtval.seq_variable(-0.2)
     st = str(rt)
     slen = str(rlen)
     sold = str(rold)
@@ -50,8 +50,8 @@ def test_ramp_eval():
     vs = test.eval_runtime(0, ts)
     assert (vs == ts / 2 + -0.2 - 2).all()
 
-    ramp = test_utils.new_extern(lambda: 2)
-    rfreq = test_utils.new_extern(lambda: 1.2)
+    ramp = rtval.seq_variable(2)
+    rfreq = rtval.seq_variable(1.2)
     rphase = 2.3
     samp = str(ramp)
     sfreq = str(rfreq)
@@ -107,10 +107,10 @@ def test_spline():
     o3 = 0.3
 
     def check_spline(rt0, rt1, rt2, rt3):
-        ro0 = test_utils.new_extern(lambda: o0) if rt0 else o0
-        ro1 = test_utils.new_extern(lambda: o1) if rt1 else o1
-        ro2 = test_utils.new_extern(lambda: o2) if rt2 else o2
-        ro3 = test_utils.new_extern(lambda: o3) if rt3 else o3
+        ro0 = rtval.seq_variable(o0) if rt0 else o0
+        ro1 = rtval.seq_variable(o1) if rt1 else o1
+        ro2 = rtval.seq_variable(o2) if rt2 else o2
+        ro3 = rtval.seq_variable(o3) if rt3 else o3
 
         sp_seq = action.SeqCubicSpline(ro0, ro1, ro2, ro3)
         assert sp_seq.order0 is ro0
@@ -243,28 +243,28 @@ def test_const():
     expect1 = list(ts * 0 + 1)
     assert v1 == pytest.approx(expect1)
 
-    v0 = 0.1
-    p = test_utils.ValueFunction(test_utils.new_extern(lambda: v0))
+    v0 = rtval.seq_variable(0.1)
+    p = test_utils.ValueFunction(v0)
     test1 = test_utils.RampTest(p, 1, 0)
     v1 = test1.eval_runtime(0, ts)
-    expect1 = list(ts * 0 + v0)
+    expect1 = list(ts * 0 + v0.value)
     assert v1 == pytest.approx(expect1)
 
-    v0 = 0.2
+    v0.value = 0.2
     v1 = test1.eval_runtime(1, ts)
-    expect1 = list(ts * 0 + v0)
+    expect1 = list(ts * 0 + v0.value)
     assert v1 == pytest.approx(expect1)
 
-    v0 = 0.1
-    p = test_utils.ValueFunction(np.cos(test_utils.new_extern(lambda: v0)) + 1)
+    v0 = rtval.seq_variable(0.1)
+    p = test_utils.ValueFunction(np.cos(v0) + 1)
     test1 = test_utils.RampTest(p, 1, 0)
     v1 = test1.eval_runtime(0, ts)
-    expect1 = list(ts * 0 + np.cos(v0) + 1)
+    expect1 = list(ts * 0 + np.cos(v0.value) + 1)
     assert v1 == pytest.approx(expect1)
 
-    v0 = 0.2
+    v0.value = 0.2
     v1 = test1.eval_runtime(1, ts)
-    expect1 = list(ts * 0 + np.cos(v0) + 1)
+    expect1 = list(ts * 0 + np.cos(v0.value) + 1)
     assert v1 == pytest.approx(expect1)
 
 values = [True, False, -5, -4, -12, -2, -1, 0, 1, 2, 3, 4, 10,
@@ -322,7 +322,7 @@ def run_check_unary(f):
 
     ts = np.linspace(0, 2, 3)
     for v in values:
-        rv = test_utils.new_extern(lambda: v)
+        rv = rtval.seq_variable(v)
         @none_on_error
         def expect1():
             fv = throw_non_finite(f, v)
@@ -350,7 +350,7 @@ def run_check_binary(f):
     assert cmp_list(v1, expect1)
 
     for v in values:
-        rv = test_utils.new_extern(lambda: v)
+        rv = rtval.seq_variable(v)
         if is_bitwise:
             p2 = test_utils.FuncAction(lambda t, l, o: f(rv, round(t * 123 + 1)))
             p3 = test_utils.FuncAction(lambda t, l, o: f(round(t * 100), rv))
@@ -378,7 +378,7 @@ def run_check_binary(f):
 
     ts = np.linspace(0, 2, 3)
     for v1 in values:
-        rv1 = test_utils.new_extern(lambda: v1)
+        rv1 = rtval.seq_variable(v1)
         for v2 in values:
             if isinstance(v1, bool) and isinstance(v2, bool) and f is np.subtract:
                 # Numpy error that we don't want to follow
@@ -389,7 +389,7 @@ def run_check_binary(f):
             if v2 == 0 and (f is operator.mod or f is np.remainder):
                 # Numpy doesn't raise an error in this case for some reason
                 continue
-            rv2 = test_utils.new_extern(lambda: v2)
+            rv2 = rtval.seq_variable(v2)
             p4 = test_utils.FuncAction(lambda t, l, o: f(rv1, rv2))
             @none_on_error
             def expect4():

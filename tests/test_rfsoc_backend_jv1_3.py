@@ -326,15 +326,15 @@ def test_output1(max_bt):
 
 @test_utils.with_seq_params
 def test_output2(max_bt):
-    b1 = True
+    b1 = rtval.seq_variable(True)
     comp = test_env.new_comp(max_bt)
     s = comp.seq
-    s.conditional(test_utils.new_extern(lambda: b1)) \
-      .add_step(test_utils.new_extern(lambda: 0.01)) \
-      .pulse('rfsoc/dds0/1/amp', test_utils.new_extern(lambda: 0.2)) \
-      .set('rfsoc/dds0/1/freq', test_utils.new_extern(lambda: 100e6), sync=1) \
-      .set('rfsoc/dds0/1/phase', test_utils.new_extern(lambda: 0.1)) \
-      .set('rfsoc/dds0/1/ff', test_utils.new_extern(lambda: True), sync=False)
+    s.conditional(b1) \
+      .add_step(rtval.seq_variable(0.01)) \
+      .pulse('rfsoc/dds0/1/amp', rtval.seq_variable(0.2)) \
+      .set('rfsoc/dds0/1/freq', rtval.seq_variable(100e6), sync=1) \
+      .set('rfsoc/dds0/1/phase', rtval.seq_variable(0.1)) \
+      .set('rfsoc/dds0/1/ff', rtval.seq_variable(True), sync=False)
     comp.finalize()
     channels = comp.get_channel_info()
     assert len(channels.channels) == 2
@@ -398,7 +398,7 @@ def test_output2(max_bt):
         },
     })
 
-    b1 = False
+    b1.value = False
     comp.runtime_finalize(2)
     test_env.check_output({
         0: {
@@ -418,11 +418,11 @@ def test_output3(max_bt):
     comp = test_env.new_comp(max_bt)
     s = comp.seq
     s.conditional(False) \
-      .add_step(test_utils.new_extern(lambda: 0.01)) \
-      .pulse('rfsoc/dds0/1/amp', test_utils.new_extern(lambda: 0.2)) \
-      .set('rfsoc/dds0/1/freq', test_utils.new_extern(lambda: 100e6), sync=1) \
-      .set('rfsoc/dds0/1/phase', test_utils.new_extern(lambda: 0.1)) \
-      .set('rfsoc/dds0/1/ff', test_utils.new_extern(lambda: True), sync=False)
+      .add_step(rtval.seq_variable(0.01)) \
+      .pulse('rfsoc/dds0/1/amp', rtval.seq_variable(0.2)) \
+      .set('rfsoc/dds0/1/freq', rtval.seq_variable(100e6), sync=1) \
+      .set('rfsoc/dds0/1/phase', rtval.seq_variable(0.1)) \
+      .set('rfsoc/dds0/1/ff', rtval.seq_variable(True), sync=False)
     comp.finalize()
     channels = comp.get_channel_info()
     assert len(channels.channels) == 2
@@ -532,7 +532,7 @@ def test_ramp_output2(max_bt):
     s = comp.seq
     ramp1 = test_utils.StaticFunction()
     ramp2 = test_utils.StaticFunction()
-    s.add_step(test_utils.new_extern(lambda: 0.01)) \
+    s.add_step(rtval.seq_variable(0.01)) \
       .pulse('rfsoc/dds0/1/amp', ramp1) \
       .set('rfsoc/dds0/1/phase', ramp2)
     comp.finalize()
@@ -1289,8 +1289,8 @@ def test_val_error(max_bt):
     s = comp.seq
     s.set('rfsoc/dds0/0/ff', True)
     s.add_step(0.01) \
-      .pulse('rfsoc/dds1/1/freq', test_utils.new_extern(lambda: 1.23)) \
-      .pulse('rfsoc/dds2/0/ff', test_utils.new_extern(lambda: True))
+      .pulse('rfsoc/dds1/1/freq', rtval.seq_variable(1.23)) \
+      .pulse('rfsoc/dds2/0/ff', rtval.seq_variable(True))
     # This causes a error to be thrown when converting to boolean
     def js89j308joro82qwe():
         s.set('rfsoc/dds0/0/ff', test_utils.new_extern(lambda: np.array([1, 2])))
@@ -1304,8 +1304,8 @@ def test_val_error(max_bt):
     s = comp.seq
     s.set('rfsoc/dds0/0/ff', True)
     s.add_step(0.01) \
-      .pulse('rfsoc/dds1/1/freq', test_utils.new_extern(lambda: 1.23)) \
-      .pulse('rfsoc/dds2/0/ff', test_utils.new_extern(lambda: True))
+      .pulse('rfsoc/dds1/1/freq', rtval.seq_variable(1.23)) \
+      .pulse('rfsoc/dds2/0/ff', rtval.seq_variable(True))
     # This causes a error to be thrown when converting to float
     def e083jafd():
         s.set('rfsoc/dds3/0/amp', test_utils.new_extern(lambda: [1, 2]))
@@ -1322,8 +1322,8 @@ def test_val_error(max_bt):
     s = comp.seq
     s.set('rfsoc/dds0/0/ff', True)
     s.add_step(0.01) \
-      .pulse('rfsoc/dds1/1/freq', test_utils.new_extern(lambda: 1.23)) \
-      .pulse('rfsoc/dds2/0/ff', test_utils.new_extern(lambda: True))
+      .pulse('rfsoc/dds1/1/freq', rtval.seq_variable(1.23)) \
+      .pulse('rfsoc/dds2/0/ff', rtval.seq_variable(True))
     def oqo8we9813fasd():
         s.set('rfsoc/dds0/0/ff', test_utils.new_extern(error_callback))
     oqo8we9813fasd()
@@ -1336,8 +1336,8 @@ def test_val_error(max_bt):
     s = comp.seq
     s.set('rfsoc/dds0/0/ff', True)
     s.add_step(0.01) \
-      .pulse('rfsoc/dds1/1/freq', test_utils.new_extern(lambda: 1.23)) \
-      .pulse('rfsoc/dds2/0/ff', test_utils.new_extern(lambda: True))
+      .pulse('rfsoc/dds1/1/freq', rtval.seq_variable(1.23)) \
+      .pulse('rfsoc/dds2/0/ff', rtval.seq_variable(True))
     def q9e8uasdfasd():
         s.set('rfsoc/dds3/0/amp', test_utils.new_extern(error_callback))
     q9e8uasdfasd()
@@ -1590,15 +1590,15 @@ def test_sync_merge(max_bt):
 
 @test_utils.with_seq_params
 def test_dyn_seq1(max_bt):
-    b1 = True
-    v1 = 0.001
+    b1 = rtval.seq_variable(True)
+    v1 = rtval.seq_variable(0.001)
 
     comp = test_env.new_comp(max_bt)
     s = comp.seq
     s.add_step(0.0005) \
       .pulse('rfsoc/dds0/0/amp', 0.2)
-    s.conditional(test_utils.new_extern(lambda: b1)) \
-      .add_step(test_utils.new_extern(lambda: v1)) \
+    s.conditional(b1) \
+      .add_step(v1) \
       .set('rfsoc/dds0/0/amp', 0.1)
     s.set('rfsoc/dds0/0/amp', 0.5)
     s.set('rfsoc/dds0/1/amp', 0.1)
@@ -1620,8 +1620,8 @@ def test_dyn_seq1(max_bt):
         },
     })
 
-    b1 = False
-    v1 = 0.001
+    b1.value = False
+    v1.value = 0.001
     comp.runtime_finalize(2)
     test_env.check_output({
         0: {
@@ -1636,8 +1636,8 @@ def test_dyn_seq1(max_bt):
         },
     })
 
-    b1 = True
-    v1 = 0
+    b1.value = True
+    v1.value = 0
     comp.runtime_finalize(3)
     test_env.check_output({
         0: {
@@ -1652,8 +1652,8 @@ def test_dyn_seq1(max_bt):
         },
     })
 
-    b1 = False
-    v1 = 0
+    b1.value = False
+    v1.value = 0
     comp.runtime_finalize(4)
     test_env.check_output({
         0: {
@@ -1945,13 +1945,13 @@ def test_tight_output5(max_bt):
 @test_utils.with_seq_params
 def test_dds_delay_rt_error(max_bt):
     comp = test_env.new_comp(max_bt)
-    comp.rb.set_dds_delay(0, test_utils.new_extern(lambda: -0.001))
+    comp.rb.set_dds_delay(0, rtval.seq_variable(-0.001))
     comp.finalize()
     with pytest.raises(ValueError, match="DDS time offset -0.001 cannot be negative."):
         comp.runtime_finalize(1)
 
     comp = test_env.new_comp(max_bt)
-    comp.rb.set_dds_delay(1, test_utils.new_extern(lambda: 1))
+    comp.rb.set_dds_delay(1, rtval.seq_variable(1))
     comp.finalize()
     with pytest.raises(ValueError,
                        match="DDS time offset 1.0 cannot be more than 100ms."):
@@ -1962,7 +1962,7 @@ def test_dds_delay_rt_error(max_bt):
 def test_dds_delay(max_bt, use_rt):
     def wrap_value(v):
         if use_rt:
-            return test_utils.new_extern(lambda: v)
+            return rtval.seq_variable(v)
         return v
     comp = test_env.new_comp(max_bt)
     s = comp.seq
@@ -2032,8 +2032,8 @@ def test_dds_delay(max_bt, use_rt):
 def test_cond_ramp_error(max_bt):
     comp = test_env.new_comp(max_bt)
     s = comp.seq
-    s.conditional(test_utils.new_extern(lambda: False)) \
-      .add_step(test_utils.new_extern(lambda: 0)) \
+    s.conditional(rtval.seq_variable(False)) \
+      .add_step(rtval.seq_variable(0)) \
       .set('rfsoc/dds0/0/amp', test_utils.DivLengthFunction()) \
       .pulse('rfsoc/dds0/1/amp', test_utils.DivLengthFunction())
     comp.finalize()
@@ -2051,7 +2051,7 @@ def test_cond_ramp_error(max_bt):
 
     comp = test_env.new_comp(max_bt)
     s = comp.seq
-    s.add_step(test_utils.new_extern(lambda: 0)) \
+    s.add_step(rtval.seq_variable(0)) \
       .set('rfsoc/dds0/0/amp', Blackman(1)) \
       .pulse('rfsoc/dds0/1/amp', Blackman(1)) \
       .set('rfsoc/dds1/0/amp', BlackmanSquare(1)) \

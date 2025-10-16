@@ -28,10 +28,8 @@ def test_cond_order1(max_bt):
     comp = test_env.new_comp(max_bt)
     s = comp.seq
 
-    c1val = True
-    c1 = test_utils.new_extern(lambda: c1val)
-    c2val = True
-    c2 = test_utils.new_extern(lambda: c2val)
+    c1 = rtval.seq_variable(True)
+    c2 = rtval.seq_variable(True)
 
     def step_aaa_yyy_1(s):
         s.wait(0.1)
@@ -105,9 +103,9 @@ def test_cond_order1(max_bt):
                      3100_000_000_000]
     assert total_time == 3100_000_000_000
 
-    c1val = False
+    c1.value = False
     comp.runtime_finalize(2)
-    assert action1.get_cond_val() is c1val
+    assert action1.get_cond_val() is c1.value
     assert action2.get_cond_val() is True
     total_time, times = test_utils.compiler_get_all_times(comp, 0)
     assert test_utils.compiler_get_channel_changed(comp) == [True]
@@ -119,9 +117,9 @@ def test_cond_order1(max_bt):
                      2100_000_000_000]
     assert total_time == 2100_000_000_000
 
-    c2val = False
+    c2.value = False
     comp.runtime_finalize(3)
-    assert action1.get_cond_val() is c1val
+    assert action1.get_cond_val() is c1.value
     assert action2.get_cond_val() is True
     total_time, times = test_utils.compiler_get_all_times(comp, 0)
     assert test_utils.compiler_get_channel_changed(comp) == [True]
@@ -133,7 +131,7 @@ def test_cond_order1(max_bt):
                      2000_000_000_000]
     assert total_time == 2000_000_000_000
 
-    c1val = True
+    c1.value = True
     with pytest.raises(ValueError, match="Action time order violation") as exc:
         comp.runtime_finalize(4)
     test_utils.check_bt(exc, max_bt, 'step_bbb_yxz_2')
@@ -143,10 +141,8 @@ def test_cond_order2(max_bt):
     comp = test_env.new_comp(max_bt)
     s = comp.seq
 
-    c1val = True
-    c1 = test_utils.new_extern(lambda: c1val)
-    c2val = True
-    c2 = test_utils.new_extern(lambda: c2val)
+    c1 = rtval.seq_variable(True)
+    c2 = rtval.seq_variable(True)
 
     def f_0_21234_alsdf():
         return s.add_floating(2).set('artiq/ttl1', False)
@@ -224,9 +220,9 @@ def test_cond_order2(max_bt):
                      3100_000_000_000]
     assert total_time == 3100_000_000_000
 
-    c1val = False
+    c1.value = False
     comp.runtime_finalize(2)
-    assert action1.get_cond_val() is c1val
+    assert action1.get_cond_val() is c1.value
     assert action2.get_cond_val() is True
     total_time, times = test_utils.compiler_get_all_times(comp, 0)
     assert test_utils.compiler_get_channel_changed(comp) == [True]
@@ -239,9 +235,9 @@ def test_cond_order2(max_bt):
                      2100_000_000_000]
     assert total_time == 2100_000_000_000
 
-    c2val = False
+    c2.value = False
     comp.runtime_finalize(3)
-    assert action1.get_cond_val() is c1val
+    assert action1.get_cond_val() is c1.value
     assert action2.get_cond_val() is True
     total_time, times = test_utils.compiler_get_all_times(comp, 0)
     assert test_utils.compiler_get_channel_changed(comp) == [True]
@@ -254,7 +250,7 @@ def test_cond_order2(max_bt):
                      2000_000_000_000]
     assert total_time == 2000_000_000_000
 
-    c1val = True
+    c1.value = True
     with pytest.raises(ValueError, match="Action time order violation") as exc:
         comp.runtime_finalize(4)
     test_utils.check_bt(exc, max_bt, 'g_123_asnbe', 'f_0_21234_alsdf')
@@ -264,8 +260,7 @@ def test_order_error1(max_bt):
     comp = test_env.new_comp(max_bt)
     s = comp.seq
 
-    c1val = True
-    c1 = test_utils.new_extern(lambda: c1val)
+    c1 = rtval.seq_variable(True)
 
     def f1_89374asjkl_asbd():
         st1 = s.conditional(c1).add_background(1).set('artiq/ttl1', True)
@@ -295,8 +290,7 @@ def test_order_error2(max_bt):
     comp = test_env.new_comp(max_bt)
     s = comp.seq
 
-    c1val = True
-    c1 = test_utils.new_extern(lambda: c1val)
+    c1 = rtval.seq_variable(True)
 
     def step_13238324(s):
         s.wait(0.1)
@@ -529,11 +523,8 @@ def test_ramp_order1(max_bt):
     comp = test_env.new_comp(max_bt)
     s = comp.seq
 
-    c1val = 0.1
-    c1 = test_utils.new_extern(lambda: c1val)
-
-    c2val = 0.1
-    c2 = test_utils.new_extern(lambda: c2val)
+    c1 = rtval.seq_variable(0.1)
+    c2 = rtval.seq_variable(0.1)
 
     s.set('artiq/analog', c1)
     f1 = test_utils.StaticFunction()
@@ -602,7 +593,7 @@ def test_ramp_order1(max_bt):
                      300_000_000_000]
     assert total_time == 300_000_000_000
 
-    c2val = 0.5
+    c2.value = 0.5
     comp.runtime_finalize(2)
     assert action1.get_cond_val() is True
     assert action2.get_cond_val() is True
@@ -623,8 +614,7 @@ def test_rt_assert(max_bt):
     comp = test_env.new_comp(max_bt)
     s = comp.seq
 
-    c1val = True
-    c1 = test_utils.new_extern(lambda: c1val)
+    c1 = rtval.seq_variable(True)
 
     def japsidfjpaoisdjpafosd():
         s.rt_assert(c1, "Some message")
@@ -634,12 +624,12 @@ def test_rt_assert(max_bt):
     comp.runtime_finalize(1)
     assert test_utils.compiler_get_channel_changed(comp) == []
 
-    c1val = False
+    c1.value = False
     with pytest.raises(AssertionError, match="Some message") as exc:
         comp.runtime_finalize(2)
     test_utils.check_bt(exc, max_bt, 'japsidfjpaoisdjpafosd')
 
-    c1val = True
+    c1.value = True
     comp.runtime_finalize(3)
     assert test_utils.compiler_get_channel_changed(comp) == []
 
@@ -661,8 +651,8 @@ def test_cond_error(max_bt):
     s = comp.seq
     s.set('artiq/ttl0', True)
     s.add_step(0.01) \
-      .pulse('artiq/urukul0_ch2/freq', test_utils.new_extern(lambda: 1.23)) \
-      .pulse('artiq/ttl2', test_utils.new_extern(lambda: True))
+      .pulse('artiq/urukul0_ch2/freq', rtval.seq_variable(1.23)) \
+      .pulse('artiq/ttl2', rtval.seq_variable(True))
     def error_callback():
         raise ValueError("AAABBBCCC")
     def ajqu7sdf7h7uhfasd():
@@ -678,8 +668,8 @@ def test_cond_error(max_bt):
 def test_cond_ramp_error(max_bt):
     comp = test_env.new_comp(max_bt)
     s = comp.seq
-    s.conditional(test_utils.new_extern(lambda: False)) \
-      .add_step(test_utils.new_extern(lambda: 0)) \
+    s.conditional(rtval.seq_variable(False)) \
+      .add_step(rtval.seq_variable(0)) \
       .set('artiq/urukul0_ch0/amp', test_utils.DivLengthFunction()) \
       .pulse('artiq/urukul0_ch1/amp', test_utils.DivLengthFunction())
     comp.finalize()
@@ -699,7 +689,7 @@ def test_cond_ramp_error(max_bt):
 
     comp = test_env.new_comp(max_bt)
     s = comp.seq
-    s.add_step(test_utils.new_extern(lambda: 0)) \
+    s.add_step(rtval.seq_variable(0)) \
       .set('artiq/urukul0_ch0/amp', action.Blackman(1)) \
       .pulse('artiq/urukul0_ch1/amp', action.Blackman(1)) \
       .set('artiq/urukul1_ch0/amp', action.BlackmanSquare(1)) \
@@ -801,8 +791,8 @@ def test_bseq_empty(max_bt):
 
 @test_utils.with_seq_params
 def test_bseq_split(max_bt):
-    r1 = test_utils.new_extern(lambda: 1)
-    b1 = test_utils.new_extern(lambda: True)
+    r1 = rtval.seq_variable(1)
+    b1 = rtval.seq_variable(True)
     func_ramp = test_utils.FuncAction(lambda t, l, o: r1 * 2 - 0.4)
     comp = test_env.new_comp(max_bt)
     s = comp.seq
