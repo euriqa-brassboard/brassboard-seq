@@ -1255,7 +1255,7 @@ struct SeqVariable : ExternCallback {
 
 PyTypeObject SeqVariable::Type = {
     .ob_base = PyVarObject_HEAD_INIT(0, 0)
-    .tp_name = "brassboard_seq.artiq_backend.SeqVariable",
+    .tp_name = "brassboard_seq.rtval.SeqVariable",
     .tp_basicsize = sizeof(SeqVariable),
     .tp_dealloc = py::tp_cxx_dealloc<false,SeqVariable>,
     .tp_str = py::unifunc<[] (py::ptr<SeqVariable> self) {
