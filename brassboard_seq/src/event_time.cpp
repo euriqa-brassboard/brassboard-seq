@@ -50,7 +50,7 @@ static inline bool get_cond_val(py::ptr<> v, unsigned age)
     return !rtval::rtval_cache(rv).is_zero();
 }
 
-static py::str_ref str_time(int64_t t)
+static void show_time_value(py::stringio &io, int64_t t)
 {
     assert(time_scale == 1e12);
     assert(t >= 0);
@@ -102,9 +102,9 @@ static py::str_ref str_time(int64_t t)
         pdec[0] = '.';
         end += 1;
     }
-    *end = ' ';
-    memcpy(&end[1], unit, strlen(unit) + 1);
-    return py::new_str(str.data());
+    io.write_ascii(str.data(), end - str.data());
+    io.write_ascii(" ");
+    io.write_ascii(unit);
 }
 
 __attribute__((visibility("internal")))
@@ -309,29 +309,9 @@ PyTypeObject TimeManager::Type = {
 namespace {
 
 static constexpr auto eventtime_str = py::unifunc<[] (time_ptr self) {
-    if (self->data.floating)
-        return "<floating>"_py.ref();
-    if (self->data.is_static())
-        return str_time(self->data._get_static());
-    auto rt_offset = self->data.get_rt_offset();
-    auto str_offset(rt_offset ? rt_offset.str() : str_time(self->data.get_c_offset()));
-    py::ptr prev = self->prev;
-    py::ptr cond = self->cond;
-    if (prev == Py_None) {
-        assert(cond == Py_True);
-        return str_offset;
-    }
-    py::ptr wait_for = self->wait_for;
-    if (wait_for == Py_None) {
-        if (cond == Py_True)
-            return py::str_format("T[%u] + %U", prev->data.id, str_offset);
-        return py::str_format("T[%u] + (%U; if %S)", prev->data.id, str_offset, cond);
-    }
-    if (cond == Py_True)
-        return py::str_format("T[%u]; wait_for(T[%u] + %U)",
-                              prev->data.id, wait_for->data.id, str_offset);
-    return py::str_format("T[%u]; wait_for(T[%u] + %U; if %S)",
-                          prev->data.id, wait_for->data.id, str_offset, cond);
+    py::stringio io;
+    self->show(io);
+    return io.getvalue();
 }>;
 
 static inline int eventtime_find_base_id(EventTime *t1, EventTime *t2, unsigned age)
@@ -392,6 +372,44 @@ PyTypeObject EventTimeDiff::Type = {
     .tp_clear = py::tp_field_clear<EventTimeDiff,&EventTimeDiff::t1,&EventTimeDiff::t2>,
 };
 
+}
+
+__attribute__((visibility("hidden")))
+void EventTime::show(py::stringio &io)
+{
+    if (data.floating)
+        return io.write_ascii("<floating>");
+    if (data.is_static())
+        return show_time_value(io, data._get_static());
+    auto write_offset = [&] {
+        if (auto rt_offset = data.get_rt_offset())
+            return rtval::show_value(io, rt_offset);
+        show_time_value(io, data.get_c_offset());
+    };
+    if (prev == Py_None) {
+        assert(cond == Py_True);
+        return write_offset();
+    }
+    io.write_ascii("T[");
+    io.write_cxx<32>(prev->data.id);
+    io.write_ascii("]");
+    if (wait_for == Py_None) {
+        io.write_ascii(" + ");
+        if (cond == Py_True)
+            return write_offset();
+        io.write_ascii("(");
+    }
+    else {
+        io.write_ascii("; wait_for(T[");
+        io.write_cxx<32>(wait_for->data.id);
+        io.write_ascii("] + ");
+    }
+    write_offset();
+    if (cond != Py_True) {
+        io.write_ascii("; if ");
+        rtval::show_value(io, cond);
+    }
+    io.write_ascii(")");
 }
 
 // If the base time has a static value, the returned time values will be the actual

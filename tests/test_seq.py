@@ -130,6 +130,10 @@ def test_seq():
   Seq - T[0]
    T[0]: 0 ps
 """
+    assert rtval.rtstr(c6, age=1) == f"""ConditionalWrapper(rv<False>) for
+  Seq - T[0]
+   T[0]: 0 ps
+"""
 
     with pytest.raises(ValueError, match="Time delay cannot be negative"):
         s.wait(-0.001)

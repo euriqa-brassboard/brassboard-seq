@@ -298,6 +298,9 @@ def test_event_time_static0():
     assert time_values == [0, 0]
     assert max_time == 0
     assert test_utils.time_manager_get_time_status(mgr) == [1, 1]
+    assert str(t1) == f'T[0]; wait_for(T[0] + 0 ps; if {c})'
+    with rtval.showrt(cached=True):
+        assert str(t1) == f'T[0]; wait_for(T[0] + 0 ps; if rv<1.0>)'
 
 def test_event_time2():
     mgr = test_utils.new_time_manager()

@@ -15,15 +15,23 @@ def test_action():
     a1 = test_utils.Action(1.2, True, True, False, {}, 0)
     a1.set_tid(1)
     assert a1.get_aid() == 0
+    check_action_str(a1, "Pulse(1.2)")
+
     a2 = test_utils.Action(1.2, True, False, False, dict(a=1, b=2), 3)
     assert a2.get_aid() == 3
     a2.set_tid(3)
+    check_action_str(a2, "Set(1.2, a=1, b=2)")
+
     a3 = test_utils.Action(2.3, False, True, True, {}, 2)
     assert a3.get_aid() == 2
     a3.set_tid(2)
-    check_action_str(a1, "Pulse(1.2)")
-    check_action_str(a2, "Set(1.2, a=1, b=2)")
     check_action_str(a3, "Pulse(2.3, cond=False, exact_time=True)")
+
+    a4 = test_utils.Action(rtval.seq_variable(3.4), rtval.seq_variable(True),
+                           False, False, {}, 4)
+    check_action_str(a4, "Set(var(3.4), cond=var(True))")
+    with rtval.showrt(age=1):
+        check_action_str(a4, "Set(rv<3.4>, cond=rv<1.0>)")
 
 def test_ramp_eval():
     rt = rtval.seq_variable(1)

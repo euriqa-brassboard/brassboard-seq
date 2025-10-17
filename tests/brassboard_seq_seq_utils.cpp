@@ -49,7 +49,7 @@ PyTypeObject Action::Type = {
     .tp_dealloc = py::tp_cxx_dealloc<true,Action>,
     .tp_str = py::unifunc<[] (py::ptr<Action> self) {
         py::stringio io;
-        self->action->print(io);
+        self->action->show(io);
         return io.getvalue();
     }>,
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,

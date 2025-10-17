@@ -623,59 +623,59 @@ static inline bool needs_parenthesis(auto v, ValueType parent_type)
 
 namespace {
 
-struct rtvalue_printer : py::stringio {
+struct rtvalue_printer {
     void show_arg(rtval_ptr v, ValueType parent_type)
     {
         auto p = needs_parenthesis(v, parent_type);
-        if (p) write_ascii("(");
+        if (p) io.write_ascii("(");
         show(v);
-        if (p) write_ascii(")");
+        if (p) io.write_ascii(")");
     }
     void show_binary(rtval_ptr v, const char *op, ValueType type_)
     {
         show_arg(v->arg0, type_);
-        write_ascii(op);
+        io.write_ascii(op);
         show_arg(v->arg1, type_);
     }
     void show_call1(rtval_ptr v, const char *f)
     {
-        write_ascii(f);
-        write_ascii("(");
+        io.write_ascii(f);
+        io.write_ascii("(");
         show(v->arg0);
-        write_ascii(")");
+        io.write_ascii(")");
     }
     void show_call2(rtval_ptr v, const char *f)
     {
-        write_ascii(f);
-        write_ascii("(");
+        io.write_ascii(f);
+        io.write_ascii("(");
         show(v->arg0);
-        write_ascii(", ");
+        io.write_ascii(", ");
         show(v->arg1);
-        write_ascii(")");
+        io.write_ascii(")");
     }
     void show_call3(rtval_ptr v, const char *f)
     {
-        write_ascii(f);
-        write_ascii("(");
+        io.write_ascii(f);
+        io.write_ascii("(");
         show(v->arg0);
-        write_ascii(", ");
+        io.write_ascii(", ");
         show(v->arg1);
-        write_ascii(", ");
+        io.write_ascii(", ");
         show((RuntimeValue*)v->cb_arg2);
-        write_ascii(")");
+        io.write_ascii(")");
     }
     void show(rtval_ptr v)
     {
         switch (v->type_) {
         case Extern:
         case ExternAge:
-            return write_str(v->cb_arg2);
+            return io.write_str(v->cb_arg2);
         case Arg:
-            write_ascii("arg(");
-            write_str(v->cb_arg2);
-            return write_ascii(")");
+            io.write_ascii("arg(");
+            io.write_str(v->cb_arg2);
+            return io.write_ascii(")");
         case Const:
-            return write_str(rtval_cache(v).to_py());
+            return io.write_str(rtval_cache(v).to_py());
         case Add:
             return show_binary(v, " + ", v->type_);
         case Sub:
@@ -769,16 +769,17 @@ struct rtvalue_printer : py::stringio {
         case Select:
             return show_call3(v, "ifelse");
         default:
-            return write_ascii("Unknown value");
+            return io.write_ascii("Unknown value");
         }
     }
+    py::stringio &io;
 };
 
 }
 
 static constexpr auto rtvalue_str = py::unifunc<[] (rtval_ptr self) {
-    rtvalue_printer io;
-    io.show(self);
+    py::stringio io;
+    show_value(io, self);
     return io.getvalue();
 }>;
 
@@ -878,6 +879,66 @@ PyTypeObject ExternCallback::Type = {
     .tp_dealloc = py::tp_cxx_dealloc<false,ExternCallback>,
     .tp_flags = Py_TPFLAGS_DEFAULT,
 };
+
+namespace {
+
+enum {
+    EVAL_NONE = -2,
+    EVAL_CACHED = -1,
+};
+
+static __thread int print_context = EVAL_NONE;
+
+static int parse_print_context(const char *fname, PyObject *const *args,
+                               py::tuple kwnames)
+{
+    auto [pyage, pycached] =
+        py::parse_pos_or_kw_args<"age","cached">(fname, args, 0, kwnames);
+    bool cached = false;
+    if (pycached)
+        cached = pycached.as_bool();
+    if (pyage) {
+        if (cached)
+            py_throw_format(PyExc_TypeError,
+                            "'age' and 'cached' cannot be provided at the same time");
+        return pyage.as_int();
+    }
+    if (!pycached)
+        py_throw_format(PyExc_TypeError,
+                        "At least one of 'age' and 'cached' must be provided");
+    return cached ? EVAL_CACHED : EVAL_NONE;
+}
+
+struct PrintContextSetter {
+    PrintContextSetter(const char *fname, PyObject *const *args, py::tuple kwnames)
+        : old_context(print_context)
+    {
+        print_context = parse_print_context(fname, args, kwnames);
+    }
+    PrintContextSetter(PrintContextSetter&&) = delete;
+    PrintContextSetter &operator=(PrintContextSetter&&) = delete;
+    ~PrintContextSetter()
+    {
+        print_context = old_context;
+    }
+    const int old_context;
+};
+
+}
+
+__attribute__((visibility("hidden")))
+void show_value(py::stringio &io, py::ptr<> val)
+{
+    if (!is_rtval(val))
+        return io.write_str(val);
+    if (print_context == EVAL_NONE || rtval_ptr(val)->type_ == Const)
+        return rtvalue_printer(io).show(val);
+    if (print_context != EVAL_CACHED)
+        rt_eval_throw(val, unsigned(print_context));
+    io.write_ascii("rv<");
+    io.write_str(rtval_cache(val).to_py());
+    io.write_ascii(">");
+}
 
 static __attribute__((flatten, noinline))
 std::pair<EvalError,GenVal> interpret_func(const int *code, GenVal *data,
@@ -1280,6 +1341,29 @@ PyTypeObject SeqVariable::Type = {
     .tp_base = &ExternCallback::Type,
 };
 
+struct PrintContext : PyObject {
+    int context_value;
+    int old_context;
+    static PyTypeObject Type;
+};
+
+PyTypeObject PrintContext::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.rtval.PrintContext",
+    .tp_basicsize = sizeof(PrintContext),
+    .tp_dealloc = py::tp_cxx_dealloc<false,PrintContext>,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_clear = py::tp_field_clear<PrintContext>,
+    .tp_methods = (py::meth_table<
+                   py::meth_noargs<"__enter__",[] (py::ptr<PrintContext> self) {
+                       self->old_context = std::exchange(print_context,
+                                                         self->context_value);
+                   }>,
+                   py::meth_fast<"__exit__",[] (py::ptr<PrintContext> self, auto...) {
+                       print_context = self->old_context;
+                   }>>),
+};
+
 }
 
 __attribute__((visibility("hidden")))
@@ -1335,6 +1419,26 @@ PyMethodDef methods[] = {
         py::check_num_arg("same_value", nargs, 2, 2);
         return py::new_bool(same_value(args[0], args[1]));
     }>,
+    py::meth_fastkw<"rtstr",[] (auto, PyObject *const *args, Py_ssize_t nargs,
+                                py::tuple kwnames) {
+        py::check_num_arg("rtstr", nargs, 1, 1);
+        PrintContextSetter setter("rtstr", args + 1, kwnames);
+        return py::ref(PyObject_Str(args[0]));
+    }>,
+    py::meth_fastkw<"rtrepr",[] (auto, PyObject *const *args, Py_ssize_t nargs,
+                                 py::tuple kwnames) {
+        py::check_num_arg("rtrepr", nargs, 1, 1);
+        PrintContextSetter setter("rtrepr", args + 1, kwnames);
+        return py::ref(PyObject_Repr(args[0]));
+    }>,
+    py::meth_fastkw<"showrt",[] (auto, PyObject *const *args, Py_ssize_t nargs,
+                                 py::tuple kwnames) {
+        py::check_num_arg("showrt", nargs, 0, 0);
+        auto ctx = py::generic_alloc<PrintContext>();
+        ctx->old_context = EVAL_NONE;
+        ctx->context_value = parse_print_context("showrt", args, kwnames);
+        return ctx;
+    }>,
     py::meth_fast<"seq_variable",rtval::seq_variable_meth>,
     {}};
 
@@ -1345,6 +1449,7 @@ void init()
     throw_if(PyType_Ready(&RuntimeValue::Type) < 0);
     throw_if(PyType_Ready(&ExternCallback::Type) < 0);
     throw_if(PyType_Ready(&SeqVariable::Type) < 0);
+    throw_if(PyType_Ready(&PrintContext::Type) < 0);
 }
 
 }

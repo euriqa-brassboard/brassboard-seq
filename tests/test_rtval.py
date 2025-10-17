@@ -83,13 +83,47 @@ def test_rtval():
         c1.xyz = 2
     assert str(c1) == '1.2'
     assert str(c2) == '2.3'
+    assert rtval.rtstr(c1, cached=False) == '1.2'
+    assert rtval.rtstr(c1, cached=True) == '1.2'
+    assert rtval.rtstr(c1, age=1) == '1.2'
+    assert rtval.rtrepr(c1, cached=False) == '1.2'
+    assert rtval.rtrepr(c1, cached=True) == '1.2'
+    assert rtval.rtrepr(c1, age=1) == '1.2'
+    with rtval.showrt(cached=False):
+        assert str(c1) == '1.2'
+        assert repr(c1) == '1.2'
+    with rtval.showrt(age=1):
+        assert str(c1) == '1.2'
+        assert repr(c1) == '1.2'
+    with rtval.showrt(cached=True):
+        assert str(c1) == '1.2'
+        assert repr(c1) == '1.2'
     c3 = c1 + c2
     assert isinstance(c3, rtval.RuntimeValue)
     assert str(c3) == '3.5'
     assert str(v1 + c1) == f'1.2 + {s1}'
+    vc1 = v1 + c1
+    assert rtval.rtstr(vc1, cached=False) == f'1.2 + {s1}'
+    assert rtval.rtstr(vc1, age=1) == 'rv<2.2>'
+    assert rtval.rtstr(vc1, cached=False, age=1) == 'rv<2.2>'
+    assert rtval.rtstr(vc1, cached=True) == 'rv<2.2>'
+    with rtval.showrt(cached=False):
+        assert str(vc1) == f'1.2 + {s1}'
+        assert repr(vc1) == f'1.2 + {s1}'
+    with rtval.showrt(age=1):
+        assert str(vc1) == f'rv<2.2>'
+        assert repr(vc1) == f'rv<2.2>'
+    with rtval.showrt(cached=True):
+        assert str(vc1) == f'rv<2.2>'
+        assert repr(vc1) == f'rv<2.2>'
     assert str(c2 + v2) == f'2.3 + {s2}'
     assert str((v1 + c1) + c2) == f'3.5 + {s1}'
     assert str(c1 + (c2 + v2)) == f'3.5 + {s2}'
+
+    with pytest.raises(TypeError, match="cannot be provided at the same time"):
+        rtval.showrt(age=1, cached=True)
+    with pytest.raises(TypeError, match="must be provided"):
+        rtval.showrt()
 
     ce1 = CmpError()
     ce2 = CmpError()
@@ -281,6 +315,21 @@ def test_rtval():
 
     assert str((v1 + v2) * 2) == f'({s1} + {s2}) * 2'
     assert str(2 * (v1 + v2)) == f'2 * ({s1} + {s2})'
+
+    sv1 = rtval.seq_variable(1.2)
+    assert str(sv1) == 'var(1.2)'
+    with rtval.showrt(age=1):
+        assert str(sv1) == 'rv<1.2>'
+    sv1.value = 2.2
+    assert str(sv1) == 'var(2.2)'
+    with rtval.showrt(cached=True):
+        assert str(sv1) == 'rv<1.2>'
+    with rtval.showrt(age=1):
+        assert str(sv1) == 'rv<1.2>'
+    with rtval.showrt(age=2):
+        assert str(sv1) == 'rv<2.2>'
+    with rtval.showrt(cached=True):
+        assert str(sv1) == 'rv<2.2>'
 
 values = [True, False, -5, -4, -12, -2, -1, 0, 1, 2, 3, 4, 10,
           0.12, 0.34, 0.56, 1.02, 3.04, -0.12, -0.34, -0.56, -1.02, -3.04,

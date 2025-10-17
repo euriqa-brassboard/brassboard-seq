@@ -21,13 +21,13 @@
 namespace brassboard_seq::action {
 
 BB_PROTECTED
-void Action::print(py::stringio &io)
+void Action::show(py::stringio &io)
 {
     io.write_ascii(is_pulse ? "Pulse(" : "Set(");
-    io.write_str(value);
+    rtval::show_value(io, value);
     if (cond != Py_True) {
         io.write_ascii(", cond=");
-        io.write_str(cond);
+        rtval::show_value(io, cond);
     }
     if (exact_time)
         io.write_ascii(", exact_time=True");

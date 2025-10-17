@@ -286,9 +286,8 @@ PyTypeObject SeqInfo::Type = {
 __attribute__((visibility("internal")))
 inline void TimeSeq::show_cond_suffix(py::stringio &io) const
 {
-    if (cond != Py_True) {
-        (io << " if ").write_str(cond);
-    }
+    if (cond != Py_True)
+        rtval::show_value(io << " if ", cond);
     io << "\n";
 }
 
@@ -385,7 +384,7 @@ inline void TimeStep::show(py::stringio &io, int indent) const
 {
     io.write_rep_ascii(indent, " ");
     io << "TimeStep(";
-    io.write_str(length);
+    rtval::show_value(io, length);
     io << ")@T[" << start_time->data.id << "]";
     show_cond_suffix(io);
     int nactions = actions.size();
@@ -396,7 +395,7 @@ inline void TimeStep::show(py::stringio &io, int indent) const
         io.write_rep_ascii(indent + 2, " ");
         io.write(seqinfo->channel_name_from_id(chn_idx));
         io << ": ";
-        action->print(io);
+        action->show(io);
         io << "\n";
     }
 }
@@ -543,7 +542,7 @@ inline void ConditionalWrapper::show(py::stringio &io, int indent) const
 {
     io.write_rep_ascii(indent, " ");
     io << "ConditionalWrapper(";
-    io.write_str(cond);
+    rtval::show_value(io, cond);
     io << ") for\n";
     if (auto s = py::exact_cast<Seq>(seq))
         return s->show(io, indent + 2);
@@ -615,7 +614,7 @@ inline void BasicSeq::show_times(py::stringio &io, int indent) const
     for (auto [i, t]: py::list_iter(seqinfo->time_mgr->event_times)) {
         io.write_rep_ascii(indent, " ");
         io << "T[" << i << "]: ";
-        io.write_str(t);
+        rtval::show_value(io, t);
         io << "\n";
     }
 }

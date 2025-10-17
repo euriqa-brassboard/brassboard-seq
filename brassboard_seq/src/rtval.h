@@ -1078,6 +1078,8 @@ static inline double get_value_f64(py::ptr<> v, unsigned age)
     return v.as_float();
 }
 
+void show_value(py::stringio &io, py::ptr<> val);
+
 struct InterpFunction {
     std::vector<int> code;
     std::vector<GenVal> data;

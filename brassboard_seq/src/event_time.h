@@ -231,6 +231,7 @@ struct EventTime : PyObject {
     static PyTypeObject Type;
     int64_t get_value(int base_id, unsigned age, std::vector<int64_t> &cache,
                       std::vector<int8_t> &status);
+    void show(py::stringio &io);
 private:
     void update_chain_pos(EventTime *prev, int nchains);
     friend struct TimeManager;
