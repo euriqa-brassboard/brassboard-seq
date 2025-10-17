@@ -29,11 +29,11 @@ if(ENABLE_TESTING)
 endif()
 
 add_custom_target(run_python
-  COMMAND env PYTHONPATH="${CMAKE_BINARY_DIR}:${CMAKE_BINARY_DIR}/tests" python
+  COMMAND env PYTHONPATH="${CMAKE_BINARY_DIR}:${CMAKE_BINARY_DIR}/tests" ${Python_EXECUTABLE}
   DEPENDS all-python-target
   USES_TERMINAL)
 
 add_custom_target(run_ipython
-  COMMAND env PYTHONPATH="${CMAKE_BINARY_DIR}:${CMAKE_BINARY_DIR}/tests" ipython
+  COMMAND env PYTHONPATH="${CMAKE_BINARY_DIR}:${CMAKE_BINARY_DIR}/tests" ${Python_EXECUTABLE} -m IPython
   DEPENDS all-python-target
   USES_TERMINAL)
