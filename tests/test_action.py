@@ -7,6 +7,7 @@ import pytest
 import math
 import numpy as np
 import operator
+import random
 
 def check_action_str(action, s):
     assert str(action) == s
@@ -140,6 +141,10 @@ def test_spline():
 
         assert list(test_seq.eval_runtime(2, [0, 0.5, 1])) == pytest.approx([0.1, 0.4875, 1.6])
         assert list(test_py.eval_runtime(2, [0, 0.5, 1])) == pytest.approx([0.1, 0.4875, 1.6])
+
+        sp2 = action.SeqCubicSpline.from_values(ro0, ro1, ro2, ro3)
+        test_seq2 = test_utils.RampTest(sp2, 3, 0)
+        assert list(test_seq2.eval_runtime(1, [0, 1, 2, 3])) == pytest.approx([o0, o1, o2, o3])
 
     def check_spline_args(has0, has1, has2, has3):
         max_arg = 0

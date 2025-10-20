@@ -89,6 +89,29 @@ PyTypeObject SeqCubicSpline::Type = {
     .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
     .tp_traverse = traverse<>,
     .tp_clear = clear<>,
+    .tp_methods = (
+        py::meth_table<
+        py::meth_fast<"from_values",[] (auto, PyObject *const *args, Py_ssize_t nargs) {
+            py::check_num_arg("SeqCubicSpline.from_values", nargs, 4, 4);
+            py::ptr v0(args[0]);
+            py::ptr v1(args[1]);
+            py::ptr v2(args[2]);
+            py::ptr v3(args[3]);
+
+            auto f4_5 = py::new_float(4.5);
+            auto fm5_5 = py::new_float(-5.5);
+
+            // v0,
+            // -5.5 * v0 + 9 * v1 - 4.5 * v2 + v3,
+            // 9 * v0 - 22.5 * v1 + 18 * v2 - 4.5 * v3,
+            // -4.5 * v0 + 13.5 * v1 - 13.5 * v2 + 4.5 * v3,
+            return alloc(v0,
+                         fm5_5 * v0 + py::int_cached(9) * v1 - f4_5 * v2 + v3,
+                         f4_5 * (py::int_cached(2) * v0
+                                 - py::int_cached(5) * v1
+                                 + py::int_cached(4) * v2 - v3),
+                         f4_5 * (py::int_cached(3) * (v1 - v2) - v0 + v3));
+        },"",METH_STATIC>>),
     .tp_getset = (py::getset_table<
                   py::getset_def<"order0",[] (py::ptr<SeqCubicSpline> self) {
                       return py::newref(self->data()->order0); }>,
