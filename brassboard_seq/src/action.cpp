@@ -450,12 +450,175 @@ PyTypeObject LinearRamp::Type = {
     }>
 };
 
+struct LinearInterp : RampFunctionBase::Base<LinearInterp> {
+    struct Data final : RampFunctionBase::Data {
+        py::tuple_ref ts;
+        py::ref<> tscale;
+
+        py::tuple_ref vs;
+        py::ref<> p0;
+        py::ref<> p1;
+        py::ref<> p2;
+
+        std::vector<double> f_ts;
+        double f_tscale;
+
+        std::vector<double> f_vs;
+        double f_p0;
+        double f_p1;
+        double f_p2;
+
+        Data(py::tuple_ref ts, py::ptr<> tscale,
+             py::tuple_ref vs, py::ref<> p0, py::ref<> p1, py::ref<> p2)
+            : ts(std::move(ts)), tscale(tscale.ref()),
+              vs(std::move(vs)), p0(std::move(p0)), p1(std::move(p1)), p2(std::move(p2)),
+              f_ts(this->ts.size()), f_vs(this->vs.size())
+        {
+        }
+
+        py::ref<> eval_end(py::ptr<>, py::ptr<>) override
+        {
+            auto v = vs.getitem(-1);
+            return ((p2 * v) + p1) * v + p0;
+        }
+        std::pair<double*,ssize_t> spline_segments(double length, double oldval) override
+        {
+            auto ptr = f_ts.data();
+            auto size = f_ts.size();
+            if (size < 2)
+                return {nullptr, 0};
+            if (f_ts[0] == 0) {
+                ptr += 1;
+                size -= 1;
+            }
+            if (ptr[size - 1] >= length)
+                size -= 1;
+            return {ptr, size};
+        }
+        bool set_runtime_params(unsigned age) override
+        {
+            bool changed = false;
+            auto eval_assign = [&] (auto &f, py::ptr<> obj, double scale=1) {
+                changed |= tracked_assign(f, rtval::get_value_f64(obj, age) * scale);
+            };
+
+            eval_assign(f_tscale, tscale);
+            for (auto [i, t]: py::tuple_iter(ts))
+                eval_assign(f_ts[i], t, f_tscale);
+            for (auto [i, v]: py::tuple_iter(vs))
+                eval_assign(f_vs[i], v);
+            eval_assign(f_p0, p0);
+            eval_assign(f_p1, p1);
+            eval_assign(f_p2, p2);
+
+            return changed;
+        }
+        double eval_interp(double t) noexcept
+        {
+            auto ub = std::ranges::upper_bound(f_ts, t);
+            if (ub == f_ts.end())
+                return f_vs.back();
+            auto i = ub - f_ts.begin();
+            if (i == 0)
+                return f_vs.front();
+            auto v0 = f_vs[i - 1];
+            auto v1 = f_vs[i];
+            auto t0 = f_ts[i - 1];
+            auto t1 = f_ts[i];
+            auto x = (t - t0) / (t1 - t0);
+            return x * v1 + (1 - x) * v0;
+        }
+        rtval::TagVal runtime_eval(double t) noexcept override
+        {
+            auto v = eval_interp(t);
+            return f_p0 + v * (f_p1 + v * f_p2);
+        }
+    };
+
+    using fields = field_pack<Data,&Data::ts,&Data::tscale,
+                              &Data::vs,&Data::p0,&Data::p1,&Data::p2>;
+    static PyTypeObject Type;
+};
+
+PyTypeObject LinearInterp::Type = {
+    .ob_base = PyVarObject_HEAD_INIT(0, 0)
+    .tp_name = "brassboard_seq.action.LinearInterp",
+    .tp_basicsize = sizeof(RampFunctionBase) + sizeof(LinearInterp::Data),
+    .tp_dealloc = py::tp_cxx_dealloc<true,LinearInterp>,
+    .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_GC,
+    .tp_traverse = traverse<>,
+    .tp_clear = clear<>,
+    .tp_getset = (py::getset_table<
+                  py::getset_def<"times",[] (py::ptr<LinearInterp> self) {
+                      return py::newref(self->data()->ts); }>,
+                  py::getset_def<"time_scale",[] (py::ptr<LinearInterp> self) {
+                      return py::newref(self->data()->tscale); }>,
+                  py::getset_def<"values",[] (py::ptr<LinearInterp> self) {
+                      return py::newref(self->data()->vs); }>,
+                  py::getset_def<"value_poly",[] (py::ptr<LinearInterp> self) {
+                      return py::new_tuple(self->data()->p0, self->data()->p1,
+                                           self->data()->p2); }>>),
+    .tp_base = &RampFunctionBase::Type,
+    .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
+                                        ssize_t nargs, py::tuple kwnames) {
+        py::check_num_arg("LinearInterp.__init__", nargs, 2, 2);
+        py::ptr<> ts = args[0];
+        py::ptr<> vs = args[1];
+        auto [tscale, vpoly] =
+            py::parse_pos_or_kw_args<"time_scale","value_poly">(
+                "LinearInterp.__init__", args + 2, 0, kwnames);
+        if (!tscale)
+            tscale = py::int_cached(1);
+        py::ref<> p0;
+        py::ref<> p1;
+        py::ref<> p2;
+        if (vpoly) {
+            auto n = vpoly.length();
+            switch (n) {
+            default:
+                py_throw_format(PyExc_TypeError,
+                                "value_poly should contain at most 3 elements");
+            case 3:
+                p2 = vpoly.getitem(2);
+                [[fallthrough]];
+            case 2:
+                p1 = vpoly.getitem(1);
+                [[fallthrough]];
+            case 1:
+                p0 = vpoly.getitem(0);
+                [[fallthrough]];
+            case 0:
+                break;
+            }
+        }
+        if (!p0)
+            p0 = py::new_int(0);
+        if (!p1)
+            p1 = py::new_int(1);
+        if (!p2)
+            p2 = py::new_int(0);
+        auto ts_tup = ts.as_tuple();
+        auto vs_tup = vs.as_tuple();
+        if (ts_tup.size() != vs_tup.size()) {
+            py_throw_format(PyExc_TypeError,
+                            "Mismatch between lengths of times and values.");
+        }
+        else if (ts_tup.size() == 0) {
+            py_throw_format(PyExc_TypeError,
+                            "Time/value segements cannot be empty.");
+        }
+        return alloc(std::move(ts_tup), tscale, std::move(vs_tup),
+                     std::move(p0), std::move(p1), std::move(p2));
+    }>
+};
+
 }
 
 PyTypeObject &RampFunction_Type = RampFunction::Type;
 PyTypeObject &Blackman_Type = Blackman::Type;
 PyTypeObject &BlackmanSquare_Type = BlackmanSquare::Type;
 PyTypeObject &LinearRamp_Type = LinearRamp::Type;
+PyTypeObject &LinearInterp_Type = LinearInterp::Type;
 
 __attribute__((visibility("hidden")))
 void init()
@@ -466,6 +629,7 @@ void init()
     throw_if(PyType_Ready(&Blackman::Type) < 0);
     throw_if(PyType_Ready(&BlackmanSquare::Type) < 0);
     throw_if(PyType_Ready(&LinearRamp::Type) < 0);
+    throw_if(PyType_Ready(&LinearInterp::Type) < 0);
 }
 
 }

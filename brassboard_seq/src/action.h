@@ -132,6 +132,7 @@ extern PyTypeObject &RampFunction_Type;
 extern PyTypeObject &Blackman_Type;
 extern PyTypeObject &BlackmanSquare_Type;
 extern PyTypeObject &LinearRamp_Type;
+extern PyTypeObject &LinearInterp_Type;
 
 void init();
 

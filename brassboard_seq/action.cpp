@@ -34,4 +34,5 @@ PY_MODINIT(action, action_module)
     m.add_type(&action::Blackman_Type);
     m.add_type(&action::BlackmanSquare_Type);
     m.add_type(&action::LinearRamp_Type);
+    m.add_type(&action::LinearInterp_Type);
 }

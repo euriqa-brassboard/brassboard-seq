@@ -241,6 +241,107 @@ def test_linear():
     expect1 = list(ts * 0.6 + 0.2)
     assert v1 == pytest.approx(expect1)
 
+def test_liner_interp():
+    with pytest.raises(TypeError):
+        action.LinearInterp()
+    with pytest.raises(TypeError):
+        action.LinearInterp((1,))
+    with pytest.raises(TypeError):
+        action.LinearInterp((), ())
+    with pytest.raises(TypeError):
+        action.LinearInterp((1,), (2, 3))
+
+    p = action.LinearInterp((1,), (2,))
+    assert p.times == (1,)
+    assert p.values == (2,)
+    assert p.time_scale == 1
+    assert p.value_poly == (0, 1, 0)
+
+    with pytest.raises(TypeError):
+        action.LinearInterp((1,), (2,), 3)
+    with pytest.raises(TypeError):
+        action.LinearInterp((1,), (2,), ts=2)
+
+    p = action.LinearInterp((3, 4), (4, 5), time_scale=2)
+    assert p.times == (3, 4)
+    assert p.values == (4, 5)
+    assert p.time_scale == 2
+    assert p.value_poly == (0, 1, 0)
+
+    with pytest.raises(TypeError):
+        action.LinearInterp((1,), (2,), value_poly=(0, 1, 2, 3))
+
+    p = action.LinearInterp((1, 3, 4), (0, 4, 5), time_scale=1.2, value_poly=(1, 2))
+    assert p.times == (1, 3, 4)
+    assert p.values == (0, 4, 5)
+    assert p.time_scale == 1.2
+    assert p.value_poly == (1, 2, 0)
+
+    p = action.LinearInterp((1, 3, 4), (0, 4, 5), value_poly=(1,))
+    assert p.times == (1, 3, 4)
+    assert p.values == (0, 4, 5)
+    assert p.time_scale == 1
+    assert p.value_poly == (1, 1, 0)
+
+    p1 = action.LinearInterp((1,), (2.3,), value_poly=(1, 2, 3), time_scale=1.2)
+    ts1 = np.linspace(0, 10, 1000)
+    test1 = test_utils.RampTest(p1, 10, 0)
+    assert test1.eval_compile_end() == pytest.approx(21.47)
+    v1 = test1.eval_runtime(0, ts1)
+    expect1 = list(ts1 * 0.0 + 21.47)
+    assert v1 == pytest.approx(expect1)
+    assert test_utils.ramp_get_spline_segments(p1, 10, 0) == ()
+
+    def check_interp(ts, vs, vpoly, tscale, tlen):
+        def eval_vpoly(v):
+            res = 0
+            for p in reversed(vpoly):
+                res = res * v + p
+            return res
+        p = action.LinearInterp(ts, vs, value_poly=vpoly, time_scale=tscale)
+        test = test_utils.RampTest(p, tlen, 0)
+        assert test.eval_compile_end() == pytest.approx(eval_vpoly(vs[-1]))
+        scaled_ts = [t * tscale for t in ts]
+        segments_ts = list(scaled_ts) # copy
+        scaled_vs = list(vs) # copy
+        if scaled_ts[0] != 0:
+            scaled_ts.insert(0, 0)
+            scaled_vs.insert(0, vs[0])
+        else:
+            segments_ts.pop(0)
+        if scaled_ts[-1] < tlen:
+            scaled_ts.append(tlen)
+            scaled_vs.append(vs[-1])
+        else:
+            segments_ts.pop(-1)
+
+        compute_ts = []
+        compute_vs = []
+        for i in range(len(scaled_ts) - 1):
+            t0 = scaled_ts[i]
+            t1 = scaled_ts[i + 1]
+            v0 = scaled_vs[i]
+            v1 = scaled_vs[i + 1]
+
+            npts = 10
+            for i in range(npts):
+                x = i / npts
+                t = t0 * (1 - x) + t1 * x
+                v = v0 * (1 - x) + v1 * x
+                compute_ts.append(t)
+                compute_vs.append(eval_vpoly(v))
+        compute_ts.append(tlen)
+        compute_vs.append(eval_vpoly(vs[-1]))
+        assert test.eval_runtime(0, compute_ts) == pytest.approx(compute_vs)
+        assert test_utils.ramp_get_spline_segments(p, tlen, 0) == pytest.approx(segments_ts)
+
+    check_interp([0, 10], [1, 2], (0, 1), 1, 10)
+    check_interp([1, 2.3, 9], [1, 10, 2], (0, 1), 1, 10)
+    check_interp([0, 0.1, 2, 3, 5, 10], [0.2, 3, 30, 0.4, -10, 3],
+                 (-1, 0.4, 0.5), 0.4, 10)
+    check_interp([0.2, 0.3, 2, 3, 5, 10], [0.2, 3, -20, 0.4, -10, 3],
+                 (0, 0.4), 0.99, 10)
+
 def test_const():
     ts = np.linspace(0, 1, 1000)
 

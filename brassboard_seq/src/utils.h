@@ -673,6 +673,11 @@ public:
     {
         return as_float([&] { bb_rethrow(key); });
     }
+    template<typename T2=_tuple>
+    auto as_tuple() const
+    {
+        return __ref<T2>(throw_if_not(PySequence_Tuple((PyObject*)_ptr())));
+    }
 
     auto attr(const char *name) const
     {
