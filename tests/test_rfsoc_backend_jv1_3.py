@@ -1167,6 +1167,51 @@ def test_short_ramp_output2(max_bt):
     })
 
 @test_utils.with_seq_params
+def test_ramp_short_output3(max_bt):
+    comp = test_env.new_comp(max_bt)
+    s = comp.seq
+    s.set('rfsoc/dds0/1/amp', 0.2)
+    s.set('rfsoc/dds2/0/freq', 80e6)
+    s.set('rfsoc/dds0/1/phase', 0.9)
+    s.add_step(500e-9) \
+      .set('rfsoc/dds0/1/amp', test_utils.RampUpAndDown(0.25, 0.5)) \
+      .set('rfsoc/dds2/0/freq', test_utils.RampUpAndDown(0.5, 100e6)) \
+      .set('rfsoc/dds0/1/phase', test_utils.RampUpAndDown(0.75, 0.3)) \
+      .set('rfsoc/dds0/0/amp', 0.2) \
+      .set('rfsoc/dds0/0/phase', -0.5 / 2 / np.pi)
+    comp.finalize()
+
+    comp.runtime_finalize(1)
+    test_env.check_output({
+        0: {
+          'freq': [Pulse(213)],
+          'amp': [Pulse(213, Spline(0.2))],
+          'phase': [Pulse(213, Spline(-0.5 / 2 / np.pi))]
+        },
+        1: {
+          'freq': [Pulse(213)],
+          # amp spline first segment too short and omitted
+          'amp': [Pulse(205, Spline(0.2, 1.8, -3.6, 1.8)),
+                  Pulse(8, Spline(0.2))],
+          'phase': [Pulse(154, Spline(-0.1, -0.6)),
+                    Pulse(51, Spline(0.3, 0.6)),
+                    Pulse(8, Spline(-0.1))]
+        },
+        4: {
+          'freq': [Pulse(102, Spline(80e6, 20e6)),
+                   Pulse(103, Spline(100e6, -20e6)),
+                   Pulse(8, Spline(80e6))],
+          'amp': [Pulse(213)],
+          'phase': [Pulse(213)]
+        },
+        5: {
+          'freq': [Pulse(213)],
+          'amp': [Pulse(213)],
+          'phase': [Pulse(213)]
+        },
+    })
+
+@test_utils.with_seq_params
 def test_arg_error(max_bt):
     comp = test_env.new_comp(max_bt)
     s = comp.seq

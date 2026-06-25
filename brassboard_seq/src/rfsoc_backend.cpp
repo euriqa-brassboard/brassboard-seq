@@ -594,6 +594,7 @@ void RFSOCBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned ag
                     continue;
                 }
                 double prev_t = 0;
+                double prev_sp_t = 0;
                 double prev_v = eval_ramp(0);
                 bb_debug("Use ramp function provided segments on %s spline: "
                          "old cycle:%" PRId64 "\n", param_name(param), cur_cycle);
@@ -613,23 +614,27 @@ void RFSOCBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned ag
                         }
                         bb_rethrow(action_key(action.aid));
                     }
-                    auto t1 = t * (1.0 / 3.0) + prev_t * (2.0 / 3.0);
-                    auto t2 = t * (2.0 / 3.0) + prev_t * (1.0 / 3.0);
+                    prev_t = t;
+                    // Skip segments that are too short
+                    if (t < prev_sp_t + min_spline_time)
+                        continue;
+                    auto t1 = t * (1.0 / 3.0) + prev_sp_t * (2.0 / 3.0);
+                    auto t2 = t * (2.0 / 3.0) + prev_sp_t * (1.0 / 3.0);
                     auto t3 = t;
                     auto v0 = prev_v;
                     auto v1 = eval_ramp(t1);
                     auto v2 = eval_ramp(t2);
                     auto v3 = eval_ramp(t3);
                     add_sample(t3, v0, v1, v2, v3);
-                    prev_t = t3;
+                    prev_sp_t = t3;
                     prev_v = v3;
                 }
                 if (!(prev_t < len)) [[unlikely]]
                     bb_throw_format(PyExc_ValueError, action_key(action.aid),
                                     "Segment time point must not "
                                     "exceed action length.");
-                auto t1 = len * (1.0 / 3.0) + prev_t * (2.0 / 3.0);
-                auto t2 = len * (2.0 / 3.0) + prev_t * (1.0 / 3.0);
+                auto t1 = len * (1.0 / 3.0) + prev_sp_t * (2.0 / 3.0);
+                auto t2 = len * (2.0 / 3.0) + prev_sp_t * (1.0 / 3.0);
                 auto t3 = len;
                 auto v0 = prev_v;
                 auto v1 = eval_ramp(t1);
