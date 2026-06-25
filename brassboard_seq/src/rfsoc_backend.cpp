@@ -576,14 +576,14 @@ void RFSOCBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned ag
                     throw_py_error(v.err);
                     return v.val.f64_val;
                 };
-                py::ref<> pts;
+                std::pair<double*,ssize_t> pts;
                 try {
                     pts = ramp_func->spline_segments(len, val);
                 }
                 catch (...) {
                     bb_rethrow(action_key(action.aid));
                 }
-                if (pts == Py_None) {
+                if (pts.second < 0) {
                     bb_debug("Use adaptive segments on %s spline: "
                              "old cycle:%" PRId64 "\n", param_name(param), cur_cycle);
                     generate_splines(eval_ramp, add_sample, len,
@@ -598,22 +598,11 @@ void RFSOCBackend::Data::runtime_finalize(py::ptr<SeqCompiler> comp, unsigned ag
                 double prev_v = eval_ramp(0);
                 bb_debug("Use ramp function provided segments on %s spline: "
                          "old cycle:%" PRId64 "\n", param_name(param), cur_cycle);
-                for (auto item: pts.generic_iter(action_key(action.aid))) {
-                    double t = PyFloat_AsDouble(item.get());
-                    if (!(t > prev_t)) [[unlikely]] {
-                        if (!PyErr_Occurred()) {
-                            if (t < 0) {
-                                PyErr_Format(PyExc_ValueError,
-                                             "Segment time cannot be negative");
-                            }
-                            else {
-                                PyErr_Format(PyExc_ValueError,
-                                             "Segment time point must "
-                                             "monotonically increase");
-                            }
-                        }
-                        bb_rethrow(action_key(action.aid));
-                    }
+                for (double t: std::span(pts.first, pts.second)) {
+                    if (!(t > prev_t)) [[unlikely]]
+                        bb_throw_format(PyExc_ValueError, action_key(action.aid),
+                                        t < 0 ? "Segment time cannot be negative" :
+                                        "Segment time point must monotonically increase");
                     prev_t = t;
                     // Skip segments that are too short
                     if (t < prev_sp_t + min_spline_time)

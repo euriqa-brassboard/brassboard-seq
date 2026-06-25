@@ -168,11 +168,16 @@ static PyModuleDef test_module = {
             return py::new_bool(action::isramp(v));
         }>,
         py::meth_fast<"ramp_get_spline_segments",[] (auto, PyObject *const *args,
-                                                     Py_ssize_t nargs) {
+                                                     Py_ssize_t nargs) -> py::ref<> {
             py::check_num_arg("ramp_get_spline_segments", nargs, 3, 3);
             auto func = py::arg_cast<action::RampFunctionBase>(args[0], "func");
-            return func->spline_segments(py::ptr(args[1]).as_float(),
-                                         py::ptr(args[2]).as_float());
+            auto segs = func->spline_segments(py::ptr(args[1]).as_float(),
+                                              py::ptr(args[2]).as_float());
+            if (segs.second < 0)
+                return py::new_none();
+            return py::new_ntuple(segs.second, [&] (auto i) {
+                return py::new_float(segs.first[i]);
+            });
         }>,
         py::meth_o<"round_time",[] (auto, py::ptr<> v) -> py::ref<> {
             if (rtval::is_rtval(v)) {

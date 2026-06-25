@@ -58,10 +58,10 @@ py::ref<> SeqCubicSpline::Data::eval_end(py::ptr<>, py::ptr<>)
 }
 
 __attribute__((visibility("internal")))
-py::ref<> SeqCubicSpline::Data::spline_segments(double length, double oldval)
+std::pair<double*,ssize_t> SeqCubicSpline::Data::spline_segments(double length, double oldval)
 {
     f_inv_length = 1 / length;
-    return py::new_tuple();
+    return {nullptr, 0};
 }
 
 __attribute__((visibility("internal")))
@@ -147,6 +147,7 @@ struct RampFunction : RampFunctionBase::Base<RampFunction> {
         py::ref<> _spline_segments;
         py::ref<> fvalue;
         std::unique_ptr<rtval::InterpFunction> interp_func;
+        std::vector<double> segment_points;
 
         Data(py::ptr<PyTypeObject> type)
         {
@@ -189,15 +190,19 @@ struct RampFunction : RampFunctionBase::Base<RampFunction> {
         {
             return call_eval(length, length, oldval);
         }
-        py::ref<> spline_segments(double length, double oldval) override
+        std::pair<double*,ssize_t> spline_segments(double length, double oldval) override
         {
             if (interp_func) {
                 interp_func->data[1].f64_val = length;
                 interp_func->data[2].f64_val = oldval;
             }
+            segment_points.clear();
             if (!_spline_segments)
-                return py::new_none();
-            return _spline_segments(py_self(), to_py(length), to_py(oldval));
+                return {nullptr, -1};
+            auto segs = _spline_segments(py_self(), to_py(length), to_py(oldval));
+            for (auto item: segs.generic_iter())
+                segment_points.push_back(item.as_float());
+            return {segment_points.data(), segment_points.size()};
         }
         bool set_runtime_params(unsigned age) override
         {
@@ -265,10 +270,10 @@ struct Blackman : RampFunctionBase::Base<Blackman> {
         {
             return offset.ref();
         }
-        py::ref<> spline_segments(double length, double oldval) override
+        std::pair<double*,ssize_t> spline_segments(double length, double oldval) override
         {
             f_t_scale = length == 0 ? 0.0 : (M_PI * 2 / length);
-            return py::new_none();
+            return {nullptr, -1};
         }
         bool set_runtime_params(unsigned age) override
         {
@@ -331,10 +336,10 @@ struct BlackmanSquare : RampFunctionBase::Base<BlackmanSquare> {
         {
             return offset.ref();
         }
-        py::ref<> spline_segments(double length, double oldval) override
+        std::pair<double*,ssize_t> spline_segments(double length, double oldval) override
         {
             f_t_scale = length == 0 ? 0.0 : (M_PI * 2 / length);
-            return py::new_none();
+            return {nullptr, -1};
         }
         bool set_runtime_params(unsigned age) override
         {
@@ -398,10 +403,10 @@ struct LinearRamp : RampFunctionBase::Base<LinearRamp> {
         {
             return end.ref();
         }
-        py::ref<> spline_segments(double length, double oldval) override
+        std::pair<double*,ssize_t> spline_segments(double length, double oldval) override
         {
             f_inv_length = 1 / length;
-            return py::new_tuple();
+            return {nullptr, 0};
         }
         bool set_runtime_params(unsigned age) override
         {
