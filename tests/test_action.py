@@ -295,17 +295,18 @@ def test_liner_interp():
     assert v1 == pytest.approx(expect1)
     assert test_utils.ramp_get_spline_segments(p1, 10, 0) == ()
 
-    def check_interp(ts, vs, vpoly, tscale, tlen):
+    def check_interp(ts, vs, vpoly, tscale, tlen, seg_step):
         def eval_vpoly(v):
             res = 0
             for p in reversed(vpoly):
                 res = res * v + p
             return res
-        p = action.LinearInterp(ts, vs, value_poly=vpoly, time_scale=tscale)
+        p = action.LinearInterp(ts, vs, value_poly=vpoly, time_scale=tscale,
+                                seg_step=seg_step)
         test = test_utils.RampTest(p, tlen, 0)
         assert test.eval_compile_end() == pytest.approx(eval_vpoly(vs[-1]))
         scaled_ts = [t * tscale for t in ts]
-        segments_ts = list(scaled_ts) # copy
+        segments_ts = scaled_ts[::seg_step]
         scaled_vs = list(vs) # copy
         if scaled_ts[0] != 0:
             scaled_ts.insert(0, 0)
@@ -315,7 +316,7 @@ def test_liner_interp():
         if scaled_ts[-1] < tlen:
             scaled_ts.append(tlen)
             scaled_vs.append(vs[-1])
-        else:
+        if segments_ts and segments_ts[-1] >= tlen:
             segments_ts.pop(-1)
 
         compute_ts = []
@@ -338,12 +339,22 @@ def test_liner_interp():
         assert test.eval_runtime(0, compute_ts) == pytest.approx(compute_vs)
         assert test_utils.ramp_get_spline_segments(p, tlen, 0) == pytest.approx(segments_ts)
 
-    check_interp([0, 10], [1, 2], (0, 1), 1, 10)
-    check_interp([1, 2.3, 9], [1, 10, 2], (0, 1), 1, 10)
+    check_interp([0, 10], [1, 2], (0, 1), 1, 10, 1)
+    check_interp([0, 10], [1, 2], (0, 1), 1, 10, 2)
+    check_interp([1, 2.3, 9], [1, 10, 2], (0, 1), 1, 10, 1)
+    check_interp([1, 2.3, 9], [1, 10, 2], (0, 1), 1, 10, 2)
     check_interp([0, 0.1, 2, 3, 5, 10], [0.2, 3, 30, 0.4, -10, 3],
-                 (-1, 0.4, 0.5, -0.3), 0.4, 10)
+                 (-1, 0.4, 0.5, -0.3), 0.4, 10, 1)
+    check_interp([0, 0.1, 2, 3, 5, 10], [0.2, 3, 30, 0.4, -10, 3],
+                 (-1, 0.4, 0.5, -0.3), 0.4, 10, 2)
+    check_interp([0, 0.1, 2, 3, 5, 10], [0.2, 3, 30, 0.4, -10, 3],
+                 (-1, 0.4, 0.5, -0.3), 0.4, 10, 3)
     check_interp([0.2, 0.3, 2, 3, 5, 10], [0.2, 3, -20, 0.4, -10, 3],
-                 (0, 0.4), 0.99, 10)
+                 (0, 0.4), 0.99, 10, 1)
+    check_interp([0.2, 0.3, 2, 3, 5, 10], [0.2, 3, -20, 0.4, -10, 3],
+                 (0, 0.4), 0.99, 10, 2)
+    check_interp([0.2, 0.3, 2, 3, 5, 10], [0.2, 3, -20, 0.4, -10, 3],
+                 (0, 0.4), 0.99, 10, 3)
 
 def test_const():
     ts = np.linspace(0, 1, 1000)

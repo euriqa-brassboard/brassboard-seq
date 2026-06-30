@@ -459,17 +459,20 @@ struct LinearInterp : RampFunctionBase::Base<LinearInterp> {
         py::tuple_ref vpoly;
 
         std::vector<double> f_ts;
+        std::vector<double> f_tseg;
         double f_tscale;
 
         std::vector<double> f_vs;
         std::vector<double> f_vpoly;
+        int seg_step;
 
         Data(py::tuple_ref ts, py::ptr<> tscale,
-             py::tuple_ref vs, py::tuple_ref vpoly)
+             py::tuple_ref vs, py::tuple_ref vpoly, int seg_step)
             : ts(std::move(ts)), tscale(tscale.ref()),
               vs(std::move(vs)), vpoly(std::move(vpoly)),
-              f_ts(this->ts.size()), f_vs(this->vs.size()),
-              f_vpoly(this->vpoly.size())
+              f_ts(this->ts.size()), f_tseg((this->ts.size() - 1) / seg_step + 1),
+              f_vs(this->vs.size()), f_vpoly(this->vpoly.size()),
+              seg_step(seg_step)
         {
         }
 
@@ -486,11 +489,11 @@ struct LinearInterp : RampFunctionBase::Base<LinearInterp> {
         }
         std::pair<double*,ssize_t> spline_segments(double length, double oldval) override
         {
-            auto ptr = f_ts.data();
-            auto size = f_ts.size();
+            auto ptr = f_tseg.data();
+            auto size = f_tseg.size();
             if (size < 2)
                 return {nullptr, 0};
-            if (f_ts[0] == 0) {
+            if (f_tseg[0] == 0) {
                 ptr += 1;
                 size -= 1;
             }
@@ -508,6 +511,9 @@ struct LinearInterp : RampFunctionBase::Base<LinearInterp> {
             eval_assign(f_tscale, tscale);
             for (auto [i, t]: py::tuple_iter(ts))
                 eval_assign(f_ts[i], t, f_tscale);
+            size_t ntseg = f_tseg.size();
+            for (size_t i = 0; i < ntseg; i++)
+                f_tseg[i] = f_ts[i * seg_step];
             for (auto [i, v]: py::tuple_iter(vs))
                 eval_assign(f_vs[i], v);
             for (auto [i, p]: py::tuple_iter(vpoly))
@@ -570,11 +576,12 @@ PyTypeObject LinearInterp::Type = {
         py::check_num_arg("LinearInterp.__init__", nargs, 2, 2);
         py::ptr<> ts = args[0];
         py::ptr<> vs = args[1];
-        auto [tscale, vpoly] =
-            py::parse_pos_or_kw_args<"time_scale","value_poly">(
+        auto [tscale, vpoly, pyseg_step] =
+            py::parse_pos_or_kw_args<"time_scale","value_poly","seg_step">(
                 "LinearInterp.__init__", args + 2, 0, kwnames);
         if (!tscale)
             tscale = py::int_cached(1);
+        int seg_step = pyseg_step ? pyseg_step.as_int() : 1;
         py::tuple_ref vpoly_tup;
         if (vpoly)
             vpoly_tup = vpoly.as_tuple();
@@ -590,7 +597,8 @@ PyTypeObject LinearInterp::Type = {
             py_throw_format(PyExc_TypeError,
                             "Time/value segements cannot be empty.");
         }
-        return alloc(std::move(ts_tup), tscale, std::move(vs_tup), std::move(vpoly_tup));
+        return alloc(std::move(ts_tup), tscale, std::move(vs_tup),
+                     std::move(vpoly_tup), seg_step);
     }>
 };
 
