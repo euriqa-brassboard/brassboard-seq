@@ -456,30 +456,33 @@ struct LinearInterp : RampFunctionBase::Base<LinearInterp> {
         py::ref<> tscale;
 
         py::tuple_ref vs;
-        py::ref<> p0;
-        py::ref<> p1;
-        py::ref<> p2;
+        py::tuple_ref vpoly;
 
         std::vector<double> f_ts;
         double f_tscale;
 
         std::vector<double> f_vs;
-        double f_p0;
-        double f_p1;
-        double f_p2;
+        std::vector<double> f_vpoly;
 
         Data(py::tuple_ref ts, py::ptr<> tscale,
-             py::tuple_ref vs, py::ref<> p0, py::ref<> p1, py::ref<> p2)
+             py::tuple_ref vs, py::tuple_ref vpoly)
             : ts(std::move(ts)), tscale(tscale.ref()),
-              vs(std::move(vs)), p0(std::move(p0)), p1(std::move(p1)), p2(std::move(p2)),
-              f_ts(this->ts.size()), f_vs(this->vs.size())
+              vs(std::move(vs)), vpoly(std::move(vpoly)),
+              f_ts(this->ts.size()), f_vs(this->vs.size()),
+              f_vpoly(this->vpoly.size())
         {
         }
 
         py::ref<> eval_end(py::ptr<>, py::ptr<>) override
         {
             auto v = vs.getitem(-1);
-            return ((p2 * v) + p1) * v + p0;
+            auto np = vpoly.size();
+            if (np == 0)
+                return py::new_float(0);
+            py::ref res(vpoly.get(np - 1).ref());
+            for (ssize_t i = np - 2; i >= 0; i--)
+                res = res * v + vpoly.get(i);
+            return res;
         }
         std::pair<double*,ssize_t> spline_segments(double length, double oldval) override
         {
@@ -507,9 +510,8 @@ struct LinearInterp : RampFunctionBase::Base<LinearInterp> {
                 eval_assign(f_ts[i], t, f_tscale);
             for (auto [i, v]: py::tuple_iter(vs))
                 eval_assign(f_vs[i], v);
-            eval_assign(f_p0, p0);
-            eval_assign(f_p1, p1);
-            eval_assign(f_p2, p2);
+            for (auto [i, p]: py::tuple_iter(vpoly))
+                eval_assign(f_vpoly[i], p);
 
             return changed;
         }
@@ -531,12 +533,17 @@ struct LinearInterp : RampFunctionBase::Base<LinearInterp> {
         rtval::TagVal runtime_eval(double t) noexcept override
         {
             auto v = eval_interp(t);
-            return f_p0 + v * (f_p1 + v * f_p2);
+            auto np = f_vpoly.size();
+            if (np == 0)
+                return 0.0;
+            double res = f_vpoly[np - 1];
+            for (ssize_t i = np - 2; i >= 0; i--)
+                res = res * v + f_vpoly[i];
+            return res;
         }
     };
 
-    using fields = field_pack<Data,&Data::ts,&Data::tscale,
-                              &Data::vs,&Data::p0,&Data::p1,&Data::p2>;
+    using fields = field_pack<Data,&Data::ts,&Data::tscale,&Data::vs,&Data::vpoly>;
     static PyTypeObject Type;
 };
 
@@ -556,8 +563,7 @@ PyTypeObject LinearInterp::Type = {
                   py::getset_def<"values",[] (py::ptr<LinearInterp> self) {
                       return py::newref(self->data()->vs); }>,
                   py::getset_def<"value_poly",[] (py::ptr<LinearInterp> self) {
-                      return py::new_tuple(self->data()->p0, self->data()->p1,
-                                           self->data()->p2); }>>),
+                      return py::newref(self->data()->vpoly); }>>),
     .tp_base = &RampFunctionBase::Type,
     .tp_vectorcall = py::vectorfunc<[] (auto, PyObject *const *args,
                                         ssize_t nargs, py::tuple kwnames) {
@@ -569,34 +575,11 @@ PyTypeObject LinearInterp::Type = {
                 "LinearInterp.__init__", args + 2, 0, kwnames);
         if (!tscale)
             tscale = py::int_cached(1);
-        py::ref<> p0;
-        py::ref<> p1;
-        py::ref<> p2;
-        if (vpoly) {
-            auto n = vpoly.length();
-            switch (n) {
-            default:
-                py_throw_format(PyExc_TypeError,
-                                "value_poly should contain at most 3 elements");
-            case 3:
-                p2 = vpoly.getitem(2);
-                [[fallthrough]];
-            case 2:
-                p1 = vpoly.getitem(1);
-                [[fallthrough]];
-            case 1:
-                p0 = vpoly.getitem(0);
-                [[fallthrough]];
-            case 0:
-                break;
-            }
-        }
-        if (!p0)
-            p0 = py::new_int(0);
-        if (!p1)
-            p1 = py::new_int(1);
-        if (!p2)
-            p2 = py::new_int(0);
+        py::tuple_ref vpoly_tup;
+        if (vpoly)
+            vpoly_tup = vpoly.as_tuple();
+        else
+            vpoly_tup = py::new_tuple(py::new_int(0), py::new_int(1));
         auto ts_tup = ts.as_tuple();
         auto vs_tup = vs.as_tuple();
         if (ts_tup.size() != vs_tup.size()) {
@@ -607,8 +590,7 @@ PyTypeObject LinearInterp::Type = {
             py_throw_format(PyExc_TypeError,
                             "Time/value segements cannot be empty.");
         }
-        return alloc(std::move(ts_tup), tscale, std::move(vs_tup),
-                     std::move(p0), std::move(p1), std::move(p2));
+        return alloc(std::move(ts_tup), tscale, std::move(vs_tup), std::move(vpoly_tup));
     }>
 };
 

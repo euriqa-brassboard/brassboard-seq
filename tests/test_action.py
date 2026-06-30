@@ -255,7 +255,7 @@ def test_liner_interp():
     assert p.times == (1,)
     assert p.values == (2,)
     assert p.time_scale == 1
-    assert p.value_poly == (0, 1, 0)
+    assert p.value_poly == (0, 1)
 
     with pytest.raises(TypeError):
         action.LinearInterp((1,), (2,), 3)
@@ -266,22 +266,25 @@ def test_liner_interp():
     assert p.times == (3, 4)
     assert p.values == (4, 5)
     assert p.time_scale == 2
-    assert p.value_poly == (0, 1, 0)
+    assert p.value_poly == (0, 1)
 
-    with pytest.raises(TypeError):
-        action.LinearInterp((1,), (2,), value_poly=(0, 1, 2, 3))
+    p = action.LinearInterp((1,), (2,), value_poly=(0, 1, 2, 3))
+    assert p.times == (1,)
+    assert p.values == (2,)
+    assert p.time_scale == 1
+    assert p.value_poly == (0, 1, 2, 3)
 
     p = action.LinearInterp((1, 3, 4), (0, 4, 5), time_scale=1.2, value_poly=(1, 2))
     assert p.times == (1, 3, 4)
     assert p.values == (0, 4, 5)
     assert p.time_scale == 1.2
-    assert p.value_poly == (1, 2, 0)
+    assert p.value_poly == (1, 2)
 
     p = action.LinearInterp((1, 3, 4), (0, 4, 5), value_poly=(1,))
     assert p.times == (1, 3, 4)
     assert p.values == (0, 4, 5)
     assert p.time_scale == 1
-    assert p.value_poly == (1, 1, 0)
+    assert p.value_poly == (1,)
 
     p1 = action.LinearInterp((1,), (2.3,), value_poly=(1, 2, 3), time_scale=1.2)
     ts1 = np.linspace(0, 10, 1000)
@@ -338,7 +341,7 @@ def test_liner_interp():
     check_interp([0, 10], [1, 2], (0, 1), 1, 10)
     check_interp([1, 2.3, 9], [1, 10, 2], (0, 1), 1, 10)
     check_interp([0, 0.1, 2, 3, 5, 10], [0.2, 3, 30, 0.4, -10, 3],
-                 (-1, 0.4, 0.5), 0.4, 10)
+                 (-1, 0.4, 0.5, -0.3), 0.4, 10)
     check_interp([0.2, 0.3, 2, 3, 5, 10], [0.2, 3, -20, 0.4, -10, 3],
                  (0, 0.4), 0.99, 10)
 
